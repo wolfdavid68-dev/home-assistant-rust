@@ -16,6 +16,7 @@ ha-mqtt = { path = "../ha-mqtt" }
 ha-somfy = { path = "../ha-somfy" }
 ha-tls = { path = "../ha-tls" }
 ha-storage = { path = "../ha-storage" }
+qrcode.workspace = true
 rpassword.workspace = true
 serde_json.workspace = true
 tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }

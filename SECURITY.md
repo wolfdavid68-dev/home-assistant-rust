@@ -16,6 +16,8 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
 - Mots de passe hachés avec **Argon2id**, jamais stockés en clair.
 - Jetons d'accès aléatoires (256 bits, générateur cryptographique), stockés **hachés**, comparés en temps constant.
 - Limitation des tentatives de connexion (blocage temporaire après plusieurs échecs).
+- Double authentification facultative par code à usage unique (TOTP, RFC 6238) : secret chiffré, code
+  non rejouable, activable et désactivable uniquement sur la machine (`ha-server user totp`).
 - Aucune route de l'API accessible sans authentification, sauf la page de connexion.
 
 ## Réseau

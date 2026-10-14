@@ -2,8 +2,8 @@
 
 Trois améliorations, dans l'ordre :
 
-1. **les jetons des appareils chiffrés dans la base** (ce document) ;
-2. la double authentification (à venir) ;
+1. [les jetons des appareils chiffrés dans la base](#1-les-jetons-des-appareils-chiffrés) ;
+2. [la double authentification](#2-la-double-authentification-totp) ;
 3. un journal d'audit (à venir).
 
 ## 1. Les jetons des appareils, chiffrés
@@ -85,3 +85,100 @@ Mets la clé de côté une fois (gestionnaire de mots de passe) : la commande es
   restants.
 - Docker : clé créée dans `/cle/ha.key` (droits 600, utilisateur sans privilège), conteneur
   « healthy ».
+
+## 2. La double authentification (TOTP)
+
+### Le principe
+
+Un mot de passe peut fuiter : réutilisé sur un site piraté, tapé sur un faux site, vu par-dessus
+ton épaule. Avec la double authentification, il faut **en plus** un code à 6 chiffres qui change
+toutes les 30 secondes, affiché par une appli de ton téléphone. Un mot de passe volé ne suffit
+plus.
+
+C'est le même système (TOTP, RFC 6238) que pour ta banque ou ton compte Google. N'importe quelle
+appli d'authentification convient : Aegis, 2FAS, Google Authenticator, Microsoft Authenticator,
+ou ton gestionnaire de mots de passe.
+
+### L'activer
+
+Sur la machine du serveur (personne ne peut l'activer, ni la désactiver, par le réseau) :
+
+```powershell
+cargo run -p ha-server -- user totp david
+# avec Docker :
+docker compose run --rm ha-server user totp david
+```
+
+1. Un **QR code** s'affiche dans le terminal : scanne-le avec l'appli. (Si elle ne le lit pas,
+   saisis à la main le code affiché en dessous.)
+2. Tape le code à 6 chiffres que l'appli affiche. La double authentification n'est activée
+   que si ce code est bon : impossible de s'enfermer dehors avec un QR code mal scanné.
+3. Toutes les sessions ouvertes sont fermées. À la prochaine connexion, la page demande le code :
+
+![Page de connexion avec le code](images/connexion.png)
+
+Le code qui a servi à l'activation ne peut pas resservir : pour te connecter juste après,
+attends le code suivant (au plus 30 secondes).
+
+Autres commandes : `user list` indique les comptes protégés, `user totp-off david` désactive.
+
+**Si tu perds ton téléphone** : sur la machine du serveur, `user totp-off david`, puis réactive
+avec le nouveau téléphone. Pense à noter le code de secours (le code « à la main ») dans ton
+gestionnaire de mots de passe au moment de l'activation.
+
+### Les protections
+
+- **Le secret est chiffré** dans la base, avec la clé de la partie 1.
+- **Un code ne sert qu'une fois.** Le serveur retient le dernier créneau accepté : un code
+  intercepté (par-dessus ton épaule, par exemple) est refusé, même dans les 30 secondes. Deux
+  connexions simultanées avec le même code ? Une seule passe : la vérification et
+  l'enregistrement se font en une seule opération SQL.
+- **Le message d'erreur ne dit rien.** Mauvais nom, mauvais mot de passe, code oublié ou faux :
+  toujours « nom d'utilisateur, mot de passe ou code incorrect ». Un attaquant n'apprend même pas
+  si le mot de passe était bon.
+- **Les codes faux comptent** dans la limite de 5 essais par quart d'heure : impossible
+  d'essayer le million de codes possibles.
+- **Un créneau d'écart est toléré** (horloge du téléphone en avance ou en retard de
+  30 secondes), pas plus.
+- **Clé de chiffrement perdue** : la connexion est refusée (sans planter le serveur), et le
+  journal explique comment désactiver puis réactiver.
+
+### Comment ça marche
+
+Le téléphone et le serveur partagent un **secret** de 160 bits (dans le QR code). Toutes les 30
+secondes, chacun calcule :
+
+```
+créneau = secondes depuis 1970 / 30
+code    = HMAC-SHA1(secret, créneau) → on garde 6 chiffres
+```
+
+Ils trouvent le même code sans jamais se parler. Le calcul est dans
+[totp.rs](../crates/ha-auth/src/totp.rs) : 20 lignes, vérifiées avec les exemples officiels de
+la RFC 6238.
+
+### Concepts Rust rencontrés
+
+- **`Option<&str>` pour un paramètre facultatif.** `login(nom, mot_de_passe, code, ip)` reçoit
+  `Some("123456")` ou `None`. Côté JSON, `#[serde(default)]` rend le champ `code` facultatif,
+  tout en refusant toujours les champs inconnus.
+- **Les motifs sur les tableaux.** `let Some(&[a, b, c, d]) = … else { … }` lit exactement 4
+  octets, ou passe dans le `else`. Pas d'indice qui pourrait déborder.
+- **`is_none_or`.** `last_step.is_none_or(|last| step > last)` se lit « pas encore de code
+  utilisé, ou ce créneau est plus récent ».
+- **Le calcul en temps constant.** La vérification calcule toujours les trois codes possibles
+  (créneau précédent, actuel, suivant), même après avoir trouvé le bon : le temps de réponse ne
+  révèle rien.
+
+### Testé
+
+- Les exemples officiels de la RFC 6238 donnent les bons codes ; l'encodage base 32 suit la
+  RFC 4648.
+- Activation refusée avec un mauvais code ; acceptée avec le bon, sessions fermées, secret
+  chiffré dans la base.
+- Connexion refusée sans code, avec un faux code, avec un bon code et un mauvais mot de passe,
+  et en rejouant un code déjà utilisé ; acceptée avec le code suivant.
+- Codes mal formés refusés (5 ou 7 chiffres, lettres, chiffres arabes…).
+- Secret illisible : connexion refusée sans planter, `totp-off` répare.
+- De bout en bout : activation en ligne de commande, QR code **décodé** comme le ferait un
+  téléphone (sur fond sombre, comme PowerShell), puis connexion dans Chromium avec le code.

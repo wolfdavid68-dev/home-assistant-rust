@@ -29,7 +29,7 @@ impl IntoResponse for ApiError {
             Self::Unauthorized => (StatusCode::UNAUTHORIZED, "authentification requise".into()),
             Self::InvalidCredentials => (
                 StatusCode::UNAUTHORIZED,
-                "nom d'utilisateur ou mot de passe incorrect".into(),
+                "nom d'utilisateur, mot de passe ou code incorrect".into(),
             ),
             Self::NotFound => (StatusCode::NOT_FOUND, "introuvable".into()),
             Self::TooManyRequests { retry_after } => {

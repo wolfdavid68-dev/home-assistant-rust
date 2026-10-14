@@ -10,6 +10,8 @@
 //! ha-server user passwd <nom>     change un mot de passe (déconnecte partout)
 //! ha-server user delete <nom>     supprime un compte
 //! ha-server user list             liste les comptes
+//! ha-server user totp <nom>       active la double authentification
+//! ha-server user totp-off <nom>   la désactive
 //! ha-server hue pair <adresse>    associe le pont Philips Hue
 //! ha-server hue status            affiche le pont associé
 //! ha-server hue forget            oublie le pont
