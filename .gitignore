@@ -1,3 +1,11 @@
 /target
 **/*.rs.bk
+
+# Secrets et données locales : ne jamais versionner
 .env
+.env.*
+secrets.yaml
+*.db
+*.db-*
+*.pem
+*.key
