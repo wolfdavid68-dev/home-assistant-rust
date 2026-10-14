@@ -15,7 +15,7 @@ pub mod evaluator;
 
 use std::path::Path;
 
-pub use config::{Action, Automation, Condition, Trigger, parse};
+pub use config::{Action, Automation, Condition, Trigger, parse, uses_sun};
 pub use engine::Engine;
 pub use error::AutomationError;
 

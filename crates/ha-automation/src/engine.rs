@@ -13,6 +13,7 @@ use tracing::{debug, info, warn};
 
 use crate::config::{Action, Automation};
 use crate::evaluator::Evaluator;
+use ha_sun::Location;
 
 /// Protection contre les boucles : une automatisation qui se déclenche plus
 /// de `MAX_RUNS` fois en `RUN_WINDOW` est mise en pause jusqu'à ce que ça se calme.
@@ -28,9 +29,23 @@ pub struct Engine(Background);
 impl Engine {
     /// Démarre le moteur. L'abonnement au bus est fait avant de rendre la main.
     pub fn start(automations: Vec<Automation>, core: Arc<Core>) -> Self {
+        Self::start_with_location(automations, core, None)
+    }
+
+    /// Comme [`Engine::start`], avec la position de la maison pour les
+    /// déclencheurs et conditions `sun`.
+    pub fn start_with_location(
+        automations: Vec<Automation>,
+        core: Arc<Core>,
+        location: Option<Location>,
+    ) -> Self {
         let events = core.bus.subscribe();
+        let mut evaluator = Evaluator::new(automations);
+        if let Some(location) = location {
+            evaluator = evaluator.with_sun(location, jiff::tz::TimeZone::system());
+        }
         Self(Background::spawn("le moteur d'automatisations", |token| {
-            run(automations, core, events, token)
+            run(evaluator, core, events, token)
         }))
     }
 
@@ -57,15 +72,15 @@ struct Runner {
 }
 
 async fn run(
-    automations: Vec<Automation>,
+    evaluator: Evaluator,
     core: Arc<Core>,
     mut events: tokio::sync::broadcast::Receiver<Arc<Event>>,
     token: CancellationToken,
 ) {
-    let count = automations.len();
+    let count = evaluator.automations().len();
     info!("{count} automatisation(s) chargée(s)");
     let mut runner = Runner {
-        evaluator: Evaluator::new(automations),
+        evaluator,
         core,
         running: (0..count).map(|_| None).collect(),
         recent_runs: vec![VecDeque::new(); count],

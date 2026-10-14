@@ -1,0 +1,21 @@
+[package]
+name = "ha-sun"
+description = "Le soleil : lever, coucher, aube, crépuscule et hauteur, calculés pour ta maison (sans réseau)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ha-core = { path = "../ha-core" }
+jiff.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["sync", "rt", "macros", "time"] }
+tracing.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["sync", "rt", "macros", "time"] }
+
+[lints]
+workspace = true

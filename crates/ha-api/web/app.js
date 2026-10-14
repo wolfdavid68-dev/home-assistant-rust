@@ -166,7 +166,7 @@ function markPending(entityId) {
 
 // ---------------------------------------------------------------- Affichage
 const SECTIONS = [
-  { title: "Présence", domains: ["device_tracker"] },
+  { title: "Présence et soleil", domains: ["device_tracker", "sun"] },
   { title: "Lumières", domains: ["light"] },
   { title: "Volets", domains: ["cover"] },
   { title: "Prises et interrupteurs", domains: ["switch"] },
@@ -200,6 +200,7 @@ function renderTile(state) {
     case "light": return lightTile(state);
     case "cover": return coverTile(state);
     case "device_tracker": return presenceTile(state);
+    case "sun": return sunTile(state);
     case "switch": return switchTile(state);
     case "binary_sensor": return binaryTile(state);
     case "sensor": return state.attributes.device_class === "alarm" ? alarmTile(state) : sensorTile(state);
@@ -304,6 +305,22 @@ function presenceTile(state) {
     "div",
     { id: tileId(state.entity_id), class: tileClass(state, "binary") + (home ? " on" : "") },
     tileHead(state, ICONS.person, text),
+  );
+}
+
+// Le soleil : levé ou couché, et l'heure du prochain changement.
+const hourMinute = new Intl.DateTimeFormat("fr", { hour: "2-digit", minute: "2-digit" });
+function sunTile(state) {
+  const up = state.state === "above_horizon";
+  const next = up ? state.attributes.next_setting : state.attributes.next_rising;
+  const when = typeof next === "string" && !Number.isNaN(Date.parse(next))
+    ? `${up ? "coucher" : "lever"} à ${hourMinute.format(new Date(next))}`
+    : "";
+  const text = [up ? "Levé" : "Couché", when].filter(Boolean).join(" · ");
+  return el(
+    "div",
+    { id: tileId(state.entity_id), class: tileClass(state, "binary") + (up ? " on" : "") },
+    tileHead(state, up ? ICONS.illuminance : ICONS.moon, text),
   );
 }
 
@@ -427,6 +444,7 @@ const ICONS = {
   stop: ["M8 8h8v8H8z"],
   illuminance: ["M12 3v2", "M12 19v2", "M5 12H3", "M21 12h-2", "M12 8a4 4 0 1 0 0 8 4 4 0 1 0 0-8z"],
   occupancy: ["M12 4a2 2 0 1 0 0 4 2 2 0 1 0 0-4z", "M8 21v-6l-2-1 2-5h8l2 5-2 1v6"],
+  moon: ["M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"],
   person: ["M12 3a4 4 0 1 0 0 8 4 4 0 1 0 0-8z", "M4 21a8 8 0 0 1 16 0"],
   globe: ["M12 3a9 9 0 1 0 0 18 9 9 0 1 0 0-18z", "M3 12h18", "M12 3a14 14 0 0 1 0 18", "M12 3a14 14 0 0 0 0 18"],
   data_rate: ["M4 17l5-5 4 4 7-8", "M15 8h5v5"],

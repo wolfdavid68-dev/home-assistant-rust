@@ -11,6 +11,8 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use ha_core::{Attributes, EntityId};
+use ha_sun::SunEvent;
+use jiff::SignedDuration;
 use jiff::civil::{Time, Weekday};
 use serde::Deserialize;
 
@@ -86,6 +88,11 @@ enum TriggerConfig {
     Time {
         at: OneOrMany,
     },
+    Sun {
+        event: String,
+        #[serde(default)]
+        offset: Option<String>,
+    },
 }
 
 #[derive(Debug, Deserialize)]
@@ -109,6 +116,16 @@ enum ConditionConfig {
         before: Option<String>,
         #[serde(default)]
         weekday: Option<OneOrMany>,
+    },
+    Sun {
+        #[serde(default)]
+        after: Option<String>,
+        #[serde(default)]
+        before: Option<String>,
+        #[serde(default)]
+        after_offset: Option<String>,
+        #[serde(default)]
+        before_offset: Option<String>,
     },
 }
 
@@ -172,6 +189,12 @@ pub enum Trigger {
     },
     /// Tous les jours à une heure précise (heure locale).
     Time { at: Vec<Time> },
+    /// Au lever, au coucher du soleil… avec un décalage (`-00:30:00` :
+    /// une demi-heure avant).
+    Sun {
+        event: SunEvent,
+        offset: SignedDuration,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -189,6 +212,11 @@ pub enum Condition {
         after: Option<Time>,
         before: Option<Time>,
         weekdays: Vec<Weekday>,
+    },
+    /// Après / avant un événement du soleil (avec décalage).
+    Sun {
+        after: Option<(SunEvent, SignedDuration)>,
+        before: Option<(SunEvent, SignedDuration)>,
     },
 }
 
@@ -317,6 +345,47 @@ fn check_trigger(config: TriggerConfig) -> Result<Trigger, String> {
                 .map(|t| parse_time(t))
                 .collect::<Result<_, _>>()?,
         },
+        TriggerConfig::Sun { event, offset } => Trigger::Sun {
+            event: parse_sun_event(&event)?,
+            offset: offset
+                .as_deref()
+                .map(parse_offset)
+                .transpose()?
+                .unwrap_or_default(),
+        },
+    })
+}
+
+fn parse_sun_event(value: &str) -> Result<SunEvent, String> {
+    SunEvent::parse(value).ok_or_else(|| {
+        format!("événement du soleil {value:?} inconnu (sunrise, sunset, dawn ou dusk)")
+    })
+}
+
+/// Décalage signé : `-00:30:00` (30 min avant), `01:00:00`, `+15min`…
+fn parse_offset(value: &str) -> Result<SignedDuration, String> {
+    let (negative, rest) = match value.strip_prefix('-') {
+        Some(rest) => (true, rest),
+        None => (false, value.strip_prefix('+').unwrap_or(value)),
+    };
+    let duration = SignedDuration::try_from(parse_duration(rest)?)
+        .map_err(|_| format!("décalage {value:?} invalide"))?;
+    Ok(if negative { -duration } else { duration })
+}
+
+/// Les automatisations utilisent-elles le soleil ? (Il faut alors la
+/// position de la maison.)
+#[must_use]
+pub fn uses_sun(automations: &[Automation]) -> bool {
+    automations.iter().any(|automation| {
+        automation
+            .triggers
+            .iter()
+            .any(|t| matches!(t, Trigger::Sun { .. }))
+            || automation
+                .conditions
+                .iter()
+                .any(|c| matches!(c, Condition::Sun { .. }))
     })
 }
 
@@ -355,6 +424,37 @@ fn check_condition(config: ConditionConfig) -> Result<Condition, String> {
                     .iter()
                     .map(|day| parse_weekday(day))
                     .collect::<Result<_, _>>()?,
+            }
+        }
+        ConditionConfig::Sun {
+            after,
+            before,
+            after_offset,
+            before_offset,
+        } => {
+            if after.is_none() && before.is_none() {
+                return Err("condition sun : il faut after ou before".into());
+            }
+            let with_offset = |event: Option<String>, offset: Option<String>| {
+                if event.is_none() && offset.is_some() {
+                    return Err("condition sun : décalage sans événement".to_owned());
+                }
+                event
+                    .map(|event| {
+                        Ok((
+                            parse_sun_event(&event)?,
+                            offset
+                                .as_deref()
+                                .map(parse_offset)
+                                .transpose()?
+                                .unwrap_or_default(),
+                        ))
+                    })
+                    .transpose()
+            };
+            Condition::Sun {
+                after: with_offset(after, after_offset)?,
+                before: with_offset(before, before_offset)?,
             }
         }
     })
@@ -552,7 +652,7 @@ mod tests {
             // Faute de frappe dans un champ.
             "- id: a\n  triggers: [{trigger: state, entity_id: light.a, too: 'on'}]\n  actions: [{delay: 1s}]",
             // Déclencheur inconnu.
-            "- id: a\n  triggers: [{trigger: sun, event: sunset}]\n  actions: [{delay: 1s}]",
+            "- id: a\n  triggers: [{trigger: moon, event: moonrise}]\n  actions: [{delay: 1s}]",
             // Identifiant d'entité invalide.
             "- id: a\n  triggers: [{trigger: state, entity_id: Salon}]\n  actions: [{delay: 1s}]",
             // Heure invalide.

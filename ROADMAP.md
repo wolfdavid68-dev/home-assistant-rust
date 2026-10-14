@@ -23,6 +23,7 @@ Un workspace Cargo découpé en crates :
 | `ha-hue`      | Philips Hue : lampes via le pont Hue (API locale v2)                        |
 | `ha-somfy`    | Somfy TaHoma : volets, capteurs, alarme, chauffage (API locale)             |
 | `ha-freebox`  | Freebox : présence, connexion Internet, nouveaux appareils (lecture seule) |
+| `ha-sun`      | Soleil : lever, coucher, hauteur, calculés sans réseau                      |
 | `ha-tls`      | Connexions HTTPS partagées (certificat épinglé ou vérifié)                  |
 | `ha-server`   | Binaire qui assemble le tout et lit la configuration                        |
 
@@ -42,5 +43,20 @@ Briques principales : `tokio` (asynchrone), `axum` (web), `sqlx` + SQLite, `serd
 - [x] **5. Automatisations** : « quand X, si Y, alors Z » en YAML ([guide](docs/etape-5-automatisations.md))
 - [x] **6. Interface web** : tableau de bord en direct, ordinateur et téléphone ([guide](docs/etape-6-interface-web.md))
 - [x] **7. Déploiement** : image Docker durcie, accès à distance via VPN, HTTPS avec Tailscale (jamais de port ouvert sur Internet) ([guide](docs/etape-7-deploiement.md))
+
+### Deuxième partie : se rapprocher de Home Assistant
+
+Les fonctions de Home Assistant les plus utiles au quotidien, une par une, dans cet ordre :
+
+- [x] **8. Soleil** : lever, coucher, aube, crépuscule ; déclencheur et condition `sun` comme dans Home Assistant ([guide](docs/soleil.md))
+- [ ] **9. Pièces** : ranger les appareils par pièce (salon, chambre…) sur le tableau de bord
+- [ ] **10. Historique en graphiques** : courbes de température, ouverture des volets…
+- [ ] **11. Scènes et scripts** : « soirée cinéma » en un bouton, suites d'actions réutilisables
+- [ ] **12. Notifications** : être prévenu sur son téléphone (alarme, fumée, nouvel appareil sur le Wi-Fi)
+- [ ] **13. Éditeur d'automatisations** : créer et modifier les automatisations depuis le tableau de bord
+- [ ] **14. Alexa en local** : piloter volets et prises à la voix, sans cloud ni port ouvert
+
+En parallèle, dès que tu me donnes les informations : commande du chauffage Somfy (résultat de
+`somfy devices`), puis de l'alarme (avec confirmation et journal).
 
 Les règles de sécurité qui s'appliquent à chaque étape sont dans [SECURITY.md](SECURITY.md).
