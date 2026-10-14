@@ -31,7 +31,7 @@ const DEFAULT_AUDIT_LIMIT: u32 = 100;
 /// Si l'écriture échoue (disque plein…), l'action n'est pas bloquée :
 /// l'erreur est signalée dans les logs. Mieux vaut pouvoir encore fermer ses
 /// volets qu'un journal parfait.
-async fn audit(
+pub(crate) async fn audit(
     state: &ApiState,
     actor: &str,
     action: &str,
@@ -95,7 +95,7 @@ const SERIES_POINTS: u32 = 300;
 
 /// Lit un corps JSON. On le fait nous-mêmes (au lieu de l'extracteur `Json`
 /// d'axum) pour que toutes les erreurs aient le même format `{"error": …}`.
-fn parse_json<T: DeserializeOwned>(body: &Bytes) -> Result<T, ApiError> {
+pub(crate) fn parse_json<T: DeserializeOwned>(body: &Bytes) -> Result<T, ApiError> {
     serde_json::from_slice(body)
         .map_err(|error| ApiError::BadRequest(format!("JSON invalide : {error}")))
 }
@@ -161,6 +161,7 @@ pub(crate) async fn logout(
     auth: Authenticated,
 ) -> Result<StatusCode, ApiError> {
     state.auth.revoke_token(&auth.token).await?;
+    crate::automations::forget_confirmation(&state, &auth.token);
     audit(&state, &auth.user.username, "logout", None, None, client).await;
     tracing::info!("déconnexion de {}", auth.user.username);
     Ok(StatusCode::NO_CONTENT)

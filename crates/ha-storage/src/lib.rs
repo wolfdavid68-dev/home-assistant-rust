@@ -9,12 +9,14 @@
 //!   appareils), avec une clé gardée dans un fichier séparé.
 
 mod audit;
+mod automations;
 mod error;
 mod recorder;
 mod secrets;
 mod store;
 
 pub use audit::{AuditCheck, AuditEntry, AuditRecord, MAX_AUDIT_LIMIT, clean_field};
+pub use automations::{AutomationVersion, MAX_VERSIONS, StoredAutomation};
 pub use error::StorageError;
 pub use recorder::Recorder;
 pub use secrets::{SecretKey, is_sealed};

@@ -14,7 +14,8 @@ use ha_core::{Attributes, EntityId};
 use ha_sun::SunEvent;
 use jiff::SignedDuration;
 use jiff::civil::{Time, Weekday};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::error::AutomationError;
 
@@ -28,34 +29,95 @@ const MAX_DURATION: Duration = Duration::from_hours(24);
 
 // ───────────────────────────── 1. Ce qu'on lit ─────────────────────────────
 
+/// Une valeur écrite comme du texte : `"on"`, `home`, `21`…
+///
+/// Un nombre sans guillemets (`state: 3`) est accepté et devient du texte,
+/// comme dans Home Assistant. Mais `on`, `off`, `yes`, `true` sans guillemets
+/// sont lus par YAML comme « vrai » ou « faux » : on les refuse avec un
+/// message clair, plutôt que de deviner ce qui était voulu.
+///
+/// Concept Rust : on écrit ici la lecture « à la main », avec un `Visitor`.
+/// Serde appelle la méthode qui correspond à ce qu'il a trouvé dans le
+/// fichier (`visit_str` pour du texte, `visit_i64` pour un entier…).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(transparent)]
+pub(crate) struct Text(String);
+
+impl<'de> Deserialize<'de> for Text {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Visitor;
+
+        impl serde::de::Visitor<'_> for Visitor {
+            type Value = Text;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("du texte")
+            }
+
+            fn visit_str<E: serde::de::Error>(self, value: &str) -> Result<Text, E> {
+                Ok(Text(value.to_owned()))
+            }
+
+            fn visit_i64<E: serde::de::Error>(self, value: i64) -> Result<Text, E> {
+                Ok(Text(value.to_string()))
+            }
+
+            fn visit_u64<E: serde::de::Error>(self, value: u64) -> Result<Text, E> {
+                Ok(Text(value.to_string()))
+            }
+
+            fn visit_f64<E: serde::de::Error>(self, value: f64) -> Result<Text, E> {
+                Ok(Text(value.to_string()))
+            }
+
+            fn visit_bool<E: serde::de::Error>(self, _: bool) -> Result<Text, E> {
+                Err(E::custom(
+                    "valeur lue comme vrai/faux : écris-la entre guillemets, par exemple \"on\" ou \"off\"",
+                ))
+            }
+        }
+
+        deserializer.deserialize_any(Visitor)
+    }
+}
+
 /// Concept Rust : `#[serde(untagged)]` essaie chaque variante dans l'ordre.
 /// Ici, cela permet d'écrire `entity_id: light.salon` **ou** une liste.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(untagged)]
 pub(crate) enum OneOrMany {
-    One(String),
-    Many(Vec<String>),
+    One(Text),
+    Many(Vec<Text>),
 }
 
 impl OneOrMany {
     fn into_vec(self) -> Vec<String> {
         match self {
-            Self::One(value) => vec![value],
-            Self::Many(values) => values,
+            Self::One(value) => vec![value.0],
+            Self::Many(values) => values.into_iter().map(|value| value.0).collect(),
         }
     }
 }
 
-#[derive(Debug, Deserialize)]
+/// Une automatisation **telle qu'elle est écrite**, avant vérification.
+///
+/// Concept Rust : la même structure sait se lire (`Deserialize`) et s'écrire
+/// (`Serialize`). Une automatisation lue en YAML, ou envoyée en JSON par le
+/// tableau de bord, passe toujours par elle : elle est donc réécrite sous une
+/// forme unique (« canonique »), quel que soit le format d'origine.
+///
+/// Les champs sont privés : on ne peut obtenir une [`Automation`] qu'en
+/// passant par [`AutomationConfig::check`].
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-struct AutomationConfig {
+pub struct AutomationConfig {
     id: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     alias: Option<String>,
-    #[serde(default = "enabled_by_default")]
+    #[serde(default = "enabled_by_default", skip_serializing_if = "is_true")]
     enabled: bool,
     triggers: Vec<TriggerConfig>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     conditions: Vec<ConditionConfig>,
     actions: Vec<ActionConfig>,
 }
@@ -64,25 +126,33 @@ fn enabled_by_default() -> bool {
     true
 }
 
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde passe toujours une référence"
+)]
+fn is_true(value: &bool) -> bool {
+    *value
+}
+
 /// Concept Rust : `#[serde(tag = "trigger")]` choisit la variante d'après la
 /// valeur du champ `trigger:` (`state`, `numeric_state` ou `time`).
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(tag = "trigger", rename_all = "snake_case", deny_unknown_fields)]
 enum TriggerConfig {
     State {
         entity_id: OneOrMany,
-        #[serde(default)]
-        from: Option<String>,
-        #[serde(default)]
-        to: Option<String>,
-        #[serde(default, rename = "for")]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        from: Option<Text>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        to: Option<Text>,
+        #[serde(default, rename = "for", skip_serializing_if = "Option::is_none")]
         for_: Option<String>,
     },
     NumericState {
         entity_id: OneOrMany,
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         above: Option<f64>,
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         below: Option<f64>,
     },
     Time {
@@ -90,12 +160,12 @@ enum TriggerConfig {
     },
     Sun {
         event: String,
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         offset: Option<String>,
     },
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(tag = "condition", rename_all = "snake_case", deny_unknown_fields)]
 enum ConditionConfig {
     State {
@@ -104,57 +174,57 @@ enum ConditionConfig {
     },
     NumericState {
         entity_id: OneOrMany,
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         above: Option<f64>,
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         below: Option<f64>,
     },
     Time {
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         after: Option<String>,
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         before: Option<String>,
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         weekday: Option<OneOrMany>,
     },
     Sun {
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         after: Option<String>,
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         before: Option<String>,
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         after_offset: Option<String>,
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         before_offset: Option<String>,
     },
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(untagged)]
 pub(crate) enum ActionConfig {
     Service(ServiceActionConfig),
     Delay(DelayActionConfig),
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ServiceActionConfig {
     /// `light.turn_on` (Home Assistant accepte aussi l'ancien nom `service`).
     #[serde(alias = "service")]
     action: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     target: Option<TargetConfig>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Attributes::is_empty")]
     data: Attributes,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct TargetConfig {
     entity_id: OneOrMany,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct DelayActionConfig {
     delay: String,
@@ -231,8 +301,15 @@ pub enum Action {
     Delay(Duration),
 }
 
-/// Lit et vérifie le contenu d'un fichier `automations.yaml`.
+/// Lit et vérifie le contenu d'un fichier `automations.yaml`. Les
+/// automatisations désactivées sont vérifiées, mais pas renvoyées.
 pub fn parse(yaml: &str) -> Result<Vec<Automation>, AutomationError> {
+    check_all(&parse_configs(yaml)?)
+}
+
+/// Lit un fichier `automations.yaml` **sans** vérifier les valeurs : seule la
+/// forme (champs connus, types) est contrôlée. Voir [`check_all`].
+pub fn parse_configs(yaml: &str) -> Result<Vec<AutomationConfig>, AutomationError> {
     if yaml.len() > MAX_FILE_SIZE {
         return Err(AutomationError::TooLarge);
     }
@@ -244,27 +321,91 @@ pub fn parse(yaml: &str) -> Result<Vec<Automation>, AutomationError> {
     if configs.len() > MAX_AUTOMATIONS {
         return Err(AutomationError::TooMany(MAX_AUTOMATIONS));
     }
+    Ok(configs)
+}
 
+/// Vérifie une liste d'automatisations (identifiants uniques compris), et
+/// renvoie celles qui sont activées.
+pub fn check_all(configs: &[AutomationConfig]) -> Result<Vec<Automation>, AutomationError> {
     let mut ids = HashSet::new();
     let mut automations = Vec::new();
     for config in configs {
-        let id = config.id.clone();
-        if !ids.insert(id.clone()) {
+        if !ids.insert(config.id.as_str()) {
             return Err(AutomationError::Invalid {
-                id,
+                id: config.id.clone(),
                 reason: "cet identifiant est déjà utilisé".into(),
             });
         }
-        let enabled = config.enabled;
-        let automation = check(config).map_err(|reason| AutomationError::Invalid {
-            id: id.clone(),
-            reason,
-        })?;
-        if enabled {
+        let automation = config.check()?;
+        if config.enabled {
             automations.push(automation);
         }
     }
     Ok(automations)
+}
+
+impl AutomationConfig {
+    /// Lit **une** automatisation écrite en YAML (une liste d'un seul
+    /// élément, copiée depuis `automations.yaml`, est aussi acceptée).
+    pub fn from_yaml(yaml: &str) -> Result<Self, AutomationError> {
+        if yaml.len() > MAX_FILE_SIZE {
+            return Err(AutomationError::TooLarge);
+        }
+        let yaml_error = |error: serde_saphyr::Error| AutomationError::Yaml(error.to_string());
+        if yaml.trim_start().starts_with('-') {
+            let mut list: Vec<Self> = serde_saphyr::from_str(yaml).map_err(yaml_error)?;
+            return match (list.pop(), list.is_empty()) {
+                (Some(config), true) => Ok(config),
+                _ => Err(AutomationError::Yaml(
+                    "une seule automatisation à la fois".into(),
+                )),
+            };
+        }
+        serde_saphyr::from_str(yaml).map_err(yaml_error)
+    }
+
+    /// Lit une automatisation envoyée en JSON par le tableau de bord.
+    pub fn from_json(value: Value) -> Result<Self, AutomationError> {
+        serde_json::from_value(value).map_err(|error| AutomationError::Yaml(error.to_string()))
+    }
+
+    /// La forme JSON, pour la base et le tableau de bord.
+    #[must_use]
+    pub fn to_json(&self) -> Value {
+        // Ne peut pas échouer : toutes les clés sont des chaînes, et les
+        // nombres sont finis (vérifiés à la lecture).
+        serde_json::to_value(self).unwrap_or(Value::Null)
+    }
+
+    /// La forme YAML, pour l'affichage et l'édition.
+    #[must_use]
+    pub fn to_yaml(&self) -> String {
+        serde_saphyr::to_string(self).unwrap_or_default()
+    }
+
+    #[must_use]
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+
+    /// Le nom affiché (l'identifiant s'il n'y en a pas).
+    #[must_use]
+    pub fn alias(&self) -> &str {
+        self.alias.as_deref().unwrap_or(&self.id)
+    }
+
+    #[must_use]
+    pub fn enabled(&self) -> bool {
+        self.enabled
+    }
+
+    /// Vérifie chaque valeur et renvoie l'automatisation prête à l'emploi.
+    pub fn check(&self) -> Result<Automation, AutomationError> {
+        check(self.clone()).map_err(|reason| AutomationError::Invalid {
+            id: self.id.clone(),
+            reason,
+        })
+    }
 }
 
 /// Vérifie une automatisation. L'erreur est un message en français.
@@ -322,8 +463,8 @@ fn check_trigger(config: TriggerConfig) -> Result<Trigger, String> {
             for_,
         } => Trigger::State {
             entity_ids: entity_ids(entity_id)?,
-            from,
-            to,
+            from: from.map(|text| text.0),
+            to: to.map(|text| text.0),
             for_: for_.as_deref().map(parse_duration).transpose()?,
         },
         TriggerConfig::NumericState {
@@ -387,6 +528,36 @@ pub fn uses_sun(automations: &[Automation]) -> bool {
                 .iter()
                 .any(|c| matches!(c, Condition::Sun { .. }))
     })
+}
+
+impl Automation {
+    /// Toutes les entités citées (déclencheurs, conditions, actions), triées.
+    #[must_use]
+    pub fn entity_ids(&self) -> Vec<&EntityId> {
+        let mut ids: Vec<&EntityId> = Vec::new();
+        for trigger in &self.triggers {
+            if let Trigger::State { entity_ids, .. } | Trigger::NumericState { entity_ids, .. } =
+                trigger
+            {
+                ids.extend(entity_ids);
+            }
+        }
+        for condition in &self.conditions {
+            if let Condition::State { entity_ids, .. }
+            | Condition::NumericState { entity_ids, .. } = condition
+            {
+                ids.extend(entity_ids);
+            }
+        }
+        for action in &self.actions {
+            if let Action::Service { entity_ids, .. } = action {
+                ids.extend(entity_ids);
+            }
+        }
+        ids.sort_unstable();
+        ids.dedup();
+        ids
+    }
 }
 
 fn check_condition(config: ConditionConfig) -> Result<Condition, String> {

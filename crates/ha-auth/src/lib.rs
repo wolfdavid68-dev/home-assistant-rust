@@ -187,6 +187,36 @@ impl Auth {
         code: Option<&str>,
         ip: IpAddr,
     ) -> Result<IssuedToken, AuthError> {
+        let user_id = self.check_credentials(username, password, code, ip).await?;
+        self.issue_token(user_id).await
+    }
+
+    /// Confirme l'identité d'un utilisateur **déjà connecté**, avant une
+    /// action sensible (modifier une automatisation…) : mot de passe, et code
+    /// à usage unique si la double authentification est activée.
+    ///
+    /// Mêmes protections qu'à la connexion (tentatives limitées par adresse,
+    /// message d'erreur unique), mais aucun jeton n'est créé.
+    pub async fn confirm(
+        &self,
+        username: &str,
+        password: &str,
+        code: Option<&str>,
+        ip: IpAddr,
+    ) -> Result<(), AuthError> {
+        self.check_credentials(username, password, code, ip)
+            .await
+            .map(|_| ())
+    }
+
+    /// Vérifie nom, mot de passe et code. Renvoie l'identifiant du compte.
+    async fn check_credentials(
+        &self,
+        username: &str,
+        password: &str,
+        code: Option<&str>,
+        ip: IpAddr,
+    ) -> Result<i64, AuthError> {
         if let Err(retry_after) = self.limiter.check(ip) {
             return Err(AuthError::TooManyAttempts { retry_after });
         }
@@ -231,7 +261,7 @@ impl Auth {
             }
         }
         self.limiter.record_success(ip);
-        self.issue_token(user_id).await
+        Ok(user_id)
     }
 
     /// Vérifie un code à usage unique et mémorise son créneau, pour qu'il ne

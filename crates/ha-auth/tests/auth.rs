@@ -266,3 +266,29 @@ async fn unreadable_two_factor_secret_refuses_login_without_crashing() {
     assert!(auth.disable_totp("david").await.unwrap());
     assert!(auth.login("david", PASSWORD, None, IP).await.is_ok());
 }
+
+#[tokio::test]
+async fn confirming_checks_the_password_without_issuing_a_token() {
+    let store = Store::open_in_memory().await.unwrap();
+    let auth = Auth::new(&store).await.unwrap();
+    auth.create_user("david", PASSWORD).await.unwrap();
+    auth.confirm("david", PASSWORD, None, IP).await.unwrap();
+    let (tokens,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM access_tokens")
+        .fetch_one(store.pool())
+        .await
+        .unwrap();
+    assert_eq!(tokens, 0, "aucun jeton créé");
+
+    assert!(matches!(
+        auth.confirm("david", "mauvais", None, IP).await,
+        Err(AuthError::InvalidCredentials)
+    ));
+    // Les échecs comptent pour la limite, comme à la connexion.
+    for _ in 1..MAX_FAILURES {
+        let _ = auth.confirm("david", "mauvais", None, IP).await;
+    }
+    assert!(matches!(
+        auth.confirm("david", PASSWORD, None, IP).await,
+        Err(AuthError::TooManyAttempts { .. })
+    ));
+}

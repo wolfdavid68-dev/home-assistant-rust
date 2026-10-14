@@ -411,7 +411,7 @@ async fn scripts_and_scenes_run_from_a_service_call() {
             automations,
             scripts,
             scenes,
-            location: None,
+            ..ha_automation::Setup::default()
         },
         Arc::clone(&core),
     );

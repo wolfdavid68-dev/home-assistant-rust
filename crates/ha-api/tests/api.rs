@@ -33,6 +33,11 @@ struct TestApp {
 
 impl TestApp {
     async fn new() -> Self {
+        Self::with_editor(true).await
+    }
+
+    /// `editable` : l'éditeur d'automatisations accepte-t-il les modifications ?
+    async fn with_editor(editable: bool) -> Self {
         let store = Store::open_in_memory().await.unwrap();
         let auth = Auth::new(&store).await.unwrap();
         auth.create_user("david", PASSWORD).await.unwrap();
@@ -42,7 +47,17 @@ impl TestApp {
             "- {area: Cuisine, entities: [{entity: switch.prise_cafe, name: Cafetière}]}",
         )
         .unwrap();
-        let state = ApiState::new(core, store, Arc::new(auth), areas);
+        let file = ha_automation::parse_configs(
+            "- {id: matin, triggers: [{trigger: time, at: '07:30'}], \
+               actions: [{action: cover.open_cover, target: {entity_id: cover.salon}}]}",
+        )
+        .unwrap();
+        let editor = ha_automation::Editor::new(store.clone(), file, false);
+        let automations = ha_api::AutomationEditor {
+            editor: Arc::new(editor),
+            editable,
+        };
+        let state = ApiState::new(core, store, Arc::new(auth), areas, Some(automations));
         Self {
             state,
             recorder: Some(recorder),
@@ -109,6 +124,12 @@ async fn every_route_requires_a_token() {
         ("GET", "/api/audit"),
         ("GET", "/api/areas"),
         ("GET", "/api/history/light.salon/series"),
+        ("POST", "/api/auth/confirm"),
+        ("GET", "/api/automations"),
+        ("POST", "/api/automations/check"),
+        ("PUT", "/api/automations/soir"),
+        ("DELETE", "/api/automations/soir"),
+        ("GET", "/api/automations/soir/versions"),
     ] {
         let (status, _) = app.request(method, uri, None, None).await;
         assert_eq!(status, StatusCode::UNAUTHORIZED, "{method} {uri}");
@@ -654,4 +675,263 @@ async fn history_series_for_a_chart() {
             .await;
         assert_eq!(status, StatusCode::BAD_REQUEST, "{bad}");
     }
+}
+
+const SOIR: &str = r#"
+id: soir
+alias: Lampe le soir
+triggers:
+  - trigger: state
+    entity_id: binary_sensor.porte
+    to: "on"
+actions:
+  - action: light.turn_on
+    target: {entity_id: light.salon}
+"#;
+
+#[tokio::test]
+async fn automations_are_listed_and_checked() {
+    let app = TestApp::new().await;
+    let token = app.login().await;
+
+    let (status, body) = app
+        .request("GET", "/api/automations", Some(&token), None)
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["editable"], true);
+    assert_eq!(body["confirmed_for"], Value::Null);
+    assert_eq!(body["automations"][0]["id"], "matin");
+    assert_eq!(body["automations"][0]["source"], "file");
+    assert!(
+        body["automations"][0]["yaml"]
+            .as_str()
+            .unwrap()
+            .starts_with("id: matin\n")
+    );
+
+    // YAML → formulaire (JSON), avec les entités inconnues signalées.
+    app.state
+        .core
+        .states
+        .set("light.salon".parse().unwrap(), "off", Attributes::new())
+        .unwrap();
+    let (status, body) = app
+        .request(
+            "POST",
+            "/api/automations/check",
+            Some(&token),
+            Some(json!({"yaml": SOIR})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["config"]["triggers"][0]["to"], "on");
+    assert_eq!(
+        body["warnings"],
+        json!(["binary_sensor.porte n'existe pas (pour l'instant)"])
+    );
+    // … et retour : formulaire → YAML.
+    let (status, back) = app
+        .request(
+            "POST",
+            "/api/automations/check",
+            Some(&token),
+            Some(json!({"config": body["config"]})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{back}");
+    assert_eq!(back["yaml"], body["yaml"]);
+
+    // Les erreurs sont expliquées.
+    for request in [
+        json!({"yaml": SOIR.replace("light.turn_on", "allume")}),
+        json!({"yaml": SOIR.replace("id: soir", "id: matin")}),
+        json!({"config": {"id": "x"}}),
+        json!({"yaml": SOIR, "config": {}}),
+        json!({}),
+    ] {
+        let (status, body) = app
+            .request(
+                "POST",
+                "/api/automations/check",
+                Some(&token),
+                Some(request),
+            )
+            .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+        assert!(body["error"].as_str().is_some_and(|e| !e.is_empty()));
+    }
+}
+
+#[tokio::test]
+async fn changing_automations_requires_a_recent_confirmation() {
+    let app = TestApp::new().await;
+    let token = app.login().await;
+    let save = json!({"yaml": SOIR});
+
+    let (status, body) = app
+        .request(
+            "PUT",
+            "/api/automations/soir",
+            Some(&token),
+            Some(save.clone()),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body["confirm"], true);
+
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/auth/confirm",
+            Some(&token),
+            Some(json!({"password": "mauvais mot de passe"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "le jeton reste valide");
+    let (status, body) = app
+        .request(
+            "POST",
+            "/api/auth/confirm",
+            Some(&token),
+            Some(json!({"password": PASSWORD})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["confirmed_for"], 900);
+
+    let (status, body) = app
+        .request(
+            "PUT",
+            "/api/automations/soir",
+            Some(&token),
+            Some(save.clone()),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+    let (status, _) = app
+        .request(
+            "PUT",
+            "/api/automations/soir",
+            Some(&token),
+            Some(save.clone()),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "modification");
+    let (status, _) = app
+        .request(
+            "PUT",
+            "/api/automations/autre",
+            Some(&token),
+            Some(save.clone()),
+        )
+        .await;
+    assert_eq!(
+        status,
+        StatusCode::BAD_REQUEST,
+        "identifiant différent de l'adresse"
+    );
+    let (status, _) = app
+        .request("DELETE", "/api/automations/matin", Some(&token), None)
+        .await;
+    assert_eq!(
+        status,
+        StatusCode::BAD_REQUEST,
+        "le fichier est en lecture seule"
+    );
+
+    let (_, body) = app
+        .request("GET", "/api/automations", Some(&token), None)
+        .await;
+    assert!(body["confirmed_for"].as_u64().unwrap() > 800);
+    assert_eq!(body["automations"][1]["id"], "soir");
+    assert_eq!(body["automations"][1]["updated_by"], "david");
+
+    let (status, _) = app
+        .request("DELETE", "/api/automations/soir", Some(&token), None)
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, _) = app
+        .request("DELETE", "/api/automations/soir", Some(&token), None)
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    let (status, body) = app
+        .request("GET", "/api/automations/soir/versions", Some(&token), None)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let deleted: Vec<bool> = body["versions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v["deleted"].as_bool().unwrap())
+        .collect();
+    assert_eq!(deleted, [true, false, false]);
+    assert_eq!(body["versions"][1]["config"]["id"], "soir");
+
+    // Tout est dans le journal d'audit.
+    let (_, body) = app.request("GET", "/api/audit", Some(&token), None).await;
+    let actions: Vec<&str> = body["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| e["action"].as_str().unwrap())
+        .collect();
+    for expected in [
+        "confirm_failed",
+        "confirm",
+        "automation_create",
+        "automation_update",
+        "automation_delete",
+    ] {
+        assert!(actions.contains(&expected), "{expected} : {actions:?}");
+    }
+
+    // La confirmation est liée au jeton : un autre jeton doit confirmer à
+    // son tour, et elle disparaît à la déconnexion.
+    let other = app.login().await;
+    let (status, _) = app
+        .request(
+            "PUT",
+            "/api/automations/soir",
+            Some(&other),
+            Some(save.clone()),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    app.request("POST", "/api/auth/logout", Some(&token), None)
+        .await;
+    let (status, _) = app
+        .request("PUT", "/api/automations/soir", Some(&token), Some(save))
+        .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn a_read_only_editor_refuses_changes() {
+    let app = TestApp::with_editor(false).await;
+    let token = app.login().await;
+    app.request(
+        "POST",
+        "/api/auth/confirm",
+        Some(&token),
+        Some(json!({"password": PASSWORD})),
+    )
+    .await;
+    let (status, body) = app
+        .request(
+            "PUT",
+            "/api/automations/soir",
+            Some(&token),
+            Some(json!({"yaml": SOIR})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert!(
+        body["error"].as_str().unwrap().contains("lecture seule"),
+        "{body}"
+    );
+    let (_, body) = app
+        .request("GET", "/api/automations", Some(&token), None)
+        .await;
+    assert_eq!(body["editable"], false);
 }

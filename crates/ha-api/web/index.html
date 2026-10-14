@@ -48,6 +48,7 @@
       </div>
       <div class="topbar-right">
         <span id="connection" class="status" aria-live="polite">Connexion…</span>
+        <button id="open-automations" class="ghost" type="button">Automatisations</button>
         <button id="logout" class="ghost" type="button">Déconnexion</button>
       </div>
     </header>
@@ -69,6 +70,75 @@
       <p id="history-summary" class="history-summary"></p>
       <ol id="history-changes" class="history-changes"></ol>
     </dialog>
+    <!-- Éditeur d'automatisations -->
+    <dialog id="automations" class="history-dialog automations-dialog" aria-labelledby="automations-title">
+      <div class="history-top">
+        <h2 id="automations-title">Automatisations</h2>
+        <button id="automations-close" class="ghost" type="button">Fermer</button>
+      </div>
+      <!-- Liste -->
+      <section id="auto-list-view">
+        <p id="auto-readonly" class="notice" hidden>
+          L'éditeur est en lecture seule (<code>HA_AUTOMATION_EDITOR=off</code>).
+        </p>
+        <p id="auto-notice" class="notice ok" role="status" hidden></p>
+        <div class="auto-toolbar">
+          <button id="auto-new" class="primary small" type="button">Nouvelle automatisation</button>
+        </div>
+        <ul id="auto-list" class="auto-list"></ul>
+      </section>
+      <!-- Édition -->
+      <section id="auto-edit-view" hidden>
+        <div class="tabs" role="group" aria-label="Mode d'édition">
+          <button type="button" class="period" id="auto-tab-form">Formulaire</button>
+          <button type="button" class="period" id="auto-tab-yaml">YAML</button>
+        </div>
+        <p id="auto-file-note" class="notice" hidden>
+          Cette automatisation est définie dans <code>automations.yaml</code> : elle se
+          modifie dans le fichier, sur le serveur. Tu peux la dupliquer dans l'éditeur.
+        </p>
+        <div id="auto-form" class="auto-form"></div>
+        <label id="auto-yaml-label" hidden>
+          Automatisation en YAML
+          <textarea id="auto-yaml" class="yaml" rows="18" spellcheck="false" autocapitalize="none"></textarea>
+        </label>
+        <p id="auto-status" class="auto-status" role="status" aria-live="polite"></p>
+        <ul id="auto-warnings" class="auto-warnings"></ul>
+        <div class="auto-actions">
+          <button id="auto-save" class="primary small" type="button">Enregistrer</button>
+          <button id="auto-duplicate" class="ghost" type="button">Dupliquer</button>
+          <button id="auto-versions" class="ghost" type="button">Versions</button>
+          <button id="auto-delete" class="ghost danger" type="button">Supprimer</button>
+          <button id="auto-cancel" class="ghost" type="button">Retour</button>
+        </div>
+        <ol id="auto-version-list" class="history-changes" hidden></ol>
+      </section>
+    </dialog>
+    <!-- Confirmation d'identité avant une modification -->
+    <dialog id="confirm" class="history-dialog confirm-dialog" aria-labelledby="confirm-title">
+      <form id="confirm-form" method="dialog" class="confirm-form">
+        <h2 id="confirm-title">Confirme ton identité</h2>
+        <p class="journal-hint">
+          Pour modifier les automatisations, retape ton mot de passe. Il ne sera plus
+          demandé pendant 15 minutes.
+        </p>
+        <label>
+          Mot de passe
+          <input name="password" type="password" autocomplete="current-password" required>
+        </label>
+        <label>
+          <span>Code de vérification <small>(si la double authentification est activée)</small></span>
+          <input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7"
+                 pattern="[0-9 ]{6,7}" placeholder="123 456">
+        </label>
+        <p id="confirm-error" class="error" role="alert" hidden></p>
+        <div class="auto-actions">
+          <button type="submit" class="primary small" value="ok">Confirmer</button>
+          <button id="confirm-cancel" type="button" class="ghost">Annuler</button>
+        </div>
+      </form>
+    </dialog>
+    <datalist id="entity-list"></datalist>
     <details id="journal" class="journal">
       <summary>Journal d'activité</summary>
       <p class="journal-hint">Qui a fait quoi, et d'où : les 50 dernières actions.</p>

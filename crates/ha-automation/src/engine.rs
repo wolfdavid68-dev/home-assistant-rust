@@ -7,6 +7,7 @@ use std::time::Duration;
 use ha_core::{Attributes, Background, CancellationToken, Core, EntityId, Event};
 use jiff::civil::DateTime;
 use tokio::sync::broadcast::error::RecvError;
+use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tokio::time::{Instant, MissedTickBehavior};
 use tracing::{debug, info, warn};
@@ -58,8 +59,9 @@ impl Engine {
             evaluator = evaluator.with_sun(location, jiff::tz::TimeZone::system());
         }
         let library = Library::publish(setup.scripts, setup.scenes, &core);
+        let reloads = setup.reloads.map(|reloads| reloads.0);
         Self(Background::spawn("le moteur d'automatisations", |token| {
-            run(evaluator, library, core, events, token)
+            run(evaluator, library, core, events, reloads, token)
         }))
     }
 
@@ -77,6 +79,51 @@ pub struct Setup {
     pub scenes: Vec<Scene>,
     /// Position de la maison, pour le soleil.
     pub location: Option<Location>,
+    /// Pour recharger les automatisations sans redémarrer (voir
+    /// [`reload_channel`]).
+    pub reloads: Option<Reloads>,
+}
+
+/// Côté « envoi » du rechargement : on lui passe la nouvelle liste.
+#[derive(Debug)]
+pub struct Reloader(watch::Sender<Arc<Vec<Automation>>>);
+
+/// Côté « réception », à donner au moteur dans [`Setup::reloads`].
+#[derive(Debug)]
+pub struct Reloads(watch::Receiver<Arc<Vec<Automation>>>);
+
+/// Crée le canal qui permet de recharger les automatisations d'un moteur
+/// qui tourne.
+///
+/// Concept Rust : un canal `watch` ne garde que la **dernière** valeur
+/// envoyée. Si deux modifications arrivent très vite, le moteur ne charge
+/// que la plus récente : c'est exactement ce qu'on veut.
+#[must_use]
+pub fn reload_channel() -> (Reloader, Reloads) {
+    let (sender, receiver) = watch::channel(Arc::new(Vec::new()));
+    (Reloader(sender), Reloads(receiver))
+}
+
+impl Reloader {
+    /// Demande au moteur de remplacer ses automatisations par `automations`.
+    /// Sans effet si le moteur est arrêté.
+    pub fn reload(&self, automations: Vec<Automation>) {
+        self.0.send_replace(Arc::new(automations));
+    }
+}
+
+/// Attend un rechargement. Sans canal (ou si l'envoi a disparu), attend pour
+/// toujours : cette branche du `select!` ne se produit alors jamais.
+async fn next_reload(
+    reloads: &mut Option<watch::Receiver<Arc<Vec<Automation>>>>,
+) -> Arc<Vec<Automation>> {
+    if let Some(receiver) = reloads {
+        if receiver.changed().await.is_ok() {
+            return Arc::clone(&receiver.borrow_and_update());
+        }
+        *reloads = None;
+    }
+    std::future::pending().await
 }
 
 /// Les scripts et les scènes, et les scripts en cours d'exécution.
@@ -225,6 +272,7 @@ async fn run(
     mut library: Library,
     core: Arc<Core>,
     mut events: tokio::sync::broadcast::Receiver<Arc<Event>>,
+    mut reloads: Option<watch::Receiver<Arc<Vec<Automation>>>>,
     token: CancellationToken,
 ) {
     let count = evaluator.automations().len();
@@ -267,6 +315,8 @@ async fn run(
                 Err(RecvError::Closed) => break,
             },
 
+            automations = next_reload(&mut reloads) => runner.reload(automations.as_ref().clone()),
+
             _ = ticker.tick() => {
                 let now = local_now();
                 let fired = runner.evaluator.on_tick(previous, now, Instant::now(), &runner.core.states);
@@ -284,6 +334,33 @@ async fn run(
 }
 
 impl Runner {
+    /// Remplace les automatisations. Celles qui n'ont pas changé continuent
+    /// comme si de rien n'était (actions en cours, attentes `for`, protection
+    /// contre les boucles) ; les actions en cours de celles qui ont été
+    /// modifiées ou supprimées sont arrêtées.
+    fn reload(&mut self, automations: Vec<Automation>) {
+        let count = automations.len();
+        let previous = self.evaluator.replace(automations);
+        let mut old_running = std::mem::take(&mut self.running);
+        let mut old_runs = std::mem::take(&mut self.recent_runs);
+        for old in &previous {
+            let kept = old.and_then(|old| old_running.get_mut(old)?.take());
+            self.running.push(kept);
+            let runs = old
+                .and_then(|old| old_runs.get_mut(old).map(std::mem::take))
+                .unwrap_or_default();
+            self.recent_runs.push(runs);
+        }
+        for handle in old_running.into_iter().flatten() {
+            handle.abort();
+        }
+        let unchanged = previous.iter().filter(|old| old.is_some()).count();
+        info!(
+            "automatisations rechargées : {count} au total, {} nouvelle(s) ou modifiée(s)",
+            count - unchanged
+        );
+    }
+
     fn launch_all(&mut self, fired: Vec<usize>) {
         for index in fired {
             self.launch(index);

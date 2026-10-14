@@ -107,6 +107,7 @@ const live = {
             entities.clear();
             for (const state of message.result) entities.set(state.entity_id, state);
             renderAll();
+            refreshEntityList();
           }
           break;
         case "event":
@@ -140,7 +141,11 @@ function onStateChanged({ entity_id, new_state }) {
   else entities.delete(entity_id);
   const existing = document.getElementById(tileId(entity_id));
   if (existing && new_state) existing.replaceWith(renderTile(new_state));
-  else renderAll(); // entité ajoutée ou supprimée : on redessine tout
+  else {
+    // Entité ajoutée ou supprimée : on redessine tout.
+    renderAll();
+    refreshEntityList();
+  }
 }
 
 // ---------------------------------------------------------------- Commandes
@@ -737,6 +742,11 @@ const AUDIT_LABELS = {
   freebox_track: "présence suivie",
   freebox_untrack: "présence plus suivie",
   freebox_new_device: "nouvel appareil sur le réseau",
+  confirm: "identité confirmée",
+  confirm_failed: "échec de confirmation",
+  automation_create: "automatisation créée",
+  automation_update: "automatisation modifiée",
+  automation_delete: "automatisation supprimée",
 };
 const dateTime = new Intl.DateTimeFormat("fr", { dateStyle: "short", timeStyle: "medium" });
 
@@ -757,7 +767,7 @@ async function loadJournal() {
       const what = [entry.target, entry.detail].filter(Boolean).join(" · ");
       return el(
         "li",
-        { class: ["login_failed", "freebox_new_device"].includes(entry.action) ? "failed" : "" },
+        { class: ["login_failed", "confirm_failed", "freebox_new_device"].includes(entry.action) ? "failed" : "" },
         el("time", { datetime: entry.at, text: dateTime.format(new Date(entry.at)) }),
         el("strong", { text: entry.actor }),
         el("span", { text: lookup(AUDIT_LABELS, entry.action) ?? entry.action }),
@@ -772,6 +782,781 @@ async function loadJournal() {
 $("#journal").addEventListener("toggle", (event) => {
   if (event.currentTarget.open) loadJournal().catch(() => {});
 });
+
+// ---------------------------------------------------------------- Automatisations
+// L'éditeur travaille directement sur la configuration JSON renvoyée par le
+// serveur : le formulaire n'est qu'une vue de cet objet. Un champ que le
+// formulaire ne sait pas afficher (paramètre rare…) est donc conservé tel quel.
+// Le serveur vérifie tout, à chaque enregistrement : rien n'est fait confiance
+// côté navigateur.
+const auto = {
+  list: [],
+  editable: false,
+  // Automatisation en cours d'édition.
+  config: null,
+  existingId: null, // identifiant si on modifie, null si on crée
+  source: "editor",
+  mode: "form",
+  checkTimer: null,
+  checkSeq: 0,
+};
+
+const TRIGGER_KINDS = {
+  state: ["Un appareil change d'état", () => ({ trigger: "state", entity_id: "" })],
+  numeric_state: ["Une valeur passe un seuil", () => ({ trigger: "numeric_state", entity_id: "", below: 18 })],
+  time: ["À une heure précise", () => ({ trigger: "time", at: "07:30" })],
+  sun: ["Lever ou coucher du soleil", () => ({ trigger: "sun", event: "sunset" })],
+};
+const CONDITION_KINDS = {
+  state: ["Un appareil est dans un état", () => ({ condition: "state", entity_id: "", state: "on" })],
+  numeric_state: ["Une valeur est au-dessus / au-dessous", () => ({ condition: "numeric_state", entity_id: "", above: 20 })],
+  time: ["Plage horaire, jours", () => ({ condition: "time", after: "18:00", before: "23:00" })],
+  sun: ["Il fait jour / nuit", () => ({ condition: "sun", after: "sunset", before: "sunrise" })],
+};
+const ACTION_KINDS = {
+  service: ["Commander un appareil", () => ({ action: "light.turn_on", target: { entity_id: "" } })],
+  delay: ["Attendre", () => ({ delay: "5min" })],
+};
+const SERVICES = {
+  light: [["turn_on", "Allumer"], ["turn_off", "Éteindre"], ["toggle", "Inverser"]],
+  switch: [["turn_on", "Allumer"], ["turn_off", "Éteindre"], ["toggle", "Inverser"]],
+  cover: [["open_cover", "Ouvrir"], ["close_cover", "Fermer"], ["stop_cover", "Arrêter"], ["set_cover_position", "Mettre à une position"]],
+  script: [["turn_on", "Lancer"], ["turn_off", "Arrêter"]],
+  scene: [["turn_on", "Activer"]],
+  notify: [["send_message", "Envoyer une notification"]],
+};
+const SUN_EVENTS = [["sunrise", "lever du soleil"], ["sunset", "coucher du soleil"], ["dawn", "aube"], ["dusk", "crépuscule"]];
+const WEEKDAYS = [["mon", "lun"], ["tue", "mar"], ["wed", "mer"], ["thu", "jeu"], ["fri", "ven"], ["sat", "sam"], ["sun", "dim"]];
+
+/** Appel à l'API : renvoie { status, data }. */
+async function api(method, url, body) {
+  const response = await fetch(url, {
+    method,
+    headers: {
+      Authorization: `Bearer ${token.get()}`,
+      ...(body !== undefined && { "Content-Type": "application/json" }),
+    },
+    ...(body !== undefined && { body: JSON.stringify(body) }),
+  });
+  if (response.status === 401) {
+    for (const dialog of document.querySelectorAll("dialog[open]")) dialog.close();
+    token.clear();
+    live.close();
+    showLogin("Session expirée : reconnecte-toi.");
+    throw new Error("session expirée");
+  }
+  const data = await response.json().catch(() => ({}));
+  return { status: response.status, data };
+}
+
+$("#open-automations").addEventListener("click", () => {
+  $("#automations").showModal();
+  showAutoList();
+});
+$("#automations-close").addEventListener("click", () => $("#automations").close());
+
+// ----- Liste
+
+async function showAutoList(notice = "") {
+  $("#auto-edit-view").hidden = true;
+  $("#auto-list-view").hidden = false;
+  const message = $("#auto-notice");
+  message.textContent = notice;
+  message.hidden = !notice;
+  const list = $("#auto-list");
+  list.replaceChildren(el("li", { class: "auto-empty", text: "Chargement…" }));
+  const { status, data } = await api("GET", "/api/automations");
+  if (status !== 200) return list.replaceChildren(el("li", { class: "auto-empty", text: "Automatisations indisponibles." }));
+  auto.list = data.automations ?? [];
+  auto.editable = data.editable === true;
+  $("#auto-readonly").hidden = auto.editable;
+  $("#auto-new").hidden = !auto.editable;
+  list.replaceChildren(...auto.list.map(autoCard));
+  if (auto.list.length === 0) {
+    list.replaceChildren(el("li", { class: "auto-empty", text: "Aucune automatisation pour l'instant." }));
+  }
+}
+
+function autoCard(entry) {
+  const badges = el("div", { class: "badges" }, el("span", { class: "badge", text: entry.source === "file" ? "fichier" : "éditeur" }));
+  if (entry.error) badges.append(el("span", { class: "badge bad", text: "invalide" }));
+  else if (!entry.enabled) badges.append(el("span", { class: "badge off", text: "désactivée" }));
+  const card = el(
+    "li",
+    { class: "auto-card" },
+    el("div", { class: "auto-card-head" }, el("strong", { text: entry.alias }), badges),
+    el("p", { class: "auto-summary", text: entry.config ? describe(entry.config) : "" }),
+  );
+  if (entry.error) card.append(el("p", { class: "error", text: entry.error }));
+  if (entry.updated_by && entry.updated_at) {
+    card.append(el("small", { class: "auto-meta", text: `Modifiée par ${entry.updated_by} le ${dateTime.format(new Date(entry.updated_at))}` }));
+  }
+  const buttons = el("div", { class: "auto-card-buttons" });
+  const open = el("button", { type: "button", class: "action-button", text: entry.source === "editor" && auto.editable ? "Modifier" : "Voir" });
+  open.addEventListener("click", () => openAutoEditor(entry));
+  buttons.append(open);
+  if (entry.source === "editor" && auto.editable && entry.config) {
+    const toggle = el("button", { type: "button", class: "action-button", text: entry.enabled ? "Désactiver" : "Activer" });
+    toggle.addEventListener("click", () => {
+      const config = structuredClone(entry.config);
+      if (entry.enabled) config.enabled = false;
+      else delete config.enabled;
+      saveAutomation(entry.id, { config }, entry.enabled ? "Automatisation désactivée." : "Automatisation activée.");
+    });
+    buttons.append(toggle);
+  }
+  card.append(buttons);
+  return card;
+}
+
+/** Résumé en français : « Quand … · Si … · Alors … ». */
+function describe(config) {
+  const parts = [`Quand ${(config.triggers ?? []).map(describeTrigger).join(", ou ")}`];
+  if (config.conditions?.length) parts.push(`si ${config.conditions.map(describeCondition).join(" et ")}`);
+  parts.push(`alors ${(config.actions ?? []).map(describeAction).join(", puis ")}`);
+  return parts.join(" · ");
+}
+
+const asList = (value) => (Array.isArray(value) ? value : value === undefined || value === "" ? [] : [value]);
+const entityNames = (value) => asList(value).map((id) => (entities.has(id) ? nameOf(entities.get(id)) : id)).join(" ou ") || "?";
+const sunLabel = (event) => SUN_EVENTS.find(([key]) => key === event)?.[1] ?? event;
+
+function describeTrigger(t) {
+  switch (t.trigger) {
+    case "state":
+      return `${entityNames(t.entity_id)} ${t.to !== undefined ? `passe à « ${t.to} »` : "change"}${t.for ? ` depuis ${t.for}` : ""}`;
+    case "numeric_state":
+      return `${entityNames(t.entity_id)} ${[t.above !== undefined && `dépasse ${t.above}`, t.below !== undefined && `descend sous ${t.below}`].filter(Boolean).join(" et ")}`;
+    case "time":
+      return `à ${asList(t.at).join(", ")}`;
+    case "sun":
+      return `${offsetText(t.offset)}${sunLabel(t.event)}`;
+    default:
+      return String(t.trigger);
+  }
+}
+
+function describeCondition(c) {
+  switch (c.condition) {
+    case "state":
+      return `${entityNames(c.entity_id)} est « ${asList(c.state).join(" » ou « ")} »`;
+    case "numeric_state":
+      return `${entityNames(c.entity_id)} ${[c.above !== undefined && `> ${c.above}`, c.below !== undefined && `< ${c.below}`].filter(Boolean).join(" et ")}`;
+    case "time": {
+      const days = asList(c.weekday);
+      return [c.after && `après ${c.after}`, c.before && `avant ${c.before}`, days.length && `le ${days.join(", ")}`].filter(Boolean).join(" ");
+    }
+    case "sun":
+      return [c.after && `après le ${sunLabel(c.after)}`, c.before && `avant le ${sunLabel(c.before)}`].filter(Boolean).join(" et ");
+    default:
+      return String(c.condition);
+  }
+}
+
+function describeAction(a) {
+  if (a.delay !== undefined) return `attendre ${a.delay}`;
+  const [domain, service] = String(a.action).split(".");
+  const label = (lookup(SERVICES, domain) ?? []).find(([key]) => key === service)?.[1];
+  return `${(label ?? a.action).toLowerCase()} ${entityNames(a.target?.entity_id)}`;
+}
+
+function offsetText(offset) {
+  const minutes = offsetMinutes(offset);
+  if (!minutes) return "au ";
+  return `${Math.abs(minutes)} min ${minutes < 0 ? "avant le " : "après le "}`;
+}
+
+// ----- Édition
+
+$("#auto-new").addEventListener("click", () =>
+  openAutoEditor({
+    id: null,
+    source: "editor",
+    config: { id: "", alias: "", triggers: [TRIGGER_KINDS.state[1]()], actions: [ACTION_KINDS.service[1]()] },
+  }),
+);
+
+function openAutoEditor(entry) {
+  auto.existingId = entry.id;
+  auto.source = entry.source;
+  auto.config = structuredClone(entry.config ?? { id: entry.id, triggers: [], actions: [] });
+  auto.mode = entry.source === "file" || !auto.editable ? "yaml" : "form";
+  $("#auto-list-view").hidden = true;
+  $("#auto-edit-view").hidden = false;
+  $("#auto-version-list").hidden = true;
+  $("#auto-file-note").hidden = entry.source !== "file";
+  $("#auto-yaml").value = entry.yaml ?? "";
+  setAutoStatus("");
+  renderAutoEditor();
+  if (entry.id === null) $("#auto-form input")?.focus();
+}
+
+function readOnly() {
+  return auto.source === "file" || !auto.editable;
+}
+
+function renderAutoEditor() {
+  const ro = readOnly();
+  $("#auto-tab-form").setAttribute("aria-pressed", String(auto.mode === "form"));
+  $("#auto-tab-yaml").setAttribute("aria-pressed", String(auto.mode === "yaml"));
+  $("#auto-tab-form").hidden = ro;
+  $("#auto-tab-yaml").hidden = ro;
+  $("#auto-form").hidden = auto.mode !== "form";
+  $("#auto-yaml-label").hidden = auto.mode !== "yaml";
+  $("#auto-yaml").readOnly = ro;
+  $("#auto-save").hidden = ro;
+  $("#auto-delete").hidden = ro || auto.existingId === null;
+  $("#auto-duplicate").hidden = !auto.editable || auto.existingId === null;
+  $("#auto-versions").hidden = auto.source === "file";
+  if (auto.mode === "form") renderAutoForm();
+}
+
+$("#auto-tab-form").addEventListener("click", async () => {
+  if (auto.mode === "form") return;
+  // YAML → formulaire : le serveur lit le YAML et renvoie le JSON.
+  const result = await checkAutomation({ yaml: $("#auto-yaml").value });
+  if (!result) return;
+  auto.config = result.config;
+  auto.mode = "form";
+  renderAutoEditor();
+});
+
+$("#auto-tab-yaml").addEventListener("click", async () => {
+  if (auto.mode === "yaml") return;
+  // Formulaire → YAML : il faut une automatisation valide.
+  const result = await checkAutomation({ config: auto.config });
+  if (!result) return setAutoStatus("Corrige d'abord l'erreur ci-dessus pour passer en YAML.", "error", true);
+  $("#auto-yaml").value = result.yaml;
+  auto.mode = "yaml";
+  renderAutoEditor();
+});
+
+$("#auto-yaml").addEventListener("input", () => scheduleCheck());
+
+function currentRequest() {
+  return auto.mode === "yaml" ? { yaml: $("#auto-yaml").value } : { config: auto.config };
+}
+
+/** Vérifie auprès du serveur ; affiche le résultat. Renvoie la réponse si valide. */
+async function checkAutomation(request = currentRequest()) {
+  const seq = ++auto.checkSeq;
+  const { status, data } = await api("POST", "/api/automations/check", request);
+  if (seq !== auto.checkSeq) return null; // une vérification plus récente est partie
+  if (status !== 200) {
+    setAutoStatus(data.error ?? "Automatisation invalide.", "error");
+    return null;
+  }
+  setAutoStatus("✓ Automatisation valide.", "ok", false, data.warnings);
+  return data;
+}
+
+function scheduleCheck() {
+  clearTimeout(auto.checkTimer);
+  auto.checkTimer = setTimeout(() => checkAutomation().catch(() => {}), 600);
+}
+
+function setAutoStatus(text, kind = "", append = false, warnings = []) {
+  const status = $("#auto-status");
+  if (append && status.textContent) status.append(el("br"), text);
+  else status.textContent = text;
+  status.className = `auto-status ${kind}`;
+  $("#auto-warnings").replaceChildren(...(warnings ?? []).map((w) => el("li", { text: `⚠ ${w}` })));
+}
+
+// ----- Le formulaire
+
+function renderAutoForm() {
+  const c = auto.config;
+  const form = $("#auto-form");
+  const scroll = $("#automations").scrollTop;
+  const alias = textField("Nom", c, "alias", { placeholder: "Volets au coucher du soleil" });
+  alias.querySelector("input").addEventListener("input", () => {
+    // À la création, l'identifiant suit le nom.
+    if (auto.existingId === null) {
+      c.id = slug(c.alias ?? "");
+      $("#auto-id").value = c.id;
+    }
+  });
+  const id = textField("Identifiant", c, "id", { placeholder: "volets_coucher_soleil" });
+  const idInput = id.querySelector("input");
+  idInput.id = "auto-id";
+  idInput.disabled = auto.existingId !== null;
+  idInput.setAttribute("autocapitalize", "none");
+  const enabled = el("input", { type: "checkbox" });
+  enabled.checked = c.enabled !== false;
+  enabled.addEventListener("change", () => {
+    if (enabled.checked) delete c.enabled;
+    else c.enabled = false;
+    scheduleCheck();
+  });
+
+  form.replaceChildren(
+    el("div", { class: "auto-row" }, alias, id),
+    el("label", { class: "check" }, enabled, "Activée"),
+    itemsBlock("Quand…", "Déclencheurs : l'un d'eux suffit.", c, "triggers", TRIGGER_KINDS, "trigger", triggerFields),
+    itemsBlock("Si… (facultatif)", "Conditions : toutes doivent être vraies.", c, "conditions", CONDITION_KINDS, "condition", conditionFields),
+    itemsBlock("Alors…", "Actions, dans l'ordre.", c, "actions", ACTION_KINDS, null, actionFields),
+  );
+  $("#automations").scrollTop = scroll;
+}
+
+/** Un bloc « Quand / Si / Alors » : la liste, et un bouton pour ajouter. */
+function itemsBlock(title, hint, config, key, kinds, tag, fields) {
+  const items = config[key] ?? [];
+  const block = el("fieldset", { class: "auto-block" }, el("legend", { text: title }), el("p", { class: "journal-hint", text: hint }));
+  items.forEach((item, index) => {
+    const kind = tag ? item[tag] : item.delay !== undefined ? "delay" : "service";
+    const label = lookup(kinds, kind)?.[0] ?? kind;
+    const remove = el("button", { type: "button", class: "ghost small", text: "Retirer", "aria-label": `Retirer : ${label}` });
+    remove.addEventListener("click", () => {
+      items.splice(index, 1);
+      if (items.length === 0 && key === "conditions") delete config.conditions;
+      renderAutoForm();
+      scheduleCheck();
+    });
+    const head = el("div", { class: "auto-item-head" }, el("strong", { text: label }));
+    if (key === "actions" && index > 0) {
+      const up = el("button", { type: "button", class: "ghost small", text: "↑", "aria-label": "Monter" });
+      up.addEventListener("click", () => {
+        [items[index - 1], items[index]] = [items[index], items[index - 1]];
+        renderAutoForm();
+        scheduleCheck();
+      });
+      head.append(up);
+    }
+    head.append(remove);
+    // Seule cette ligne est redessinée quand un champ change sa forme (autre
+    // appareil, autre commande) : les autres gardent le focus et le curseur.
+    const box = el("div", { class: "auto-fields" });
+    let busy = false;
+    const refresh = () => {
+      // Retirer le champ qui a le focus déclenche son événement « change »,
+      // qui redemanderait un dessin : on l'ignore pendant celui-ci.
+      if (busy) return;
+      busy = true;
+      const focusables = () => [...box.querySelectorAll("input, select")];
+      const focused = focusables().indexOf(document.activeElement);
+      box.replaceChildren(...fields(item, refresh));
+      if (focused >= 0) focusables()[focused]?.focus();
+      busy = false;
+    };
+    refresh();
+    block.append(el("div", { class: "auto-item" }, head, box));
+  });
+  const add = el("select", { "aria-label": `Ajouter (${title})` }, el("option", { value: "", text: "+ Ajouter…" }));
+  for (const [value, [text]] of Object.entries(kinds)) add.append(el("option", { value, text }));
+  add.addEventListener("change", () => {
+    const make = lookup(kinds, add.value)?.[1];
+    if (!make) return;
+    config[key] = [...items, make()];
+    renderAutoForm();
+    scheduleCheck();
+  });
+  block.append(add);
+  return block;
+}
+
+function triggerFields(t) {
+  switch (t.trigger) {
+    case "state":
+      return [
+        entityField(t, "entity_id"),
+        textField("De (facultatif)", t, "from", { placeholder: "ex. : off" }),
+        textField("À (facultatif)", t, "to", { placeholder: "ex. : on" }),
+        durationField("Depuis au moins (facultatif)", t, "for", true),
+      ];
+    case "numeric_state":
+      return [entityField(t, "entity_id"), numberField("Au-dessus de", t, "above"), numberField("Au-dessous de", t, "below")];
+    case "time":
+      return [timeField("Heure", t, "at")];
+    case "sun":
+      return [selectField("Événement", t, "event", SUN_EVENTS), offsetField(t, "offset")];
+    default:
+      return [];
+  }
+}
+
+function conditionFields(c) {
+  switch (c.condition) {
+    case "state":
+      return [entityField(c, "entity_id"), textField("État", c, "state", { placeholder: "ex. : on", list: true })];
+    case "numeric_state":
+      return [entityField(c, "entity_id"), numberField("Au-dessus de", c, "above"), numberField("Au-dessous de", c, "below")];
+    case "time":
+      return [timeField("Après (facultatif)", c, "after", true), timeField("Avant (facultatif)", c, "before", true), weekdayField(c)];
+    case "sun":
+      return [
+        selectField("Après", c, "after", SUN_EVENTS, true),
+        offsetField(c, "after_offset"),
+        selectField("Avant", c, "before", SUN_EVENTS, true),
+        offsetField(c, "before_offset"),
+      ];
+    default:
+      return [];
+  }
+}
+
+function actionFields(a, refresh) {
+  if (a.delay !== undefined) return [durationField("Durée", a, "delay", false)];
+  a.target ??= { entity_id: "" };
+  const entity = entityField(a.target, "entity_id", () => {
+    // L'appareil change de type : on propose sa première commande.
+    const domain = asList(a.target.entity_id)[0]?.split(".")[0];
+    const services = lookup(SERVICES, domain);
+    if (services && !String(a.action).startsWith(`${domain}.`)) {
+      a.action = `${domain}.${services[0][0]}`;
+      refresh();
+      scheduleCheck();
+    }
+  });
+  const domain = asList(a.target.entity_id)[0]?.split(".")[0] ?? String(a.action).split(".")[0];
+  const options = (lookup(SERVICES, domain) ?? []).map(([service, label]) => [`${domain}.${service}`, label]);
+  if (!options.some(([value]) => value === a.action)) options.push([a.action, a.action]);
+  const fields = [entity, selectField("Commande", a, "action", options, false, refresh)];
+
+  a.data ??= {};
+  const extra = { ...a.data };
+  if (a.action === "light.turn_on") {
+    fields.push(percentField("Luminosité % (facultatif)", a.data, "brightness"));
+    delete extra.brightness;
+  } else if (a.action === "cover.set_cover_position") {
+    fields.push(numberField("Position (0 = fermé, 100 = ouvert)", a.data, "position"));
+    delete extra.position;
+  } else if (a.action === "notify.send_message") {
+    fields.push(textField("Titre (facultatif)", a.data, "title"), textField("Message", a.data, "message"));
+    fields.push(selectField("Priorité", a.data, "priority", [[1, "1 (discrète)"], [2, "2"], [3, "3 (normale)"], [4, "4"], [5, "5 (urgente)"]], true));
+    delete extra.title;
+    delete extra.message;
+    delete extra.priority;
+  }
+  if (Object.keys(extra).length > 0) {
+    fields.push(el("p", { class: "journal-hint", text: `Autres paramètres, conservés : ${JSON.stringify(extra)}` }));
+  }
+  return fields;
+}
+
+// ----- Champs du formulaire (chacun lit et modifie une clé de l'objet)
+
+function field(label, input) {
+  return el("label", {}, el("span", { class: "label", text: label }), input);
+}
+
+function changed() {
+  scheduleCheck();
+}
+
+/** Texte. `list` : plusieurs valeurs séparées par des virgules. Vide = clé retirée. */
+function textField(label, object, key, { placeholder = "", list = false } = {}) {
+  const value = object[key];
+  const input = el("input", { placeholder, value: Array.isArray(value) ? value.join(", ") : value ?? "" });
+  input.addEventListener("input", () => {
+    const parts = list ? input.value.split(",").map((s) => s.trim()).filter(Boolean) : [input.value];
+    if (list ? parts.length === 0 : input.value === "") delete object[key];
+    else object[key] = list && parts.length > 1 ? parts : parts[0];
+    changed();
+  });
+  return field(label, input);
+}
+
+/** Appareil(s) : suggestions tirées des appareils connus. */
+function entityField(object, key, onChange) {
+  const value = object[key];
+  const input = el("input", {
+    list: "entity-list", placeholder: "light.salon", autocapitalize: "none", spellcheck: "false",
+    value: Array.isArray(value) ? value.join(", ") : value ?? "",
+  });
+  input.addEventListener("input", () => {
+    const parts = input.value.split(",").map((s) => s.trim()).filter(Boolean);
+    object[key] = parts.length > 1 ? parts : parts[0] ?? "";
+    changed();
+  });
+  if (onChange) input.addEventListener("change", onChange);
+  const names = asList(value).filter((id) => entities.has(id)).map((id) => nameOf(entities.get(id)));
+  input.title = names.join(", ");
+  const label = names.length ? `Appareil(s) · ${names.join(", ")}` : "Appareil(s)";
+  return field(label, input);
+}
+
+function numberField(label, object, key) {
+  const input = el("input", { type: "number", step: "any", inputmode: "decimal", value: object[key] ?? "" });
+  input.addEventListener("input", () => {
+    if (input.value === "" || !Number.isFinite(Number(input.value))) delete object[key];
+    else object[key] = Number(input.value);
+    changed();
+  });
+  return field(label, input);
+}
+
+/** Luminosité en % à l'écran, 1 à 255 dans la configuration. */
+function percentField(label, object, key) {
+  const value = typeof object[key] === "number" ? Math.round((object[key] / 255) * 100) : "";
+  const input = el("input", { type: "number", min: "1", max: "100", inputmode: "numeric", value });
+  input.addEventListener("input", () => {
+    const percent = Number(input.value);
+    if (input.value === "" || !Number.isFinite(percent)) delete object[key];
+    else object[key] = Math.min(255, Math.max(1, Math.round(percent * 2.55)));
+    changed();
+  });
+  return field(label, input);
+}
+
+function selectField(label, object, key, options, optional = false, onChange) {
+  const select = el("select");
+  if (optional) select.append(el("option", { value: "", text: "—" }));
+  for (const [value, text] of options) select.append(el("option", { value: String(value), text }));
+  select.value = object[key] === undefined ? "" : String(object[key]);
+  select.addEventListener("change", () => {
+    const option = options.find(([value]) => String(value) === select.value);
+    if (!option) delete object[key];
+    else object[key] = option[0];
+    changed();
+    onChange?.();
+  });
+  return field(label, select);
+}
+
+/** Heure : un sélecteur d'heure, ou du texte pour plusieurs heures. */
+function timeField(label, object, key, optional = false) {
+  const value = object[key];
+  const simple = value === undefined || (typeof value === "string" && /^\d{2}:\d{2}$/.test(value));
+  if (!simple) return textField(label, object, key, { placeholder: "07:30, 19:00", list: true });
+  const input = el("input", { type: "time", value: value ?? "" });
+  input.addEventListener("input", () => {
+    if (input.value === "" && optional) delete object[key];
+    else object[key] = input.value;
+    changed();
+  });
+  return field(label, input);
+}
+
+/** Durée : un nombre et une unité (`5min`, `30s`, `2h`). */
+function durationField(label, object, key, optional) {
+  const seconds = durationSeconds(object[key]);
+  const [amount, unit] =
+    seconds === null ? ["", "min"] : seconds % 3600 === 0 && seconds > 0 ? [seconds / 3600, "h"] : seconds % 60 === 0 ? [seconds / 60, "min"] : [seconds, "s"];
+  const number = el("input", { type: "number", min: "0", inputmode: "numeric", value: String(amount), "aria-label": label });
+  const select = el("select", { "aria-label": `Unité : ${label}` });
+  for (const [value, text] of [["s", "secondes"], ["min", "minutes"], ["h", "heures"]]) select.append(el("option", { value, text }));
+  select.value = unit;
+  const update = () => {
+    if (number.value === "" && optional) delete object[key];
+    else object[key] = `${Math.max(0, Math.round(Number(number.value) || 0))}${select.value}`;
+    changed();
+  };
+  number.addEventListener("input", update);
+  select.addEventListener("change", update);
+  return el("label", {}, el("span", { class: "label", text: label }), el("span", { class: "inline" }, number, select));
+}
+
+/** `5min` → 300 ; `00:05:00` → 300 ; illisible → null. */
+function durationSeconds(value) {
+  if (typeof value !== "string") return null;
+  let match = /^(\d+)(s|min|h)$/.exec(value);
+  if (match) return Number(match[1]) * { s: 1, min: 60, h: 3600 }[match[2]];
+  match = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(value);
+  if (match) return Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3] ?? 0);
+  return null;
+}
+
+/** Décalage du soleil, en minutes : `-00:30:00` ↔ 30 minutes avant. */
+function offsetMinutes(value) {
+  if (typeof value !== "string") return 0;
+  const negative = value.startsWith("-");
+  const seconds = durationSeconds(value.replace(/^[-+]/, ""));
+  return seconds === null ? 0 : Math.round(seconds / 60) * (negative ? -1 : 1);
+}
+
+function offsetField(object, key) {
+  const minutes = offsetMinutes(object[key]);
+  const number = el("input", { type: "number", min: "0", max: "1440", inputmode: "numeric", value: minutes ? String(Math.abs(minutes)) : "", "aria-label": "Décalage en minutes" });
+  const select = el("select", { "aria-label": "Avant ou après" });
+  for (const [value, text] of [["after", "après"], ["before", "avant"]]) select.append(el("option", { value, text }));
+  select.value = minutes < 0 ? "before" : "after";
+  const update = () => {
+    const total = Math.min(1440, Math.round(Math.abs(Number(number.value) || 0)));
+    if (total === 0) delete object[key];
+    else {
+      const hh = String(Math.floor(total / 60)).padStart(2, "0");
+      const mm = String(total % 60).padStart(2, "0");
+      object[key] = `${select.value === "before" ? "-" : ""}${hh}:${mm}:00`;
+    }
+    changed();
+  };
+  number.addEventListener("input", update);
+  select.addEventListener("change", update);
+  return el("label", {}, el("span", { class: "label", text: "Décalage en min (facultatif)" }), el("span", { class: "inline" }, number, select));
+}
+
+function weekdayField(c) {
+  const days = new Set(asList(c.weekday));
+  const box = el("div", { class: "weekdays", role: "group", "aria-label": "Jours" });
+  for (const [en, fr] of WEEKDAYS) {
+    const input = el("input", { type: "checkbox" });
+    input.checked = days.has(en) || days.has(fr);
+    input.addEventListener("change", () => {
+      const boxes = box.querySelectorAll("input");
+      const chosen = WEEKDAYS.filter((_, i) => boxes[i].checked).map(([en]) => en);
+      if (chosen.length === 0) delete c.weekday;
+      else c.weekday = chosen;
+      changed();
+    });
+    box.append(el("label", { class: "check" }, input, fr));
+  }
+  return el("div", { class: "weekdays-field" }, el("span", { class: "label", text: "Jours (aucun = tous)" }), box);
+}
+
+/** « Volets au coucher ! » → « volets_au_coucher » (identifiant valide). */
+function slug(text) {
+  return text
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 64);
+}
+
+// ----- Enregistrer, supprimer, versions
+
+$("#auto-save").addEventListener("click", () => {
+  const request = currentRequest();
+  const id = auto.mode === "yaml" ? auto.existingId ?? yamlId($("#auto-yaml").value) : auto.config.id;
+  if (!id) return setAutoStatus("Donne un nom (ou un identifiant) à l'automatisation.", "error");
+  saveAutomation(id, request, auto.existingId === null ? "Automatisation créée." : "Automatisation enregistrée.");
+});
+
+/** L'identifiant écrit dans un YAML (`id: …`), pour l'adresse de la requête. */
+function yamlId(yaml) {
+  return /^\s*-?\s*id:\s*["']?([a-z0-9_]+)["']?\s*$/m.exec(yaml)?.[1] ?? null;
+}
+
+async function saveAutomation(id, request, done) {
+  const { status, data } = await api("PUT", `/api/automations/${encodeURIComponent(id)}`, request);
+  if (status === 403 && data.confirm) return askConfirmation(() => saveAutomation(id, request, done));
+  if (status !== 200 && status !== 201) {
+    if (!$("#auto-edit-view").hidden) return setAutoStatus(data.error ?? "Enregistrement impossible.", "error");
+    return showAutoList(data.error ?? "Enregistrement impossible.");
+  }
+  const warnings = data.warnings?.length ? ` Attention : ${data.warnings.join(" ; ")}.` : "";
+  showAutoList(done + warnings);
+}
+
+$("#auto-delete").addEventListener("click", () => {
+  const id = auto.existingId;
+  if (id === null || !window.confirm(`Supprimer l'automatisation « ${auto.config?.alias || id} » ? (Ses versions sont gardées.)`)) return;
+  deleteAutomation(id);
+});
+
+async function deleteAutomation(id) {
+  const { status, data } = await api("DELETE", `/api/automations/${encodeURIComponent(id)}`);
+  if (status === 403 && data.confirm) return askConfirmation(() => deleteAutomation(id));
+  if (status !== 204) return setAutoStatus(data.error ?? "Suppression impossible.", "error");
+  showAutoList("Automatisation supprimée.");
+}
+
+$("#auto-duplicate").addEventListener("click", async () => {
+  // Depuis le YAML, on repasse par le serveur pour obtenir le JSON.
+  let config = auto.config;
+  if (auto.mode === "yaml") {
+    const result = await checkAutomation({ yaml: $("#auto-yaml").value }).catch(() => null);
+    if (!result) return;
+    config = result.config;
+  }
+  const copy = structuredClone(config);
+  const ids = new Set(auto.list.map((entry) => entry.id));
+  let id = `${copy.id}_copie`.slice(0, 64);
+  for (let n = 2; ids.has(id); n++) id = `${copy.id}_copie_${n}`.slice(0, 64);
+  copy.id = id;
+  copy.alias = `${copy.alias ?? config.id} (copie)`;
+  openAutoEditor({ id: null, source: "editor", config: copy });
+  setAutoStatus("Copie prête : modifie-la puis enregistre.", "ok");
+});
+
+$("#auto-versions").addEventListener("click", async () => {
+  const id = auto.existingId ?? auto.config?.id;
+  const list = $("#auto-version-list");
+  if (!id) return;
+  const { status, data } = await api("GET", `/api/automations/${encodeURIComponent(id)}/versions`);
+  if (status !== 200) return setAutoStatus("Versions indisponibles.", "error");
+  list.hidden = false;
+  list.replaceChildren(
+    ...data.versions.map((version) => {
+      const item = el(
+        "li",
+        {},
+        el("time", { datetime: version.changed_at, text: dateTime.format(new Date(version.changed_at)) }),
+        el("span", { text: `${version.changed_by}${version.deleted ? " · supprimée" : ""}` }),
+      );
+      if (version.config && !readOnly()) {
+        const load = el("button", { type: "button", class: "ghost small", text: "Charger" });
+        load.addEventListener("click", () => {
+          auto.config = version.config;
+          $("#auto-yaml").value = version.yaml ?? "";
+          renderAutoEditor();
+          setAutoStatus("Version chargée : enregistre pour la rétablir.", "ok");
+        });
+        item.append(load);
+      }
+      return item;
+    }),
+  );
+  if (data.versions.length === 0) list.replaceChildren(el("li", { text: "Aucune version enregistrée." }));
+});
+
+$("#auto-cancel").addEventListener("click", () => showAutoList());
+
+// ----- Confirmation d'identité
+
+let afterConfirmation = null;
+
+function askConfirmation(then) {
+  afterConfirmation = then;
+  const form = $("#confirm-form");
+  form.reset();
+  $("#confirm-error").hidden = true;
+  $("#confirm").showModal();
+  form.password.focus();
+}
+
+$("#confirm-cancel").addEventListener("click", () => {
+  afterConfirmation = null;
+  $("#confirm").close();
+});
+
+$("#confirm-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector("button[type=submit]");
+  button.disabled = true;
+  try {
+    const code = form.code.value.trim();
+    const { status } = await api("POST", "/api/auth/confirm", {
+      password: form.password.value,
+      ...(code && { code }),
+    });
+    form.password.value = "";
+    form.code.value = "";
+    if (status !== 200) {
+      const error = $("#confirm-error");
+      error.textContent = status === 429 ? "Trop de tentatives. Réessaie dans 15 minutes." : "Mot de passe ou code incorrect.";
+      error.hidden = false;
+      return;
+    }
+    $("#confirm").close();
+    const then = afterConfirmation;
+    afterConfirmation = null;
+    then?.();
+  } finally {
+    button.disabled = false;
+  }
+});
+
+/** Suggestions d'appareils pour les champs « Appareil(s) ». */
+function refreshEntityList() {
+  const list = $("#entity-list");
+  const sorted = [...entities.values()].sort((a, b) => a.entity_id.localeCompare(b.entity_id));
+  list.replaceChildren(...sorted.map((state) => el("option", { value: state.entity_id, label: nameOf(state) })));
+}
 
 // ---------------------------------------------------------------- Démarrage
 function showDashboard() {

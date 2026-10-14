@@ -17,6 +17,9 @@ pub enum AutomationError {
     #[error("automatisation « {id} » : {reason}")]
     Invalid { id: String, reason: String },
 
+    #[error("base de données : {0}")]
+    Storage(#[from] ha_storage::StorageError),
+
     #[error("{kind} « {id} » : {reason}")]
     InvalidEntry {
         kind: &'static str,
