@@ -20,7 +20,7 @@
 //! ha-server freebox pair          associe la Freebox (lecture seule)
 //! ha-server freebox devices       liste les appareils du réseau
 //! ha-server freebox track <MAC> <nom>  suit la présence d'un appareil
-//! ha-server automations check     vérifie le fichier d'automatisations
+//! ha-server automations check     vérifie automatisations, scripts et scènes
 //! ha-server areas check           vérifie le fichier des pièces
 //! ha-server audit [nombre]        affiche le journal d'audit
 //! ha-server audit verify          vérifie que le journal n'a pas été modifié
@@ -41,6 +41,8 @@
 //! - `HA_MQTT_DISCOVERY_PREFIX` : préfixe de découverte (par défaut `homeassistant`) ;
 //! - `HA_LATITUDE` et `HA_LONGITUDE` : position de la maison, pour le soleil
 //!   (deux décimales suffisent, par exemple 48.85 et 2.35) ;
+//! - `HA_SCRIPTS_PATH` et `HA_SCENES_PATH` : scripts et scènes (par défaut
+//!   `scripts.yaml` et `scenes.yaml`) ;
 //! - `HA_AREAS_PATH` : fichier des pièces (par défaut `areas.yaml`) ;
 //! - `HA_AUTOMATIONS_PATH` : fichier d'automatisations (par défaut `automations.yaml`) ;
 //! - `RUST_LOG` : niveau de détail des logs (par défaut `info`).
@@ -99,7 +101,8 @@ async fn main() -> ExitCode {
         ["hue", rest @ ..] => cli::hue_command(rest).await,
         ["somfy", rest @ ..] => cli::somfy_command(rest).await,
         ["freebox", rest @ ..] => cli::freebox_command(rest).await,
-        ["automations", "check"] => cli::check_automations(&automations_path()),
+        ["automations", "check"] => cli::check_automations(&automations_path())
+            .and_then(|()| cli::check_scripts_and_scenes(&scripts_path(), &scenes_path())),
         ["areas", "check"] => cli::check_areas(&areas_path()),
         ["audit", rest @ ..] => cli::audit_command(rest).await,
         ["healthcheck"] => match parse_bind() {
@@ -117,6 +120,27 @@ async fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+fn scripts_path() -> std::path::PathBuf {
+    std::env::var("HA_SCRIPTS_PATH")
+        .unwrap_or_else(|_| "scripts.yaml".to_owned())
+        .into()
+}
+
+fn scenes_path() -> std::path::PathBuf {
+    std::env::var("HA_SCENES_PATH")
+        .unwrap_or_else(|_| "scenes.yaml".to_owned())
+        .into()
+}
+
+/// Lit un fichier de scripts ou de scènes ; l'erreur indique le fichier.
+fn load_named<T>(
+    path: &std::path::Path,
+    parse: impl Fn(&str) -> Result<Vec<T>, ha_automation::AutomationError>,
+) -> Result<Vec<T>, String> {
+    ha_automation::scripts::load_file(path, parse)
+        .map_err(|error| format!("{} : {error}", path.display()))
 }
 
 fn automations_path() -> std::path::PathBuf {
@@ -154,6 +178,8 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     // Un fichier d'automatisations invalide empêche le démarrage, avec un
     // message clair : mieux vaut corriger que de tourner à moitié.
     let automations = ha_automation::load(&automations_path())?;
+    let scripts = load_named(&scripts_path(), ha_automation::parse_scripts)?;
+    let scenes = load_named(&scenes_path(), ha_automation::parse_scenes)?;
     let areas = ha_areas::load(&areas_path())
         .map_err(|error| format!("{} : {error}", areas_path().display()))?;
     info!("{} pièce(s) chargée(s)", areas.len());
@@ -213,7 +239,15 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
 
     // Vrais appareils (MQTT) ou, à défaut, appareils simulés.
     let mqtt = mqtt_config.map(|config| Mqtt::start(config, Arc::clone(&core)));
-    let engine = Engine::start_with_location(automations, Arc::clone(&core), location);
+    let engine = Engine::start_with(
+        ha_automation::Setup {
+            automations,
+            scripts,
+            scenes,
+            location,
+        },
+        Arc::clone(&core),
+    );
     let sun = location.map(|location| SunTracker::start(location, Arc::clone(&core)));
     // Une association illisible (clé de chiffrement perdue, par exemple)
     // ne doit pas empêcher le reste de la maison de fonctionner.

@@ -1,0 +1,20 @@
+# Exemple de scripts. Copie ce fichier en `scripts.yaml` (avec Docker :
+# `config/scripts.yaml`), adapte les noms d'appareils, puis vérifie avec :
+#   cargo run -p ha-server -- automations check
+#
+# Un script est une suite d'actions, lancée d'un bouton du tableau de bord ou
+# depuis une automatisation (action: script.turn_on).
+
+- id: depart
+  alias: Je pars
+  sequence:
+    - action: cover.close_cover
+      target:
+        entity_id: [cover.volet_salon, cover.volet_chambre]
+    - action: light.turn_off
+      target:
+        entity_id: [light.salon, light.entree]
+    - delay: 2min
+    - action: switch.turn_off
+      target:
+        entity_id: switch.prise_cafe

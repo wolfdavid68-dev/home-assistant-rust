@@ -32,7 +32,7 @@ const MAX_DURATION: Duration = Duration::from_hours(24);
 /// Ici, cela permet d'écrire `entity_id: light.salon` **ou** une liste.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
-enum OneOrMany {
+pub(crate) enum OneOrMany {
     One(String),
     Many(Vec<String>),
 }
@@ -131,14 +131,14 @@ enum ConditionConfig {
 
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
-enum ActionConfig {
+pub(crate) enum ActionConfig {
     Service(ServiceActionConfig),
     Delay(DelayActionConfig),
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct ServiceActionConfig {
+pub(crate) struct ServiceActionConfig {
     /// `light.turn_on` (Home Assistant accepte aussi l'ancien nom `service`).
     #[serde(alias = "service")]
     action: String,
@@ -150,13 +150,13 @@ struct ServiceActionConfig {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct TargetConfig {
+pub(crate) struct TargetConfig {
     entity_id: OneOrMany,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct DelayActionConfig {
+pub(crate) struct DelayActionConfig {
     delay: String,
 }
 
@@ -460,7 +460,7 @@ fn check_condition(config: ConditionConfig) -> Result<Condition, String> {
     })
 }
 
-fn check_action(config: ActionConfig) -> Result<Action, String> {
+pub(crate) fn check_action(config: ActionConfig) -> Result<Action, String> {
     match config {
         ActionConfig::Delay(delay) => Ok(Action::Delay(parse_duration(&delay.delay)?)),
         ActionConfig::Service(service) => {

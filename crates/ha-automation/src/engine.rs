@@ -4,7 +4,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ha_core::{Background, CancellationToken, Core, Event};
+use ha_core::{Attributes, Background, CancellationToken, Core, EntityId, Event};
 use jiff::civil::DateTime;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::task::JoinHandle;
@@ -13,6 +13,7 @@ use tracing::{debug, info, warn};
 
 use crate::config::{Action, Automation};
 use crate::evaluator::Evaluator;
+use crate::scripts::{Scene, Script};
 use ha_sun::Location;
 
 /// Protection contre les boucles : une automatisation qui se déclenche plus
@@ -39,19 +40,167 @@ impl Engine {
         core: Arc<Core>,
         location: Option<Location>,
     ) -> Self {
+        Self::start_with(
+            Setup {
+                automations,
+                location,
+                ..Setup::default()
+            },
+            core,
+        )
+    }
+
+    /// Démarre le moteur avec les automatisations, les scripts et les scènes.
+    pub fn start_with(setup: Setup, core: Arc<Core>) -> Self {
         let events = core.bus.subscribe();
-        let mut evaluator = Evaluator::new(automations);
-        if let Some(location) = location {
+        let mut evaluator = Evaluator::new(setup.automations);
+        if let Some(location) = setup.location {
             evaluator = evaluator.with_sun(location, jiff::tz::TimeZone::system());
         }
+        let library = Library::publish(setup.scripts, setup.scenes, &core);
         Self(Background::spawn("le moteur d'automatisations", |token| {
-            run(evaluator, core, events, token)
+            run(evaluator, library, core, events, token)
         }))
     }
 
     /// Arrête le moteur ; les actions en cours (attentes `delay`…) sont abandonnées.
     pub async fn stop(self) {
         self.0.stop().await;
+    }
+}
+
+/// Tout ce que le moteur fait tourner.
+#[derive(Debug, Default)]
+pub struct Setup {
+    pub automations: Vec<Automation>,
+    pub scripts: Vec<Script>,
+    pub scenes: Vec<Scene>,
+    /// Position de la maison, pour le soleil.
+    pub location: Option<Location>,
+}
+
+/// Les scripts et les scènes, et les scripts en cours d'exécution.
+struct Library {
+    scripts: Vec<Script>,
+    scenes: Vec<Scene>,
+    running: Vec<Option<JoinHandle<()>>>,
+}
+
+impl Library {
+    /// Crée les entités `script.*` (« off ») et `scene.*` (« unknown »,
+    /// comme Home Assistant tant qu'une scène n'a jamais été activée).
+    fn publish(scripts: Vec<Script>, scenes: Vec<Scene>, core: &Core) -> Self {
+        for script in &scripts {
+            set_entity(core, script.entity_id(), "off", &script.alias);
+        }
+        for scene in &scenes {
+            set_entity(core, scene.entity_id(), "unknown", &scene.name);
+        }
+        let running = scripts.iter().map(|_| None).collect();
+        Self {
+            scripts,
+            scenes,
+            running,
+        }
+    }
+
+    /// Réagit à `script.turn_on`, `script.turn_off` et `scene.turn_on` ;
+    /// les autres appels ne nous concernent pas.
+    fn on_call(&mut self, domain: &str, service: &str, entity_id: &EntityId, core: &Arc<Core>) {
+        match (domain, service) {
+            ("script", "turn_on" | "toggle") => self.start_script(entity_id, core),
+            ("script", "turn_off") => self.stop_script(entity_id, core),
+            ("scene", "turn_on") => self.activate_scene(entity_id, core),
+            _ => {}
+        }
+    }
+
+    fn find_script(&self, entity_id: &EntityId) -> Option<usize> {
+        self.scripts
+            .iter()
+            .position(|script| script.entity_id().as_ref() == Some(entity_id))
+    }
+
+    fn start_script(&mut self, entity_id: &EntityId, core: &Arc<Core>) {
+        let Some(index) = self.find_script(entity_id) else {
+            warn!("script inconnu : {entity_id}");
+            return;
+        };
+        let Some(slot) = self.running.get_mut(index) else {
+            return;
+        };
+        // Mode « une à la fois » : un script déjà en cours n'est pas relancé.
+        // C'est aussi ce qui empêche un script de se relancer lui-même à l'infini.
+        if slot.as_ref().is_some_and(|handle| !handle.is_finished()) {
+            warn!("{entity_id} est déjà en cours : nouveau lancement ignoré");
+            return;
+        }
+        let Some(script) = self.scripts.get(index) else {
+            return;
+        };
+        info!("script « {} » lancé", script.alias);
+        let alias = script.alias.clone();
+        let actions = script.actions.clone();
+        let entity = script.entity_id();
+        let core = Arc::clone(core);
+        *slot = Some(tokio::spawn(async move {
+            set_entity(&core, entity.clone(), "on", &alias);
+            run_actions(alias.clone(), actions, Arc::clone(&core)).await;
+            set_entity(&core, entity, "off", &alias);
+        }));
+    }
+
+    fn stop_script(&mut self, entity_id: &EntityId, core: &Core) {
+        let Some(index) = self.find_script(entity_id) else {
+            return;
+        };
+        if let Some(Some(handle)) = self.running.get_mut(index) {
+            handle.abort();
+        }
+        if let Some(script) = self.scripts.get(index) {
+            info!("script « {} » arrêté", script.alias);
+            set_entity(core, script.entity_id(), "off", &script.alias);
+        }
+    }
+
+    fn activate_scene(&self, entity_id: &EntityId, core: &Arc<Core>) {
+        let Some(scene) = self
+            .scenes
+            .iter()
+            .find(|scene| scene.entity_id().as_ref() == Some(entity_id))
+        else {
+            warn!("scène inconnue : {entity_id}");
+            return;
+        };
+        info!("scène « {} » activée", scene.name);
+        // Comme Home Assistant : l'état d'une scène est la date de sa
+        // dernière activation.
+        set_entity(
+            core,
+            scene.entity_id(),
+            &jiff::Timestamp::now().to_string(),
+            &scene.name,
+        );
+        tokio::spawn(run_actions(
+            scene.name.clone(),
+            scene.actions.clone(),
+            Arc::clone(core),
+        ));
+    }
+
+    fn abort_all(self) {
+        for handle in self.running.into_iter().flatten() {
+            handle.abort();
+        }
+    }
+}
+
+fn set_entity(core: &Core, entity_id: Option<EntityId>, state: &str, name: &str) {
+    let Some(entity_id) = entity_id else { return };
+    let mut attributes = Attributes::new();
+    attributes.insert("friendly_name".into(), name.into());
+    if let Err(error) = core.states.set(entity_id, state, attributes) {
+        warn!("état refusé : {error}");
     }
 }
 
@@ -73,12 +222,17 @@ struct Runner {
 
 async fn run(
     evaluator: Evaluator,
+    mut library: Library,
     core: Arc<Core>,
     mut events: tokio::sync::broadcast::Receiver<Arc<Event>>,
     token: CancellationToken,
 ) {
     let count = evaluator.automations().len();
-    info!("{count} automatisation(s) chargée(s)");
+    info!(
+        "{count} automatisation(s), {} script(s), {} scène(s) chargé(e)s",
+        library.scripts.len(),
+        library.scenes.len()
+    );
     let mut runner = Runner {
         evaluator,
         core,
@@ -95,8 +249,8 @@ async fn run(
             () = token.cancelled() => break,
 
             received = events.recv() => match received {
-                Ok(event) => {
-                    if let Event::StateChanged { entity_id, old_state, new_state } = event.as_ref() {
+                Ok(event) => match event.as_ref() {
+                    Event::StateChanged { entity_id, old_state, new_state } => {
                         let fired = runner.evaluator.on_state_changed(
                             entity_id,
                             old_state.as_ref(),
@@ -105,7 +259,10 @@ async fn run(
                         );
                         runner.launch_all(fired);
                     }
-                }
+                    Event::CallService { domain, service, entity_id, .. } => {
+                        library.on_call(domain, service, entity_id, &runner.core);
+                    }
+                },
                 Err(RecvError::Lagged(missed)) => warn!("automatisations : {missed} événements manqués"),
                 Err(RecvError::Closed) => break,
             },
@@ -122,6 +279,7 @@ async fn run(
     for handle in runner.running.into_iter().flatten() {
         handle.abort();
     }
+    library.abort_all();
     info!("automatisations arrêtées");
 }
 

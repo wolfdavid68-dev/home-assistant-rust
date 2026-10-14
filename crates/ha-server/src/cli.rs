@@ -35,7 +35,7 @@ utilisation :
   ha-server freebox track <MAC> <nom>  suit la présence d'un appareil
   ha-server freebox untrack <nom>      arrête de le suivre
   ha-server freebox forget             oublie la Freebox
-  ha-server automations check     vérifie le fichier d'automatisations
+  ha-server automations check     vérifie automatisations, scripts et scènes
   ha-server areas check           vérifie le fichier des pièces
   ha-server audit [nombre]        affiche le journal d'audit
   ha-server audit verify          vérifie que le journal n'a pas été modifié
@@ -727,6 +727,40 @@ pub fn check_areas(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
     println!("{} : {} pièce(s) valide(s)", path.display(), areas.len());
     for area in &areas {
         println!("  - {} ({} appareil(s))", area.name, area.entities.len());
+    }
+    Ok(())
+}
+
+/// Vérifie `scripts.yaml` et `scenes.yaml` (avec `automations check`).
+pub fn check_scripts_and_scenes(
+    scripts: &std::path::Path,
+    scenes: &std::path::Path,
+) -> Result<(), Box<dyn Error>> {
+    let loaded = ha_automation::scripts::load_file(scripts, ha_automation::parse_scripts)
+        .map_err(|error| format!("{} : {error}", scripts.display()))?;
+    println!(
+        "{} : {} script(s) valide(s)",
+        scripts.display(),
+        loaded.len()
+    );
+    for script in &loaded {
+        println!(
+            "  - script.{} « {} » ({} action(s))",
+            script.id,
+            script.alias,
+            script.actions.len()
+        );
+    }
+    let loaded = ha_automation::scripts::load_file(scenes, ha_automation::parse_scenes)
+        .map_err(|error| format!("{} : {error}", scenes.display()))?;
+    println!("{} : {} scène(s) valide(s)", scenes.display(), loaded.len());
+    for scene in &loaded {
+        println!(
+            "  - scene.{} « {} » ({} appareil(s))",
+            scene.id,
+            scene.name,
+            scene.actions.len()
+        );
     }
     Ok(())
 }

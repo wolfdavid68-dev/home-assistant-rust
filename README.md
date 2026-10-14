@@ -19,6 +19,7 @@ Un noyau domotique en Rust, inspiré de Home Assistant.
 - [Étape 8 : le soleil (lever, coucher, volets au crépuscule), expliqué](docs/soleil.md)
 - [Étape 9 : les pièces, expliqué](docs/pieces.md)
 - [Étape 10 : l'historique en graphiques, expliqué](docs/historique.md)
+- [Étape 11 : scènes et scripts, expliqué](docs/scenes-scripts.md)
 - [Étape 5 : les automatisations, expliqué](docs/etape-5-automatisations.md)
 - [Modernisation du code, expliquée](docs/modernisation.md)
 - [Étape 6 : l'interface web, expliquée](docs/etape-6-interface-web.md)
