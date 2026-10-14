@@ -29,7 +29,7 @@ Briques principales : `tokio` (asynchrone), `axum` (web), `sqlx` + SQLite, `serd
 
 - [x] **0. Fondations** : installer Rust, workspace Cargo, CI GitHub Actions (fmt, clippy, tests, audit des dépendances), Dependabot
 - [x] **1. Noyau** : bus d'événements + machine à états + entités de démo, en ligne de commande
-- [ ] **2. Stockage** : enregistrer les entités et l'historique dans SQLite
+- [x] **2. Stockage** : enregistrer les entités et l'historique dans SQLite ([guide](docs/etape-2-stockage.md))
 - [ ] **3. Authentification + API** : comptes, jetons, API REST et WebSocket en local
 - [ ] **4. MQTT** : piloter de vrais appareils (découverte automatique façon Home Assistant)
 - [ ] **5. Automatisations** : « quand X, si Y, alors Z » en YAML

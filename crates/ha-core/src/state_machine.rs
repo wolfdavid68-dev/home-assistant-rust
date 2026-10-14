@@ -54,14 +54,7 @@ impl StateMachine {
         attributes: Attributes,
     ) -> Result<bool, CoreError> {
         let new_state: String = new_state.into();
-        let len = new_state.chars().count();
-        if len > MAX_STATE_LEN {
-            return Err(CoreError::StateTooLong {
-                entity_id: entity_id.to_string(),
-                len,
-                max: MAX_STATE_LEN,
-            });
-        }
+        check_state_len(&entity_id, &new_state)?;
 
         let now = SystemTime::now();
         let mut states = self.write();
@@ -89,6 +82,39 @@ impl StateMachine {
         Ok(true)
     }
 
+    /// Remet en place un état sauvegardé (au démarrage), avec ses dates d'origine.
+    ///
+    /// Contrairement à [`StateMachine::set`], aucun événement n'est publié : rien
+    /// n'a réellement changé, on retrouve simplement ce qu'on savait avant l'arrêt.
+    /// Une entité déjà présente n'est pas écrasée : un état « vivant » est
+    /// toujours plus récent qu'un état sauvegardé. Renvoie `Ok(true)` si l'état
+    /// a été restauré.
+    pub fn restore(
+        &self,
+        entity_id: EntityId,
+        state: impl Into<String>,
+        attributes: Attributes,
+        last_changed: SystemTime,
+        last_updated: SystemTime,
+    ) -> Result<bool, CoreError> {
+        let state: String = state.into();
+        check_state_len(&entity_id, &state)?;
+
+        let mut states = self.write();
+        if states.contains_key(&entity_id) {
+            return Ok(false);
+        }
+        let restored = State::new(
+            entity_id.clone(),
+            state,
+            attributes,
+            last_changed,
+            last_updated,
+        );
+        states.insert(entity_id, restored);
+        Ok(true)
+    }
+
     /// Supprime une entité. Renvoie `true` si elle existait.
     pub fn remove(&self, entity_id: &EntityId) -> bool {
         let mut states = self.write();
@@ -113,4 +139,16 @@ impl StateMachine {
     fn write(&self) -> RwLockWriteGuard<'_, HashMap<EntityId, State>> {
         self.states.write().unwrap_or_else(PoisonError::into_inner)
     }
+}
+
+fn check_state_len(entity_id: &EntityId, state: &str) -> Result<(), CoreError> {
+    let len = state.chars().count();
+    if len > MAX_STATE_LEN {
+        return Err(CoreError::StateTooLong {
+            entity_id: entity_id.to_string(),
+            len,
+            max: MAX_STATE_LEN,
+        });
+    }
+    Ok(())
 }

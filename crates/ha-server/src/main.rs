@@ -1,13 +1,20 @@
-//! Démonstration de l'étape 1 : quelques entités simulées qui changent d'état,
-//! et un abonné qui affiche chaque changement reçu sur le bus.
+//! Démonstration : quelques entités simulées qui changent d'état, un abonné qui
+//! affiche chaque changement reçu sur le bus, et (depuis l'étape 2) un
+//! enregistreur qui sauvegarde tout dans SQLite.
 //!
 //! Lancer avec `cargo run -p ha-server`, arrêter avec Ctrl+C.
+//!
+//! Variables d'environnement :
+//! - `HA_DB_PATH` : fichier de la base (par défaut `ha.db`) ;
+//! - `HA_HISTORY_DAYS` : nombre de jours d'historique conservés (par défaut 10) ;
+//! - `RUST_LOG` : niveau de détail des logs (par défaut `info`).
 
 use std::error::Error;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use ha_core::{Attributes, Core, EntityId, Event};
+use ha_storage::{Recorder, Store};
 use serde_json::json;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{info, warn};
@@ -24,28 +31,71 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .init();
 
     info!(
-        "ha-server {} — démo de l'étape 1 (Ctrl+C pour arrêter)",
+        "ha-server {} — démo de l'étape 2 (Ctrl+C pour arrêter)",
         ha_core::VERSION
     );
 
+    let db_path = std::env::var("HA_DB_PATH").unwrap_or_else(|_| DEFAULT_DB_PATH.to_owned());
+    let history_days = history_days()?;
+    let store = Store::open(&db_path).await?;
+    info!("base de données : {db_path}");
+
+    // On oublie l'historique trop ancien.
+    let cutoff = SystemTime::now()
+        .checked_sub(Duration::from_secs(u64::from(history_days) * 24 * 3600))
+        .unwrap_or(SystemTime::UNIX_EPOCH);
+    let purged = store.purge_history(cutoff).await?;
+    info!("historique conservé : {history_days} jours ({purged} lignes anciennes supprimées)");
+
+    // On recharge les états d'avant l'arrêt, AVANT de démarrer quoi que ce soit.
     let core = Arc::new(Core::new());
+    let restored = store.restore_into(&core.states).await?;
+    info!("{restored} états restaurés depuis la base");
+    for state in core.states.all() {
+        info!("  {} = {} (restauré)", state.entity_id(), state.state());
+    }
+
+    let recorder = Recorder::start(store.clone(), Arc::clone(&core));
 
     // On s'abonne AVANT de créer les entités, pour ne rater aucun événement.
     let logger = tokio::spawn(log_state_changes(core.bus.subscribe()));
-    let simulation = tokio::spawn(simulate_devices(Arc::clone(&core)));
+    let mut simulation = tokio::spawn(simulate_devices(Arc::clone(&core)));
 
     // Concept Rust : `select!` attend la première de plusieurs opérations.
+    // `&mut simulation` emprunte la tâche au lieu de la consommer, pour pouvoir
+    // l'arrêter ensuite.
     tokio::select! {
         result = tokio::signal::ctrl_c() => result?,
-        result = simulation => result??,
+        result = &mut simulation => result??,
     }
+    // Plus aucun changement d'état après ce point.
+    simulation.abort();
 
     info!("arrêt — états finaux :");
     for state in core.states.all() {
         info!("  {} = {}", state.entity_id(), state.state());
     }
     logger.abort();
+    // L'enregistreur écrit les derniers changements avant de fermer la base.
+    recorder.stop().await;
+    store.close().await;
     Ok(())
+}
+
+const DEFAULT_DB_PATH: &str = "ha.db";
+const DEFAULT_HISTORY_DAYS: u32 = 10;
+
+/// Lit `HA_HISTORY_DAYS`. Une valeur invalide arrête le programme avec un
+/// message clair, plutôt que d'être ignorée en silence.
+fn history_days() -> Result<u32, String> {
+    match std::env::var("HA_HISTORY_DAYS") {
+        Err(_) => Ok(DEFAULT_HISTORY_DAYS),
+        Ok(value) => value
+            .parse::<u32>()
+            .ok()
+            .filter(|days| (1..=3650).contains(days))
+            .ok_or_else(|| format!("HA_HISTORY_DAYS invalide : {value:?} (entre 1 et 3650)")),
+    }
 }
 
 /// Affiche chaque changement d'état publié sur le bus.
