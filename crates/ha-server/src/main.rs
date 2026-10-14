@@ -21,6 +21,8 @@
 //! ha-server freebox devices       liste les appareils du réseau
 //! ha-server freebox track <MAC> <nom>  suit la présence d'un appareil
 //! ha-server automations check     vérifie automatisations, scripts et scènes
+//! ha-server automations list      liste les automatisations (fichier et éditeur)
+//! ha-server automations delete <id>  supprime une automatisation de l'éditeur
 //! ha-server areas check           vérifie le fichier des pièces
 //! ha-server audit [nombre]        affiche le journal d'audit
 //! ha-server audit verify          vérifie que le journal n'a pas été modifié
@@ -47,6 +49,8 @@
 //!   le téléphone avec ntfy (entité `notify.telephone`) ;
 //! - `HA_AREAS_PATH` : fichier des pièces (par défaut `areas.yaml`) ;
 //! - `HA_AUTOMATIONS_PATH` : fichier d'automatisations (par défaut `automations.yaml`) ;
+//! - `HA_AUTOMATION_EDITOR` : `on` (par défaut) ou `off` pour un éditeur
+//!   d'automatisations en lecture seule dans le tableau de bord ;
 //! - `RUST_LOG` : niveau de détail des logs (par défaut `info`).
 
 mod cli;
@@ -103,8 +107,7 @@ async fn main() -> ExitCode {
         ["hue", rest @ ..] => cli::hue_command(rest).await,
         ["somfy", rest @ ..] => cli::somfy_command(rest).await,
         ["freebox", rest @ ..] => cli::freebox_command(rest).await,
-        ["automations", "check"] => cli::check_automations(&automations_path())
-            .and_then(|()| cli::check_scripts_and_scenes(&scripts_path(), &scenes_path())),
+        ["automations", rest @ ..] => cli::automations_command(rest).await,
         ["areas", "check"] => cli::check_areas(&areas_path()),
         ["audit", rest @ ..] => cli::audit_command(rest).await,
         ["healthcheck"] => match parse_bind() {
@@ -124,13 +127,13 @@ async fn main() -> ExitCode {
     }
 }
 
-fn scripts_path() -> std::path::PathBuf {
+pub(crate) fn scripts_path() -> std::path::PathBuf {
     std::env::var("HA_SCRIPTS_PATH")
         .unwrap_or_else(|_| "scripts.yaml".to_owned())
         .into()
 }
 
-fn scenes_path() -> std::path::PathBuf {
+pub(crate) fn scenes_path() -> std::path::PathBuf {
     std::env::var("HA_SCENES_PATH")
         .unwrap_or_else(|_| "scenes.yaml".to_owned())
         .into()
@@ -145,7 +148,7 @@ fn load_named<T>(
         .map_err(|error| format!("{} : {error}", path.display()))
 }
 
-fn automations_path() -> std::path::PathBuf {
+pub(crate) fn automations_path() -> std::path::PathBuf {
     std::env::var("HA_AUTOMATIONS_PATH")
         .unwrap_or_else(|_| DEFAULT_AUTOMATIONS_PATH.to_owned())
         .into()
@@ -165,7 +168,7 @@ fn areas_path() -> std::path::PathBuf {
         .into()
 }
 
-fn db_path() -> String {
+pub(crate) fn db_path() -> String {
     std::env::var("HA_DB_PATH").unwrap_or_else(|_| DEFAULT_DB_PATH.to_owned())
 }
 
@@ -179,7 +182,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     let mqtt_config = mqtt_config()?;
     // Un fichier d'automatisations invalide empêche le démarrage, avec un
     // message clair : mieux vaut corriger que de tourner à moitié.
-    let automations = ha_automation::load(&automations_path())?;
+    let file_automations = ha_automation::load_configs(&automations_path())?;
+    let automations = ha_automation::check_all(&file_automations)?;
+    let editable = automation_editor()?;
     let scripts = load_named(&scripts_path(), ha_automation::parse_scripts)?;
     let scenes = load_named(&scenes_path(), ha_automation::parse_scenes)?;
     let areas = ha_areas::load(&areas_path())
@@ -234,7 +239,24 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     // API HTTP / WebSocket.
     let listener = tokio::net::TcpListener::bind(bind).await?;
     info!("API sur http://{bind}/api/");
-    let api_state = ApiState::new(Arc::clone(&core), store.clone(), auth, areas);
+    // L'éditeur d'automatisations : celles du fichier, plus celles créées
+    // depuis le tableau de bord. Chaque modification recharge le moteur.
+    let (reloader, reloads) = ha_automation::reload_channel();
+    let editor = Arc::new(
+        ha_automation::Editor::new(store.clone(), file_automations, location.is_some())
+            .with_reloader(reloader),
+    );
+    let automations = editor.active().await?;
+    if !editable {
+        info!("éditeur d'automatisations en lecture seule (HA_AUTOMATION_EDITOR=off)");
+    }
+    let api_state = ApiState::new(
+        Arc::clone(&core),
+        store.clone(),
+        auth,
+        areas,
+        Some(ha_api::AutomationEditor { editor, editable }),
+    );
     let api = tokio::spawn(ha_api::serve(listener, Arc::clone(&api_state)));
 
     // On s'abonne AVANT de créer les entités, pour ne rater aucun événement.
@@ -248,6 +270,7 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
             scripts,
             scenes,
             location,
+            reloads: Some(reloads),
         },
         Arc::clone(&core),
     );
@@ -373,7 +396,19 @@ fn days_ago(days: u32) -> SystemTime {
 
 /// Lit la position de la maison (`HA_LATITUDE`, `HA_LONGITUDE`), pour le
 /// soleil. `None` si elle n'est pas indiquée.
-fn location() -> Result<Option<Location>, String> {
+/// `HA_AUTOMATION_EDITOR` : peut-on modifier les automatisations depuis le
+/// tableau de bord ?
+fn automation_editor() -> Result<bool, String> {
+    match std::env::var("HA_AUTOMATION_EDITOR").as_deref() {
+        Err(_) | Ok("on") => Ok(true),
+        Ok("off") => Ok(false),
+        Ok(other) => Err(format!(
+            "HA_AUTOMATION_EDITOR : « {other} » invalide (on ou off)"
+        )),
+    }
+}
+
+pub(crate) fn location() -> Result<Option<Location>, String> {
     let read = |name: &str| -> Result<Option<f64>, String> {
         match std::env::var(name) {
             Err(_) => Ok(None),

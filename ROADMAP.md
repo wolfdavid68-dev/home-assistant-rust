@@ -55,7 +55,7 @@ Les fonctions de Home Assistant les plus utiles au quotidien, une par une, dans 
 - [x] **10. Historique en graphiques** : courbes de température, frise des ouvertures, sur 24 h ou 7 jours ([guide](docs/historique.md))
 - [x] **11. Scènes et scripts** : « soirée cinéma » en un bouton, suites d'actions réutilisables ([guide](docs/scenes-scripts.md))
 - [x] **12. Notifications** : être prévenu sur son téléphone (alarme, fumée, nouvel appareil sur le Wi-Fi), avec ntfy ([guide](docs/notifications.md))
-- [ ] **13. Éditeur d'automatisations** : créer et modifier les automatisations depuis le tableau de bord
+- [x] **13. Éditeur d'automatisations** : créer et modifier les automatisations depuis le tableau de bord ([guide](docs/editeur-automatisations.md))
 - [ ] **14. Alexa en local** : piloter volets et prises à la voix, sans cloud ni port ouvert
 
 En parallèle, dès que tu me donnes les informations : commande du chauffage Somfy (résultat de

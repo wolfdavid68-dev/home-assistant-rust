@@ -10,6 +10,7 @@ publish.workspace = true
 axum.workspace = true
 ha-areas = { path = "../ha-areas" }
 ha-auth = { path = "../ha-auth" }
+ha-automation = { path = "../ha-automation" }
 ha-core = { path = "../ha-core" }
 ha-storage = { path = "../ha-storage" }
 serde.workspace = true

@@ -4,29 +4,36 @@
 //! |---------|--------|------|
 //! | POST | `/api/auth/login` | Connexion : renvoie un jeton (seule route publique) |
 //! | POST | `/api/auth/logout` | Révoque le jeton utilisé |
+//! | POST | `/api/auth/confirm` | Confirme son identité avant une modification sensible |
 //! | GET | `/api/` | Vérifie que l'API répond |
 //! | GET | `/api/states` | Tous les états |
 //! | GET / POST / DELETE | `/api/states/{entity_id}` | Lire / modifier / supprimer un état |
 //! | GET | `/api/history/{entity_id}` | Historique d'une entité |
 //! | POST | `/api/services/{domain}/{service}` | Appel de service (`switch/turn_on`…) |
+//! | GET | `/api/automations` | Automatisations (fichier et éditeur) |
+//! | POST | `/api/automations/check` | Vérifie une automatisation sans l'enregistrer |
+//! | PUT / DELETE | `/api/automations/{id}` | Crée, modifie, supprime (confirmation requise) |
+//! | GET | `/api/automations/{id}/versions` | Versions précédentes |
 //! | GET | `/api/websocket` | API WebSocket (authentification dans le 1er message) |
 //! | GET | `/` | Tableau de bord web (page publique ; les données demandent un jeton) |
 
 mod auth;
+mod automations;
 mod error;
 mod json;
 mod rest;
 mod web;
 mod ws;
 
+use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::sync::Arc;
-use std::time::Duration;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use axum::http::{HeaderValue, StatusCode, header};
-use axum::routing::{get, post};
+use axum::routing::{get, post, put};
 use ha_auth::Auth;
 use ha_core::CancellationToken;
 use ha_core::Core;
@@ -35,6 +42,7 @@ use tokio::net::TcpListener;
 use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::timeout::TimeoutLayer;
 
+pub use automations::{AutomationEditor, CONFIRMATION_LIFETIME};
 pub use json::{format_timestamp, state_to_json};
 
 /// Taille maximale du corps d'une requête : 64 Kio suffisent largement.
@@ -50,6 +58,10 @@ pub struct ApiState {
     pub auth: Arc<Auth>,
     /// Les pièces de la maison (fichier `areas.yaml`).
     pub areas: Vec<ha_areas::Area>,
+    /// L'éditeur d'automatisations (absent : les routes répondent 404).
+    pub automations: Option<AutomationEditor>,
+    /// Confirmations d'identité en cours : empreinte du jeton → fin de validité.
+    confirmations: Mutex<HashMap<[u8; 32], Instant>>,
     shutdown: CancellationToken,
 }
 
@@ -59,6 +71,7 @@ impl ApiState {
         store: Store,
         auth: Arc<Auth>,
         areas: Vec<ha_areas::Area>,
+        automations: Option<AutomationEditor>,
     ) -> Arc<Self> {
         let shutdown = CancellationToken::new();
         Arc::new(Self {
@@ -66,6 +79,8 @@ impl ApiState {
             store,
             auth,
             areas,
+            automations,
+            confirmations: Mutex::default(),
             shutdown,
         })
     }
@@ -87,6 +102,14 @@ pub fn router(state: Arc<ApiState>) -> Router {
         .route("/api/", get(rest::root))
         .route("/api/auth/login", post(rest::login))
         .route("/api/auth/logout", post(rest::logout))
+        .route("/api/auth/confirm", post(automations::confirm))
+        .route("/api/automations", get(automations::list))
+        .route("/api/automations/check", post(automations::check))
+        .route(
+            "/api/automations/{id}",
+            put(automations::save).delete(automations::delete),
+        )
+        .route("/api/automations/{id}/versions", get(automations::versions))
         .route("/api/states", get(rest::list_states))
         .route(
             "/api/states/{entity_id}",

@@ -142,8 +142,9 @@ pas aux ordres, mais on voit les appels de service dans les logs.
 
 ## Pas encore pris en charge
 
-Lever et coucher du soleil, déclencheurs d'événements, conditions « ou », actions conditionnelles
-(`choose`, `if`), modes `restart`/`queued`, rechargement sans redémarrer.
+Déclencheurs d'événements, conditions « ou », actions conditionnelles (`choose`, `if`), modes
+`restart`/`queued`. (Le soleil est arrivé à l'étape 8, et l'édition depuis le tableau de bord,
+sans redémarrer, à l'étape 13 : voir [l'éditeur](editeur-automatisations.md).)
 
 ```bash
 cargo test -p ha-automation

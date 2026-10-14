@@ -21,6 +21,9 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
 - Double authentification facultative par code à usage unique (TOTP, RFC 6238) : secret chiffré, code
   non rejouable, activable et désactivable uniquement sur la machine (`ha-server user totp`).
 - Aucune route de l'API accessible sans authentification, sauf la page de connexion.
+- Modifier les automatisations depuis le tableau de bord demande de **confirmer son identité** (mot de passe,
+  et code si la double authentification est activée), valable 15 minutes pour ce jeton seulement ; chaque
+  modification est journalisée et notifiée. `HA_AUTOMATION_EDITOR=off` met l'éditeur en lecture seule.
 
 ## Réseau
 

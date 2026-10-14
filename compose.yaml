@@ -25,6 +25,8 @@ services:
     environment:
       TZ: ${TZ:-Europe/Paris}
       RUST_LOG: ${RUST_LOG:-info}
+      # Éditeur d'automatisations en lecture seule (voir docs/editeur-automatisations.md) :
+      # HA_AUTOMATION_EDITOR: "off"
       # Notifications sur le téléphone avec ntfy (voir docs/notifications.md) :
       # HA_NTFY_URL: https://ntfy.sh
       # HA_NTFY_TOPIC: maison-un-sujet-long-et-aleatoire

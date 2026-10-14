@@ -14,6 +14,12 @@ pub enum ApiError {
     Unauthorized,
     /// 401 aussi, mais pour un échec de connexion.
     InvalidCredentials,
+    /// 403 : action interdite.
+    Forbidden(String),
+    /// 403 aussi : l'action demande de confirmer son identité (mot de passe).
+    /// La réponse contient `"confirm": true`, pour que le tableau de bord
+    /// affiche la demande de mot de passe.
+    ConfirmationRequired,
     /// 404 : n'existe pas.
     NotFound,
     /// 429 : trop de tentatives.
@@ -31,6 +37,17 @@ impl IntoResponse for ApiError {
                 StatusCode::UNAUTHORIZED,
                 "nom d'utilisateur, mot de passe ou code incorrect".into(),
             ),
+            Self::Forbidden(message) => (StatusCode::FORBIDDEN, message),
+            Self::ConfirmationRequired => {
+                return (
+                    StatusCode::FORBIDDEN,
+                    axum::Json(json!({
+                        "error": "confirme ton identité avec ton mot de passe",
+                        "confirm": true,
+                    })),
+                )
+                    .into_response();
+            }
             Self::NotFound => (StatusCode::NOT_FOUND, "introuvable".into()),
             Self::TooManyRequests { retry_after } => {
                 let mut response = (

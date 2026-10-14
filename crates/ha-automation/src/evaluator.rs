@@ -75,6 +75,33 @@ impl Evaluator {
         &self.automations
     }
 
+    /// Remplace les automatisations (après une modification dans l'éditeur).
+    ///
+    /// Renvoie, pour chaque nouvelle automatisation, sa position dans
+    /// l'ancienne liste si elle **n'a pas changé**. Ses attentes `for` en
+    /// cours sont gardées ; celles des automatisations modifiées ou
+    /// supprimées sont abandonnées.
+    pub fn replace(&mut self, automations: Vec<Automation>) -> Vec<Option<usize>> {
+        let previous: Vec<Option<usize>> = automations
+            .iter()
+            .map(|new| self.automations.iter().position(|old| old == new))
+            .collect();
+        self.pending.retain_mut(|pending| {
+            match previous
+                .iter()
+                .position(|old| *old == Some(pending.automation))
+            {
+                Some(new) => {
+                    pending.automation = new;
+                    true
+                }
+                None => false,
+            }
+        });
+        self.automations = automations;
+        previous
+    }
+
     /// Un changement d'état : renvoie les automatisations déclenchées
     /// (leur position dans la liste).
     pub fn on_state_changed(

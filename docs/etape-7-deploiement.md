@@ -65,8 +65,10 @@ docker compose run --rm ha-server somfy pair 192.168.1.30
 docker compose restart
 ```
 
-**Automatisations** : mets ton fichier dans `config/automations.yaml` (le dossier `config` est
-lu par le conteneur, en lecture seule), puis `docker compose restart`.
+**Automatisations** : le plus simple est de les créer dans le tableau de bord (bouton
+**Automatisations**, voir [l'éditeur](editeur-automatisations.md)) ; elles sont rangées dans la
+base, donc sauvegardées avec elle. Tu peux aussi mettre un fichier dans `config/automations.yaml`
+(le dossier `config` est lu par le conteneur, en lecture seule), puis `docker compose restart`.
 
 **MQTT** : décommente les lignes `HA_MQTT_…` et `secrets` dans [compose.yaml](../compose.yaml),
 et mets le mot de passe du broker dans `secrets/mqtt_password` (ignoré par Git).

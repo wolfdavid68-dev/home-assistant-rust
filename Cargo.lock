@@ -796,6 +796,7 @@ dependencies = [
  "futures-util",
  "ha-areas",
  "ha-auth",
+ "ha-automation",
  "ha-core",
  "ha-storage",
  "serde",
@@ -840,6 +841,7 @@ name = "ha-automation"
 version = "0.1.0"
 dependencies = [
  "ha-core",
+ "ha-storage",
  "ha-sun",
  "jiff",
  "serde",

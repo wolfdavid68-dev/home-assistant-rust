@@ -57,8 +57,9 @@ ne sont dans aucune pièce restent rangés par type, en dessous. Un appareil lis
 Comme les automatisations : un fichier se relit, se sauvegarde, se compare d'une version à
 l'autre, et se **vérifie** avant d'être utilisé. Il est lu en lecture seule par le serveur (avec
 Docker, le dossier `config` est monté en lecture seule) : même quelqu'un qui prendrait le
-contrôle du tableau de bord ne pourrait pas le modifier. L'étape 13 apportera un éditeur dans
-l'interface, avec les mêmes vérifications.
+contrôle du tableau de bord ne pourrait pas le modifier. Les automatisations, elles, se
+modifient aussi dans le tableau de bord depuis l'étape 13 ([guide](editeur-automatisations.md)),
+avec les mêmes vérifications et une confirmation par mot de passe.
 
 ## Les vérifications
 
