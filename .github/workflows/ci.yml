@@ -91,3 +91,34 @@ jobs:
       - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
         with:
           command: check all
+
+  docker:
+    # Construit l'image, la démarre avec les mêmes protections que
+    # compose.yaml, puis vérifie qu'elle répond et s'arrête proprement.
+    name: image Docker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build
+        run: docker build -t ha-server:ci .
+
+      - name: Smoke test
+        run: |
+          docker run -d --name ha --read-only --tmpfs /tmp \
+            --cap-drop ALL --security-opt no-new-privileges:true \
+            -p 127.0.0.1:8123:8123 ha-server:ci
+          status=starting
+          for _ in $(seq 1 60); do
+            status=$(docker inspect --format '{{.State.Health.Status}}' ha)
+            [ "$status" = healthy ] && break
+            sleep 2
+          done
+          docker logs ha
+          test "$status" = healthy
+          curl -fsS -D - -o /dev/null http://127.0.0.1:8123/ | grep -i '^content-security-policy:'
+          docker stop ha
+          docker logs ha 2>&1 | grep 'SIGTERM'
+          test "$(docker inspect --format '{{.State.ExitCode}}' ha)" = 0

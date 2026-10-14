@@ -13,3 +13,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
+
+  # Images de base du Dockerfile (épinglées par empreinte).
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly

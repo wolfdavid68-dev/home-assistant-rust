@@ -22,6 +22,7 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
 
 - Par défaut, le serveur écoute seulement en local (`127.0.0.1`). L'ouverture au réseau local est un choix explicite.
 - **Ne jamais exposer le serveur directement sur Internet.** Accès à distance uniquement via VPN (WireGuard, Tailscale).
+- HTTPS à distance avec `tailscale serve` (vrai certificat) ; jamais `tailscale funnel`, qui publie sur Internet.
 - MQTT : broker avec identifiants, et TLS dès qu'il sort de la machine.
   **Exception temporaire** : TLS pas encore disponible (la partie TLS de `rumqttc` 0.25 dépend de crates
   vulnérables, refusées par `cargo deny`). D'ici là, broker sur la même machine ou sur le réseau local
@@ -52,7 +53,8 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
 ## Processus
 
 - Tout changement passe par une pull request ; la CI (fmt, clippy, tests, audit) doit être verte avant de fusionner.
-- En Docker : utilisateur non-root, système de fichiers en lecture seule autant que possible.
+- En Docker : utilisateur non-root, système de fichiers en lecture seule, aucune capacité Linux, image sans shell
+  épinglée par empreinte, port publié sur `127.0.0.1` par défaut (voir `compose.yaml`).
 
 ## Signaler une faille
 

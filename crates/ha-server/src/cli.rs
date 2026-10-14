@@ -27,7 +27,8 @@ utilisation :
   ha-server somfy devices         liste les appareils de la box
   ha-server somfy status          affiche la box associée
   ha-server somfy forget          oublie la box
-  ha-server automations check     vérifie le fichier d'automatisations";
+  ha-server automations check     vérifie le fichier d'automatisations
+  ha-server healthcheck           vérifie qu'un serveur répond (pour Docker)";
 
 pub async fn user_command(args: &[&str], db_path: &str) -> Result<(), Box<dyn Error>> {
     let store = Store::open(db_path).await?;

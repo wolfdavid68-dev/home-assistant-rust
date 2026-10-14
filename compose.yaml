@@ -1,0 +1,72 @@
+# Lancement avec Docker Compose. Guide complet : docs/etape-7-deploiement.md
+#
+#   docker compose up -d --build                     démarrer (et construire)
+#   docker compose run --rm ha-server user add <nom> créer un compte
+#   docker compose logs -f                           voir les logs
+#   docker compose down                              arrêter
+#   docker compose run --rm sauvegarde …             sauvegarder (voir le guide)
+#
+# Les données (base ha.db : comptes, historique, associations Hue et Somfy)
+# sont dans le volume « ha-data », conservé entre les mises à jour.
+
+services:
+  ha-server:
+    build: .
+    image: ha-server:local
+    restart: unless-stopped
+    ports:
+      # Par défaut, le tableau de bord n'est joignable QUE depuis cette
+      # machine (127.0.0.1). Pour l'ouvrir à ton réseau local, mets par
+      # exemple HA_PUBLISH=192.168.1.20 (l'adresse de cette machine) dans un
+      # fichier .env à côté de ce fichier. Ne redirige JAMAIS ce port depuis
+      # ta box Internet : pour l'accès à distance, voir le guide (VPN).
+      - "${HA_PUBLISH:-127.0.0.1}:8123:8123"
+    environment:
+      TZ: ${TZ:-Europe/Paris}
+      RUST_LOG: ${RUST_LOG:-info}
+      # Broker MQTT (étape 4), facultatif :
+      # HA_MQTT_HOST: 192.168.1.20
+      # HA_MQTT_USER: ha-server
+      # HA_MQTT_PASSWORD_FILE: /run/secrets/mqtt_password
+    volumes:
+      - ha-data:/data
+      # Ton fichier d'automatisations : config/automations.yaml (lecture seule).
+      - ./config:/config:ro
+    # secrets:
+    #   - mqtt_password
+
+    # Durcissement : le programme n'a besoin d'aucun privilège.
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    pids_limit: 128
+    # Laisse le temps d'enregistrer les derniers états à l'arrêt.
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  # Outil de sauvegarde et de restauration de la base, lancé seulement à la
+  # demande (voir le guide). Il ne démarre jamais avec « docker compose up ».
+  sauvegarde:
+    image: busybox:1.37@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e
+    profiles: [outils]
+    network_mode: none
+    volumes:
+      - ha-data:/data
+      - ./sauvegardes:/sauvegardes
+
+volumes:
+  ha-data:
+
+# secrets:
+#   mqtt_password:
+#     file: ./secrets/mqtt_password

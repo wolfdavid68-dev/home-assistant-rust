@@ -39,6 +39,6 @@ Briques principales : `tokio` (asynchrone), `axum` (web), `sqlx` + SQLite, `serd
 - [x] **4 ter. Somfy TaHoma** : volets, capteurs, alarme et chauffage en lecture, API locale ([guide](docs/somfy.md)) — commande du chauffage et de l'alarme à venir
 - [x] **5. Automatisations** : « quand X, si Y, alors Z » en YAML ([guide](docs/etape-5-automatisations.md))
 - [x] **6. Interface web** : tableau de bord en direct, ordinateur et téléphone ([guide](docs/etape-6-interface-web.md))
-- [ ] **7. Déploiement** : image Docker, accès à distance via VPN (jamais de port ouvert sur Internet)
+- [x] **7. Déploiement** : image Docker durcie, accès à distance via VPN, HTTPS avec Tailscale (jamais de port ouvert sur Internet) ([guide](docs/etape-7-deploiement.md))
 
 Les règles de sécurité qui s'appliquent à chaque étape sont dans [SECURITY.md](SECURITY.md).

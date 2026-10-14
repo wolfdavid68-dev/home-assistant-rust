@@ -18,10 +18,19 @@ Un noyau domotique en Rust, inspiré de Home Assistant.
 - [Étape 5 : les automatisations, expliqué](docs/etape-5-automatisations.md)
 - [Modernisation du code, expliquée](docs/modernisation.md)
 - [Étape 6 : l'interface web, expliquée](docs/etape-6-interface-web.md)
+- [Étape 7 : le déploiement (Docker, VPN, HTTPS), expliqué](docs/etape-7-deploiement.md)
 
 ## Lancer le serveur
 
 ```bash
 cargo run -p ha-server -- user add <nom>   # une seule fois : crée un compte
 cargo run -p ha-server                     # tableau de bord sur http://127.0.0.1:8123/
+```
+
+Ou avec Docker (installation durable, accès à distance par VPN) : voir le
+[guide de l'étape 7](docs/etape-7-deploiement.md).
+
+```bash
+docker compose up -d --build
+docker compose run --rm ha-server user add <nom>
 ```
