@@ -1,0 +1,12 @@
+[package]
+name = "ha-core"
+description = "Noyau : bus d'événements, machine à états, registre des services"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

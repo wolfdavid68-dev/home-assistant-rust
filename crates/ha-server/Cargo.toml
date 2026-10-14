@@ -1,0 +1,13 @@
+[package]
+name = "ha-server"
+description = "Binaire qui assemble les crates et lit la configuration"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ha-core = { path = "../ha-core" }
+
+[lints]
+workspace = true
