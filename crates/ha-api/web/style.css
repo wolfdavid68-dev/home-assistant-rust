@@ -1,0 +1,237 @@
+/* Tableau de bord — CSS moderne, sans bibliothèque.
+   Thème clair ou sombre selon le réglage du système. */
+
+:root {
+  --bg: #f1f5f9;
+  --card: #ffffff;
+  --text: #0f172a;
+  --muted: #64748b;
+  --border: #e2e8f0;
+  --accent: #f59e0b;      /* lumière allumée */
+  --accent-soft: #fef3c7;
+  --on: #10b981;          /* prise allumée, détection */
+  --on-soft: #d1fae5;
+  --danger: #dc2626;
+  --radius: 18px;
+  --shadow: 0 1px 2px rgb(15 23 42 / 0.06), 0 4px 16px rgb(15 23 42 / 0.06);
+  color-scheme: light dark;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b1120;
+    --card: #131c2e;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --border: #1e293b;
+    --accent-soft: #3b2a07;
+    --on-soft: #06281d;
+    --shadow: none;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+[hidden] { display: none !important; }
+
+h1 { font-size: 1.25rem; margin: 0; letter-spacing: -0.01em; }
+h2 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin: 0 0 0.75rem;
+}
+
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+.brand { display: flex; align-items: center; gap: 0.6rem; }
+
+/* ---------- Connexion ---------- */
+
+.login {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+}
+
+.login-card {
+  width: min(100%, 380px);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 2rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.login-card .brand { justify-content: center; margin-bottom: 0.5rem; }
+.login-card h1 { font-size: 1.6rem; }
+
+label { display: grid; gap: 0.35rem; font-size: 0.9rem; color: var(--muted); }
+
+input:not([type="range"]) {
+  padding: 0.7rem 0.85rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.primary {
+  padding: 0.8rem;
+  border: 0;
+  border-radius: 12px;
+  background: var(--text);
+  color: var(--bg);
+  font-weight: 600;
+}
+.primary:disabled { opacity: 0.6; cursor: wait; }
+
+.error { color: var(--danger); margin: 0; font-size: 0.9rem; }
+
+/* ---------- Barre du haut ---------- */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.9rem max(1.25rem, env(safe-area-inset-left));
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+
+.topbar-right { display: flex; align-items: center; gap: 0.75rem; }
+
+.status {
+  font-size: 0.8rem;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.status::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.status.live::before { background: var(--on); box-shadow: 0 0 0 4px var(--on-soft); }
+
+.ghost {
+  border: 1px solid var(--border);
+  background: transparent;
+  border-radius: 999px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.85rem;
+}
+
+/* ---------- Tuiles ---------- */
+
+.sections {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1.25rem max(1.25rem, env(safe-area-inset-left)) 3rem;
+  display: grid;
+  gap: 1.75rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr));
+  gap: 0.85rem;
+}
+
+.tile {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1rem;
+  display: grid;
+  gap: 0.6rem;
+  align-content: start;
+  transition: background 0.25s, border-color 0.25s, transform 0.1s;
+}
+
+.tile-head { display: flex; align-items: center; gap: 0.7rem; }
+
+.icon {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  color: var(--muted);
+}
+.icon svg { width: 22px; height: 22px; }
+
+.name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.sub { font-size: 0.8rem; color: var(--muted); }
+
+.value { font-size: 1.9rem; font-weight: 650; letter-spacing: -0.02em; }
+.value small { font-size: 1rem; color: var(--muted); font-weight: 500; margin-left: 0.15rem; }
+
+/* Tuiles qu'on peut toucher pour allumer / éteindre. */
+.tile-toggle {
+  all: unset;
+  display: block;
+  cursor: pointer;
+  border-radius: 12px;
+}
+.tile-toggle:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+button.tile { text-align: left; width: 100%; color: inherit; }
+button.tile:active { transform: scale(0.98); }
+
+.tile.light.on { background: var(--accent-soft); border-color: var(--accent); }
+.tile.light.on .icon { background: var(--accent); color: #fff; }
+.tile.switch.on, .tile.binary.on { background: var(--on-soft); border-color: var(--on); }
+.tile.switch.on .icon, .tile.binary.on .icon { background: var(--on); color: #fff; }
+.tile.unavailable { opacity: 0.55; }
+.tile.pending { animation: pulse 1s ease-in-out infinite; }
+
+@keyframes pulse { 50% { opacity: 0.6; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .tile, .tile.pending { transition: none; animation: none; }
+}
+
+/* Curseur de luminosité */
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+  margin: 0;
+}
+
+.light-card { display: grid; gap: 0.6rem; }
+
+.empty {
+  text-align: center;
+  color: var(--muted);
+  padding: 3rem 1.5rem;
+}
