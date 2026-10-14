@@ -10,11 +10,13 @@
 //! | GET | `/api/history/{entity_id}` | Historique d'une entité |
 //! | POST | `/api/services/{domain}/{service}` | Appel de service (`switch/turn_on`…) |
 //! | GET | `/api/websocket` | API WebSocket (authentification dans le 1er message) |
+//! | GET | `/` | Tableau de bord web (page publique ; les données demandent un jeton) |
 
 mod auth;
 mod error;
 mod json;
 mod rest;
+mod web;
 mod ws;
 
 use std::net::SocketAddr;
@@ -23,13 +25,14 @@ use std::time::Duration;
 
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
-use axum::http::StatusCode;
+use axum::http::{HeaderValue, StatusCode, header};
 use axum::routing::{get, post};
 use ha_auth::Auth;
 use ha_core::CancellationToken;
 use ha_core::Core;
 use ha_storage::Store;
 use tokio::net::TcpListener;
+use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::timeout::TimeoutLayer;
 
 pub use json::{format_timestamp, state_to_json};
@@ -86,7 +89,30 @@ pub fn router(state: Arc<ApiState>) -> Router {
         .route("/api/history/{entity_id}", get(rest::history))
         .route("/api/services/{domain}/{service}", post(rest::call_service))
         .route("/api/websocket", get(ws::handler))
+        // Tableau de bord web.
+        .route("/", get(web::index))
+        .route("/app.js", get(web::app_js))
+        .route("/style.css", get(web::style_css))
+        .route("/icon.svg", get(web::icon_svg))
+        .route("/manifest.webmanifest", get(web::manifest))
         .layer(DefaultBodyLimit::max(MAX_BODY_SIZE))
+        // En-têtes de sécurité sur toutes les réponses.
+        .layer(SetResponseHeaderLayer::overriding(
+            header::CONTENT_SECURITY_POLICY,
+            HeaderValue::from_static(web::CONTENT_SECURITY_POLICY),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            header::X_CONTENT_TYPE_OPTIONS,
+            HeaderValue::from_static("nosniff"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            header::X_FRAME_OPTIONS,
+            HeaderValue::from_static("DENY"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            header::REFERRER_POLICY,
+            HeaderValue::from_static("no-referrer"),
+        ))
         .layer(TimeoutLayer::with_status_code(
             StatusCode::REQUEST_TIMEOUT,
             REQUEST_TIMEOUT,

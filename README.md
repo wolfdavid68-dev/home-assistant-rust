@@ -2,6 +2,8 @@
 
 Un noyau domotique en Rust, inspiré de Home Assistant.
 
+![Tableau de bord](docs/images/tableau-de-bord-ordinateur.png)
+
 - [Feuille de route](ROADMAP.md)
 - [Règles de sécurité](SECURITY.md)
 
@@ -14,10 +16,11 @@ Un noyau domotique en Rust, inspiré de Home Assistant.
 - [Philips Hue : piloter tes lampes, expliqué](docs/hue.md)
 - [Étape 5 : les automatisations, expliqué](docs/etape-5-automatisations.md)
 - [Modernisation du code, expliquée](docs/modernisation.md)
+- [Étape 6 : l'interface web, expliquée](docs/etape-6-interface-web.md)
 
 ## Lancer le serveur
 
 ```bash
 cargo run -p ha-server -- user add <nom>   # une seule fois : crée un compte
-cargo run -p ha-server                     # API sur http://127.0.0.1:8123/api/
+cargo run -p ha-server                     # tableau de bord sur http://127.0.0.1:8123/
 ```

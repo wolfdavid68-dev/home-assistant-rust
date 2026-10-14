@@ -408,3 +408,75 @@ async fn service_calls_are_published_on_the_bus() {
         assert_eq!(status, StatusCode::BAD_REQUEST, "{uri}");
     }
 }
+
+#[tokio::test]
+async fn dashboard_files_are_served_with_security_headers() {
+    let app = TestApp::new().await;
+    for (uri, content_type) in [
+        ("/", "text/html; charset=utf-8"),
+        ("/app.js", "text/javascript; charset=utf-8"),
+        ("/style.css", "text/css; charset=utf-8"),
+        ("/icon.svg", "image/svg+xml"),
+        ("/manifest.webmanifest", "application/manifest+json"),
+    ] {
+        let response = app
+            .router()
+            .oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK, "{uri}");
+        let headers = response.headers();
+        assert_eq!(headers[header::CONTENT_TYPE], content_type, "{uri}");
+        assert!(
+            headers[header::CONTENT_SECURITY_POLICY]
+                .to_str()
+                .unwrap()
+                .contains("script-src 'self'"),
+            "{uri}"
+        );
+        assert_eq!(headers[header::X_CONTENT_TYPE_OPTIONS], "nosniff");
+        assert_eq!(headers[header::X_FRAME_OPTIONS], "DENY");
+    }
+}
+
+#[tokio::test]
+async fn api_errors_also_carry_security_headers() {
+    let app = TestApp::new().await;
+    let response = app
+        .router()
+        .oneshot(
+            Request::builder()
+                .uri("/api/states")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert!(
+        response
+            .headers()
+            .contains_key(header::CONTENT_SECURITY_POLICY)
+    );
+    assert_eq!(response.headers()[header::REFERRER_POLICY], "no-referrer");
+}
+
+#[test]
+fn dashboard_never_uses_inner_html() {
+    // Règle de sécurité : les noms d'appareils viennent du réseau. La page ne
+    // doit jamais les insérer comme du HTML.
+    let script = include_str!("../web/app.js");
+    for forbidden in [
+        ".innerHTML",
+        ".outerHTML",
+        ".insertAdjacentHTML(",
+        "document.write(",
+        "eval(",
+        "new Function(",
+    ] {
+        assert!(
+            !script.contains(forbidden),
+            "{forbidden} interdit dans app.js"
+        );
+    }
+}

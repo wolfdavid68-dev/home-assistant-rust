@@ -18,7 +18,7 @@ zeroize = "1.9.1"
 rpassword = "7.5.4"
 # Serveur web : HTTP/1 et WebSocket uniquement.
 axum = { version = "0.8.9", default-features = false, features = ["http1", "json", "query", "tokio", "tracing", "ws"] }
-tower-http = { version = "0.7.1", features = ["timeout"] }
+tower-http = { version = "0.7.1", features = ["set-header", "timeout"] }
 # MQTT sans TLS : la partie TLS de rumqttc 0.25 dépend de crates vulnérables
 # ou abandonnées (refusées par cargo deny). À réactiver quand ce sera corrigé.
 rumqttc = { version = "0.25.1", default-features = false }

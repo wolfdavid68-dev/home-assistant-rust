@@ -30,6 +30,11 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
 - Pont Philips Hue : HTTPS avec certificat **épinglé** à l'association (confiance au premier usage),
   jamais de vérification TLS désactivée.
 
+## Interface web
+
+- Politique de sécurité du contenu (CSP) stricte : aucun script dans la page, aucune ressource extérieure.
+- Données venues du réseau insérées uniquement avec `textContent`, jamais `innerHTML` (vérifié par un test).
+
 ## Secrets
 
 - Aucun secret dans le dépôt Git. Ils vont dans `secrets.yaml` ou `.env`, ignorés par Git.
