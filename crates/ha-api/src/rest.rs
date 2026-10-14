@@ -2,6 +2,7 @@
 
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::{Duration, SystemTime};
 
 use axum::Json;
 use axum::body::Bytes;
@@ -79,6 +80,18 @@ struct SetStateRequest {
 pub(crate) struct HistoryQuery {
     limit: Option<u32>,
 }
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct SeriesQuery {
+    hours: Option<u32>,
+}
+
+/// Période par défaut d'un graphique, et période maximale (31 jours).
+const DEFAULT_SERIES_HOURS: u32 = 24;
+const MAX_SERIES_HOURS: u32 = 31 * 24;
+/// Nombre de points d'une courbe : assez pour être fluide, peu pour être léger.
+const SERIES_POINTS: u32 = 300;
 
 /// Lit un corps JSON. On le fait nous-mêmes (au lieu de l'extracteur `Json`
 /// d'axum) pour que toutes les erreurs aient le même format `{"error": …}`.
@@ -285,6 +298,48 @@ pub(crate) async fn history(
     Ok(Json(
         json!({ "entity_id": entity_id.as_str(), "history": entries }),
     ))
+}
+
+/// `GET /api/history/{entity_id}/series?hours=24` : l'historique d'une
+/// période, résumé pour un graphique (courbe et changements de valeur).
+pub(crate) async fn history_series(
+    State(state): State<Arc<ApiState>>,
+    _auth: Authenticated,
+    Path(entity_id): Path<String>,
+    Query(query): Query<SeriesQuery>,
+) -> Result<Json<Value>, ApiError> {
+    let entity_id = parse_entity_id(&entity_id)?;
+    let hours = query.hours.unwrap_or(DEFAULT_SERIES_HOURS);
+    if !(1..=MAX_SERIES_HOURS).contains(&hours) {
+        return Err(ApiError::BadRequest(format!(
+            "« hours » doit être entre 1 et {MAX_SERIES_HOURS}"
+        )));
+    }
+    let until = SystemTime::now();
+    let since = until
+        .checked_sub(Duration::from_secs(u64::from(hours) * 3600))
+        .unwrap_or(SystemTime::UNIX_EPOCH);
+    let series = state
+        .store
+        .history_series(&entity_id, since, until, SERIES_POINTS)
+        .await?;
+    let numeric: Vec<Value> = series
+        .numeric
+        .iter()
+        .map(|p| json!({"at": format_timestamp(p.at), "mean": p.mean, "min": p.min, "max": p.max}))
+        .collect();
+    let changes: Vec<Value> = series
+        .changes
+        .iter()
+        .map(|c| json!({"at": format_timestamp(c.at), "state": c.state}))
+        .collect();
+    Ok(Json(json!({
+        "entity_id": entity_id.as_str(),
+        "since": format_timestamp(since),
+        "until": format_timestamp(until),
+        "numeric": numeric,
+        "changes": changes,
+    })))
 }
 
 /// `POST /api/services/{domain}/{service}` : `{"entity_id": "switch.prise", …paramètres}`.

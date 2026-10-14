@@ -422,3 +422,76 @@ async fn old_audit_lines_are_purged() {
     assert_eq!(store.purge_audit(future).await.unwrap(), 1);
     assert_eq!(store.audit_log(10).await.unwrap(), Vec::new());
 }
+
+/// Ajoute une ligne d'historique à une date précise (en secondes).
+async fn history_row(store: &Store, entity: &str, state: Option<&str>, at_seconds: u64) {
+    let at =
+        ha_storage::to_micros(std::time::UNIX_EPOCH + Duration::from_secs(at_seconds)).unwrap();
+    sqlx::query(
+        "INSERT INTO state_history (entity_id, state, attributes, last_changed, last_updated, recorded_at)
+         VALUES (?1, ?2, ?3, ?4, ?4, ?4)",
+    )
+    .bind(entity)
+    .bind(state)
+    .bind(state.map(|_| "{}"))
+    .bind(at)
+    .execute(store.pool())
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn history_series_summarises_numbers_and_changes() {
+    let store = Store::open_in_memory().await.unwrap();
+    let base = 1_700_000_000;
+    let time = |s: u64| std::time::UNIX_EPOCH + Duration::from_secs(base + s);
+
+    // Température : deux mesures par tranche de 100 s, et une valeur non
+    // numérique qui ne doit pas devenir un zéro.
+    for (offset, value) in [
+        (0, "20.0"),
+        (50, "22.0"),
+        (100, "unavailable"),
+        (150, "25.5"),
+        (160, "24.5"),
+    ] {
+        history_row(&store, "sensor.temperature", Some(value), base + offset).await;
+    }
+    let series = store
+        .history_series(&id("sensor.temperature"), time(0), time(200), 2)
+        .await
+        .unwrap();
+    let means: Vec<f64> = series.numeric.iter().map(|p| p.mean).collect();
+    assert_eq!(means, [21.0, 25.0]);
+    assert_eq!((series.numeric[1].min, series.numeric[1].max), (24.5, 25.5));
+
+    // Porte : la valeur d'avant la période, puis seulement les vrais changements.
+    for (offset, value) in [
+        (0, Some("off")),
+        (10, Some("on")),
+        (20, Some("on")),
+        (30, Some("off")),
+        (40, None),
+    ] {
+        history_row(&store, "binary_sensor.porte", value, base + 1_000 + offset).await;
+    }
+    let series = store
+        .history_series(&id("binary_sensor.porte"), time(1_005), time(2_000), 10)
+        .await
+        .unwrap();
+    let changes: Vec<Option<&str>> = series.changes.iter().map(|c| c.state.as_deref()).collect();
+    assert_eq!(changes, [Some("off"), Some("on"), Some("off"), None]);
+    assert_eq!(
+        series.changes[0].at,
+        time(1_005),
+        "valeur au début de la période"
+    );
+    assert_eq!(series.numeric, Vec::new(), "pas une valeur numérique");
+
+    // Période vide ou à l'envers.
+    let empty = store
+        .history_series(&id("binary_sensor.porte"), time(2_000), time(1_000), 10)
+        .await
+        .unwrap();
+    assert_eq!(empty, ha_storage::HistorySeries::default());
+}

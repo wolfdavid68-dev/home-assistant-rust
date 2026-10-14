@@ -108,6 +108,7 @@ async fn every_route_requires_a_token() {
         ("POST", "/api/services/switch/turn_on"),
         ("GET", "/api/audit"),
         ("GET", "/api/areas"),
+        ("GET", "/api/history/light.salon/series"),
     ] {
         let (status, _) = app.request(method, uri, None, None).await;
         assert_eq!(status, StatusCode::UNAUTHORIZED, "{method} {uri}");
@@ -600,4 +601,57 @@ async fn areas_are_served() {
         json!({"areas": [{"name": "Cuisine",
                           "entities": [{"entity_id": "switch.prise_cafe", "name": "Cafetière"}]}]})
     );
+}
+
+#[tokio::test]
+async fn history_series_for_a_chart() {
+    let mut app = TestApp::new().await;
+    let token = app.login().await;
+    for value in ["20.5", "21.5", "unavailable", "22"] {
+        let (status, _) = app
+            .request(
+                "POST",
+                "/api/states/sensor.temperature",
+                Some(&token),
+                Some(json!({"state": value})),
+            )
+            .await;
+        assert!(status.is_success());
+    }
+    // L'enregistreur écrit tout avant de s'arrêter.
+    app.recorder.take().unwrap().stop().await;
+
+    let (status, body) = app
+        .request(
+            "GET",
+            "/api/history/sensor.temperature/series?hours=24",
+            Some(&token),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    // Les mesures, très proches dans le temps, tombent dans la même tranche.
+    let points = body["numeric"].as_array().unwrap();
+    assert_eq!(points.len(), 1, "{body}");
+    assert_eq!(points[0]["min"], 20.5);
+    assert_eq!(points[0]["max"], 22.0);
+    let changes: Vec<&str> = body["changes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["state"].as_str().unwrap())
+        .collect();
+    assert_eq!(changes, ["20.5", "21.5", "unavailable", "22"]);
+
+    for bad in ["hours=0", "hours=10000", "hours=abc", "jours=2"] {
+        let (status, _) = app
+            .request(
+                "GET",
+                &format!("/api/history/sensor.temperature/series?{bad}"),
+                Some(&token),
+                None,
+            )
+            .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{bad}");
+    }
 }

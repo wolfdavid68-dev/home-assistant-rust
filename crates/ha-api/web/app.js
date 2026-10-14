@@ -223,6 +223,12 @@ function renderAll() {
 }
 
 function renderTile(state) {
+  const tile = renderTileContent(state);
+  tile.append(historyButton(state));
+  return tile;
+}
+
+function renderTileContent(state) {
   switch (domainOf(state)) {
     case "light": return lightTile(state);
     case "cover": return coverTile(state);
@@ -301,16 +307,19 @@ function coverTile(state) {
 
 function switchTile(state) {
   const on = state.state === "on";
-  const tile = el(
+  // Le bouton est à l'intérieur de la tuile (et non la tuile entière), pour
+  // que le bouton « historique » puisse être à côté : un bouton ne peut pas
+  // en contenir un autre.
+  const toggle = el(
     "button",
-    { id: tileId(state.entity_id), class: tileClass(state, "switch"), type: "button", "aria-pressed": String(on) },
+    { class: "tile-toggle", type: "button", "aria-pressed": String(on) },
     tileHead(state, ICONS.plug, statusText(state)),
   );
-  tile.addEventListener("click", () => {
+  toggle.addEventListener("click", () => {
     markPending(state.entity_id);
     callService("switch", "toggle", { entity_id: state.entity_id });
   });
-  return tile;
+  return el("div", { id: tileId(state.entity_id), class: tileClass(state, "switch") }, toggle);
 }
 
 function binaryTile(state) {
@@ -472,12 +481,185 @@ const ICONS = {
   stop: ["M8 8h8v8H8z"],
   illuminance: ["M12 3v2", "M12 19v2", "M5 12H3", "M21 12h-2", "M12 8a4 4 0 1 0 0 8 4 4 0 1 0 0-8z"],
   occupancy: ["M12 4a2 2 0 1 0 0 4 2 2 0 1 0 0-4z", "M8 21v-6l-2-1 2-5h8l2 5-2 1v6"],
+  chart: ["M4 19h16", "M4 15l4-5 4 3 6-7"],
   moon: ["M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"],
   person: ["M12 3a4 4 0 1 0 0 8 4 4 0 1 0 0-8z", "M4 21a8 8 0 0 1 16 0"],
   globe: ["M12 3a9 9 0 1 0 0 18 9 9 0 1 0 0-18z", "M3 12h18", "M12 3a14 14 0 0 1 0 18", "M12 3a14 14 0 0 0 0 18"],
   data_rate: ["M4 17l5-5 4 4 7-8", "M15 8h5v5"],
 };
 const BINARY_ICONS = { motion: ICONS.motion, connectivity: ICONS.globe };
+
+// ---------------------------------------------------------------- Historique
+// Fenêtre d'historique : une courbe pour les valeurs numériques, une frise
+// pour les autres (allumé / éteint, présent / absent…). Le dessin est en SVG,
+// construit élément par élément : pas de bibliothèque, pas de HTML.
+const SVG_NS = "http://www.w3.org/2000/svg";
+const CHART = { width: 640, height: 220, left: 52, right: 12, top: 12, bottom: 28 };
+const historyView = { entityId: null, hours: 24 };
+const number = new Intl.NumberFormat("fr", { maximumFractionDigits: 1 });
+const shortTime = new Intl.DateTimeFormat("fr", { hour: "2-digit", minute: "2-digit" });
+const dayTime = new Intl.DateTimeFormat("fr", { weekday: "short", hour: "2-digit", minute: "2-digit" });
+// Valeurs qui veulent dire « actif » : colorées dans la frise.
+const ACTIVE_STATES = new Set(["on", "home", "open", "above_horizon", "playing", "unlocked"]);
+
+function historyButton(state) {
+  const button = el(
+    "button",
+    { class: "history-button", type: "button", title: "Historique", "aria-label": `Historique de ${nameOf(state)}` },
+    svgIcon(ICONS.chart),
+  );
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    openHistory(state.entity_id);
+  });
+  return button;
+}
+
+function openHistory(entityId) {
+  historyView.entityId = entityId;
+  const state = entities.get(entityId);
+  $("#history-title").textContent = state ? nameOf(state) : entityId;
+  $("#history").showModal();
+  loadHistory().catch(() => {
+    $("#history-summary").textContent = "Historique indisponible.";
+  });
+}
+
+$("#history-close").addEventListener("click", () => $("#history").close());
+for (const button of document.querySelectorAll(".period")) {
+  button.addEventListener("click", () => {
+    historyView.hours = Number(button.dataset.hours);
+    loadHistory().catch(() => {});
+  });
+}
+
+async function loadHistory() {
+  for (const button of document.querySelectorAll(".period")) {
+    button.setAttribute("aria-pressed", String(Number(button.dataset.hours) === historyView.hours));
+  }
+  $("#history-summary").textContent = "Chargement…";
+  const url = `/api/history/${encodeURIComponent(historyView.entityId)}/series?hours=${historyView.hours}`;
+  const response = await fetch(url, { headers: { Authorization: `Bearer ${token.get()}` } });
+  if (response.status === 401) {
+    $("#history").close();
+    token.clear();
+    live.close();
+    return showLogin("Session expirée : reconnecte-toi.");
+  }
+  if (!response.ok) throw new Error("historique");
+  drawHistory(await response.json());
+}
+
+function svg(tag, attributes = {}) {
+  const node = document.createElementNS(SVG_NS, tag);
+  for (const [name, value] of Object.entries(attributes)) node.setAttribute(name, String(value));
+  return node;
+}
+
+function drawHistory(data) {
+  const since = Date.parse(data.since);
+  const until = Date.parse(data.until);
+  const state = entities.get(historyView.entityId);
+  const unit = state?.attributes.unit_of_measurement ?? "";
+  const points = (data.numeric ?? []).filter(
+    (p) => Number.isFinite(p.mean) && Number.isFinite(p.min) && Number.isFinite(p.max) && !Number.isNaN(Date.parse(p.at)),
+  );
+  const changes = (data.changes ?? []).filter((c) => !Number.isNaN(Date.parse(c.at)));
+  const x = (time) => CHART.left + ((time - since) / Math.max(1, until - since)) * (CHART.width - CHART.left - CHART.right);
+  const chart = svg("svg", { viewBox: `0 0 ${CHART.width} ${CHART.height}`, role: "img", "aria-label": `Historique de ${$("#history-title").textContent}` });
+
+  // Graduations du temps : début, milieu, fin.
+  const format = historyView.hours > 24 ? dayTime : shortTime;
+  for (const [time, anchor] of [[since, "start"], [(since + until) / 2, "middle"], [until, "end"]]) {
+    const label = svg("text", { x: x(time), y: CHART.height - 8, class: "axis", "text-anchor": anchor });
+    label.textContent = format.format(new Date(time));
+    chart.append(label);
+  }
+
+  if (points.length > 0) {
+    drawCurve(chart, points, x, unit);
+    const low = Math.min(...points.map((p) => p.min));
+    const high = Math.max(...points.map((p) => p.max));
+    const mean = points.reduce((sum, p) => sum + p.mean, 0) / points.length;
+    $("#history-summary").textContent =
+      `min ${number.format(low)} · moyenne ${number.format(mean)} · max ${number.format(high)} ${unit}`.trim();
+  } else if (changes.length > 0) {
+    drawTimeline(chart, changes, x, until);
+    $("#history-summary").textContent = `${Math.max(0, changes.length - 1)} changement(s) sur la période`;
+  } else {
+    $("#history-summary").textContent = "Aucune donnée sur cette période.";
+  }
+  $("#history-chart").replaceChildren(chart);
+
+  // Pour une valeur qui n'est pas numérique : les derniers changements, en
+  // texte (le plus récent d'abord).
+  $("#history-changes").replaceChildren(
+    ...(points.length > 0 ? [] : changes).slice(-8).reverse().map((change) =>
+      el(
+        "li",
+        {},
+        el("time", { datetime: change.at, text: format.format(new Date(change.at)) }),
+        el("span", { text: historyLabel(change.state, unit) }),
+      ),
+    ),
+  );
+}
+
+function drawCurve(chart, points, x, unit) {
+  let low = Math.min(...points.map((p) => p.min));
+  let high = Math.max(...points.map((p) => p.max));
+  if (high - low < 1e-9) {
+    low -= 1;
+    high += 1;
+  }
+  const margin = (high - low) * 0.1;
+  low -= margin;
+  high += margin;
+  const y = (value) => CHART.top + ((high - value) / (high - low)) * (CHART.height - CHART.top - CHART.bottom);
+
+  for (const value of [high - margin, (high + low) / 2, low + margin]) {
+    chart.append(svg("line", { x1: CHART.left, x2: CHART.width - CHART.right, y1: y(value), y2: y(value), class: "grid" }));
+    const label = svg("text", { x: CHART.left - 6, y: y(value) + 4, class: "axis", "text-anchor": "end" });
+    label.textContent = `${number.format(value)}${unit ? ` ${unit}` : ""}`;
+    chart.append(label);
+  }
+  // Bande min–max, puis la courbe des moyennes.
+  const top = points.map((p) => `${x(Date.parse(p.at))},${y(p.max)}`);
+  const bottom = points.map((p) => `${x(Date.parse(p.at))},${y(p.min)}`).reverse();
+  chart.append(svg("polygon", { points: [...top, ...bottom].join(" "), class: "band" }));
+  chart.append(svg("polyline", { points: points.map((p) => `${x(Date.parse(p.at))},${y(p.mean)}`).join(" "), class: "curve" }));
+}
+
+function drawTimeline(chart, changes, x, until) {
+  const top = CHART.top + 30;
+  const height = CHART.height - CHART.top - CHART.bottom - 60;
+  changes.forEach((change, index) => {
+    const start = Date.parse(change.at);
+    const end = index + 1 < changes.length ? Date.parse(changes[index + 1].at) : until;
+    const active = typeof change.state === "string" && ACTIVE_STATES.has(change.state);
+    const missing = change.state === null || change.state === "unavailable" || change.state === "unknown";
+    chart.append(svg("rect", {
+      x: x(start), y: top, width: Math.max(1, x(end) - x(start)), height,
+      class: active ? "segment active" : missing ? "segment missing" : "segment",
+    }));
+  });
+}
+
+/** Libellé lisible d'une valeur de l'historique. */
+function historyLabel(value, unit) {
+  if (value === null) return "supprimé";
+  const state = entities.get(historyView.entityId);
+  const domain = historyView.entityId.split(".")[0];
+  if (domain === "device_tracker") return value === "home" ? "À la maison" : value === "not_home" ? "Absent" : value;
+  if (domain === "sun") return value === "above_horizon" ? "Levé" : value === "below_horizon" ? "Couché" : value;
+  if (domain === "cover") return lookup(COVER_LABELS, value) ?? value;
+  if (domain === "binary_sensor") {
+    const labels = lookup(BINARY_LABELS, state?.attributes.device_class);
+    if (labels && (value === "on" || value === "off")) return value === "on" ? labels[0] : labels[1];
+  }
+  if (unit && Number.isFinite(Number(value))) return `${number.format(Number(value))} ${unit}`;
+  return lookup(STATUS_LABELS, value) ?? value;
+}
 
 // ---------------------------------------------------------------- Journal
 const AUDIT_LABELS = {

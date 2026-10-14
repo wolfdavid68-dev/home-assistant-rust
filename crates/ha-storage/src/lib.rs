@@ -18,4 +18,7 @@ pub use audit::{AuditCheck, AuditEntry, AuditRecord, MAX_AUDIT_LIMIT, clean_fiel
 pub use error::StorageError;
 pub use recorder::Recorder;
 pub use secrets::{SecretKey, is_sealed};
-pub use store::{HistoryEntry, MAX_HISTORY_LIMIT, Store, StoredState, from_micros, to_micros};
+pub use store::{
+    HistoryEntry, HistorySeries, MAX_HISTORY_LIMIT, MAX_SERIES_BUCKETS, MAX_SERIES_CHANGES,
+    SeriesPoint, StateChange, Store, StoredState, from_micros, to_micros,
+};
