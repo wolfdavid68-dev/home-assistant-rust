@@ -15,6 +15,7 @@ ha-core = { path = "../ha-core" }
 ha-freebox = { path = "../ha-freebox" }
 ha-hue = { path = "../ha-hue" }
 ha-mqtt = { path = "../ha-mqtt" }
+ha-notify = { path = "../ha-notify" }
 ha-somfy = { path = "../ha-somfy" }
 ha-tls = { path = "../ha-tls" }
 jiff.workspace = true

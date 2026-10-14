@@ -78,3 +78,53 @@
     - action: cover.close_cover
       target:
         entity_id: cover.volet_salon
+
+# Notifications sur le téléphone (il faut configurer ntfy : HA_NTFY_URL et
+# HA_NTFY_TOPIC, voir docs/notifications.md).
+
+# Fumée détectée : notification urgente.
+- id: alerte_fumee
+  alias: Alerte fumée
+  triggers:
+    - trigger: state
+      entity_id: binary_sensor.fumee_salon
+      to: "on"
+  actions:
+    - action: notify.send_message
+      target:
+        entity_id: notify.telephone
+      data:
+        title: Fumée !
+        message: Le détecteur de fumée du salon s'est déclenché.
+        priority: 5
+
+# Un appareil inconnu vient de rejoindre le Wi-Fi (intégration Freebox).
+- id: alerte_nouvel_appareil
+  alias: Nouvel appareil sur le Wi-Fi
+  triggers:
+    - trigger: state
+      entity_id: sensor.freebox_nouvel_appareil
+  actions:
+    - action: notify.send_message
+      target:
+        entity_id: notify.telephone
+      data:
+        title: Nouvel appareil sur le Wi-Fi
+        message: Un appareil inconnu s'est connecté. Regarde le journal d'activité.
+        priority: 4
+
+# Internet coupé depuis 5 minutes.
+- id: alerte_internet
+  alias: Internet coupé
+  triggers:
+    - trigger: state
+      entity_id: binary_sensor.freebox_internet
+      to: "off"
+      for: 5min
+  actions:
+    - action: notify.send_message
+      target:
+        entity_id: notify.telephone
+      data:
+        title: Internet coupé
+        message: La connexion Internet de la maison est coupée depuis 5 minutes.
