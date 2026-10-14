@@ -1,0 +1,67 @@
+# Exemple d'automatisations. Copie ce fichier en `automations.yaml`, adapte les
+# noms d'entités (voir GET /api/states), puis vérifie-le avec :
+#   cargo run -p ha-server -- automations check
+#
+# Syntaxe : la même que Home Assistant (triggers / conditions / actions).
+
+# Allumer le salon quand la porte s'ouvre le soir, puis l'éteindre 10 min après.
+- id: salon_au_retour
+  alias: Lumière du salon au retour le soir
+  triggers:
+    - trigger: state
+      entity_id: binary_sensor.porte_entree
+      to: "on"
+  conditions:
+    - condition: time
+      after: "18:00"
+      before: "23:30"
+    - condition: state
+      entity_id: light.salon
+      state: "off"
+  actions:
+    - action: light.turn_on
+      target:
+        entity_id: light.salon
+      data:
+        brightness: 180
+    - delay: 10min
+    - action: light.turn_off
+      target:
+        entity_id: light.salon
+
+# Prévenir l'oubli : éteindre la prise café si elle est allumée depuis 2 heures.
+- id: cafe_oublie
+  triggers:
+    - trigger: state
+      entity_id: switch.prise_cafe
+      to: "on"
+      for: 2h
+  actions:
+    - action: switch.turn_off
+      target:
+        entity_id: switch.prise_cafe
+
+# Allumer le radiateur s'il fait moins de 18,5 °C en semaine.
+- id: chauffage_semaine
+  alias: Radiateur quand il fait froid
+  triggers:
+    - trigger: numeric_state
+      entity_id: sensor.temperature_salon
+      below: 18.5
+  conditions:
+    - condition: time
+      weekday: [lun, mar, mer, jeu, ven]
+  actions:
+    - action: switch.turn_on
+      target:
+        entity_id: switch.radiateur
+
+# Tout éteindre chaque soir à 23 h 45.
+- id: extinction_nuit
+  triggers:
+    - trigger: time
+      at: "23:45"
+  actions:
+    - action: light.turn_off
+      target:
+        entity_id: [light.salon, light.cuisine]

@@ -12,6 +12,7 @@ Un noyau domotique en Rust, inspiré de Home Assistant.
 - [Étape 3 : comptes, authentification et API, expliqués](docs/etape-3-auth-api.md)
 - [Étape 4 : les vrais appareils avec MQTT, expliqué](docs/etape-4-mqtt.md)
 - [Philips Hue : piloter tes lampes, expliqué](docs/hue.md)
+- [Étape 5 : les automatisations, expliqué](docs/etape-5-automatisations.md)
 
 ## Lancer le serveur
 
