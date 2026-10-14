@@ -174,19 +174,46 @@ const SECTIONS = [
   { title: "Détecteurs", domains: ["binary_sensor"] },
 ];
 
+// ---------------------------------------------------------------- Pièces
+// Les pièces viennent du fichier areas.yaml (GET /api/areas).
+let areas = [];
+const customNames = new Map();
+
+async function loadAreas() {
+  const response = await fetch("/api/areas", { headers: { Authorization: `Bearer ${token.get()}` } });
+  if (!response.ok) return;
+  areas = (await response.json()).areas ?? [];
+  customNames.clear();
+  for (const area of areas) {
+    for (const entity of area.entities) {
+      if (typeof entity.name === "string") customNames.set(entity.entity_id, entity.name);
+    }
+  }
+  renderAll();
+}
+
 function renderAll() {
   const container = $("#sections");
   const sorted = [...entities.values()].sort((a, b) => nameOf(a).localeCompare(nameOf(b), "fr"));
   const used = new Set();
+  // D'abord une section par pièce, dans l'ordre du fichier…
+  const areaGroups = areas.map((area) => {
+    const items = area.entities
+      .map((entity) => entities.get(entity.entity_id))
+      .filter((state) => state !== undefined);
+    items.forEach((s) => used.add(s.entity_id));
+    return { title: area.name, items };
+  });
+  // … puis, par type, les appareils qui ne sont dans aucune pièce.
   const groups = SECTIONS.map(({ title, domains }) => {
-    const items = sorted.filter((s) => domains.includes(domainOf(s)));
+    const items = sorted.filter((s) => !used.has(s.entity_id) && domains.includes(domainOf(s)));
     items.forEach((s) => used.add(s.entity_id));
     return { title, items };
   });
   groups.push({ title: "Autres", items: sorted.filter((s) => !used.has(s.entity_id)) });
 
   container.replaceChildren(
-    ...groups
+    ...[...areaGroups, ...groups]
       .filter((group) => group.items.length > 0)
       .map(({ title, items }) =>
         el("section", {}, el("h2", { text: title }), el("div", { class: "grid" }, ...items.map(renderTile))),
@@ -350,7 +377,7 @@ function tileHead(state, icon, subtitle) {
     "div",
     { class: "tile-head" },
     el("span", { class: "icon" }, svgIcon(icon)),
-    el("div", {}, el("div", { class: "name", text: nameOf(state) }), el("div", { class: "sub", text: subtitle })),
+    el("div", {}, el("div", { class: "name", text: nameOf(state), title: state.entity_id }), el("div", { class: "sub", text: subtitle })),
   );
 }
 
@@ -390,7 +417,8 @@ const BINARY_LABELS = {
  *  obtiendrait des objets internes de JavaScript au lieu d'un libellé. */
 const lookup = (table, key) => (typeof key === "string" && Object.hasOwn(table, key) ? table[key] : undefined);
 const domainOf = (state) => state.entity_id.split(".")[0];
-const nameOf = (state) => state.attributes.friendly_name || state.entity_id.split(".")[1].replaceAll("_", " ");
+const nameOf = (state) =>
+  customNames.get(state.entity_id) || state.attributes.friendly_name || state.entity_id.split(".")[1].replaceAll("_", " ");
 const tileId = (entityId) => `tile-${entityId}`;
 
 const relative = new Intl.RelativeTimeFormat("fr", { numeric: "auto" });
@@ -516,6 +544,7 @@ function showDashboard() {
   $("#login-view").hidden = true;
   $("#dashboard-view").hidden = false;
   live.open();
+  loadAreas().catch(() => {});
 }
 
 // Rafraîchit les « il y a … » chaque minute.

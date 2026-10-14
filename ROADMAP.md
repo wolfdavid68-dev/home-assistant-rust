@@ -23,6 +23,7 @@ Un workspace Cargo découpé en crates :
 | `ha-hue`      | Philips Hue : lampes via le pont Hue (API locale v2)                        |
 | `ha-somfy`    | Somfy TaHoma : volets, capteurs, alarme, chauffage (API locale)             |
 | `ha-freebox`  | Freebox : présence, connexion Internet, nouveaux appareils (lecture seule) |
+| `ha-areas`    | Pièces de la maison et noms lisibles (fichier `areas.yaml`)                 |
 | `ha-sun`      | Soleil : lever, coucher, hauteur, calculés sans réseau                      |
 | `ha-tls`      | Connexions HTTPS partagées (certificat épinglé ou vérifié)                  |
 | `ha-server`   | Binaire qui assemble le tout et lit la configuration                        |
@@ -49,7 +50,7 @@ Briques principales : `tokio` (asynchrone), `axum` (web), `sqlx` + SQLite, `serd
 Les fonctions de Home Assistant les plus utiles au quotidien, une par une, dans cet ordre :
 
 - [x] **8. Soleil** : lever, coucher, aube, crépuscule ; déclencheur et condition `sun` comme dans Home Assistant ([guide](docs/soleil.md))
-- [ ] **9. Pièces** : ranger les appareils par pièce (salon, chambre…) sur le tableau de bord
+- [x] **9. Pièces** : ranger les appareils par pièce (salon, chambre…) et leur donner un nom lisible ([guide](docs/pieces.md))
 - [ ] **10. Historique en graphiques** : courbes de température, ouverture des volets…
 - [ ] **11. Scènes et scripts** : « soirée cinéma » en un bouton, suites d'actions réutilisables
 - [ ] **12. Notifications** : être prévenu sur son téléphone (alarme, fumée, nouvel appareil sur le Wi-Fi)

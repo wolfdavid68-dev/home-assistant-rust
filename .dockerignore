@@ -13,4 +13,5 @@ secrets
 *.pem
 *.key
 automations.yaml
+areas.yaml
 sauvegardes

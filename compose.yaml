@@ -36,7 +36,8 @@ services:
       - ha-data:/data
       # La clé qui chiffre les jetons Hue et Somfy, à part de la base.
       - ha-cle:/cle
-      # Ton fichier d'automatisations : config/automations.yaml (lecture seule).
+      # Tes fichiers d'automatisations et de pièces : config/automations.yaml et
+      # config/areas.yaml (lecture seule).
       - ./config:/config:ro
     # secrets:
     #   - mqtt_password

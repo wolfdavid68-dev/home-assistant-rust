@@ -1,0 +1,16 @@
+[package]
+name = "ha-areas"
+description = "Pièces de la maison : quels appareils sont dans le salon, la chambre… (fichier areas.yaml)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ha-core = { path = "../ha-core" }
+serde.workspace = true
+serde-saphyr.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

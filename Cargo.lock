@@ -794,6 +794,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "futures-util",
+ "ha-areas",
  "ha-auth",
  "ha-core",
  "ha-storage",
@@ -805,6 +806,16 @@ dependencies = [
  "tower-http 0.7.1",
  "tracing",
  "zeroize",
+]
+
+[[package]]
+name = "ha-areas"
+version = "0.1.0"
+dependencies = [
+ "ha-core",
+ "serde",
+ "serde-saphyr",
+ "thiserror",
 ]
 
 [[package]]
@@ -912,6 +923,7 @@ name = "ha-server"
 version = "0.1.0"
 dependencies = [
  "ha-api",
+ "ha-areas",
  "ha-auth",
  "ha-automation",
  "ha-core",

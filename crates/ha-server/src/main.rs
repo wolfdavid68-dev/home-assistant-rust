@@ -21,6 +21,7 @@
 //! ha-server freebox devices       liste les appareils du réseau
 //! ha-server freebox track <MAC> <nom>  suit la présence d'un appareil
 //! ha-server automations check     vérifie le fichier d'automatisations
+//! ha-server areas check           vérifie le fichier des pièces
 //! ha-server audit [nombre]        affiche le journal d'audit
 //! ha-server audit verify          vérifie que le journal n'a pas été modifié
 //! ha-server healthcheck           vérifie qu'un serveur répond (pour Docker)
@@ -40,6 +41,7 @@
 //! - `HA_MQTT_DISCOVERY_PREFIX` : préfixe de découverte (par défaut `homeassistant`) ;
 //! - `HA_LATITUDE` et `HA_LONGITUDE` : position de la maison, pour le soleil
 //!   (deux décimales suffisent, par exemple 48.85 et 2.35) ;
+//! - `HA_AREAS_PATH` : fichier des pièces (par défaut `areas.yaml`) ;
 //! - `HA_AUTOMATIONS_PATH` : fichier d'automatisations (par défaut `automations.yaml`) ;
 //! - `RUST_LOG` : niveau de détail des logs (par défaut `info`).
 
@@ -74,6 +76,7 @@ const DEFAULT_BIND: &str = "127.0.0.1:8123";
 const DEFAULT_HISTORY_DAYS: u32 = 10;
 const DEFAULT_AUDIT_DAYS: u32 = 365;
 const DEFAULT_AUTOMATIONS_PATH: &str = "automations.yaml";
+const DEFAULT_AREAS_PATH: &str = "areas.yaml";
 
 /// Concept Rust : `#[tokio::main]` démarre le moteur asynchrone de tokio.
 /// Une fonction `async` peut attendre (`.await`) sans bloquer le fil
@@ -97,6 +100,7 @@ async fn main() -> ExitCode {
         ["somfy", rest @ ..] => cli::somfy_command(rest).await,
         ["freebox", rest @ ..] => cli::freebox_command(rest).await,
         ["automations", "check"] => cli::check_automations(&automations_path()),
+        ["areas", "check"] => cli::check_areas(&areas_path()),
         ["audit", rest @ ..] => cli::audit_command(rest).await,
         ["healthcheck"] => match parse_bind() {
             Ok(bind) => health::check(bind).await,
@@ -129,6 +133,12 @@ async fn open_store() -> Result<Store, ha_storage::StorageError> {
     Store::open_with_key(&db_path, &key_path).await
 }
 
+fn areas_path() -> std::path::PathBuf {
+    std::env::var("HA_AREAS_PATH")
+        .unwrap_or_else(|_| DEFAULT_AREAS_PATH.to_owned())
+        .into()
+}
+
 fn db_path() -> String {
     std::env::var("HA_DB_PATH").unwrap_or_else(|_| DEFAULT_DB_PATH.to_owned())
 }
@@ -144,6 +154,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     // Un fichier d'automatisations invalide empêche le démarrage, avec un
     // message clair : mieux vaut corriger que de tourner à moitié.
     let automations = ha_automation::load(&automations_path())?;
+    let areas = ha_areas::load(&areas_path())
+        .map_err(|error| format!("{} : {error}", areas_path().display()))?;
+    info!("{} pièce(s) chargée(s)", areas.len());
     let location = location()?;
     if location.is_none() && ha_automation::uses_sun(&automations) {
         return Err(
@@ -192,7 +205,7 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     // API HTTP / WebSocket.
     let listener = tokio::net::TcpListener::bind(bind).await?;
     info!("API sur http://{bind}/api/");
-    let api_state = ApiState::new(Arc::clone(&core), store.clone(), auth);
+    let api_state = ApiState::new(Arc::clone(&core), store.clone(), auth, areas);
     let api = tokio::spawn(ha_api::serve(listener, Arc::clone(&api_state)));
 
     // On s'abonne AVANT de créer les entités, pour ne rater aucun événement.
