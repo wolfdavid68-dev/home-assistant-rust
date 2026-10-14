@@ -38,17 +38,7 @@ impl std::fmt::Debug for Pairing {
 /// Sécurité : elle finit dans une URL (`https://<hôte>/…`) ; on refuse donc
 /// tout caractère qui pourrait en changer le sens (`/`, `@`, `?`…).
 pub fn check_host(host: &str) -> Result<(), HueError> {
-    let (name, port) = match host.split_once(':') {
-        Some((name, port)) => (name, Some(port)),
-        None => (host, None),
-    };
-    let valid = !name.is_empty()
-        && name.len() <= 253
-        && name
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'-')
-        && port.is_none_or(|port| port.parse::<u16>().is_ok_and(|p| p > 0));
-    if valid {
+    if tls::is_valid_host(host) {
         Ok(())
     } else {
         Err(HueError::InvalidHost(host.to_owned()))

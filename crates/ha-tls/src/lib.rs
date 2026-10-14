@@ -1,15 +1,22 @@
-//! Connexion HTTPS au pont Hue, avec **épinglage du certificat**.
+//! Connexions HTTPS, partagées par les intégrations (Hue, Somfy…).
 //!
-//! Le pont Hue utilise un certificat qui n'est pas signé par une autorité
-//! publique (comme ceux des sites web) : un navigateur afficherait un
-//! avertissement. Beaucoup de programmes désactivent alors simplement la
-//! vérification… ce qui permettrait à n'importe quel appareil du réseau de se
-//! faire passer pour le pont et de récupérer la clé d'accès.
+//! - [`client`] : vers un **appareil du réseau local** (pont Hue, box
+//!   TaHoma), avec **épinglage du certificat** ;
+//! - [`public_client`] : vers un **service sur Internet**, avec la
+//!   vérification habituelle par les autorités de confiance du système.
 //!
-//! On fait mieux : lors de l'association (`ha-server hue pair`), on mémorise
-//! l'empreinte SHA-256 du certificat du pont. Ensuite, **seul ce certificat
-//! précis est accepté**. C'est le principe « confiance au premier usage »
-//! (TOFU), le même que SSH quand il demande « The authenticity of host … ».
+//! Pourquoi l'épinglage ? Les appareils locaux utilisent des certificats qui
+//! ne sont pas signés par une autorité publique (comme ceux des sites web) :
+//! un navigateur afficherait un avertissement. Beaucoup de programmes
+//! désactivent alors simplement la vérification… ce qui permettrait à
+//! n'importe quel appareil du réseau de se faire passer pour le pont et de
+//! récupérer la clé d'accès.
+//!
+//! On fait mieux : lors de l'association (`ha-server hue pair`…), on
+//! mémorise l'empreinte SHA-256 du certificat de l'appareil. Ensuite, **seul
+//! ce certificat précis est accepté**. C'est le principe « confiance au
+//! premier usage » (TOFU), le même que SSH quand il demande « The
+//! authenticity of host … ».
 
 use std::sync::{Arc, Mutex, PoisonError};
 
@@ -19,7 +26,17 @@ use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 use rustls::{DigitallySignedStruct, SignatureScheme};
 use sha2::{Digest, Sha256};
 
-use crate::error::HueError;
+use rustls_platform_verifier::BuilderVerifierExt;
+
+/// Erreur de préparation ou d'utilisation d'une connexion HTTPS.
+#[derive(Debug, thiserror::Error)]
+pub enum TlsError {
+    #[error("configuration TLS impossible : {0}")]
+    Tls(#[from] rustls::Error),
+
+    #[error("client HTTPS impossible : {0}")]
+    Http(#[from] reqwest::Error),
+}
 
 /// Empreinte SHA-256 d'un certificat.
 pub type Fingerprint = [u8; 32];
@@ -58,7 +75,7 @@ impl ServerCertVerifier for PinnedVerifier {
         *self.seen.lock().unwrap_or_else(PoisonError::into_inner) = Some(fingerprint);
         match self.expected {
             Some(expected) if expected != fingerprint => Err(rustls::Error::General(
-                "certificat du pont Hue inattendu : ce n'est peut-être pas ton pont".into(),
+                "certificat inattendu : ce n'est peut-être pas ton appareil (pont, box…)".into(),
             )),
             _ => Ok(ServerCertVerified::assertion()),
         }
@@ -106,7 +123,7 @@ impl ServerCertVerifier for PinnedVerifier {
 /// (ou n'importe lequel, en le notant, si `expected` vaut `None`).
 pub fn client(
     expected: Option<Fingerprint>,
-) -> Result<(reqwest::Client, Arc<PinnedVerifier>), HueError> {
+) -> Result<(reqwest::Client, Arc<PinnedVerifier>), TlsError> {
     let provider = Arc::new(rustls::crypto::ring::default_provider());
     let verifier = Arc::new(PinnedVerifier {
         expected,
@@ -126,6 +143,44 @@ pub fn client(
         .connect_timeout(std::time::Duration::from_secs(5))
         .build()?;
     Ok((client, verifier))
+}
+
+/// Crée un client HTTPS pour un service sur Internet (serveur Somfy…).
+///
+/// Le certificat est vérifié comme le ferait un navigateur, avec les
+/// autorités de confiance **du système** (magasin de certificats de
+/// Windows, de macOS ou de Linux).
+pub fn public_client() -> Result<reqwest::Client, TlsError> {
+    let provider = Arc::new(rustls::crypto::ring::default_provider());
+    let config = rustls::ClientConfig::builder_with_provider(provider)
+        .with_safe_default_protocol_versions()?
+        .with_platform_verifier()?
+        .with_no_client_auth();
+    Ok(reqwest::Client::builder()
+        .tls_backend_preconfigured(config)
+        .https_only(true)
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(30))
+        .build()?)
+}
+
+/// Vérifie une adresse d'appareil : une adresse IPv4 ou un nom d'hôte
+/// simple, éventuellement suivi de `:port`.
+///
+/// Sécurité : elle finit dans une URL (`https://<hôte>/…`) ; on refuse donc
+/// tout caractère qui pourrait en changer le sens (`/`, `@`, `?`…).
+#[must_use]
+pub fn is_valid_host(host: &str) -> bool {
+    let (name, port) = match host.split_once(':') {
+        Some((name, port)) => (name, Some(port)),
+        None => (host, None),
+    };
+    !name.is_empty()
+        && name.len() <= 253
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'-')
+        && port.is_none_or(|port| port.parse::<u16>().is_ok_and(|p| p > 0))
 }
 
 /// Empreinte au format lisible : `AB:CD:…`.

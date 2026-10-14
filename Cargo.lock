@@ -818,9 +818,9 @@ dependencies = [
  "futures-util",
  "ha-core",
  "ha-storage",
+ "ha-tls",
  "rcgen",
  "reqwest",
- "rustls",
  "serde",
  "serde_json",
  "sha2 0.11.1",
@@ -855,12 +855,35 @@ dependencies = [
  "ha-core",
  "ha-hue",
  "ha-mqtt",
+ "ha-somfy",
  "ha-storage",
+ "ha-tls",
  "rpassword",
  "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "zeroize",
+]
+
+[[package]]
+name = "ha-somfy"
+version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "ha-core",
+ "ha-storage",
+ "ha-tls",
+ "rcgen",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "sqlx",
+ "thiserror",
+ "tokio",
+ "tokio-rustls",
+ "tracing",
  "zeroize",
 ]
 
@@ -874,6 +897,17 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "ha-tls"
+version = "0.1.0"
+dependencies = [
+ "reqwest",
+ "rustls",
+ "rustls-platform-verifier",
+ "sha2 0.11.1",
+ "thiserror",
 ]
 
 [[package]]

@@ -5,8 +5,8 @@ pub enum HueError {
     #[error("connexion au pont impossible : {0}")]
     Http(#[from] reqwest::Error),
 
-    #[error("configuration TLS impossible : {0}")]
-    Tls(#[from] rustls::Error),
+    #[error("{0}")]
+    Tls(#[from] ha_tls::TlsError),
 
     #[error("adresse du pont invalide : {0:?} (exemple : 192.168.1.20)")]
     InvalidHost(String),

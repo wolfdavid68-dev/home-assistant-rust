@@ -230,6 +230,21 @@ input[type="range"] {
 
 .light-card { display: grid; gap: 0.6rem; }
 
+/* Volets : trois boutons ronds (ouvrir, arrêter, fermer). */
+.cover-buttons { display: flex; gap: 0.5rem; }
+.round {
+  flex: 1;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  display: grid;
+  place-items: center;
+}
+.round svg { width: 20px; height: 20px; }
+.round:active { transform: scale(0.96); }
+.tile.cover.on .icon { background: var(--text); color: var(--bg); }
+
 .empty {
   text-align: center;
   color: var(--muted);

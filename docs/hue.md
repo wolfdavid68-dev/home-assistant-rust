@@ -28,7 +28,7 @@ deux cohabitent sans rien configurer.
 
 | Fichier | Contenu |
 |---------|---------|
-| [tls.rs](../crates/ha-hue/src/tls.rs) | Connexion HTTPS avec épinglage du certificat du pont |
+| [ha-tls](../crates/ha-tls/src/lib.rs) | Connexion HTTPS avec épinglage du certificat (partagée avec Somfy) |
 | [pairing.rs](../crates/ha-hue/src/pairing.rs) | Association, sauvegarde de la clé |
 | [api.rs](../crates/ha-hue/src/api.rs) | Appels à l'API v2 du pont |
 | [lights.rs](../crates/ha-hue/src/lights.rs) | Lampes ⇄ entités, commandes |
