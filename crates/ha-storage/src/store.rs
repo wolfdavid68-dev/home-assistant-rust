@@ -105,6 +105,12 @@ impl Store {
         Ok(Self { pool })
     }
 
+    /// Accès direct aux connexions, pour les crates qui ont leurs propres
+    /// tables dans la même base (comptes et jetons dans `ha-auth`).
+    pub fn pool(&self) -> &SqlitePool {
+        &self.pool
+    }
+
     /// Ferme proprement toutes les connexions.
     pub async fn close(&self) {
         self.pool.close().await;
@@ -336,7 +342,7 @@ fn decode_history(row: HistoryRow) -> Result<HistoryEntry, Box<dyn std::error::E
 }
 
 /// Date → microsecondes depuis 1970.
-fn to_micros(time: SystemTime) -> Result<i64, StorageError> {
+pub fn to_micros(time: SystemTime) -> Result<i64, StorageError> {
     let since_epoch = time
         .duration_since(UNIX_EPOCH)
         .map_err(|_| StorageError::Timestamp("date antérieure à 1970"))?;
@@ -345,7 +351,7 @@ fn to_micros(time: SystemTime) -> Result<i64, StorageError> {
 }
 
 /// Microsecondes depuis 1970 → date.
-fn from_micros(micros: i64) -> Result<SystemTime, StorageError> {
+pub fn from_micros(micros: i64) -> Result<SystemTime, StorageError> {
     let micros = u64::try_from(micros).map_err(|_| StorageError::Timestamp("date négative"))?;
     UNIX_EPOCH
         .checked_add(Duration::from_micros(micros))

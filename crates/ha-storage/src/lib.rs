@@ -11,4 +11,4 @@ mod store;
 
 pub use error::StorageError;
 pub use recorder::Recorder;
-pub use store::{HistoryEntry, MAX_HISTORY_LIMIT, Store, StoredState};
+pub use store::{HistoryEntry, MAX_HISTORY_LIMIT, Store, StoredState, from_micros, to_micros};

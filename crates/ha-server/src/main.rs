@@ -1,18 +1,32 @@
-//! Démonstration : quelques entités simulées qui changent d'état, un abonné qui
-//! affiche chaque changement reçu sur le bus, et (depuis l'étape 2) un
-//! enregistreur qui sauvegarde tout dans SQLite.
+//! Le serveur domotique : noyau, stockage SQLite, API HTTP/WebSocket et, en
+//! attendant les vrais appareils (étape 4), quelques entités simulées.
 //!
-//! Lancer avec `cargo run -p ha-server`, arrêter avec Ctrl+C.
+//! Utilisation :
+//!
+//! ```text
+//! ha-server                       démarre le serveur (Ctrl+C pour arrêter)
+//! ha-server user add <nom>        crée un compte (le mot de passe est demandé)
+//! ha-server user passwd <nom>     change un mot de passe (déconnecte partout)
+//! ha-server user delete <nom>     supprime un compte
+//! ha-server user list             liste les comptes
+//! ```
 //!
 //! Variables d'environnement :
 //! - `HA_DB_PATH` : fichier de la base (par défaut `ha.db`) ;
+//! - `HA_BIND` : adresse d'écoute de l'API (par défaut `127.0.0.1:8123`) ;
 //! - `HA_HISTORY_DAYS` : nombre de jours d'historique conservés (par défaut 10) ;
 //! - `RUST_LOG` : niveau de détail des logs (par défaut `info`).
 
+mod cli;
+
 use std::error::Error;
+use std::net::SocketAddr;
+use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
+use ha_api::ApiState;
+use ha_auth::Auth;
 use ha_core::{Attributes, Core, EntityId, Event};
 use ha_storage::{Recorder, Store};
 use serde_json::json;
@@ -20,23 +34,48 @@ use tokio::sync::broadcast::error::RecvError;
 use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
 
+const DEFAULT_DB_PATH: &str = "ha.db";
+const DEFAULT_BIND: &str = "127.0.0.1:8123";
+const DEFAULT_HISTORY_DAYS: u32 = 10;
+
 /// Concept Rust : `#[tokio::main]` démarre le moteur asynchrone de tokio.
 /// Une fonction `async` peut attendre (`.await`) sans bloquer le fil
 /// d'exécution : pendant qu'une tâche attend, les autres avancent.
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() -> ExitCode {
     // Logs : niveau `info` par défaut, modifiable avec la variable RUST_LOG.
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
         .init();
 
-    info!(
-        "ha-server {} — démo de l'étape 2 (Ctrl+C pour arrêter)",
-        ha_core::VERSION
-    );
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    let result = match args.as_slice() {
+        [] => run_server().await,
+        ["user", rest @ ..] => cli::user_command(rest, &db_path()).await,
+        _ => Err(cli::USAGE.into()),
+    };
+    // On affiche le message lisible de l'erreur (`Display`), pas sa forme
+    // technique (`Debug`) qu'afficherait un `main` qui renvoie `Result`.
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("erreur : {error}");
+            ExitCode::FAILURE
+        }
+    }
+}
 
-    let db_path = std::env::var("HA_DB_PATH").unwrap_or_else(|_| DEFAULT_DB_PATH.to_owned());
+fn db_path() -> String {
+    std::env::var("HA_DB_PATH").unwrap_or_else(|_| DEFAULT_DB_PATH.to_owned())
+}
+
+async fn run_server() -> Result<(), Box<dyn Error>> {
+    info!("ha-server {} (Ctrl+C pour arrêter)", ha_core::VERSION);
+
+    let db_path = db_path();
     let history_days = history_days()?;
+    let bind = bind_address()?;
     let store = Store::open(&db_path).await?;
     info!("base de données : {db_path}");
 
@@ -47,6 +86,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let purged = store.purge_history(cutoff).await?;
     info!("historique conservé : {history_days} jours ({purged} lignes anciennes supprimées)");
 
+    let auth = Arc::new(Auth::new(&store).await?);
+    auth.purge_expired_tokens().await?;
+    if auth.list_users().await?.is_empty() {
+        warn!("aucun compte : l'API refusera toutes les connexions.");
+        warn!("crée un compte avec : ha-server user add <nom>");
+    }
+
     // On recharge les états d'avant l'arrêt, AVANT de démarrer quoi que ce soit.
     let core = Arc::new(Core::new());
     let restored = store.restore_into(&core.states).await?;
@@ -56,6 +102,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     let recorder = Recorder::start(store.clone(), Arc::clone(&core));
+
+    // API HTTP / WebSocket.
+    let listener = tokio::net::TcpListener::bind(bind).await?;
+    info!("API sur http://{bind}/api/");
+    let api_state = ApiState::new(Arc::clone(&core), store.clone(), auth);
+    let api = tokio::spawn(ha_api::serve(listener, Arc::clone(&api_state)));
 
     // On s'abonne AVANT de créer les entités, pour ne rater aucun événement.
     let logger = tokio::spawn(log_state_changes(core.bus.subscribe()));
@@ -70,6 +122,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
     // Plus aucun changement d'état après ce point.
     simulation.abort();
+    api_state.shutdown();
+    if let Err(error) = api.await? {
+        warn!("arrêt de l'API : {error}");
+    }
 
     info!("arrêt — états finaux :");
     for state in core.states.all() {
@@ -82,9 +138,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-const DEFAULT_DB_PATH: &str = "ha.db";
-const DEFAULT_HISTORY_DAYS: u32 = 10;
-
 /// Lit `HA_HISTORY_DAYS`. Une valeur invalide arrête le programme avec un
 /// message clair, plutôt que d'être ignorée en silence.
 fn history_days() -> Result<u32, String> {
@@ -96,6 +149,19 @@ fn history_days() -> Result<u32, String> {
             .filter(|days| (1..=3650).contains(days))
             .ok_or_else(|| format!("HA_HISTORY_DAYS invalide : {value:?} (entre 1 et 3650)")),
     }
+}
+
+/// Lit `HA_BIND`. Par défaut, l'API n'écoute que sur la machine elle-même.
+fn bind_address() -> Result<SocketAddr, String> {
+    let value = std::env::var("HA_BIND").unwrap_or_else(|_| DEFAULT_BIND.to_owned());
+    let addr: SocketAddr = value
+        .parse()
+        .map_err(|_| format!("HA_BIND invalide : {value:?} (exemple : 127.0.0.1:8123)"))?;
+    if !addr.ip().is_loopback() {
+        warn!("l'API écoute sur {addr} : elle est joignable depuis le réseau.");
+        warn!("ne l'expose JAMAIS directement sur Internet : passe par un VPN.");
+    }
+    Ok(addr)
 }
 
 /// Affiche chaque changement d'état publié sur le bus.
