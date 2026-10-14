@@ -51,7 +51,7 @@ fn zigbee2mqtt_sensors_share_one_topic() {
     );
     // Un seul abonnement pour deux entités.
     assert_eq!(a, [Action::Subscribe("zigbee2mqtt/capteur".into())]);
-    assert!(b.is_empty());
+    assert_eq!(b, Vec::<Action>::new());
     assert_eq!(
         state(&core, "sensor.capteur_temperature").as_deref(),
         Some("unknown")
@@ -146,10 +146,9 @@ fn json_light_with_brightness() {
 
     // Luminosité hors limites : refusée.
     let data = json!({"brightness": 9999}).as_object().unwrap().clone();
-    assert!(
-        bridge
-            .handle_service("light", "turn_on", &lamp, &data, &core.states)
-            .is_empty()
+    assert_eq!(
+        bridge.handle_service("light", "turn_on", &lamp, &data, &core.states),
+        Vec::<Action>::new()
     );
 }
 
@@ -164,38 +163,35 @@ fn services_for_other_entities_are_ignored() {
     );
     let none = Attributes::new();
     // Entité inconnue du pont, domaine incohérent, service inconnu.
-    assert!(
-        bridge
-            .handle_service(
-                "switch",
-                "turn_on",
-                &id("switch.autre"),
-                &none,
-                &core.states
-            )
-            .is_empty()
+    assert_eq!(
+        bridge.handle_service(
+            "switch",
+            "turn_on",
+            &id("switch.autre"),
+            &none,
+            &core.states
+        ),
+        Vec::<Action>::new()
     );
-    assert!(
-        bridge
-            .handle_service(
-                "light",
-                "turn_on",
-                &id("switch.prise_cafe"),
-                &none,
-                &core.states
-            )
-            .is_empty()
+    assert_eq!(
+        bridge.handle_service(
+            "light",
+            "turn_on",
+            &id("switch.prise_cafe"),
+            &none,
+            &core.states
+        ),
+        Vec::<Action>::new()
     );
-    assert!(
-        bridge
-            .handle_service(
-                "switch",
-                "explode",
-                &id("switch.prise_cafe"),
-                &none,
-                &core.states
-            )
-            .is_empty()
+    assert_eq!(
+        bridge.handle_service(
+            "switch",
+            "explode",
+            &id("switch.prise_cafe"),
+            &none,
+            &core.states
+        ),
+        Vec::<Action>::new()
     );
 }
 

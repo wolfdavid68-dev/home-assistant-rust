@@ -111,7 +111,10 @@ async fn removed_entity_leaves_a_trace_in_history() {
     core.states.remove(&plug);
     recorder.stop().await;
 
-    assert!(store.load_states().await.unwrap().is_empty());
+    assert_eq!(
+        store.load_states().await.unwrap(),
+        Vec::<ha_storage::StoredState>::new()
+    );
     let history = store.history(&plug, 10).await.unwrap();
     assert_eq!(history.len(), 2);
     assert!(
@@ -215,7 +218,10 @@ async fn purge_removes_only_old_history() {
 
     let in_one_minute = SystemTime::now() + Duration::from_mins(1);
     assert_eq!(store.purge_history(in_one_minute).await.unwrap(), 1);
-    assert!(store.history(&light, 10).await.unwrap().is_empty());
+    assert_eq!(
+        store.history(&light, 10).await.unwrap(),
+        Vec::<ha_storage::HistoryEntry>::new()
+    );
     // Le dernier état connu, lui, est conservé.
     assert_eq!(store.load_states().await.unwrap().len(), 1);
 }

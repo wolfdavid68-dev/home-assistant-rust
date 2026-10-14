@@ -117,7 +117,10 @@ async fn deleting_a_user_revokes_their_tokens() {
     assert!(auth.delete_user("david").await.unwrap());
 
     assert!(auth.authenticate(&issued.token).await.unwrap().is_none());
-    assert!(auth.list_users().await.unwrap().is_empty());
+    assert_eq!(
+        auth.list_users().await.unwrap(),
+        Vec::<ha_auth::User>::new()
+    );
 }
 
 #[tokio::test]
