@@ -51,7 +51,7 @@ Les fonctions de Home Assistant les plus utiles au quotidien, une par une, dans 
 
 - [x] **8. Soleil** : lever, coucher, aube, crépuscule ; déclencheur et condition `sun` comme dans Home Assistant ([guide](docs/soleil.md))
 - [x] **9. Pièces** : ranger les appareils par pièce (salon, chambre…) et leur donner un nom lisible ([guide](docs/pieces.md))
-- [ ] **10. Historique en graphiques** : courbes de température, ouverture des volets…
+- [x] **10. Historique en graphiques** : courbes de température, frise des ouvertures, sur 24 h ou 7 jours ([guide](docs/historique.md))
 - [ ] **11. Scènes et scripts** : « soirée cinéma » en un bouton, suites d'actions réutilisables
 - [ ] **12. Notifications** : être prévenu sur son téléphone (alarme, fumée, nouvel appareil sur le Wi-Fi)
 - [ ] **13. Éditeur d'automatisations** : créer et modifier les automatisations depuis le tableau de bord

@@ -32,6 +32,39 @@ pub struct StoredState {
     pub last_updated: SystemTime,
 }
 
+/// Un point d'une courbe : moyenne, minimum et maximum d'une valeur
+/// numérique sur une tranche de temps.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SeriesPoint {
+    /// Début de la tranche (premier relevé de la tranche).
+    pub at: SystemTime,
+    pub mean: f64,
+    pub min: f64,
+    pub max: f64,
+}
+
+/// Un changement de valeur. `state` vaut `None` si l'entité a été supprimée.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StateChange {
+    pub at: SystemTime,
+    pub state: Option<String>,
+}
+
+/// L'historique d'une entité sur une période, prêt à dessiner.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct HistorySeries {
+    /// Pour un capteur numérique : une courbe d'au plus `buckets` points.
+    pub numeric: Vec<SeriesPoint>,
+    /// Les changements de valeur (au plus [`MAX_SERIES_CHANGES`]), en
+    /// commençant par la valeur au début de la période.
+    pub changes: Vec<StateChange>,
+}
+
+/// Nombre maximal de changements renvoyés par [`Store::history_series`].
+pub const MAX_SERIES_CHANGES: u32 = 2_000;
+/// Nombre maximal de points d'une courbe.
+pub const MAX_SERIES_BUCKETS: u32 = 1_000;
+
 /// Une ligne de l'historique. `state` vaut `None` si l'entité a été supprimée.
 #[derive(Debug, Clone, PartialEq)]
 pub struct HistoryEntry {
@@ -314,6 +347,108 @@ impl Store {
             }
         }
         Ok(entries)
+    }
+
+    /// L'historique de `entity_id` entre `since` et `until`, résumé pour un
+    /// graphique : au plus `buckets` points pour une valeur numérique, et la
+    /// liste des changements de valeur.
+    ///
+    /// Concept : le résumé est calculé **par SQLite** (`GROUP BY`, `LAG`),
+    /// sans charger toutes les lignes en mémoire. Un capteur qui envoie une
+    /// mesure par seconde produit 86 400 lignes par jour : on n'en renvoie
+    /// que quelques centaines.
+    pub async fn history_series(
+        &self,
+        entity_id: &EntityId,
+        since: SystemTime,
+        until: SystemTime,
+        buckets: u32,
+    ) -> Result<HistorySeries, StorageError> {
+        let since = to_micros(since)?;
+        let until = to_micros(until)?;
+        if until <= since {
+            return Ok(HistorySeries::default());
+        }
+        let buckets = i64::from(buckets.clamp(1, MAX_SERIES_BUCKETS));
+        let width = ((until - since) / buckets).max(1);
+
+        // Valeurs numériques uniquement (« 21.5 », « -3 ») : « unavailable »
+        // ou « on » ne doivent pas devenir des zéros sur la courbe.
+        let points: Vec<(i64, f64, f64, f64)> = sqlx::query_as(
+            "SELECT MIN(recorded_at),
+                    AVG(CAST(state AS REAL)), MIN(CAST(state AS REAL)), MAX(CAST(state AS REAL))
+             FROM state_history
+             WHERE entity_id = ?1 AND recorded_at >= ?2 AND recorded_at <= ?3
+               AND state GLOB '*[0-9]*' AND trim(state, '0123456789.-+eE') = ''
+             GROUP BY (recorded_at - ?2) / ?4
+             ORDER BY 1",
+        )
+        .bind(entity_id.as_str())
+        .bind(since)
+        .bind(until)
+        .bind(width)
+        .fetch_all(&self.pool)
+        .await?;
+
+        // La valeur au début de la période (dernier relevé avant `since`)…
+        let initial: Option<(Option<String>,)> = sqlx::query_as(
+            "SELECT state FROM state_history
+             WHERE entity_id = ?1 AND recorded_at < ?2
+             ORDER BY recorded_at DESC, id DESC LIMIT 1",
+        )
+        .bind(entity_id.as_str())
+        .bind(since)
+        .fetch_optional(&self.pool)
+        .await?;
+        // … puis seulement les vrais changements de valeur (pas les mises à
+        // jour d'attributs) : `LAG` donne la valeur de la ligne précédente.
+        let rows: Vec<(i64, Option<String>)> = sqlx::query_as(
+            "SELECT recorded_at, state FROM (
+                 SELECT recorded_at, state,
+                        LAG(state, 1, char(1)) OVER (ORDER BY recorded_at, id) AS previous
+                 FROM state_history
+                 WHERE entity_id = ?1 AND recorded_at >= ?2 AND recorded_at <= ?3
+             )
+             WHERE previous IS NOT state
+             ORDER BY recorded_at
+             LIMIT ?4",
+        )
+        .bind(entity_id.as_str())
+        .bind(since)
+        .bind(until)
+        .bind(MAX_SERIES_CHANGES)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut changes = Vec::with_capacity(rows.len() + 1);
+        if let Some((state,)) = initial {
+            changes.push(StateChange {
+                at: from_micros(since)?,
+                state,
+            });
+        }
+        for (at, state) in rows {
+            // Même valeur que celle du début de période : pas un changement.
+            if changes.last().is_some_and(|last| last.state == state) {
+                continue;
+            }
+            changes.push(StateChange {
+                at: from_micros(at)?,
+                state,
+            });
+        }
+        let numeric = points
+            .into_iter()
+            .map(|(at, mean, min, max)| {
+                Ok(SeriesPoint {
+                    at: from_micros(at)?,
+                    mean,
+                    min,
+                    max,
+                })
+            })
+            .collect::<Result<_, StorageError>>()?;
+        Ok(HistorySeries { numeric, changes })
     }
 
     /// Supprime l'historique enregistré avant `older_than`.

@@ -95,6 +95,7 @@ pub fn router(state: Arc<ApiState>) -> Router {
                 .delete(rest::delete_state),
         )
         .route("/api/history/{entity_id}", get(rest::history))
+        .route("/api/history/{entity_id}/series", get(rest::history_series))
         .route("/api/audit", get(rest::audit_log))
         .route("/api/areas", get(rest::areas))
         .route("/api/services/{domain}/{service}", post(rest::call_service))
