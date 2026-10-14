@@ -413,6 +413,61 @@ const ICONS = {
   occupancy: ["M12 4a2 2 0 1 0 0 4 2 2 0 1 0 0-4z", "M8 21v-6l-2-1 2-5h8l2 5-2 1v6"],
 };
 
+// ---------------------------------------------------------------- Journal
+const AUDIT_LABELS = {
+  login: "connexion",
+  login_failed: "échec de connexion",
+  logout: "déconnexion",
+  service: "commande",
+  state_set: "état modifié",
+  state_delete: "état supprimé",
+  user_add: "compte créé",
+  user_passwd: "mot de passe changé",
+  user_delete: "compte supprimé",
+  user_totp: "double authentification activée",
+  user_totp_off: "double authentification désactivée",
+  hue_pair: "pont Hue associé",
+  hue_forget: "pont Hue oublié",
+  somfy_pair: "box Somfy associée",
+  somfy_forget: "box Somfy oubliée",
+  server_start: "démarrage du serveur",
+  server_stop: "arrêt du serveur",
+};
+const dateTime = new Intl.DateTimeFormat("fr", { dateStyle: "short", timeStyle: "medium" });
+
+async function loadJournal() {
+  const list = $("#journal-list");
+  const response = await fetch("/api/audit?limit=50", {
+    headers: { Authorization: `Bearer ${token.get()}` },
+  });
+  if (response.status === 401) {
+    token.clear();
+    live.close();
+    return showLogin("Session expirée : reconnecte-toi.");
+  }
+  if (!response.ok) return list.replaceChildren(el("li", { text: "Journal indisponible." }));
+  const { entries } = await response.json();
+  list.replaceChildren(
+    ...entries.map((entry) => {
+      const what = [entry.target, entry.detail].filter(Boolean).join(" · ");
+      return el(
+        "li",
+        { class: entry.action === "login_failed" ? "failed" : "" },
+        el("time", { datetime: entry.at, text: dateTime.format(new Date(entry.at)) }),
+        el("strong", { text: entry.actor }),
+        el("span", { text: lookup(AUDIT_LABELS, entry.action) ?? entry.action }),
+        el("span", { class: "what", text: what }),
+        el("small", { text: entry.source }),
+      );
+    }),
+  );
+  if (entries.length === 0) list.replaceChildren(el("li", { text: "Aucune action pour l'instant." }));
+}
+
+$("#journal").addEventListener("toggle", (event) => {
+  if (event.currentTarget.open) loadJournal().catch(() => {});
+});
+
 // ---------------------------------------------------------------- Démarrage
 function showDashboard() {
   $("#login-view").hidden = true;

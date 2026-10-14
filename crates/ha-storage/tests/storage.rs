@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use ha_core::{Attributes, Core, EntityId};
-use ha_storage::{Recorder, Store};
+use ha_storage::{AuditCheck, AuditRecord, Recorder, Store};
 use serde_json::json;
 
 fn id(value: &str) -> EntityId {
@@ -292,4 +292,133 @@ async fn secrets_survive_a_restart_but_need_the_key_file() {
     let store = Store::open(&db.0).await.unwrap();
     assert!(store.unseal("somfy_box.token", &sealed).is_err());
     store.close().await;
+}
+
+fn record<'a>(actor: &'a str, action: &'a str, target: Option<&'a str>) -> AuditRecord<'a> {
+    AuditRecord {
+        actor,
+        action,
+        target,
+        detail: None,
+        source: "192.168.1.10",
+    }
+}
+
+#[tokio::test]
+async fn audit_log_is_readable_and_tamper_evident() {
+    let store = Store::open_in_memory().await.unwrap();
+    assert_eq!(
+        store.verify_audit().await.unwrap(),
+        AuditCheck::Intact { entries: 0 }
+    );
+    store.audit(record("david", "login", None)).await.unwrap();
+    store
+        .audit(record("david", "service", Some("cover.volet_salon")))
+        .await
+        .unwrap();
+    store.audit(record("david", "logout", None)).await.unwrap();
+
+    let log = store.audit_log(10).await.unwrap();
+    assert_eq!(log.len(), 3);
+    assert_eq!(log[0].action, "logout", "le plus récent d'abord");
+    assert_eq!(log[1].target.as_deref(), Some("cover.volet_salon"));
+    assert_eq!(
+        store.verify_audit().await.unwrap(),
+        AuditCheck::Intact { entries: 3 }
+    );
+
+    // Quelqu'un modifie une ligne directement dans la base…
+    sqlx::query("UPDATE audit_log SET actor = 'quelquun' WHERE id = 2")
+        .execute(store.pool())
+        .await
+        .unwrap();
+    assert!(matches!(
+        store.verify_audit().await.unwrap(),
+        AuditCheck::Broken { id: 2, .. }
+    ));
+}
+
+#[tokio::test]
+async fn deleting_a_line_in_the_middle_is_detected_but_purging_is_not_an_error() {
+    let store = Store::open_in_memory().await.unwrap();
+    for action in ["a", "b", "c", "d"] {
+        store.audit(record("david", action, None)).await.unwrap();
+    }
+    // La purge des lignes anciennes garde une chaîne vérifiable.
+    sqlx::query("DELETE FROM audit_log WHERE id = 1")
+        .execute(store.pool())
+        .await
+        .unwrap();
+    assert_eq!(
+        store.verify_audit().await.unwrap(),
+        AuditCheck::Intact { entries: 3 }
+    );
+    // Une ligne supprimée au milieu : détecté.
+    sqlx::query("DELETE FROM audit_log WHERE id = 3")
+        .execute(store.pool())
+        .await
+        .unwrap();
+    assert!(matches!(
+        store.verify_audit().await.unwrap(),
+        AuditCheck::Broken { id: 4, .. }
+    ));
+}
+
+#[tokio::test]
+async fn audit_lines_are_signed_with_the_key_file() {
+    let db = TempDb::new("audit-key");
+    let store = Store::open(&db.0).await.unwrap();
+    store.audit(record("david", "login", None)).await.unwrap();
+    store.close().await;
+
+    // Sans la bonne clé, impossible de produire des signatures valides :
+    // une ligne ajoutée par quelqu'un qui n'a que la base est détectée.
+    std::fs::remove_file(db.0.with_extension("key")).unwrap();
+    let store = Store::open(&db.0).await.unwrap();
+    store.audit(record("intrus", "login", None)).await.unwrap();
+    assert!(matches!(
+        store.verify_audit().await.unwrap(),
+        AuditCheck::Broken { id: 1, .. }
+    ));
+    store.close().await;
+}
+
+#[tokio::test]
+async fn concurrent_audit_writes_keep_the_chain_intact() {
+    let db = TempDb::new("audit-concurrent");
+    let store = Store::open(&db.0).await.unwrap();
+    // Deux « processus » (deux connexions indépendantes à la même base).
+    let other = Store::open(&db.0).await.unwrap();
+    let mut tasks = Vec::new();
+    for i in 0..20 {
+        let store = if i % 2 == 0 {
+            store.clone()
+        } else {
+            other.clone()
+        };
+        tasks.push(tokio::spawn(async move {
+            store
+                .audit(record("david", "service", Some(&format!("light.l{i}"))))
+                .await
+                .unwrap();
+        }));
+    }
+    for task in tasks {
+        task.await.unwrap();
+    }
+    assert_eq!(
+        store.verify_audit().await.unwrap(),
+        AuditCheck::Intact { entries: 20 }
+    );
+    store.close().await;
+    other.close().await;
+}
+
+#[tokio::test]
+async fn old_audit_lines_are_purged() {
+    let store = Store::open_in_memory().await.unwrap();
+    store.audit(record("david", "login", None)).await.unwrap();
+    let future = SystemTime::now() + Duration::from_mins(1);
+    assert_eq!(store.purge_audit(future).await.unwrap(), 1);
+    assert_eq!(store.audit_log(10).await.unwrap(), Vec::new());
 }

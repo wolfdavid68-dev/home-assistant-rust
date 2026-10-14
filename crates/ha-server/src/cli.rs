@@ -30,6 +30,8 @@ utilisation :
   ha-server somfy status          affiche la box associée
   ha-server somfy forget          oublie la box
   ha-server automations check     vérifie le fichier d'automatisations
+  ha-server audit [nombre]        affiche le journal d'audit
+  ha-server audit verify          vérifie que le journal n'a pas été modifié
   ha-server healthcheck           vérifie qu'un serveur répond (pour Docker)";
 
 pub async fn user_command(args: &[&str]) -> Result<(), Box<dyn Error>> {
@@ -83,6 +85,9 @@ pub async fn user_command(args: &[&str]) -> Result<(), Box<dyn Error>> {
         }
         _ => Err(USAGE.into()),
     };
+    if result.is_ok() {
+        audit_cli(&store, "user", args).await;
+    }
     store.close().await;
     result
 }
@@ -171,6 +176,9 @@ fn ask_new_password() -> Result<Zeroizing<String>, Box<dyn Error>> {
 pub async fn hue_command(args: &[&str]) -> Result<(), Box<dyn Error>> {
     let store = crate::open_store().await?;
     let result = hue_inner(args, &store).await;
+    if result.is_ok() {
+        audit_cli(&store, "hue", args).await;
+    }
     store.close().await;
     result
 }
@@ -247,6 +255,9 @@ pub fn check_automations(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
 pub async fn somfy_command(args: &[&str]) -> Result<(), Box<dyn Error>> {
     let store = crate::open_store().await?;
     let result = somfy_inner(args, &store).await;
+    if result.is_ok() {
+        audit_cli(&store, "somfy", args).await;
+    }
     store.close().await;
     result
 }
@@ -416,4 +427,125 @@ fn ask_secret(prompt: &str) -> Result<Zeroizing<String>, Box<dyn Error>> {
     Ok(Zeroizing::new(
         line.trim_end_matches(['\r', '\n']).to_owned(),
     ))
+}
+
+/// Enregistre dans le journal d'audit les commandes qui changent quelque
+/// chose (pas celles qui ne font que lire).
+async fn audit_cli(store: &Store, domain: &str, args: &[&str]) {
+    let (action, target) = match (domain, args) {
+        (
+            "user",
+            [
+                command @ ("add" | "passwd" | "delete" | "totp" | "totp-off"),
+                name,
+            ],
+        ) => (format!("user_{}", command.replace('-', "_")), Some(*name)),
+        ("hue" | "somfy", ["pair", host, ..]) => (format!("{domain}_pair"), Some(*host)),
+        ("hue" | "somfy", ["forget"]) => (format!("{domain}_forget"), None),
+        _ => return,
+    };
+    audit_local(store, "ligne de commande", &action, target).await;
+}
+
+/// Ajoute une ligne « locale » (faite sur la machine elle-même) au journal.
+pub async fn audit_local(store: &Store, actor: &str, action: &str, target: Option<&str>) {
+    let record = ha_storage::AuditRecord {
+        actor,
+        action,
+        target,
+        detail: None,
+        source: "local",
+    };
+    if let Err(error) = store.audit(record).await {
+        eprintln!("attention : journal d'audit non écrit ({error})");
+    }
+}
+
+/// `ha-server audit [nombre]` et `ha-server audit verify`.
+pub async fn audit_command(args: &[&str]) -> Result<(), Box<dyn Error>> {
+    let store = crate::open_store().await?;
+    let result = audit_inner(args, &store).await;
+    store.close().await;
+    result
+}
+
+async fn audit_inner(args: &[&str], store: &Store) -> Result<(), Box<dyn Error>> {
+    let limit = match args {
+        ["verify"] => {
+            return match store.verify_audit().await? {
+                ha_storage::AuditCheck::Intact { entries } => {
+                    println!("journal intact : {entries} lignes, signatures et chaîne valides");
+                    Ok(())
+                }
+                ha_storage::AuditCheck::Broken { id, reason } => {
+                    Err(format!("journal MODIFIÉ à la ligne {id} : {reason}").into())
+                }
+            };
+        }
+        [] => 50,
+        [count] => count
+            .parse::<u32>()
+            .ok()
+            .filter(|count| (1..=ha_storage::MAX_AUDIT_LIMIT).contains(count))
+            .ok_or_else(|| {
+                format!(
+                    "nombre de lignes invalide (entre 1 et {})",
+                    ha_storage::MAX_AUDIT_LIMIT
+                )
+            })?,
+        _ => return Err(USAGE.into()),
+    };
+    let mut entries = store.audit_log(limit).await?;
+    // Le plus récent en bas, comme dans un terminal.
+    entries.reverse();
+    if entries.is_empty() {
+        println!("journal vide");
+    }
+    let zone = jiff::tz::TimeZone::system();
+    for entry in entries {
+        let when = jiff::Timestamp::try_from(entry.at).map_or_else(
+            |_| "date invalide".to_owned(),
+            |at| {
+                at.to_zoned(zone.clone())
+                    .strftime("%d/%m/%Y %H:%M:%S")
+                    .to_string()
+            },
+        );
+        let what = [entry.target.as_deref(), entry.detail.as_deref()]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join(" ");
+        println!(
+            "{when}  {:<18} {:<34} {what}  ({})",
+            entry.actor,
+            action_label(&entry.action),
+            entry.source
+        );
+    }
+    Ok(())
+}
+
+/// Libellé lisible d'une action du journal.
+fn action_label(action: &str) -> &str {
+    match action {
+        "login" => "connexion",
+        "login_failed" => "ÉCHEC de connexion",
+        "logout" => "déconnexion",
+        "service" => "commande",
+        "state_set" => "état modifié",
+        "state_delete" => "état supprimé",
+        "user_add" => "compte créé",
+        "user_passwd" => "mot de passe changé",
+        "user_delete" => "compte supprimé",
+        "user_totp" => "double authentification activée",
+        "user_totp_off" => "double authentification désactivée",
+        "hue_pair" => "pont Hue associé",
+        "hue_forget" => "pont Hue oublié",
+        "somfy_pair" => "box Somfy associée",
+        "somfy_forget" => "box Somfy oubliée",
+        "server_start" => "démarrage du serveur",
+        "server_stop" => "arrêt du serveur",
+        other => other,
+    }
 }

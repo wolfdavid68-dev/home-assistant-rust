@@ -18,6 +18,8 @@
 //! ha-server somfy pair <adresse>  associe la box Somfy TaHoma
 //! ha-server somfy devices         liste les appareils de la box
 //! ha-server automations check     vérifie le fichier d'automatisations
+//! ha-server audit [nombre]        affiche le journal d'audit
+//! ha-server audit verify          vérifie que le journal n'a pas été modifié
 //! ha-server healthcheck           vérifie qu'un serveur répond (pour Docker)
 //! ```
 //!
@@ -27,6 +29,7 @@
 //!   (par défaut, à côté de la base : `ha.key`) ;
 //! - `HA_BIND` : adresse d'écoute de l'API (par défaut `127.0.0.1:8123`) ;
 //! - `HA_HISTORY_DAYS` : nombre de jours d'historique conservés (par défaut 10) ;
+//! - `HA_AUDIT_DAYS` : nombre de jours de journal d'audit conservés (par défaut 365) ;
 //! - `HA_MQTT_HOST` : adresse du broker MQTT (sans elle : appareils simulés) ;
 //! - `HA_MQTT_PORT` : port du broker (par défaut 1883) ;
 //! - `HA_MQTT_USER` et `HA_MQTT_PASSWORD_FILE` (fichier contenant le mot de
@@ -62,6 +65,7 @@ use zeroize::Zeroizing;
 const DEFAULT_DB_PATH: &str = "ha.db";
 const DEFAULT_BIND: &str = "127.0.0.1:8123";
 const DEFAULT_HISTORY_DAYS: u32 = 10;
+const DEFAULT_AUDIT_DAYS: u32 = 365;
 const DEFAULT_AUTOMATIONS_PATH: &str = "automations.yaml";
 
 /// Concept Rust : `#[tokio::main]` démarre le moteur asynchrone de tokio.
@@ -85,6 +89,7 @@ async fn main() -> ExitCode {
         ["hue", rest @ ..] => cli::hue_command(rest).await,
         ["somfy", rest @ ..] => cli::somfy_command(rest).await,
         ["automations", "check"] => cli::check_automations(&automations_path()),
+        ["audit", rest @ ..] => cli::audit_command(rest).await,
         ["healthcheck"] => match parse_bind() {
             Ok(bind) => health::check(bind).await,
             Err(error) => Err(error.into()),
@@ -125,6 +130,7 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
 
     let db_path = db_path();
     let history_days = history_days()?;
+    let audit_days = days_from_env("HA_AUDIT_DAYS", DEFAULT_AUDIT_DAYS)?;
     let bind = bind_address()?;
     let mqtt_config = mqtt_config()?;
     // Un fichier d'automatisations invalide empêche le démarrage, avec un
@@ -133,12 +139,22 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     let store = open_store().await?;
     info!("base de données : {db_path}");
 
-    // On oublie l'historique trop ancien.
-    let cutoff = SystemTime::now()
-        .checked_sub(Duration::from_secs(u64::from(history_days) * 24 * 3600))
-        .unwrap_or(SystemTime::UNIX_EPOCH);
-    let purged = store.purge_history(cutoff).await?;
+    // On oublie l'historique et le journal d'audit trop anciens.
+    let purged = store.purge_history(days_ago(history_days)).await?;
     info!("historique conservé : {history_days} jours ({purged} lignes anciennes supprimées)");
+    let purged = store.purge_audit(days_ago(audit_days)).await?;
+    info!("journal d'audit conservé : {audit_days} jours ({purged} lignes anciennes supprimées)");
+    // Le journal a-t-il été modifié pendant que le serveur était arrêté ?
+    match store.verify_audit().await? {
+        ha_storage::AuditCheck::Intact { entries } => {
+            info!("journal d'audit vérifié : {entries} lignes intactes");
+        }
+        ha_storage::AuditCheck::Broken { id, reason } => {
+            warn!("journal d'audit MODIFIÉ à la ligne {id} : {reason}");
+            warn!("quelqu'un a peut-être touché à la base : vérifie avec « ha-server audit »");
+        }
+    }
+    cli::audit_local(&store, "serveur", "server_start", None).await;
 
     let auth = Arc::new(Auth::new(&store).await?);
     auth.purge_expired_tokens().await?;
@@ -230,6 +246,7 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     logger.abort();
     // L'enregistreur écrit les derniers changements avant de fermer la base.
     recorder.stop().await;
+    cli::audit_local(&store, "serveur", "server_stop", None).await;
     store.close().await;
     Ok(())
 }
@@ -237,14 +254,26 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
 /// Lit `HA_HISTORY_DAYS`. Une valeur invalide arrête le programme avec un
 /// message clair, plutôt que d'être ignorée en silence.
 fn history_days() -> Result<u32, String> {
-    match std::env::var("HA_HISTORY_DAYS") {
-        Err(_) => Ok(DEFAULT_HISTORY_DAYS),
+    days_from_env("HA_HISTORY_DAYS", DEFAULT_HISTORY_DAYS)
+}
+
+/// Lit un nombre de jours (entre 1 et 3650) dans la variable `name`.
+fn days_from_env(name: &str, default: u32) -> Result<u32, String> {
+    match std::env::var(name) {
+        Err(_) => Ok(default),
         Ok(value) => value
             .parse::<u32>()
             .ok()
             .filter(|days| (1..=3650).contains(days))
-            .ok_or_else(|| format!("HA_HISTORY_DAYS invalide : {value:?} (entre 1 et 3650)")),
+            .ok_or_else(|| format!("{name} invalide : {value:?} (entre 1 et 3650)")),
     }
+}
+
+/// Date d'il y a `days` jours.
+fn days_ago(days: u32) -> SystemTime {
+    SystemTime::now()
+        .checked_sub(Duration::from_secs(u64::from(days) * 24 * 3600))
+        .unwrap_or(SystemTime::UNIX_EPOCH)
 }
 
 /// Lit la configuration MQTT. `None` si `HA_MQTT_HOST` n'est pas défini.

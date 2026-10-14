@@ -15,6 +15,7 @@ ha-hue = { path = "../ha-hue" }
 ha-mqtt = { path = "../ha-mqtt" }
 ha-somfy = { path = "../ha-somfy" }
 ha-tls = { path = "../ha-tls" }
+jiff.workspace = true
 ha-storage = { path = "../ha-storage" }
 qrcode.workspace = true
 rpassword.workspace = true

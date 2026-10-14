@@ -19,6 +19,8 @@ use std::sync::Arc;
 
 use chacha20poly1305::aead::{Aead, Payload};
 use chacha20poly1305::{KeyInit, XChaCha20Poly1305, XNonce};
+use hmac::{Hmac, Mac};
+use sha2::Sha256;
 use zeroize::Zeroizing;
 
 use crate::error::StorageError;
@@ -35,7 +37,13 @@ const MAX_SEALED_LEN: usize = 16 * 1024;
 /// du `Store` sans la dupliquer en mémoire. Le chiffreur efface sa clé de la
 /// mémoire quand il est libéré (option `zeroize` de la crate).
 #[derive(Clone)]
-pub struct SecretKey(Arc<XChaCha20Poly1305>);
+pub struct SecretKey(Arc<Keys>);
+
+struct Keys {
+    cipher: XChaCha20Poly1305,
+    /// Clé de signature du journal d'audit, dérivée de la clé principale.
+    audit: Zeroizing<[u8; 32]>,
+}
 
 /// On n'affiche jamais la clé, même dans un message de débogage.
 impl fmt::Debug for SecretKey {
@@ -98,7 +106,29 @@ impl SecretKey {
     fn from_bytes(bytes: &[u8]) -> Result<Self, StorageError> {
         let cipher = XChaCha20Poly1305::new_from_slice(bytes)
             .map_err(|_| StorageError::Secret("taille de clé"))?;
-        Ok(Self(Arc::new(cipher)))
+        // Une clé par usage : la clé du journal est dérivée de la clé
+        // principale (HMAC avec une étiquette), au lieu de la réutiliser.
+        let mut derive = <Hmac<Sha256> as hmac::KeyInit>::new_from_slice(bytes)
+            .map_err(|_| StorageError::Secret("taille de clé"))?;
+        derive.update(b"ha-rust audit log v1");
+        let audit = Zeroizing::new(derive.finalize().into_bytes().into());
+        Ok(Self(Arc::new(Keys { cipher, audit })))
+    }
+
+    /// Signature (HMAC-SHA256) d'une ligne du journal d'audit. Chaque champ
+    /// est précédé de sa longueur : « ab » + « c » et « a » + « bc » ne
+    /// donnent pas la même signature.
+    pub(crate) fn audit_mac(&self, fields: &[&[u8]]) -> [u8; 32] {
+        let Ok(mut mac) = <Hmac<Sha256> as hmac::KeyInit>::new_from_slice(self.0.audit.as_slice())
+        else {
+            // HMAC accepte des clés de toute taille : ce cas n'arrive pas.
+            return [0; 32];
+        };
+        for field in fields {
+            mac.update(&(field.len() as u64).to_be_bytes());
+            mac.update(field);
+        }
+        mac.finalize().into_bytes().into()
     }
 
     /// Chiffre `plaintext`, pour l'usage `context` (par exemple
@@ -108,6 +138,7 @@ impl SecretKey {
         getrandom::fill(&mut nonce).map_err(|_| StorageError::Secret("aléatoire"))?;
         let ciphertext = self
             .0
+            .cipher
             .encrypt(
                 &XNonce::from(nonce),
                 Payload {
@@ -136,6 +167,7 @@ impl SecretKey {
             .ok_or(StorageError::Secret("secret trop court"))?;
         let plaintext = Zeroizing::new(
             self.0
+                .cipher
                 .decrypt(
                     &XNonce::from(*nonce),
                     Payload {

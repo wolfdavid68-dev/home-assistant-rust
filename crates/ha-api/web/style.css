@@ -251,3 +251,41 @@ input[type="range"] {
   color: var(--muted);
   padding: 3rem 1.5rem;
 }
+
+/* ---------- Journal d'activité ---------- */
+
+.journal {
+  max-width: 1100px;
+  margin: 0 auto 3rem;
+  padding: 0 max(1.25rem, env(safe-area-inset-left));
+}
+.journal summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0.75rem 0;
+}
+.journal-hint { color: var(--muted); font-size: 0.85rem; margin: 0 0 0.75rem; }
+.journal-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.journal-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  align-items: baseline;
+  padding: 0.65rem 1rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+.journal-list li:first-child { border-top: 0; }
+.journal-list time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.journal-list .what { overflow-wrap: anywhere; }
+.journal-list small { color: var(--muted); margin-left: auto; }
+.journal-list li.failed strong,
+.journal-list li.failed span { color: var(--danger); }
