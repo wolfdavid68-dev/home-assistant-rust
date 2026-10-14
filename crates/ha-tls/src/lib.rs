@@ -151,6 +151,14 @@ pub fn client(
 /// autorités de confiance **du système** (magasin de certificats de
 /// Windows, de macOS ou de Linux).
 pub fn public_client() -> Result<reqwest::Client, TlsError> {
+    web_client(true)
+}
+
+/// Comme [`public_client`], mais en acceptant aussi le HTTP non chiffré si
+/// `https_only` est faux. À réserver aux adresses du réseau local (un
+/// serveur de notifications chez toi, par exemple) : c'est à l'appelant de
+/// le vérifier.
+pub fn web_client(https_only: bool) -> Result<reqwest::Client, TlsError> {
     let provider = Arc::new(rustls::crypto::ring::default_provider());
     let config = rustls::ClientConfig::builder_with_provider(provider)
         .with_safe_default_protocol_versions()?
@@ -158,7 +166,10 @@ pub fn public_client() -> Result<reqwest::Client, TlsError> {
         .with_no_client_auth();
     Ok(reqwest::Client::builder()
         .tls_backend_preconfigured(config)
-        .https_only(true)
+        .https_only(https_only)
+        // Pas de redirection suivie : une réponse ne peut pas nous envoyer
+        // (avec nos identifiants) vers une autre adresse.
+        .redirect(reqwest::redirect::Policy::none())
         .connect_timeout(std::time::Duration::from_secs(10))
         .timeout(std::time::Duration::from_secs(30))
         .build()?)

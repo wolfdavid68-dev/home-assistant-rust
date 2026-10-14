@@ -34,6 +34,8 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
 
 - Pont Philips Hue : HTTPS avec certificat **épinglé** à l'association (confiance au premier usage),
   jamais de vérification TLS désactivée.
+- Notifications (ntfy) : HTTPS obligatoire hors réseau local, aucune redirection suivie, jeton lu dans un
+  fichier et jamais journalisé, contenu jamais journalisé, au plus 10 notifications en 10 minutes.
 - Freebox : même principe, en **lecture seule** ; le jeton ne circule jamais (session par défi HMAC).
 - Box Somfy TaHoma : même principe. Le compte Somfy ne sert qu'une fois, à créer le jeton local ; le mot de
   passe n'est jamais enregistré. Portails et portes de garage ne sont pas pilotables sans réflexion dédiée.

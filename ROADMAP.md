@@ -24,6 +24,7 @@ Un workspace Cargo découpé en crates :
 | `ha-somfy`    | Somfy TaHoma : volets, capteurs, alarme, chauffage (API locale)             |
 | `ha-freebox`  | Freebox : présence, connexion Internet, nouveaux appareils (lecture seule) |
 | `ha-areas`    | Pièces de la maison et noms lisibles (fichier `areas.yaml`)                 |
+| `ha-notify`   | Notifications sur le téléphone avec ntfy                                    |
 | `ha-sun`      | Soleil : lever, coucher, hauteur, calculés sans réseau                      |
 | `ha-tls`      | Connexions HTTPS partagées (certificat épinglé ou vérifié)                  |
 | `ha-server`   | Binaire qui assemble le tout et lit la configuration                        |
@@ -53,7 +54,7 @@ Les fonctions de Home Assistant les plus utiles au quotidien, une par une, dans 
 - [x] **9. Pièces** : ranger les appareils par pièce (salon, chambre…) et leur donner un nom lisible ([guide](docs/pieces.md))
 - [x] **10. Historique en graphiques** : courbes de température, frise des ouvertures, sur 24 h ou 7 jours ([guide](docs/historique.md))
 - [x] **11. Scènes et scripts** : « soirée cinéma » en un bouton, suites d'actions réutilisables ([guide](docs/scenes-scripts.md))
-- [ ] **12. Notifications** : être prévenu sur son téléphone (alarme, fumée, nouvel appareil sur le Wi-Fi)
+- [x] **12. Notifications** : être prévenu sur son téléphone (alarme, fumée, nouvel appareil sur le Wi-Fi), avec ntfy ([guide](docs/notifications.md))
 - [ ] **13. Éditeur d'automatisations** : créer et modifier les automatisations depuis le tableau de bord
 - [ ] **14. Alexa en local** : piloter volets et prises à la voix, sans cloud ni port ouvert
 

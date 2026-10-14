@@ -919,6 +919,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "ha-notify"
+version = "0.1.0"
+dependencies = [
+ "ha-core",
+ "ha-tls",
+ "jiff",
+ "reqwest",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "url",
+ "zeroize",
+]
+
+[[package]]
 name = "ha-server"
 version = "0.1.0"
 dependencies = [
@@ -930,6 +946,7 @@ dependencies = [
  "ha-freebox",
  "ha-hue",
  "ha-mqtt",
+ "ha-notify",
  "ha-somfy",
  "ha-storage",
  "ha-sun",

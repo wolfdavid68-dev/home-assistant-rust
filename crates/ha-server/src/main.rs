@@ -43,6 +43,8 @@
 //!   (deux décimales suffisent, par exemple 48.85 et 2.35) ;
 //! - `HA_SCRIPTS_PATH` et `HA_SCENES_PATH` : scripts et scènes (par défaut
 //!   `scripts.yaml` et `scenes.yaml`) ;
+//! - `HA_NTFY_URL`, `HA_NTFY_TOPIC`, `HA_NTFY_TOKEN_FILE` : notifications sur
+//!   le téléphone avec ntfy (entité `notify.telephone`) ;
 //! - `HA_AREAS_PATH` : fichier des pièces (par défaut `areas.yaml`) ;
 //! - `HA_AUTOMATIONS_PATH` : fichier d'automatisations (par défaut `automations.yaml`) ;
 //! - `RUST_LOG` : niveau de détail des logs (par défaut `info`).
@@ -184,6 +186,7 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         .map_err(|error| format!("{} : {error}", areas_path().display()))?;
     info!("{} pièce(s) chargée(s)", areas.len());
     let location = location()?;
+    let ntfy = ntfy_config()?;
     if location.is_none() && ha_automation::uses_sun(&automations) {
         return Err(
             "des automatisations utilisent le soleil : indique la position de la maison \
@@ -249,6 +252,15 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         Arc::clone(&core),
     );
     let sun = location.map(|location| SunTracker::start(location, Arc::clone(&core)));
+    let notifier = match ntfy {
+        Some(config) => {
+            for warning in config.warnings() {
+                warn!("notifications : {warning}");
+            }
+            Some(ha_notify::Notifier::start(config, Arc::clone(&core))?)
+        }
+        None => None,
+    };
     // Une association illisible (clé de chiffrement perdue, par exemple)
     // ne doit pas empêcher le reste de la maison de fonctionner.
     let hue = match ha_hue::pairing::load(&store).await {
@@ -299,6 +311,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         simulation.abort();
     }
     engine.stop().await;
+    if let Some(notifier) = notifier {
+        notifier.stop().await;
+    }
     if let Some(sun) = sun {
         sun.stop().await;
     }
@@ -380,6 +395,30 @@ fn location() -> Result<Option<Location>, String> {
         }
         _ => Err("il faut HA_LATITUDE et HA_LONGITUDE ensemble".into()),
     }
+}
+
+/// Lit la configuration des notifications (`HA_NTFY_URL`, `HA_NTFY_TOPIC`,
+/// `HA_NTFY_TOKEN_FILE` ou `HA_NTFY_TOKEN`). `None` sans `HA_NTFY_URL`.
+fn ntfy_config() -> Result<Option<ha_notify::Config>, String> {
+    let Ok(url) = std::env::var("HA_NTFY_URL") else {
+        return Ok(None);
+    };
+    let topic = std::env::var("HA_NTFY_TOPIC").map_err(|_| "HA_NTFY_TOPIC manquant")?;
+    // Comme pour MQTT, un fichier est préférable à une variable
+    // d'environnement pour un secret.
+    let token = match std::env::var("HA_NTFY_TOKEN_FILE") {
+        Ok(path) => {
+            let content =
+                Zeroizing::new(std::fs::read_to_string(&path).map_err(|error| {
+                    format!("lecture de HA_NTFY_TOKEN_FILE ({path}) : {error}")
+                })?);
+            Some(Zeroizing::new(content.trim().to_owned()))
+        }
+        Err(_) => std::env::var("HA_NTFY_TOKEN").ok().map(Zeroizing::new),
+    };
+    ha_notify::Config::new(&url, &topic, token)
+        .map(Some)
+        .map_err(|error| error.to_string())
 }
 
 /// Lit la configuration MQTT. `None` si `HA_MQTT_HOST` n'est pas défini.

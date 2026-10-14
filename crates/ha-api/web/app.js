@@ -167,7 +167,7 @@ function markPending(entityId) {
 // ---------------------------------------------------------------- Affichage
 const SECTIONS = [
   { title: "Scènes et scripts", domains: ["scene", "script"] },
-  { title: "Présence et soleil", domains: ["device_tracker", "sun"] },
+  { title: "Présence et soleil", domains: ["device_tracker", "sun", "notify"] },
   { title: "Lumières", domains: ["light"] },
   { title: "Volets", domains: ["cover"] },
   { title: "Prises et interrupteurs", domains: ["switch"] },
@@ -237,6 +237,7 @@ function renderTileContent(state) {
     case "sun": return sunTile(state);
     case "scene":
     case "script": return actionTile(state);
+    case "notify": return notifyTile(state);
     case "switch": return switchTile(state);
     case "binary_sensor": return binaryTile(state);
     case "sensor": return state.attributes.device_class === "alarm" ? alarmTile(state) : sensorTile(state);
@@ -366,6 +367,28 @@ function actionTile(state) {
     // un appareil indisponible, elle ne doit pas être grisée.
     { id: tileId(state.entity_id), class: running ? "tile action on" : "tile action" },
     tileHead(state, isScript ? ICONS.play : ICONS.sparkle, subtitle),
+    button,
+  );
+}
+
+// Le téléphone : date de la dernière notification, et un bouton pour tester.
+function notifyTile(state) {
+  const subtitle = Number.isNaN(Date.parse(state.state))
+    ? "Aucune notification envoyée"
+    : `Dernière notification il y a ${ago(state.state)}`;
+  const button = el("button", { type: "button", class: "action-button", text: "Envoyer un test" });
+  button.addEventListener("click", () => {
+    markPending(state.entity_id);
+    callService("notify", "send_message", {
+      entity_id: state.entity_id,
+      title: "Maison",
+      message: "Test depuis le tableau de bord : les notifications fonctionnent.",
+    });
+  });
+  return el(
+    "div",
+    { id: tileId(state.entity_id), class: "tile action" },
+    tileHead(state, ICONS.bell, subtitle),
     button,
   );
 }
@@ -507,6 +530,7 @@ const ICONS = {
   stop: ["M8 8h8v8H8z"],
   illuminance: ["M12 3v2", "M12 19v2", "M5 12H3", "M21 12h-2", "M12 8a4 4 0 1 0 0 8 4 4 0 1 0 0-8z"],
   occupancy: ["M12 4a2 2 0 1 0 0 4 2 2 0 1 0 0-4z", "M8 21v-6l-2-1 2-5h8l2 5-2 1v6"],
+  bell: ["M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9", "M10 21a2 2 0 0 0 4 0"],
   play: ["M8 5v14l11-7z"],
   sparkle: ["M12 3v4", "M12 17v4", "M3 12h4", "M17 12h4", "M6 6l2.5 2.5", "M15.5 15.5L18 18", "M6 18l2.5-2.5", "M15.5 8.5L18 6"],
   chart: ["M4 19h16", "M4 15l4-5 4 3 6-7"],
