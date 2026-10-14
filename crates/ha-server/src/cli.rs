@@ -39,6 +39,7 @@ utilisation :
   ha-server automations list      liste les automatisations (fichier et éditeur)
   ha-server automations delete <id>  supprime une automatisation de l'éditeur
   ha-server areas check           vérifie le fichier des pièces
+  ha-server alexa check           vérifie le fichier des appareils pour Alexa
   ha-server audit [nombre]        affiche le journal d'audit
   ha-server audit verify          vérifie que le journal n'a pas été modifié
   ha-server healthcheck           vérifie qu'un serveur répond (pour Docker)";
@@ -907,4 +908,28 @@ fn local_time(at: std::time::SystemTime) -> String {
                 .to_string()
         },
     )
+}
+
+/// `ha-server alexa check` : vérifie `alexa.yaml`.
+pub fn check_alexa(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
+    if !path.exists() {
+        println!(
+            "{} n'existe pas : aucun appareil pour Alexa.",
+            path.display()
+        );
+        return Ok(());
+    }
+    let devices = ha_alexa::load(path).map_err(|error| format!("{} : {error}", path.display()))?;
+    println!(
+        "{} : {} appareil(s) pour Alexa",
+        path.display(),
+        devices.len()
+    );
+    for device in &devices {
+        match &device.name {
+            Some(name) => println!("  - {} « {name} »", device.entity_id),
+            None => println!("  - {} (nom de l'appareil)", device.entity_id),
+        }
+    }
+    Ok(())
 }

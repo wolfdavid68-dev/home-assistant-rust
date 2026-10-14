@@ -789,6 +789,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "ha-alexa"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "ha-core",
+ "ha-storage",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "sha2 0.11.1",
+ "socket2",
+ "sqlx",
+ "thiserror",
+ "tokio",
+ "tower",
+ "tower-http 0.7.1",
+ "tracing",
+]
+
+[[package]]
 name = "ha-api"
 version = "0.1.0"
 dependencies = [
@@ -940,6 +960,7 @@ dependencies = [
 name = "ha-server"
 version = "0.1.0"
 dependencies = [
+ "ha-alexa",
  "ha-api",
  "ha-areas",
  "ha-auth",

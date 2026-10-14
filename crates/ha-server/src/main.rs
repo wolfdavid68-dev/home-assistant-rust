@@ -24,6 +24,7 @@
 //! ha-server automations list      liste les automatisations (fichier et éditeur)
 //! ha-server automations delete <id>  supprime une automatisation de l'éditeur
 //! ha-server areas check           vérifie le fichier des pièces
+//! ha-server alexa check           vérifie le fichier des appareils pour Alexa
 //! ha-server audit [nombre]        affiche le journal d'audit
 //! ha-server audit verify          vérifie que le journal n'a pas été modifié
 //! ha-server healthcheck           vérifie qu'un serveur répond (pour Docker)
@@ -49,6 +50,9 @@
 //!   le téléphone avec ntfy (entité `notify.telephone`) ;
 //! - `HA_AREAS_PATH` : fichier des pièces (par défaut `areas.yaml`) ;
 //! - `HA_AUTOMATIONS_PATH` : fichier d'automatisations (par défaut `automations.yaml`) ;
+//! - `HA_ALEXA_IP` : adresse de cette machine sur le réseau local, pour
+//!   piloter les appareils de `alexa.yaml` à la voix (`HA_ALEXA_PATH`,
+//!   `HA_ALEXA_PORT` (80), `HA_ALEXA_ALLOWED` : adresses des Echo) ;
 //! - `HA_AUTOMATION_EDITOR` : `on` (par défaut) ou `off` pour un éditeur
 //!   d'automatisations en lecture seule dans le tableau de bord ;
 //! - `RUST_LOG` : niveau de détail des logs (par défaut `info`).
@@ -109,6 +113,7 @@ async fn main() -> ExitCode {
         ["freebox", rest @ ..] => cli::freebox_command(rest).await,
         ["automations", rest @ ..] => cli::automations_command(rest).await,
         ["areas", "check"] => cli::check_areas(&areas_path()),
+        ["alexa", "check"] => cli::check_alexa(&alexa_path()),
         ["audit", rest @ ..] => cli::audit_command(rest).await,
         ["healthcheck"] => match parse_bind() {
             Ok(bind) => health::check(bind).await,
@@ -192,6 +197,7 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     info!("{} pièce(s) chargée(s)", areas.len());
     let location = location()?;
     let ntfy = ntfy_config()?;
+    let alexa_settings = alexa_settings()?;
     if location.is_none() && ha_automation::uses_sun(&automations) {
         return Err(
             "des automatisations utilisent le soleil : indique la position de la maison \
@@ -309,6 +315,27 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
             None
         }
     };
+    // Alexa : un souci (port 80 déjà pris, droits insuffisants) ne doit pas
+    // empêcher le reste de la maison de fonctionner.
+    let alexa = match alexa_settings {
+        Some(settings) => {
+            if settings.devices.is_empty() {
+                warn!(
+                    "Alexa : aucun appareil dans {} : rien à piloter",
+                    alexa_path().display()
+                );
+            }
+            match ha_alexa::Alexa::start(settings, store.clone(), Arc::clone(&core)).await {
+                Ok(alexa) => Some(alexa),
+                Err(error) => {
+                    warn!("Alexa désactivée : {error}");
+                    warn!("voir docs/alexa.md (port 80, découverte sur le port 1900)");
+                    None
+                }
+            }
+        }
+        None => None,
+    };
     let mut simulation = if mqtt.is_none() && hue.is_none() && somfy.is_none() && freebox.is_none()
     {
         info!("aucun appareil configuré (MQTT, Hue, Somfy, Freebox) : appareils simulés");
@@ -332,6 +359,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     // Plus aucun changement d'état après ce point.
     if let Some(simulation) = simulation {
         simulation.abort();
+    }
+    if let Some(alexa) = alexa {
+        alexa.stop().await;
     }
     engine.stop().await;
     if let Some(notifier) = notifier {
@@ -394,8 +424,6 @@ fn days_ago(days: u32) -> SystemTime {
         .unwrap_or(SystemTime::UNIX_EPOCH)
 }
 
-/// Lit la position de la maison (`HA_LATITUDE`, `HA_LONGITUDE`), pour le
-/// soleil. `None` si elle n'est pas indiquée.
 /// `HA_AUTOMATION_EDITOR` : peut-on modifier les automatisations depuis le
 /// tableau de bord ?
 fn automation_editor() -> Result<bool, String> {
@@ -408,6 +436,61 @@ fn automation_editor() -> Result<bool, String> {
     }
 }
 
+pub(crate) fn alexa_path() -> std::path::PathBuf {
+    std::env::var("HA_ALEXA_PATH")
+        .unwrap_or_else(|_| "alexa.yaml".to_owned())
+        .into()
+}
+
+/// Réglages d'Alexa (`HA_ALEXA_IP`, `HA_ALEXA_PORT`, `HA_ALEXA_ALLOWED`).
+/// `None` si `HA_ALEXA_IP` n'est pas indiquée : Alexa est désactivée.
+fn alexa_settings() -> Result<Option<ha_alexa::Settings>, String> {
+    let Ok(ip) = std::env::var("HA_ALEXA_IP") else {
+        return Ok(None);
+    };
+    let ip: std::net::Ipv4Addr = ip.trim().parse().map_err(|_| {
+        format!("HA_ALEXA_IP invalide : {ip:?} (l'adresse IPv4 de cette machine, par exemple 192.168.1.20)")
+    })?;
+    if ip.is_unspecified() || ip.is_loopback() {
+        return Err(format!(
+            "HA_ALEXA_IP : {ip} ne convient pas, il faut l'adresse de cette machine sur le réseau local"
+        ));
+    }
+    let port = match std::env::var("HA_ALEXA_PORT") {
+        Err(_) => ha_alexa::DEFAULT_PORT,
+        Ok(value) => value
+            .trim()
+            .parse::<u16>()
+            .ok()
+            .filter(|port| *port > 0)
+            .ok_or_else(|| format!("HA_ALEXA_PORT invalide : {value:?}"))?,
+    };
+    let allowed = match std::env::var("HA_ALEXA_ALLOWED") {
+        Err(_) => ha_alexa::Allowed::LocalNetwork,
+        Ok(list) => ha_alexa::Allowed::Only(
+            list.split(',')
+                .map(str::trim)
+                .filter(|item| !item.is_empty())
+                .map(|item| {
+                    item.parse()
+                        .map_err(|_| format!("HA_ALEXA_ALLOWED : adresse invalide {item:?}"))
+                })
+                .collect::<Result<_, _>>()?,
+        ),
+    };
+    let devices = ha_alexa::load(&alexa_path())
+        .map_err(|error| format!("{} : {error}", alexa_path().display()))?;
+    Ok(Some(ha_alexa::Settings {
+        ip,
+        port,
+        discovery_port: ha_alexa::ssdp::PORT,
+        allowed,
+        devices,
+    }))
+}
+
+/// Lit la position de la maison (`HA_LATITUDE`, `HA_LONGITUDE`), pour le
+/// soleil. `None` si elle n'est pas indiquée.
 pub(crate) fn location() -> Result<Option<Location>, String> {
     let read = |name: &str| -> Result<Option<f64>, String> {
         match std::env::var(name) {
