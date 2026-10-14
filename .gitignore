@@ -9,3 +9,6 @@ secrets.yaml
 *.db-*
 *.pem
 *.key
+
+# Automatisations locales (propres à ta maison)
+automations.yaml

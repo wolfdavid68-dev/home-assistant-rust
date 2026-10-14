@@ -27,6 +27,10 @@ rumqttc = { version = "0.25.1", default-features = false }
 # le certificat du pont est épinglé.
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls-no-provider", "stream"] }
 rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
+# Automatisations : YAML en Rust pur (sans `unsafe-libyaml`, abandonnée) et
+# dates/heures locales avec fuseau horaire.
+jiff = "0.2.38"
+serde-saphyr = "2.0.0"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 # SQLite uniquement : pas de MySQL (qui tire `rsa`, faille connue) ni de PostgreSQL.

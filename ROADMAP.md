@@ -34,7 +34,7 @@ Briques principales : `tokio` (asynchrone), `axum` (web), `sqlx` + SQLite, `serd
 - [x] **3. Authentification + API** : comptes, jetons, API REST et WebSocket en local ([guide](docs/etape-3-auth-api.md))
 - [x] **4. MQTT** : piloter de vrais appareils (découverte automatique façon Home Assistant) ([guide](docs/etape-4-mqtt.md)) — sans TLS pour l'instant
 - [x] **4 bis. Philips Hue** : lampes via le pont Hue, en local, certificat épinglé ([guide](docs/hue.md))
-- [ ] **5. Automatisations** : « quand X, si Y, alors Z » en YAML
+- [x] **5. Automatisations** : « quand X, si Y, alors Z » en YAML ([guide](docs/etape-5-automatisations.md))
 - [ ] **6. Interface web** : tableau de bord simple
 - [ ] **7. Déploiement** : image Docker, accès à distance via VPN (jamais de port ouvert sur Internet)
 

@@ -21,7 +21,8 @@ utilisation :
   ha-server user list             liste les comptes
   ha-server hue pair <adresse>    associe le pont Philips Hue
   ha-server hue status            affiche le pont associé
-  ha-server hue forget            oublie le pont";
+  ha-server hue forget            oublie le pont
+  ha-server automations check     vérifie le fichier d'automatisations";
 
 pub async fn user_command(args: &[&str], db_path: &str) -> Result<(), Box<dyn Error>> {
     let store = Store::open(db_path).await?;
@@ -134,4 +135,28 @@ async fn hue_inner(args: &[&str], store: &Store) -> Result<(), Box<dyn Error>> {
         }
         _ => Err(USAGE.into()),
     }
+}
+
+/// Vérifie le fichier d'automatisations sans démarrer le serveur.
+pub fn check_automations(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
+    if !path.exists() {
+        println!("{} n'existe pas : aucune automatisation.", path.display());
+        return Ok(());
+    }
+    let automations = ha_automation::load(path)?;
+    println!(
+        "{} : {} automatisation(s) valide(s)",
+        path.display(),
+        automations.len()
+    );
+    for automation in &automations {
+        println!(
+            "  - {} ({} déclencheur(s), {} condition(s), {} action(s))",
+            automation.alias,
+            automation.triggers.len(),
+            automation.conditions.len(),
+            automation.actions.len()
+        );
+    }
+    Ok(())
 }
