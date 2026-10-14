@@ -243,9 +243,31 @@ async fn box_is_identified_paired_and_saved() {
 
     let store = Store::open_in_memory().await.unwrap();
     pairing::save(&store, &paired).await.unwrap();
+    // Dans la base, le jeton est chiffré.
+    let raw: String = sqlx::query_scalar("SELECT token FROM somfy_box")
+        .fetch_one(store.pool())
+        .await
+        .unwrap();
+    assert!(!raw.contains(TOKEN), "jeton en clair dans la base");
     let loaded = pairing::load(&store).await.unwrap().unwrap();
     assert_eq!(loaded.token.as_str(), TOKEN);
     assert_eq!(loaded.fingerprint, fingerprint);
+
+    // Une association faite avant le chiffrement (jeton en clair) est
+    // relue, puis chiffrée.
+    sqlx::query("UPDATE somfy_box SET token = ?1")
+        .bind(TOKEN)
+        .execute(store.pool())
+        .await
+        .unwrap();
+    let loaded = pairing::load(&store).await.unwrap().unwrap();
+    assert_eq!(loaded.token.as_str(), TOKEN);
+    let raw: String = sqlx::query_scalar("SELECT token FROM somfy_box")
+        .fetch_one(store.pool())
+        .await
+        .unwrap();
+    assert!(ha_storage::is_sealed(&raw), "ancien jeton pas rechiffré");
+
     assert!(pairing::forget(&store).await.unwrap());
 }
 

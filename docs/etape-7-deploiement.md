@@ -172,8 +172,24 @@ et le serveur, qui tourne volontairement sans droits, ne pourrait plus ouvrir sa
 `chown 65532:65532` lui rend la propriété du fichier. (Les apostrophes simples `'…'` fonctionnent
 telles quelles dans PowerShell comme sous Linux.)
 
-**Range tes sauvegardes en lieu sûr** : elles contiennent les jetons du pont Hue et de la box
-Somfy. Elles ne contiennent aucun mot de passe en clair (ils sont hachés avec Argon2id).
+Tes sauvegardes ne contiennent aucun mot de passe en clair (ils sont hachés avec Argon2id), et
+les jetons du pont Hue et de la box Somfy y sont **chiffrés**. La clé qui les déchiffre n'est pas
+dans `/data` mais dans un volume à part (`ha-cle`) : une sauvegarde volée ne permet pas de piloter
+tes appareils.
+
+**La clé, à mettre de côté une fois pour toutes** (dans ton gestionnaire de mots de passe) :
+
+```powershell
+docker compose run --rm sauvegarde cat /cle/ha.key
+```
+
+Si tu la perds (en réinstallant tout sur une autre machine, par exemple), rien de grave : le
+serveur démarre quand même et te demande de refaire `hue pair` et `somfy pair`. Pour la remettre en
+place :
+
+```powershell
+docker compose run --rm sauvegarde sh -c 'echo COLLE-ICI-LA-CLE > /cle/ha.key && chown 65532:65532 /cle/ha.key && chmod 600 /cle/ha.key'
+```
 
 ## Les protections, une par une
 
@@ -183,7 +199,7 @@ Tout est dans [compose.yaml](../compose.yaml) :
 |---|---|
 | `ports: "127.0.0.1:8123:8123"` | Joignable seulement depuis la machine, par défaut |
 | `user: "65532:65532"` | Le programme tourne sans aucun droit d'administrateur |
-| `read_only: true` | Le système de fichiers est en lecture seule (sauf `/data` et `/tmp`) |
+| `read_only: true` | Le système de fichiers est en lecture seule (sauf `/data`, `/cle` et `/tmp`) |
 | `cap_drop: ALL` | Retire toutes les « capacités » spéciales du noyau Linux |
 | `no-new-privileges` | Interdit de regagner des droits, même par un programme spécial |
 | `mem_limit`, `pids_limit` | Un emballement ne peut pas faire tomber toute la machine |

@@ -30,8 +30,8 @@ utilisation :
   ha-server automations check     vérifie le fichier d'automatisations
   ha-server healthcheck           vérifie qu'un serveur répond (pour Docker)";
 
-pub async fn user_command(args: &[&str], db_path: &str) -> Result<(), Box<dyn Error>> {
-    let store = Store::open(db_path).await?;
+pub async fn user_command(args: &[&str]) -> Result<(), Box<dyn Error>> {
+    let store = crate::open_store().await?;
     let auth = Auth::new(&store).await?;
 
     let result = match args {
@@ -91,8 +91,8 @@ fn ask_new_password() -> Result<Zeroizing<String>, Box<dyn Error>> {
     Ok(first)
 }
 
-pub async fn hue_command(args: &[&str], db_path: &str) -> Result<(), Box<dyn Error>> {
-    let store = Store::open(db_path).await?;
+pub async fn hue_command(args: &[&str]) -> Result<(), Box<dyn Error>> {
+    let store = crate::open_store().await?;
     let result = hue_inner(args, &store).await;
     store.close().await;
     result
@@ -167,8 +167,8 @@ pub fn check_automations(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-pub async fn somfy_command(args: &[&str], db_path: &str) -> Result<(), Box<dyn Error>> {
-    let store = Store::open(db_path).await?;
+pub async fn somfy_command(args: &[&str]) -> Result<(), Box<dyn Error>> {
+    let store = crate::open_store().await?;
     let result = somfy_inner(args, &store).await;
     store.close().await;
     result

@@ -8,8 +8,10 @@ use ha_core::{Attributes, EntityId, State, StateMachine};
 use sqlx::SqlitePool;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
 use tracing::warn;
+use zeroize::Zeroizing;
 
 use crate::error::StorageError;
+use crate::secrets::SecretKey;
 
 /// Nombre maximal de lignes renvoyées par [`Store::history`].
 pub const MAX_HISTORY_LIMIT: u32 = 10_000;
@@ -46,6 +48,7 @@ pub struct HistoryEntry {
 #[derive(Debug, Clone)]
 pub struct Store {
     pool: SqlitePool,
+    secrets: SecretKey,
 }
 
 /// Ligne brute de la table `states` : (entity_id, state, attributes, last_changed, last_updated).
@@ -63,8 +66,21 @@ type HistoryRow = (
 
 impl Store {
     /// Ouvre (ou crée) la base dans le fichier `path` et met le schéma à jour.
+    ///
+    /// La clé qui chiffre les secrets est dans un fichier voisin, avec
+    /// l'extension `.key` (`ha.db` → `ha.key`). Elle est créée si besoin.
     pub async fn open(path: impl AsRef<Path>) -> Result<Self, StorageError> {
         let path = path.as_ref();
+        Self::open_with_key(path, &path.with_extension("key")).await
+    }
+
+    /// Comme [`Store::open`], avec la clé de chiffrement dans `key_path`.
+    pub async fn open_with_key(
+        path: impl AsRef<Path>,
+        key_path: &Path,
+    ) -> Result<Self, StorageError> {
+        let path = path.as_ref();
+        let secrets = SecretKey::load_or_create(key_path)?;
         create_private_file(path)?;
 
         let options = SqliteConnectOptions::new()
@@ -79,7 +95,7 @@ impl Store {
             // traîner dans le fichier.
             .pragma("secure_delete", "ON")
             .busy_timeout(Duration::from_secs(5));
-        Self::connect(options, 4).await
+        Self::connect(options, 4, secrets).await
     }
 
     /// Base temporaire en mémoire, perdue à la fermeture. Utile pour les tests.
@@ -87,12 +103,13 @@ impl Store {
         let options = SqliteConnectOptions::from_str("sqlite::memory:")?.foreign_keys(true);
         // Chaque connexion à `:memory:` aurait sa propre base vide : on n'en
         // garde donc qu'une seule, ouverte en permanence.
-        Self::connect(options, 1).await
+        Self::connect(options, 1, SecretKey::random()?).await
     }
 
     async fn connect(
         options: SqliteConnectOptions,
         max_connections: u32,
+        secrets: SecretKey,
     ) -> Result<Self, StorageError> {
         let pool = SqlitePoolOptions::new()
             .max_connections(max_connections)
@@ -102,7 +119,7 @@ impl Store {
             .connect_with(options)
             .await?;
         MIGRATOR.run(&pool).await?;
-        Ok(Self { pool })
+        Ok(Self { pool, secrets })
     }
 
     /// Accès direct aux connexions, pour les crates qui ont leurs propres
@@ -110,6 +127,18 @@ impl Store {
     #[must_use]
     pub fn pool(&self) -> &SqlitePool {
         &self.pool
+    }
+
+    /// Chiffre un secret avant de le ranger dans la base. `context` dit à
+    /// quoi il sert (par exemple `"somfy_box.token"`) : le secret ne pourra
+    /// être déchiffré que pour ce même usage.
+    pub fn seal(&self, context: &str, plaintext: &str) -> Result<String, StorageError> {
+        self.secrets.seal(context, plaintext)
+    }
+
+    /// Déchiffre un secret lu dans la base (voir [`Store::seal`]).
+    pub fn unseal(&self, context: &str, sealed: &str) -> Result<Zeroizing<String>, StorageError> {
+        self.secrets.unseal(context, sealed)
     }
 
     /// Ferme proprement toutes les connexions.

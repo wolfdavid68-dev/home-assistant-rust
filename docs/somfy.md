@@ -96,7 +96,8 @@ Autres commandes : `somfy status` (box associée et empreinte), `somfy forget`.
   confiance de ton système (magasin de certificats de Windows).
 - **La connexion à la box** utilise le **certificat épinglé** à l'association, comme pour Hue. Un
   appareil qui se ferait passer pour la box sur ton réseau est refusé (un test le vérifie).
-- **Le jeton** est rangé dans `ha.db` (lisible par toi seul), n'apparaît jamais dans les logs ni
+- **Le jeton** est rangé **chiffré** dans `ha.db`, avec une clé gardée à part dans `ha.key`
+  (voir [le renforcement de la sécurité](renforcement-securite.md)). Il n'apparaît jamais dans les logs ni
   dans un affichage de débogage (vérifié), et est effacé de la mémoire après usage.
 - **Tout ce que dit la box est vérifié** : adresses d'appareils au format strict (un appareil
   nommé `io://x/../../exec` est refusé, un test le vérifie), noms limités sans caractères de

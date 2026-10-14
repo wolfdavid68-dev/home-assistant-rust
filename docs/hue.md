@@ -53,7 +53,8 @@ Un test le prouve : le faux pont des tests, avec un autre certificat, est refus�
 
 Autres protections :
 
-- La **clé d'application** est rangée dans `ha.db`, lisible par toi seul (droits `600`). Elle
+- La **clé d'application** est rangée **chiffrée** dans `ha.db`, avec une clé gardée dans un
+  fichier à part, `ha.key` (voir [le renforcement de la sécurité](renforcement-securite.md)). Elle
   n'apparaît jamais dans les logs ni dans un affichage de débogage, et elle est effacée de la
   mémoire après usage.
 - Tout ce qui vient du pont est vérifié : identifiants de lampes au format UUID (ils finissent dans

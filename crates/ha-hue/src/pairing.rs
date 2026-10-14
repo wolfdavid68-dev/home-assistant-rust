@@ -3,12 +3,16 @@
 
 use std::time::{Duration, Instant, SystemTime};
 
-use ha_storage::{Store, to_micros};
+use ha_storage::{Store, is_sealed, to_micros};
+use tracing::info;
 use zeroize::Zeroizing;
 
 use crate::api;
 use crate::error::HueError;
 use crate::tls::{self, Fingerprint};
+
+/// Usage de la clé d'application, pour son chiffrement dans la base.
+const APP_KEY_CONTEXT: &str = "hue_bridge.app_key";
 
 /// Temps laissé pour appuyer sur le bouton du pont.
 pub const LINK_BUTTON_TIMEOUT: Duration = Duration::from_mins(1);
@@ -95,7 +99,7 @@ pub async fn save(store: &Store, pairing: &Pairing) -> Result<(), HueError> {
     .bind(&pairing.host)
     .bind(&pairing.bridge_id)
     .bind(pairing.fingerprint.as_slice())
-    .bind(pairing.app_key.as_str())
+    .bind(store.seal(APP_KEY_CONTEXT, &pairing.app_key)?)
     .bind(to_micros(SystemTime::now())?)
     .execute(store.pool())
     .await?;
@@ -116,12 +120,24 @@ pub async fn load(store: &Store) -> Result<Option<Pairing>, HueError> {
     let fingerprint: Fingerprint = fingerprint
         .try_into()
         .map_err(|_| HueError::Bridge("empreinte enregistrée invalide".into()))?;
-    Ok(Some(Pairing {
+    let app_key = Zeroizing::new(app_key);
+    let was_sealed = is_sealed(&app_key);
+    let pairing = Pairing {
         host,
         bridge_id,
         fingerprint,
-        app_key: Zeroizing::new(app_key),
-    }))
+        app_key: if was_sealed {
+            store.unseal(APP_KEY_CONTEXT, &app_key)?
+        } else {
+            app_key
+        },
+    };
+    if !was_sealed {
+        // Association faite avant le chiffrement : on la chiffre maintenant.
+        save(store, &pairing).await?;
+        info!("clé du pont Hue chiffrée dans la base");
+    }
+    Ok(Some(pairing))
 }
 
 /// Oublie le pont. Renvoie `false` s'il n'y en avait pas.

@@ -41,6 +41,9 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
 ## Secrets
 
 - Aucun secret dans le dépôt Git. Ils vont dans `secrets.yaml` ou `.env`, ignorés par Git.
+- Les secrets que le serveur doit relire (clé du pont Hue, jeton Somfy) sont **chiffrés** dans la base
+  (XChaCha20-Poly1305), avec une clé rangée dans un fichier séparé (`ha.key`, droits 600). Une copie
+  de la base seule ne permet pas de piloter les appareils.
 - Si un secret est poussé par erreur, on le **change** immédiatement (le supprimer de Git ne suffit pas).
 
 ## Dépendances

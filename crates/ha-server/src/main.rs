@@ -21,6 +21,8 @@
 //!
 //! Variables d'environnement :
 //! - `HA_DB_PATH` : fichier de la base (par défaut `ha.db`) ;
+//! - `HA_KEY_PATH` : fichier de la clé qui chiffre les secrets de la base
+//!   (par défaut, à côté de la base : `ha.key`) ;
 //! - `HA_BIND` : adresse d'écoute de l'API (par défaut `127.0.0.1:8123`) ;
 //! - `HA_HISTORY_DAYS` : nombre de jours d'historique conservés (par défaut 10) ;
 //! - `HA_MQTT_HOST` : adresse du broker MQTT (sans elle : appareils simulés) ;
@@ -77,9 +79,9 @@ async fn main() -> ExitCode {
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
     let result = match args.as_slice() {
         [] => run_server().await,
-        ["user", rest @ ..] => cli::user_command(rest, &db_path()).await,
-        ["hue", rest @ ..] => cli::hue_command(rest, &db_path()).await,
-        ["somfy", rest @ ..] => cli::somfy_command(rest, &db_path()).await,
+        ["user", rest @ ..] => cli::user_command(rest).await,
+        ["hue", rest @ ..] => cli::hue_command(rest).await,
+        ["somfy", rest @ ..] => cli::somfy_command(rest).await,
         ["automations", "check"] => cli::check_automations(&automations_path()),
         ["healthcheck"] => match parse_bind() {
             Ok(bind) => health::check(bind).await,
@@ -104,6 +106,14 @@ fn automations_path() -> std::path::PathBuf {
         .into()
 }
 
+/// Ouvre la base, avec la clé qui chiffre les secrets (jetons Hue, Somfy).
+async fn open_store() -> Result<Store, ha_storage::StorageError> {
+    let db_path = std::path::PathBuf::from(db_path());
+    let key_path = std::env::var_os("HA_KEY_PATH")
+        .map_or_else(|| db_path.with_extension("key"), std::path::PathBuf::from);
+    Store::open_with_key(&db_path, &key_path).await
+}
+
 fn db_path() -> String {
     std::env::var("HA_DB_PATH").unwrap_or_else(|_| DEFAULT_DB_PATH.to_owned())
 }
@@ -118,7 +128,7 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     // Un fichier d'automatisations invalide empêche le démarrage, avec un
     // message clair : mieux vaut corriger que de tourner à moitié.
     let automations = ha_automation::load(&automations_path())?;
-    let store = Store::open(&db_path).await?;
+    let store = open_store().await?;
     info!("base de données : {db_path}");
 
     // On oublie l'historique trop ancien.
@@ -157,12 +167,22 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     // Vrais appareils (MQTT) ou, à défaut, appareils simulés.
     let mqtt = mqtt_config.map(|config| Mqtt::start(config, Arc::clone(&core)));
     let engine = Engine::start(automations, Arc::clone(&core));
-    let hue = ha_hue::pairing::load(&store)
-        .await?
-        .map(|pairing| Hue::start(pairing, Arc::clone(&core)));
-    let somfy = ha_somfy::pairing::load(&store)
-        .await?
-        .map(|pairing| Somfy::start(pairing, Arc::clone(&core)));
+    // Une association illisible (clé de chiffrement perdue, par exemple)
+    // ne doit pas empêcher le reste de la maison de fonctionner.
+    let hue = match ha_hue::pairing::load(&store).await {
+        Ok(pairing) => pairing.map(|pairing| Hue::start(pairing, Arc::clone(&core))),
+        Err(error) => {
+            warn!("Hue : association illisible ({error}). Refais « ha-server hue pair ».");
+            None
+        }
+    };
+    let somfy = match ha_somfy::pairing::load(&store).await {
+        Ok(pairing) => pairing.map(|pairing| Somfy::start(pairing, Arc::clone(&core))),
+        Err(error) => {
+            warn!("Somfy : association illisible ({error}). Refais « ha-server somfy pair ».");
+            None
+        }
+    };
     let mut simulation = if mqtt.is_none() && hue.is_none() && somfy.is_none() {
         info!("aucun appareil configuré (MQTT, Hue, Somfy) : appareils simulés");
         Some(tokio::spawn(simulate_devices(Arc::clone(&core))))
