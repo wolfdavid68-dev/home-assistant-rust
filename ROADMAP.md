@@ -58,6 +58,10 @@ Les fonctions de Home Assistant les plus utiles au quotidien, une par une, dans 
 - [x] **13. Éditeur d'automatisations** : créer et modifier les automatisations depuis le tableau de bord ([guide](docs/editeur-automatisations.md))
 - [x] **14. Alexa en local** : piloter volets et prises à la voix, sans cloud ni port ouvert ([guide](docs/alexa.md)) — pas encore essayé avec un vrai Echo
 
+### Troisième partie : aller plus loin
+
+- [x] **15. Météo locale** : conditions, température, prévisions sur 5 jours avec Open-Meteo (sans compte), capteurs pour les automatisations ([guide](docs/meteo.md))
+
 En parallèle, dès que tu me donnes les informations : commande du chauffage Somfy (résultat de
 `somfy devices`), puis de l'alarme (avec confirmation et journal).
 

@@ -44,6 +44,8 @@
 //! - `HA_MQTT_DISCOVERY_PREFIX` : préfixe de découverte (par défaut `homeassistant`) ;
 //! - `HA_LATITUDE` et `HA_LONGITUDE` : position de la maison, pour le soleil
 //!   (deux décimales suffisent, par exemple 48.85 et 2.35) ;
+//! - `HA_METEO` : `on` pour la météo locale avec Open-Meteo (il faut la
+//!   position de la maison) ; `HA_METEO_URL` pour un serveur auto-hébergé ;
 //! - `HA_SCRIPTS_PATH` et `HA_SCENES_PATH` : scripts et scènes (par défaut
 //!   `scripts.yaml` et `scenes.yaml`) ;
 //! - `HA_NTFY_URL`, `HA_NTFY_TOPIC`, `HA_NTFY_TOKEN_FILE` : notifications sur
@@ -198,6 +200,7 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     let location = location()?;
     let ntfy = ntfy_config()?;
     let alexa_settings = alexa_settings()?;
+    let weather_config = weather_config(location)?;
     if location.is_none() && ha_automation::uses_sun(&automations) {
         return Err(
             "des automatisations utilisent le soleil : indique la position de la maison \
@@ -281,6 +284,10 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         Arc::clone(&core),
     );
     let sun = location.map(|location| SunTracker::start(location, Arc::clone(&core)));
+    let weather = match weather_config {
+        Some(config) => Some(ha_weather::Weather::start(config, Arc::clone(&core))?),
+        None => None,
+    };
     let notifier = match ntfy {
         Some(config) => {
             for warning in config.warnings() {
@@ -370,6 +377,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     if let Some(sun) = sun {
         sun.stop().await;
     }
+    if let Some(weather) = weather {
+        weather.stop().await;
+    }
     if let Some(freebox) = freebox {
         freebox.stop().await;
     }
@@ -433,6 +443,23 @@ fn automation_editor() -> Result<bool, String> {
         Ok(other) => Err(format!(
             "HA_AUTOMATION_EDITOR : « {other} » invalide (on ou off)"
         )),
+    }
+}
+
+/// `HA_METEO=on` : météo locale avec Open-Meteo. Il faut la position.
+fn weather_config(location: Option<Location>) -> Result<Option<ha_weather::Config>, String> {
+    match std::env::var("HA_METEO").as_deref() {
+        Err(_) | Ok("off") => Ok(None),
+        Ok("on") => {
+            let location = location.ok_or(
+                "HA_METEO=on : indique la position de la maison avec HA_LATITUDE et HA_LONGITUDE",
+            )?;
+            let url = std::env::var("HA_METEO_URL").ok();
+            ha_weather::Config::new(location, url.as_deref())
+                .map(Some)
+                .map_err(|error| error.to_string())
+        }
+        Ok(other) => Err(format!("HA_METEO : « {other} » invalide (on ou off)")),
     }
 }
 

@@ -172,7 +172,8 @@ function markPending(entityId) {
 // ---------------------------------------------------------------- Affichage
 const SECTIONS = [
   { title: "Scènes et scripts", domains: ["scene", "script"] },
-  { title: "Présence et soleil", domains: ["device_tracker", "sun", "notify"] },
+  // Les capteurs de la météo (sensor.meteo_…) vont avec la météo.
+  { title: "Météo, présence et soleil", domains: ["weather", "device_tracker", "sun", "notify"], extra: (s) => s.entity_id.startsWith("sensor.meteo_") },
   { title: "Lumières", domains: ["light"] },
   { title: "Volets", domains: ["cover"] },
   { title: "Prises et interrupteurs", domains: ["switch"] },
@@ -200,7 +201,11 @@ async function loadAreas() {
 
 function renderAll() {
   const container = $("#sections");
-  const sorted = [...entities.values()].sort((a, b) => nameOf(a).localeCompare(nameOf(b), "fr"));
+  // Par nom, sauf la météo, toujours en tête de sa section.
+  const first = (state) => (domainOf(state) === "weather" ? 0 : 1);
+  const sorted = [...entities.values()].sort(
+    (a, b) => first(a) - first(b) || nameOf(a).localeCompare(nameOf(b), "fr"),
+  );
   const used = new Set();
   // D'abord une section par pièce, dans l'ordre du fichier…
   const areaGroups = areas.map((area) => {
@@ -211,8 +216,8 @@ function renderAll() {
     return { title: area.name, items };
   });
   // … puis, par type, les appareils qui ne sont dans aucune pièce.
-  const groups = SECTIONS.map(({ title, domains }) => {
-    const items = sorted.filter((s) => !used.has(s.entity_id) && domains.includes(domainOf(s)));
+  const groups = SECTIONS.map(({ title, domains, extra }) => {
+    const items = sorted.filter((s) => !used.has(s.entity_id) && (domains.includes(domainOf(s)) || extra?.(s)));
     items.forEach((s) => used.add(s.entity_id));
     return { title, items };
   });
@@ -240,6 +245,7 @@ function renderTileContent(state) {
     case "cover": return coverTile(state);
     case "device_tracker": return presenceTile(state);
     case "sun": return sunTile(state);
+    case "weather": return weatherTile(state);
     case "scene":
     case "script": return actionTile(state);
     case "notify": return notifyTile(state);
@@ -398,6 +404,62 @@ function notifyTile(state) {
   );
 }
 
+// La météo : condition, température, et les prévisions des prochains jours.
+const WEATHER_LABELS = {
+  "sunny": ["Ensoleillé", "sun"], "clear-night": ["Nuit claire", "moon"],
+  "partlycloudy": ["Éclaircies", "partly"], "cloudy": ["Nuageux", "cloud"],
+  "fog": ["Brouillard", "fog"], "rainy": ["Pluie", "rain"], "pouring": ["Fortes pluies", "rain"],
+  "snowy": ["Neige", "snow"], "snowy-rainy": ["Pluie et neige", "snow"],
+  "lightning-rainy": ["Orages", "storm"], "exceptional": ["Exceptionnel", "cloud"],
+};
+const dayName = new Intl.DateTimeFormat("fr", { weekday: "short" });
+const finite = (value) => typeof value === "number" && Number.isFinite(value);
+const degrees = (value) => (finite(value) ? `${number.format(value)} °C` : "—");
+
+function weatherIcon(condition) {
+  const [, icon] = lookup(WEATHER_LABELS, condition) ?? ["", "cloud"];
+  return icon === "sun" ? ICONS.illuminance : lookup(ICONS, icon) ?? ICONS.cloud;
+}
+
+function weatherTile(state) {
+  const a = state.attributes;
+  const [label] = lookup(WEATHER_LABELS, state.state) ?? [statusText(state)];
+  const feels = finite(a.apparent_temperature) ? ` · ressenti ${degrees(a.apparent_temperature)}` : "";
+  const details = [
+    finite(a.humidity) && `Humidité ${number.format(a.humidity)} %`,
+    finite(a.wind_speed) && `Vent ${number.format(a.wind_speed)} km/h`,
+  ].filter(Boolean).join(" · ");
+  const days = (Array.isArray(a.forecast) ? a.forecast : [])
+    .filter((day) => typeof day?.datetime === "string" && !Number.isNaN(Date.parse(day.datetime)))
+    .slice(0, 5)
+    .map((day) => {
+      const [dayLabel] = lookup(WEATHER_LABELS, day.condition) ?? [""];
+      const rain = finite(day.precipitation_probability) && day.precipitation_probability >= 30
+        ? `${number.format(day.precipitation_probability)} %` : "";
+      return el(
+        "li",
+        { title: dayLabel },
+        el("span", { class: "day", text: dayName.format(new Date(`${day.datetime}T12:00`)) }),
+        svgIcon(weatherIcon(day.condition)),
+        el("span", { class: "max", text: finite(day.temperature) ? `${Math.round(day.temperature)}°` : "—" }),
+        el("span", { class: "min", text: finite(day.templow) ? `${Math.round(day.templow)}°` : "" }),
+        el("small", { class: "rain", text: rain }),
+      );
+    });
+  const value = el("div", { class: "value", text: finite(a.temperature) ? number.format(a.temperature) : "—" });
+  if (finite(a.temperature)) value.append(el("small", { text: "°C" }));
+  return el(
+    "div",
+    { id: tileId(state.entity_id), class: `${tileClass(state, "weather")} wide` },
+    tileHead(state, weatherIcon(state.state), `${label}${feels}`),
+    value,
+    el("div", { class: "sub", text: details }),
+    el("ol", { class: "forecast", "aria-label": "Prévisions" }, ...days),
+    // Licence CC BY 4.0 d'Open-Meteo : la source doit être citée.
+    el("small", { class: "attribution", text: typeof a.attribution === "string" ? a.attribution : "" }),
+  );
+}
+
 // Le soleil : levé ou couché, et l'heure du prochain changement.
 const hourMinute = new Intl.DateTimeFormat("fr", { hour: "2-digit", minute: "2-digit" });
 function sunTile(state) {
@@ -543,6 +605,14 @@ const ICONS = {
   person: ["M12 3a4 4 0 1 0 0 8 4 4 0 1 0 0-8z", "M4 21a8 8 0 0 1 16 0"],
   globe: ["M12 3a9 9 0 1 0 0 18 9 9 0 1 0 0-18z", "M3 12h18", "M12 3a14 14 0 0 1 0 18", "M12 3a14 14 0 0 0 0 18"],
   data_rate: ["M4 17l5-5 4 4 7-8", "M15 8h5v5"],
+  cloud: ["M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z"],
+  partly: ["M12 2v2", "M4.9 4.9l1.4 1.4", "M20 12h2", "M19.1 4.9l-1.4 1.4", "M15.9 13A4 4 0 0 0 8.1 9.2", "M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6z"],
+  rain: ["M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2", "M16 14v6", "M8 14v6", "M12 16v6"],
+  snow: ["M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2", "M8 15h.01", "M8 19h.01", "M12 17h.01", "M12 21h.01", "M16 15h.01", "M16 19h.01"],
+  storm: ["M6 16.3A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 .5 8.97", "M13 12l-3 5h4l-3 5"],
+  fog: ["M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2", "M16 17H7", "M17 21H9"],
+  wind_speed: ["M17.7 7.7A2.5 2.5 0 1 1 19.5 12H2", "M9.6 4.6A2 2 0 1 1 11 8H2", "M12.6 19.4A2 2 0 1 0 14 16H2"],
+  precipitation: ["M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2", "M16 14v6", "M8 14v6", "M12 16v6"],
 };
 const BINARY_ICONS = { motion: ICONS.motion, connectivity: ICONS.globe };
 

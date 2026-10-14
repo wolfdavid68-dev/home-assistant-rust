@@ -974,6 +974,7 @@ dependencies = [
  "ha-storage",
  "ha-sun",
  "ha-tls",
+ "ha-weather",
  "jiff",
  "qrcode",
  "rpassword",
@@ -1043,6 +1044,22 @@ dependencies = [
  "rustls-platform-verifier",
  "sha2 0.11.1",
  "thiserror",
+]
+
+[[package]]
+name = "ha-weather"
+version = "0.1.0"
+dependencies = [
+ "ha-core",
+ "ha-sun",
+ "ha-tls",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "url",
 ]
 
 [[package]]

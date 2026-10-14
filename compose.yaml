@@ -34,6 +34,8 @@ services:
       # Position de la maison, pour le soleil (deux décimales suffisent) :
       # HA_LATITUDE: "48.85"
       # HA_LONGITUDE: "2.35"
+      # Météo locale avec Open-Meteo (voir docs/meteo.md), il faut la position :
+      # HA_METEO: "on"
       # Alexa en local (voir docs/alexa.md) : Linux uniquement, avec
       # « network_mode: host » plus bas. Adresse de cette machine, et
       # adresses de tes Echo :
