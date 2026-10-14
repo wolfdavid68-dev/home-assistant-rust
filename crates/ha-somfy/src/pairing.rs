@@ -2,13 +2,17 @@
 
 use std::time::SystemTime;
 
-use ha_storage::{Store, to_micros};
+use ha_storage::{Store, is_sealed, to_micros};
 use ha_tls::Fingerprint;
+use tracing::info;
 use zeroize::Zeroizing;
 
 use crate::api::{self, LocalApi};
 use crate::cloud::is_gateway_id;
 use crate::error::SomfyError;
+
+/// Usage du jeton, pour son chiffrement dans la base.
+const TOKEN_CONTEXT: &str = "somfy_box.token";
 
 /// Ce qu'il faut savoir pour se reconnecter à la box.
 pub struct Pairing {
@@ -74,7 +78,7 @@ pub async fn save(store: &Store, pairing: &Pairing) -> Result<(), SomfyError> {
     .bind(&pairing.host)
     .bind(&pairing.gateway_id)
     .bind(pairing.fingerprint.as_slice())
-    .bind(pairing.token.as_str())
+    .bind(store.seal(TOKEN_CONTEXT, &pairing.token)?)
     .bind(to_micros(SystemTime::now())?)
     .execute(store.pool())
     .await?;
@@ -100,12 +104,24 @@ pub async fn load(store: &Store) -> Result<Option<Pairing>, SomfyError> {
     let fingerprint: Fingerprint = fingerprint
         .try_into()
         .map_err(|_| SomfyError::Unexpected("empreinte enregistrée invalide".into()))?;
-    Ok(Some(Pairing {
+    let token = Zeroizing::new(token);
+    let was_sealed = is_sealed(&token);
+    let pairing = Pairing {
         host,
         gateway_id,
         fingerprint,
-        token: Zeroizing::new(token),
-    }))
+        token: if was_sealed {
+            store.unseal(TOKEN_CONTEXT, &token)?
+        } else {
+            token
+        },
+    };
+    if !was_sealed {
+        // Association faite avant le chiffrement : on la chiffre maintenant.
+        save(store, &pairing).await?;
+        info!("jeton de la box Somfy chiffré dans la base");
+    }
+    Ok(Some(pairing))
 }
 
 /// Oublie la box. Renvoie `false` s'il n'y en avait pas.

@@ -51,6 +51,7 @@ impl TempDb {
             path.push(suffix);
             let _ = std::fs::remove_file(path);
         }
+        let _ = std::fs::remove_file(self.0.with_extension("key"));
     }
 }
 
@@ -262,4 +263,33 @@ async fn database_file_is_private() {
         0o600,
         "seul le propriétaire doit pouvoir lire la base"
     );
+}
+
+#[tokio::test]
+async fn secrets_survive_a_restart_but_need_the_key_file() {
+    let db = TempDb::new("secrets");
+    let sealed = {
+        let store = Store::open(&db.0).await.unwrap();
+        let sealed = store.seal("somfy_box.token", "jeton-très-secret").unwrap();
+        store.close().await;
+        sealed
+    };
+    assert!(
+        db.0.with_extension("key").exists(),
+        "clé dans un fichier séparé"
+    );
+
+    // Même base, même clé : le secret se relit.
+    let store = Store::open(&db.0).await.unwrap();
+    assert_eq!(
+        store.unseal("somfy_box.token", &sealed).unwrap().as_str(),
+        "jeton-très-secret"
+    );
+    store.close().await;
+
+    // La base sans sa clé (une sauvegarde volée, par exemple) : illisible.
+    std::fs::remove_file(db.0.with_extension("key")).unwrap();
+    let store = Store::open(&db.0).await.unwrap();
+    assert!(store.unseal("somfy_box.token", &sealed).is_err());
+    store.close().await;
 }

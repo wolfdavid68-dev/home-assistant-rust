@@ -19,6 +19,7 @@ Un noyau domotique en Rust, inspiré de Home Assistant.
 - [Modernisation du code, expliquée](docs/modernisation.md)
 - [Étape 6 : l'interface web, expliquée](docs/etape-6-interface-web.md)
 - [Étape 7 : le déploiement (Docker, VPN, HTTPS), expliqué](docs/etape-7-deploiement.md)
+- [Renforcement de la sécurité : jetons chiffrés, expliqué](docs/renforcement-securite.md)
 
 ## Lancer le serveur
 

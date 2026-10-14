@@ -37,15 +37,19 @@ COPY --from=builder /usr/local/bin/ha-server /usr/local/bin/ha-server
 # Le dossier des données appartient à l'utilisateur sans privilège
 # « nonroot » (n° 65532) sous lequel tourne le programme.
 COPY --from=builder --chown=65532:65532 /data-empty /data
+# La clé qui chiffre les secrets de la base est rangée à part : une
+# sauvegarde de /data seule ne suffit pas à lire les jetons des appareils.
+COPY --from=builder --chown=65532:65532 /data-empty /cle
 
 ENV HA_DB_PATH=/data/ha.db \
+    HA_KEY_PATH=/cle/ha.key \
     HA_AUTOMATIONS_PATH=/config/automations.yaml \
     HA_BIND=0.0.0.0:8123 \
     TZ=Europe/Paris
 
 USER nonroot
 WORKDIR /data
-VOLUME ["/data"]
+VOLUME ["/data", "/cle"]
 EXPOSE 8123
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

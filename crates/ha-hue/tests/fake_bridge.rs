@@ -213,9 +213,36 @@ async fn pairing_pins_the_certificate_and_waits_for_the_button() {
 
     let store = Store::open_in_memory().await.unwrap();
     pairing::save(&store, &paired).await.unwrap();
+    // Dans la base, la clé est chiffrée.
+    let raw: String = sqlx::query_scalar("SELECT app_key FROM hue_bridge")
+        .fetch_one(store.pool())
+        .await
+        .unwrap();
+    assert!(!raw.contains(APP_KEY), "clé en clair dans la base");
     let loaded = pairing::load(&store).await.unwrap().unwrap();
     assert_eq!(loaded.fingerprint, bridge.fingerprint);
     assert_eq!(loaded.app_key.as_str(), APP_KEY);
+
+    // Une association faite avant le chiffrement est relue, puis chiffrée.
+    sqlx::query("UPDATE hue_bridge SET app_key = ?1")
+        .bind(APP_KEY)
+        .execute(store.pool())
+        .await
+        .unwrap();
+    assert_eq!(
+        pairing::load(&store)
+            .await
+            .unwrap()
+            .unwrap()
+            .app_key
+            .as_str(),
+        APP_KEY
+    );
+    let raw: String = sqlx::query_scalar("SELECT app_key FROM hue_bridge")
+        .fetch_one(store.pool())
+        .await
+        .unwrap();
+    assert!(ha_storage::is_sealed(&raw), "ancienne clé pas rechiffrée");
     assert!(pairing::forget(&store).await.unwrap());
     assert!(pairing::load(&store).await.unwrap().is_none());
 }

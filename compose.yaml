@@ -7,7 +7,8 @@
 #   docker compose run --rm sauvegarde …             sauvegarder (voir le guide)
 #
 # Les données (base ha.db : comptes, historique, associations Hue et Somfy)
-# sont dans le volume « ha-data », conservé entre les mises à jour.
+# sont dans le volume « ha-data », et la clé qui chiffre les jetons dans
+# « ha-cle ». Les deux sont conservés entre les mises à jour.
 
 services:
   ha-server:
@@ -30,6 +31,8 @@ services:
       # HA_MQTT_PASSWORD_FILE: /run/secrets/mqtt_password
     volumes:
       - ha-data:/data
+      # La clé qui chiffre les jetons Hue et Somfy, à part de la base.
+      - ha-cle:/cle
       # Ton fichier d'automatisations : config/automations.yaml (lecture seule).
       - ./config:/config:ro
     # secrets:
@@ -62,10 +65,12 @@ services:
     network_mode: none
     volumes:
       - ha-data:/data
+      - ha-cle:/cle
       - ./sauvegardes:/sauvegardes
 
 volumes:
   ha-data:
+  ha-cle:
 
 # secrets:
 #   mqtt_password:

@@ -17,6 +17,9 @@ pub enum StorageError {
     #[error("attributs illisibles : {0}")]
     Json(#[from] serde_json::Error),
 
+    #[error("chiffrement des secrets : {0}")]
+    Secret(&'static str),
+
     #[error("date hors limites : {0}")]
     Timestamp(&'static str),
 }

@@ -15,6 +15,9 @@ argon2 = "0.6.0"
 getrandom = "0.4.3"
 sha2 = "0.11.1"
 zeroize = "1.9.1"
+# Chiffrement des secrets rangés dans la base (jetons Hue et Somfy) :
+# XChaCha20-Poly1305, en Rust pur (RustCrypto). L'aléatoire vient de `getrandom`.
+chacha20poly1305 = { version = "0.11.0", default-features = false, features = ["alloc", "zeroize"] }
 rpassword = "7.5.4"
 # Serveur web : HTTP/1 et WebSocket uniquement.
 axum = { version = "0.8.9", default-features = false, features = ["http1", "json", "query", "tokio", "tracing", "ws"] }
