@@ -166,6 +166,7 @@ function markPending(entityId) {
 
 // ---------------------------------------------------------------- Affichage
 const SECTIONS = [
+  { title: "Présence", domains: ["device_tracker"] },
   { title: "Lumières", domains: ["light"] },
   { title: "Volets", domains: ["cover"] },
   { title: "Prises et interrupteurs", domains: ["switch"] },
@@ -198,6 +199,7 @@ function renderTile(state) {
   switch (domainOf(state)) {
     case "light": return lightTile(state);
     case "cover": return coverTile(state);
+    case "device_tracker": return presenceTile(state);
     case "switch": return switchTile(state);
     case "binary_sensor": return binaryTile(state);
     case "sensor": return state.attributes.device_class === "alarm" ? alarmTile(state) : sensorTile(state);
@@ -286,10 +288,22 @@ function switchTile(state) {
 function binaryTile(state) {
   const labels = lookup(BINARY_LABELS, state.attributes.device_class) ?? ["Actif", "Inactif"];
   const text = state.state === "on" ? labels[0] : state.state === "off" ? labels[1] : statusText(state);
+  const icon = lookup(BINARY_ICONS, state.attributes.device_class) ?? ICONS.door;
   return el(
     "div",
     { id: tileId(state.entity_id), class: tileClass(state, "binary") },
-    tileHead(state, state.attributes.device_class === "motion" ? ICONS.motion : ICONS.door, text),
+    tileHead(state, icon, text),
+  );
+}
+
+// Présence (téléphone connecté au Wi-Fi de la Freebox).
+function presenceTile(state) {
+  const home = state.state === "home";
+  const text = home ? "À la maison" : state.state === "not_home" ? "Absent" : statusText(state);
+  return el(
+    "div",
+    { id: tileId(state.entity_id), class: tileClass(state, "binary") + (home ? " on" : "") },
+    tileHead(state, ICONS.person, text),
   );
 }
 
@@ -347,7 +361,9 @@ const BINARY_LABELS = {
   door: ["Ouverte", "Fermée"], window: ["Ouverte", "Fermée"], opening: ["Ouvert", "Fermé"],
   motion: ["Mouvement", "Calme"], occupancy: ["Présence", "Personne"],
   smoke: ["Fumée !", "Rien à signaler"],
+  connectivity: ["Connecté", "Déconnecté"],
 };
+
 
 // ---------------------------------------------------------------- Utilitaires
 
@@ -411,7 +427,11 @@ const ICONS = {
   stop: ["M8 8h8v8H8z"],
   illuminance: ["M12 3v2", "M12 19v2", "M5 12H3", "M21 12h-2", "M12 8a4 4 0 1 0 0 8 4 4 0 1 0 0-8z"],
   occupancy: ["M12 4a2 2 0 1 0 0 4 2 2 0 1 0 0-4z", "M8 21v-6l-2-1 2-5h8l2 5-2 1v6"],
+  person: ["M12 3a4 4 0 1 0 0 8 4 4 0 1 0 0-8z", "M4 21a8 8 0 0 1 16 0"],
+  globe: ["M12 3a9 9 0 1 0 0 18 9 9 0 1 0 0-18z", "M3 12h18", "M12 3a14 14 0 0 1 0 18", "M12 3a14 14 0 0 0 0 18"],
+  data_rate: ["M4 17l5-5 4 4 7-8", "M15 8h5v5"],
 };
+const BINARY_ICONS = { motion: ICONS.motion, connectivity: ICONS.globe };
 
 // ---------------------------------------------------------------- Journal
 const AUDIT_LABELS = {
@@ -432,6 +452,11 @@ const AUDIT_LABELS = {
   somfy_forget: "box Somfy oubliée",
   server_start: "démarrage du serveur",
   server_stop: "arrêt du serveur",
+  freebox_pair: "Freebox associée",
+  freebox_forget: "Freebox oubliée",
+  freebox_track: "présence suivie",
+  freebox_untrack: "présence plus suivie",
+  freebox_new_device: "nouvel appareil sur le réseau",
 };
 const dateTime = new Intl.DateTimeFormat("fr", { dateStyle: "short", timeStyle: "medium" });
 
@@ -452,7 +477,7 @@ async function loadJournal() {
       const what = [entry.target, entry.detail].filter(Boolean).join(" · ");
       return el(
         "li",
-        { class: entry.action === "login_failed" ? "failed" : "" },
+        { class: ["login_failed", "freebox_new_device"].includes(entry.action) ? "failed" : "" },
         el("time", { datetime: entry.at, text: dateTime.format(new Date(entry.at)) }),
         el("strong", { text: entry.actor }),
         el("span", { text: lookup(AUDIT_LABELS, entry.action) ?? entry.action }),

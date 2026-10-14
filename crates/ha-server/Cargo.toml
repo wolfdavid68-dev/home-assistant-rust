@@ -11,6 +11,7 @@ ha-api = { path = "../ha-api" }
 ha-automation = { path = "../ha-automation" }
 ha-auth = { path = "../ha-auth" }
 ha-core = { path = "../ha-core" }
+ha-freebox = { path = "../ha-freebox" }
 ha-hue = { path = "../ha-hue" }
 ha-mqtt = { path = "../ha-mqtt" }
 ha-somfy = { path = "../ha-somfy" }

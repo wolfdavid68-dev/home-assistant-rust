@@ -17,6 +17,9 @@
 //! ha-server hue forget            oublie le pont
 //! ha-server somfy pair <adresse>  associe la box Somfy TaHoma
 //! ha-server somfy devices         liste les appareils de la box
+//! ha-server freebox pair          associe la Freebox (lecture seule)
+//! ha-server freebox devices       liste les appareils du réseau
+//! ha-server freebox track <MAC> <nom>  suit la présence d'un appareil
 //! ha-server automations check     vérifie le fichier d'automatisations
 //! ha-server audit [nombre]        affiche le journal d'audit
 //! ha-server audit verify          vérifie que le journal n'a pas été modifié
@@ -52,6 +55,7 @@ use ha_api::ApiState;
 use ha_auth::Auth;
 use ha_automation::Engine;
 use ha_core::{Attributes, Core, EntityId, Event};
+use ha_freebox::Freebox;
 use ha_hue::Hue;
 use ha_mqtt::{Mqtt, MqttConfig};
 use ha_somfy::Somfy;
@@ -88,6 +92,7 @@ async fn main() -> ExitCode {
         ["user", rest @ ..] => cli::user_command(rest).await,
         ["hue", rest @ ..] => cli::hue_command(rest).await,
         ["somfy", rest @ ..] => cli::somfy_command(rest).await,
+        ["freebox", rest @ ..] => cli::freebox_command(rest).await,
         ["automations", "check"] => cli::check_automations(&automations_path()),
         ["audit", rest @ ..] => cli::audit_command(rest).await,
         ["healthcheck"] => match parse_bind() {
@@ -201,8 +206,18 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
             None
         }
     };
-    let mut simulation = if mqtt.is_none() && hue.is_none() && somfy.is_none() {
-        info!("aucun appareil configuré (MQTT, Hue, Somfy) : appareils simulés");
+    let freebox = match ha_freebox::pairing::load(&store).await {
+        Ok(pairing) => {
+            pairing.map(|pairing| Freebox::start(pairing, store.clone(), Arc::clone(&core)))
+        }
+        Err(error) => {
+            warn!("Freebox : association illisible ({error}). Refais « ha-server freebox pair ».");
+            None
+        }
+    };
+    let mut simulation = if mqtt.is_none() && hue.is_none() && somfy.is_none() && freebox.is_none()
+    {
+        info!("aucun appareil configuré (MQTT, Hue, Somfy, Freebox) : appareils simulés");
         Some(tokio::spawn(simulate_devices(Arc::clone(&core))))
     } else {
         None
@@ -225,6 +240,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         simulation.abort();
     }
     engine.stop().await;
+    if let Some(freebox) = freebox {
+        freebox.stop().await;
+    }
     if let Some(somfy) = somfy {
         somfy.stop().await;
     }

@@ -29,6 +29,12 @@ utilisation :
   ha-server somfy devices         liste les appareils de la box
   ha-server somfy status          affiche la box associée
   ha-server somfy forget          oublie la box
+  ha-server freebox pair [adresse]     associe la Freebox (lecture seule)
+  ha-server freebox status             affiche la Freebox associée
+  ha-server freebox devices            liste les appareils du réseau
+  ha-server freebox track <MAC> <nom>  suit la présence d'un appareil
+  ha-server freebox untrack <nom>      arrête de le suivre
+  ha-server freebox forget             oublie la Freebox
   ha-server automations check     vérifie le fichier d'automatisations
   ha-server audit [nombre]        affiche le journal d'audit
   ha-server audit verify          vérifie que le journal n'a pas été modifié
@@ -441,7 +447,17 @@ async fn audit_cli(store: &Store, domain: &str, args: &[&str]) {
             ],
         ) => (format!("user_{}", command.replace('-', "_")), Some(*name)),
         ("hue" | "somfy", ["pair", host, ..]) => (format!("{domain}_pair"), Some(*host)),
-        ("hue" | "somfy", ["forget"]) => (format!("{domain}_forget"), None),
+        ("freebox", ["pair", rest @ ..]) => (
+            "freebox_pair".to_owned(),
+            Some(
+                rest.first()
+                    .copied()
+                    .unwrap_or(ha_freebox::api::DEFAULT_HOST),
+            ),
+        ),
+        ("freebox", ["track", mac, _]) => ("freebox_track".to_owned(), Some(*mac)),
+        ("freebox", ["untrack", name]) => ("freebox_untrack".to_owned(), Some(*name)),
+        ("hue" | "somfy" | "freebox", ["forget"]) => (format!("{domain}_forget"), None),
         _ => return,
     };
     audit_local(store, "ligne de commande", &action, target).await;
@@ -544,8 +560,158 @@ fn action_label(action: &str) -> &str {
         "hue_forget" => "pont Hue oublié",
         "somfy_pair" => "box Somfy associée",
         "somfy_forget" => "box Somfy oubliée",
+        "freebox_pair" => "Freebox associée",
+        "freebox_forget" => "Freebox oubliée",
+        "freebox_track" => "présence suivie",
+        "freebox_untrack" => "présence plus suivie",
+        "freebox_new_device" => "NOUVEL appareil sur le réseau",
         "server_start" => "démarrage du serveur",
         "server_stop" => "arrêt du serveur",
         other => other,
     }
+}
+
+/// `ha-server freebox …`
+pub async fn freebox_command(args: &[&str]) -> Result<(), Box<dyn Error>> {
+    let store = crate::open_store().await?;
+    let result = freebox_inner(args, &store).await;
+    if result.is_ok() {
+        audit_cli(&store, "freebox", args).await;
+    }
+    store.close().await;
+    result
+}
+
+async fn freebox_inner(args: &[&str], store: &Store) -> Result<(), Box<dyn Error>> {
+    use ha_freebox::pairing as freebox;
+
+    match args {
+        ["pair"] => freebox_pair(store, ha_freebox::api::DEFAULT_HOST).await,
+        ["pair", host] => freebox_pair(store, host).await,
+        ["status"] => {
+            match freebox::load(store).await? {
+                Some(pairing) => {
+                    println!(
+                        "Freebox associée : {} ({})",
+                        pairing.device_name, pairing.host
+                    );
+                    println!(
+                        "empreinte : {}",
+                        tls::format_fingerprint(&pairing.fingerprint)
+                    );
+                    for tracked in freebox::tracked(store).await? {
+                        println!("suivi : device_tracker.{}  ({})", tracked.name, tracked.mac);
+                    }
+                }
+                None => println!("aucune Freebox associée (ha-server freebox pair)"),
+            }
+            Ok(())
+        }
+        ["devices"] => {
+            let pairing = freebox::load(store)
+                .await?
+                .ok_or("aucune Freebox associée (ha-server freebox pair)")?;
+            let (session, _) = freebox::connect(&pairing).await?;
+            let tracked = freebox::tracked(store).await?;
+            let mut hosts = session.hosts().await?;
+            hosts.sort_by_key(|host| (!host.active, ha_freebox::presence::display_name(host)));
+            println!("  {:<17}  {:<15} nom", "adresse MAC", "type");
+            for host in &hosts {
+                let Some(mac) = host.mac() else { continue };
+                let followed = tracked
+                    .iter()
+                    .find(|t| t.mac == mac)
+                    .map(|t| format!("  → device_tracker.{}", t.name))
+                    .unwrap_or_default();
+                println!(
+                    "{} {mac}  {:<15} {}{followed}",
+                    if host.active { "●" } else { "○" },
+                    ha_storage::clean_field(&host.host_type),
+                    ha_freebox::presence::display_name(host),
+                );
+            }
+            println!("\n● actif   ○ inactif");
+            println!("Pour suivre ta présence : ha-server freebox track <adresse MAC> <nom>");
+            Ok(())
+        }
+        ["track", mac, name] => {
+            let tracked = freebox::track(store, mac, name).await?;
+            println!(
+                "présence de {} suivie : device_tracker.{} (redémarre le serveur)",
+                tracked.mac, tracked.name
+            );
+            Ok(())
+        }
+        ["untrack", name] => {
+            if freebox::untrack(store, name).await? {
+                println!("« {name} » n'est plus suivi (redémarre le serveur)");
+                Ok(())
+            } else {
+                Err(format!("« {name} » n'était pas suivi").into())
+            }
+        }
+        ["forget"] => {
+            if freebox::forget(store).await? {
+                println!("Freebox oubliée.");
+                println!(
+                    "Retire aussi « ha-rust » dans Freebox OS : Paramètres > Gestion des accès > Applications."
+                );
+            } else {
+                println!("aucune Freebox n'était associée");
+            }
+            Ok(())
+        }
+        _ => Err(USAGE.into()),
+    }
+}
+
+async fn freebox_pair(store: &Store, host: &str) -> Result<(), Box<dyn Error>> {
+    use ha_freebox::pairing as freebox;
+
+    let (version, fingerprint) = freebox::identify(host).await?;
+    println!(
+        "Freebox trouvée : {} (API {})",
+        ha_storage::clean_field(&version.device_name),
+        ha_storage::clean_field(&version.api_version)
+    );
+    println!("empreinte de son certificat :");
+    println!("  {}", tls::format_fingerprint(&fingerprint));
+    println!("seul ce certificat sera accepté à l'avenir.\n");
+    println!("→ Va voir l'écran de la Freebox et accepte l'application « ha-rust »");
+    println!(
+        "  (tu as {} secondes).",
+        freebox::AUTHORIZATION_TIMEOUT.as_secs()
+    );
+    let pairing = freebox::request_token(
+        host,
+        &version.device_name,
+        fingerprint,
+        freebox::AUTHORIZATION_TIMEOUT,
+    )
+    .await?;
+    let (session, permissions) = freebox::connect(&pairing).await?;
+    freebox::save(store, &pairing).await?;
+    // On mémorise le réseau actuel : seuls les appareils qui arriveront
+    // ensuite seront signalés comme nouveaux.
+    let current: Vec<(String, String)> = session
+        .hosts()
+        .await?
+        .iter()
+        .filter_map(|host| Some((host.mac()?, ha_freebox::presence::display_name(host))))
+        .collect();
+    freebox::remember(store, &current).await?;
+    println!(
+        "\nFreebox associée ({} appareils sur le réseau).",
+        current.len()
+    );
+    if !permissions.is_empty() {
+        println!("droits accordés à « ha-rust » : {}", permissions.join(", "));
+        println!(
+            "Garde le minimum : décoche-les dans Freebox OS (Paramètres > Gestion des accès > \
+             Applications), puis vérifie avec « freebox devices ». En cas de « droits \
+             insuffisants », recoche le dernier retiré."
+        );
+    }
+    println!("Ensuite : ha-server freebox devices, puis freebox track <adresse MAC> <nom>.");
+    Ok(())
 }
