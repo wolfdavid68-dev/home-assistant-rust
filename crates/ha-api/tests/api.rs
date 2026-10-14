@@ -96,6 +96,7 @@ async fn every_route_requires_a_token() {
         ("DELETE", "/api/states/light.salon"),
         ("GET", "/api/history/light.salon"),
         ("POST", "/api/auth/logout"),
+        ("POST", "/api/services/switch/turn_on"),
     ] {
         let (status, _) = app.request(method, uri, None, None).await;
         assert_eq!(status, StatusCode::UNAUTHORIZED, "{method} {uri}");
@@ -356,4 +357,52 @@ async fn websocket_rejects_a_bad_token() {
     ));
 
     app.state.shutdown();
+}
+
+#[tokio::test]
+async fn service_calls_are_published_on_the_bus() {
+    let app = TestApp::new().await;
+    let token = app.login().await;
+    let mut events = app.state.core.bus.subscribe();
+
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/services/light/turn_on",
+            Some(&token),
+            Some(json!({"entity_id": "light.salon", "brightness": 128})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let event = events.try_recv().unwrap();
+    let ha_core::Event::CallService {
+        domain,
+        service,
+        entity_id,
+        data,
+    } = event.as_ref()
+    else {
+        panic!("CallService attendu, reçu {event:?}");
+    };
+    assert_eq!((domain.as_str(), service.as_str()), ("light", "turn_on"));
+    assert_eq!(entity_id.as_str(), "light.salon");
+    assert_eq!(data["brightness"], 128);
+
+    // Sans entity_id, ou avec un nom de service invalide : refusé.
+    for (uri, body) in [
+        ("/api/services/light/turn_on", json!({"brightness": 1})),
+        ("/api/services/light/turn_on", json!({"entity_id": 42})),
+        (
+            "/api/services/Light/turn_on",
+            json!({"entity_id": "light.salon"}),
+        ),
+        (
+            "/api/services/light/turn%20on",
+            json!({"entity_id": "light.salon"}),
+        ),
+    ] {
+        let (status, _) = app.request("POST", uri, Some(&token), Some(body)).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{uri}");
+    }
 }

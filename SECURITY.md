@@ -23,6 +23,9 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
 - Par défaut, le serveur écoute seulement en local (`127.0.0.1`). L'ouverture au réseau local est un choix explicite.
 - **Ne jamais exposer le serveur directement sur Internet.** Accès à distance uniquement via VPN (WireGuard, Tailscale).
 - MQTT : broker avec identifiants, et TLS dès qu'il sort de la machine.
+  **Exception temporaire** : TLS pas encore disponible (la partie TLS de `rumqttc` 0.25 dépend de crates
+  vulnérables, refusées par `cargo deny`). D'ici là, broker sur la même machine ou sur le réseau local
+  uniquement, jamais joignable depuis Internet.
 
 ## Secrets
 

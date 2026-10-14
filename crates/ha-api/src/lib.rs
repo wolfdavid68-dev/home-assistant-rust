@@ -8,6 +8,7 @@
 //! | GET | `/api/states` | Tous les états |
 //! | GET / POST / DELETE | `/api/states/{entity_id}` | Lire / modifier / supprimer un état |
 //! | GET | `/api/history/{entity_id}` | Historique d'une entité |
+//! | POST | `/api/services/{domain}/{service}` | Appel de service (`switch/turn_on`…) |
 //! | GET | `/api/websocket` | API WebSocket (authentification dans le 1er message) |
 
 mod auth;
@@ -83,6 +84,7 @@ pub fn router(state: Arc<ApiState>) -> Router {
                 .delete(rest::delete_state),
         )
         .route("/api/history/{entity_id}", get(rest::history))
+        .route("/api/services/{domain}/{service}", post(rest::call_service))
         .route("/api/websocket", get(ws::handler))
         .layer(DefaultBodyLimit::max(MAX_BODY_SIZE))
         .layer(TimeoutLayer::with_status_code(

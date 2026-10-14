@@ -10,6 +10,9 @@ pub enum CoreError {
     #[error("identifiant d'entité invalide : {0:?} (format attendu : domaine.nom, en minuscules)")]
     InvalidEntityId(String),
 
+    #[error("nom de service invalide : {0:?} (1 à 64 caractères parmi a-z, 0-9 et « _ »)")]
+    InvalidServiceName(String),
+
     #[error("état trop long pour {entity_id} : {len} caractères (maximum {max})")]
     StateTooLong {
         entity_id: String,

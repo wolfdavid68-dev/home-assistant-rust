@@ -1,7 +1,7 @@
 //! Tests du noyau, vu de l'extérieur (seulement l'API publique).
 
 // Dans un test, un `unwrap` qui échoue fait simplement échouer le test : c'est voulu.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
@@ -27,7 +27,10 @@ fn next_change(
         old_state,
         new_state,
         ..
-    } = event.as_ref();
+    } = event.as_ref()
+    else {
+        panic!("StateChanged attendu, reçu {event:?}");
+    };
     (
         old_state.as_ref().map(|s| s.state().to_owned()),
         new_state.as_ref().map(|s| s.state().to_owned()),
@@ -235,7 +238,59 @@ async fn every_subscriber_receives_every_event() {
 
     for rx in [&mut first, &mut second] {
         let event = rx.recv().await.unwrap();
-        let Event::StateChanged { entity_id, .. } = event.as_ref();
+        let Event::StateChanged { entity_id, .. } = event.as_ref() else {
+            panic!("StateChanged attendu, reçu {event:?}");
+        };
         assert_eq!(entity_id.as_str(), "light.salon");
     }
+}
+
+#[test]
+fn call_service_is_published_on_the_bus() {
+    let core = Core::new();
+    let mut rx = core.bus.subscribe();
+
+    core.call_service(
+        "switch",
+        "turn_on",
+        id("switch.prise"),
+        attrs(json!({"x": 1})),
+    )
+    .unwrap();
+
+    let event = rx.try_recv().unwrap();
+    let Event::CallService {
+        domain,
+        service,
+        entity_id,
+        data,
+    } = event.as_ref()
+    else {
+        panic!("CallService attendu, reçu {event:?}");
+    };
+    assert_eq!(
+        (domain.as_str(), service.as_str(), entity_id.as_str()),
+        ("switch", "turn_on", "switch.prise")
+    );
+    assert_eq!(data["x"], 1);
+}
+
+#[test]
+fn invalid_service_names_are_rejected() {
+    let core = Core::new();
+    let mut rx = core.bus.subscribe();
+    for (domain, service) in [
+        ("", "turn_on"),
+        ("switch", ""),
+        ("Switch", "turn_on"),
+        ("switch", "turn on"),
+        ("switch", "turn_on; rm"),
+    ] {
+        let result = core.call_service(domain, service, id("switch.prise"), Attributes::new());
+        assert!(
+            matches!(result, Err(CoreError::InvalidServiceName(_))),
+            "{domain:?} {service:?}"
+        );
+    }
+    assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 }
