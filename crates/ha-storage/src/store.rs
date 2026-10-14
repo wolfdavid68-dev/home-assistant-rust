@@ -5,7 +5,7 @@ use std::str::FromStr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use ha_core::{Attributes, EntityId, State, StateMachine};
-use sqlx::SqlitePool;
+use sqlx::{ConnectOptions, Connection, SqlitePool};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
 use tracing::warn;
 use zeroize::Zeroizing;
@@ -95,6 +95,13 @@ impl Store {
             // traîner dans le fichier.
             .pragma("secure_delete", "ON")
             .busy_timeout(Duration::from_secs(5));
+        // Une première connexion, seule, crée le fichier et le passe en mode
+        // WAL. Ce changement demande un accès exclusif : si plusieurs
+        // connexions le tentaient en même temps sur une base neuve, l'une
+        // d'elles pouvait échouer (« database is locked »). Le mode WAL reste
+        // ensuite inscrit dans le fichier, et les connexions suivantes n'ont
+        // plus rien à changer.
+        options.clone().connect().await?.close().await?;
         Self::connect(options, 4, secrets).await
     }
 
