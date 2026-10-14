@@ -7,6 +7,12 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["sync"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["sync", "macros", "rt"] }
 
 [lints]
 workspace = true
