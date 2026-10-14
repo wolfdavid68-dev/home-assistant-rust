@@ -1,0 +1,22 @@
+# Exemple de scènes. Copie ce fichier en `scenes.yaml` (avec Docker :
+# `config/scenes.yaml`), adapte les noms d'appareils, puis vérifie avec :
+#   cargo run -p ha-server -- automations check
+#
+# Une scène est un état voulu pour plusieurs appareils :
+#   lampe  : "on", "off", ou {brightness: 1 à 255}
+#   prise  : "on" ou "off"
+#   volet  : open, closed, ou {position: 0 à 100}
+# (Par sécurité, pas d'alarme ni de porte dans une scène.)
+
+- id: soiree_cinema
+  name: Soirée cinéma
+  entities:
+    light.salon: {brightness: 40}
+    light.entree: "off"
+    cover.volet_salon: closed
+
+- id: reveil
+  name: Réveil
+  entities:
+    cover.volet_chambre: {position: 50}
+    light.salon: "on"

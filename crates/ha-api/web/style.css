@@ -352,3 +352,21 @@ input[type="range"] {
 .history-changes { list-style: none; margin: 0; padding: 0; font-size: 0.9rem; }
 .history-changes li { display: flex; gap: 0.8rem; padding: 0.3rem 0; border-top: 1px solid var(--border); }
 .history-changes time { color: var(--muted); min-width: 7.5rem; font-variant-numeric: tabular-nums; }
+
+/* ---------- Scènes et scripts ---------- */
+
+.action-button {
+  font: inherit;
+  font-weight: 600;
+  justify-self: start;
+  padding: 0.45rem 1rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+.action-button:hover { border-color: var(--accent); }
+.action-button:active { transform: scale(0.97); }
+.tile.action.on { background: var(--accent-soft); border-color: var(--accent); }
+.tile.action.on .icon { background: var(--accent); color: #fff; }

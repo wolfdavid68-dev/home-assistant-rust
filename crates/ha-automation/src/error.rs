@@ -16,4 +16,11 @@ pub enum AutomationError {
 
     #[error("automatisation « {id} » : {reason}")]
     Invalid { id: String, reason: String },
+
+    #[error("{kind} « {id} » : {reason}")]
+    InvalidEntry {
+        kind: &'static str,
+        id: String,
+        reason: String,
+    },
 }

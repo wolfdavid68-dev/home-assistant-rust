@@ -166,6 +166,7 @@ function markPending(entityId) {
 
 // ---------------------------------------------------------------- Affichage
 const SECTIONS = [
+  { title: "Scènes et scripts", domains: ["scene", "script"] },
   { title: "Présence et soleil", domains: ["device_tracker", "sun"] },
   { title: "Lumières", domains: ["light"] },
   { title: "Volets", domains: ["cover"] },
@@ -234,6 +235,8 @@ function renderTileContent(state) {
     case "cover": return coverTile(state);
     case "device_tracker": return presenceTile(state);
     case "sun": return sunTile(state);
+    case "scene":
+    case "script": return actionTile(state);
     case "switch": return switchTile(state);
     case "binary_sensor": return binaryTile(state);
     case "sensor": return state.attributes.device_class === "alarm" ? alarmTile(state) : sensorTile(state);
@@ -341,6 +344,29 @@ function presenceTile(state) {
     "div",
     { id: tileId(state.entity_id), class: tileClass(state, "binary") + (home ? " on" : "") },
     tileHead(state, ICONS.person, text),
+  );
+}
+
+// Scène (« Soirée cinéma ») ou script (« Je pars ») : un bouton pour lancer.
+function actionTile(state) {
+  const isScript = domainOf(state) === "script";
+  const running = isScript && state.state === "on";
+  const subtitle = isScript
+    ? running ? "En cours…" : "Prêt"
+    : Number.isNaN(Date.parse(state.state)) ? "Jamais activée" : `Activée il y a ${ago(state.state)}`;
+  const button = el("button", { type: "button", class: "action-button" });
+  button.textContent = running ? "Arrêter" : isScript ? "Lancer" : "Activer";
+  button.addEventListener("click", () => {
+    markPending(state.entity_id);
+    callService(domainOf(state), running ? "turn_off" : "turn_on", { entity_id: state.entity_id });
+  });
+  return el(
+    "div",
+    // Pas de `tileClass` ici : une scène jamais activée (« unknown ») n'est pas
+    // un appareil indisponible, elle ne doit pas être grisée.
+    { id: tileId(state.entity_id), class: running ? "tile action on" : "tile action" },
+    tileHead(state, isScript ? ICONS.play : ICONS.sparkle, subtitle),
+    button,
   );
 }
 
@@ -481,6 +507,8 @@ const ICONS = {
   stop: ["M8 8h8v8H8z"],
   illuminance: ["M12 3v2", "M12 19v2", "M5 12H3", "M21 12h-2", "M12 8a4 4 0 1 0 0 8 4 4 0 1 0 0-8z"],
   occupancy: ["M12 4a2 2 0 1 0 0 4 2 2 0 1 0 0-4z", "M8 21v-6l-2-1 2-5h8l2 5-2 1v6"],
+  play: ["M8 5v14l11-7z"],
+  sparkle: ["M12 3v4", "M12 17v4", "M3 12h4", "M17 12h4", "M6 6l2.5 2.5", "M15.5 15.5L18 18", "M6 18l2.5-2.5", "M15.5 8.5L18 6"],
   chart: ["M4 19h16", "M4 15l4-5 4 3 6-7"],
   moon: ["M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"],
   person: ["M12 3a4 4 0 1 0 0 8 4 4 0 1 0 0-8z", "M4 21a8 8 0 0 1 16 0"],

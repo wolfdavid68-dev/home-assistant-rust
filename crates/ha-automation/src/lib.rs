@@ -12,12 +12,14 @@ pub mod config;
 mod engine;
 mod error;
 pub mod evaluator;
+pub mod scripts;
 
 use std::path::Path;
 
 pub use config::{Action, Automation, Condition, Trigger, parse, uses_sun};
-pub use engine::Engine;
+pub use engine::{Engine, Setup};
 pub use error::AutomationError;
+pub use scripts::{Scene, Script, parse_scenes, parse_scripts};
 
 /// Lit le fichier d'automatisations. Un fichier absent donne une liste vide.
 pub fn load(path: &Path) -> Result<Vec<Automation>, AutomationError> {

@@ -14,4 +14,6 @@ secrets
 *.key
 automations.yaml
 areas.yaml
+scripts.yaml
+scenes.yaml
 sauvegardes

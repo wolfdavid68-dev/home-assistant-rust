@@ -375,3 +375,110 @@ fn invalid_sun_configurations_are_refused() {
             .unwrap();
     assert!(!ha_automation::uses_sun(&time_only));
 }
+
+#[tokio::test]
+async fn scripts_and_scenes_run_from_a_service_call() {
+    let scripts = ha_automation::parse_scripts(
+        r"
+- id: depart
+  alias: Je pars
+  sequence:
+    - action: cover.close_cover
+      target: {entity_id: cover.volet_salon}
+    - delay: 1s
+    - action: switch.turn_off
+      target: {entity_id: switch.prise_cafe}
+",
+    )
+    .unwrap();
+    let scenes = ha_automation::parse_scenes(
+        "- {id: cinema, name: Soirée cinéma, entities: {light.salon: {brightness: 50}}}",
+    )
+    .unwrap();
+    // Une automatisation peut aussi lancer une scène.
+    let automations = parse(
+        r#"
+- id: film
+  triggers: [{trigger: state, entity_id: switch.tv, to: "on"}]
+  actions: [{action: scene.turn_on, target: {entity_id: scene.cinema}}]
+"#,
+    )
+    .unwrap();
+    let core = Arc::new(Core::new());
+    let mut rx = core.bus.subscribe();
+    let engine = Engine::start_with(
+        ha_automation::Setup {
+            automations,
+            scripts,
+            scenes,
+            location: None,
+        },
+        Arc::clone(&core),
+    );
+    // Les entités existent dès le démarrage.
+    assert_eq!(
+        core.states.get(&id("script.depart")).unwrap().state(),
+        "off"
+    );
+    assert_eq!(
+        core.states.get(&id("scene.cinema")).unwrap().state(),
+        "unknown"
+    );
+    assert_eq!(
+        core.states.get(&id("scene.cinema")).unwrap().attributes()["friendly_name"],
+        "Soirée cinéma"
+    );
+
+    // Lancer le script : ses actions s'enchaînent, il est « on » pendant ce temps.
+    core.call_service("script", "turn_on", id("script.depart"), Attributes::new())
+        .unwrap();
+    assert_eq!(
+        next_service_call(&mut rx).await,
+        ("script".into(), "turn_on".into(), "script.depart".into())
+    );
+    assert_eq!(
+        next_service_call(&mut rx).await,
+        (
+            "cover".into(),
+            "close_cover".into(),
+            "cover.volet_salon".into()
+        )
+    );
+    assert_eq!(core.states.get(&id("script.depart")).unwrap().state(), "on");
+    // Relancé pendant qu'il tourne : ignoré (pas de double exécution).
+    core.call_service("script", "turn_on", id("script.depart"), Attributes::new())
+        .unwrap();
+    let _ = next_service_call(&mut rx).await; // l'appel script.turn_on lui-même
+    assert_eq!(
+        next_service_call(&mut rx).await,
+        (
+            "switch".into(),
+            "turn_off".into(),
+            "switch.prise_cafe".into()
+        )
+    );
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert_eq!(
+        core.states.get(&id("script.depart")).unwrap().state(),
+        "off"
+    );
+
+    // Une automatisation active la scène.
+    core.states
+        .set(id("switch.tv"), "on", Attributes::new())
+        .unwrap();
+    assert_eq!(
+        next_service_call(&mut rx).await,
+        ("scene".into(), "turn_on".into(), "scene.cinema".into())
+    );
+    assert_eq!(
+        next_service_call(&mut rx).await,
+        ("light".into(), "turn_on".into(), "light.salon".into())
+    );
+    assert_ne!(
+        core.states.get(&id("scene.cinema")).unwrap().state(),
+        "unknown"
+    );
+
+    engine.stop().await;
+}
