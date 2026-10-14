@@ -65,3 +65,16 @@
     - action: light.turn_off
       target:
         entity_id: [light.salon, light.cuisine]
+
+# Fermer les volets 30 minutes après le coucher du soleil (il faut la
+# position de la maison : HA_LATITUDE et HA_LONGITUDE).
+- id: volets_coucher_soleil
+  alias: Volets fermés à la tombée de la nuit
+  triggers:
+    - trigger: sun
+      event: sunset
+      offset: "00:30:00"
+  actions:
+    - action: cover.close_cover
+      target:
+        entity_id: cover.volet_salon

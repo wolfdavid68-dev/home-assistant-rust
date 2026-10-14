@@ -38,6 +38,8 @@
 //! - `HA_MQTT_USER` et `HA_MQTT_PASSWORD_FILE` (fichier contenant le mot de
 //!   passe, conseillé) ou `HA_MQTT_PASSWORD` : identifiants du broker ;
 //! - `HA_MQTT_DISCOVERY_PREFIX` : préfixe de découverte (par défaut `homeassistant`) ;
+//! - `HA_LATITUDE` et `HA_LONGITUDE` : position de la maison, pour le soleil
+//!   (deux décimales suffisent, par exemple 48.85 et 2.35) ;
 //! - `HA_AUTOMATIONS_PATH` : fichier d'automatisations (par défaut `automations.yaml`) ;
 //! - `RUST_LOG` : niveau de détail des logs (par défaut `info`).
 
@@ -60,6 +62,7 @@ use ha_hue::Hue;
 use ha_mqtt::{Mqtt, MqttConfig};
 use ha_somfy::Somfy;
 use ha_storage::{Recorder, Store};
+use ha_sun::{Location, SunTracker};
 use serde_json::json;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{info, warn};
@@ -141,6 +144,14 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     // Un fichier d'automatisations invalide empêche le démarrage, avec un
     // message clair : mieux vaut corriger que de tourner à moitié.
     let automations = ha_automation::load(&automations_path())?;
+    let location = location()?;
+    if location.is_none() && ha_automation::uses_sun(&automations) {
+        return Err(
+            "des automatisations utilisent le soleil : indique la position de la maison \
+                    avec HA_LATITUDE et HA_LONGITUDE"
+                .into(),
+        );
+    }
     let store = open_store().await?;
     info!("base de données : {db_path}");
 
@@ -189,7 +200,8 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
 
     // Vrais appareils (MQTT) ou, à défaut, appareils simulés.
     let mqtt = mqtt_config.map(|config| Mqtt::start(config, Arc::clone(&core)));
-    let engine = Engine::start(automations, Arc::clone(&core));
+    let engine = Engine::start_with_location(automations, Arc::clone(&core), location);
+    let sun = location.map(|location| SunTracker::start(location, Arc::clone(&core)));
     // Une association illisible (clé de chiffrement perdue, par exemple)
     // ne doit pas empêcher le reste de la maison de fonctionner.
     let hue = match ha_hue::pairing::load(&store).await {
@@ -240,6 +252,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         simulation.abort();
     }
     engine.stop().await;
+    if let Some(sun) = sun {
+        sun.stop().await;
+    }
     if let Some(freebox) = freebox {
         freebox.stop().await;
     }
@@ -292,6 +307,32 @@ fn days_ago(days: u32) -> SystemTime {
     SystemTime::now()
         .checked_sub(Duration::from_secs(u64::from(days) * 24 * 3600))
         .unwrap_or(SystemTime::UNIX_EPOCH)
+}
+
+/// Lit la position de la maison (`HA_LATITUDE`, `HA_LONGITUDE`), pour le
+/// soleil. `None` si elle n'est pas indiquée.
+fn location() -> Result<Option<Location>, String> {
+    let read = |name: &str| -> Result<Option<f64>, String> {
+        match std::env::var(name) {
+            Err(_) => Ok(None),
+            Ok(value) => value
+                .trim()
+                .parse::<f64>()
+                .map(Some)
+                .map_err(|_| format!("{name} invalide : {value:?} (exemple : 48.85)")),
+        }
+    };
+    match (read("HA_LATITUDE")?, read("HA_LONGITUDE")?) {
+        (None, None) => Ok(None),
+        (Some(latitude), Some(longitude)) => {
+            let location = Location::new(latitude, longitude).map_err(|error| error.to_string())?;
+            // La position exacte de la maison est une donnée personnelle :
+            // on ne l'écrit pas dans les logs.
+            info!("soleil : position de la maison configurée");
+            Ok(Some(location))
+        }
+        _ => Err("il faut HA_LATITUDE et HA_LONGITUDE ensemble".into()),
+    }
 }
 
 /// Lit la configuration MQTT. `None` si `HA_MQTT_HOST` n'est pas défini.

@@ -829,6 +829,7 @@ name = "ha-automation"
 version = "0.1.0"
 dependencies = [
  "ha-core",
+ "ha-sun",
  "jiff",
  "serde",
  "serde-saphyr",
@@ -919,6 +920,7 @@ dependencies = [
  "ha-mqtt",
  "ha-somfy",
  "ha-storage",
+ "ha-sun",
  "ha-tls",
  "jiff",
  "qrcode",
@@ -966,6 +968,18 @@ dependencies = [
  "tokio",
  "tracing",
  "zeroize",
+]
+
+[[package]]
+name = "ha-sun"
+version = "0.1.0"
+dependencies = [
+ "ha-core",
+ "jiff",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

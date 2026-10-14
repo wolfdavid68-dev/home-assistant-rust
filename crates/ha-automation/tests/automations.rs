@@ -297,3 +297,81 @@ async fn runaway_loops_are_stopped() {
 
     engine.stop().await;
 }
+
+/// Paris, le 21 juin 2024, en heure d'été (UTC+2) : lever vers 05 h 47,
+/// coucher vers 21 h 58.
+fn paris_summer(evaluator: Evaluator) -> Evaluator {
+    evaluator.with_sun(
+        ha_sun::Location::new(48.8566, 2.3522).unwrap(),
+        jiff::tz::TimeZone::fixed(jiff::tz::offset(2)),
+    )
+}
+
+#[test]
+fn sun_trigger_with_offset() {
+    let yaml = r#"
+- id: volets_soir
+  triggers: [{trigger: sun, event: sunset, offset: "-00:30:00"}]
+  actions: [{delay: 1s}]
+"#;
+    let automations = parse(yaml).unwrap();
+    assert!(ha_automation::uses_sun(&automations));
+    let mut evaluator = paris_summer(Evaluator::new(automations));
+    let core = Core::new();
+    let day = date(2024, 6, 21);
+    let at = |h, m| day.at(h, m, 0, 0);
+    let mut tick = |a, b| evaluator.on_tick(a, b, Instant::now(), &core.states);
+    // Coucher à 21 h 57-58 : moins 30 min → vers 21 h 27-28.
+    assert_eq!(tick(at(21, 20), at(21, 26)), Vec::<usize>::new());
+    assert_eq!(tick(at(21, 26), at(21, 29)), [0]);
+    assert_eq!(
+        tick(at(21, 29), at(21, 35)),
+        Vec::<usize>::new(),
+        "une seule fois"
+    );
+}
+
+#[test]
+fn sun_conditions_including_the_night() {
+    let yaml = r#"
+- id: nuit
+  triggers: [{trigger: state, entity_id: binary_sensor.porte, to: "on"}]
+  conditions: [{condition: sun, after: sunset, before: sunrise}]
+  actions: [{delay: 1s}]
+- id: matin
+  triggers: [{trigger: state, entity_id: binary_sensor.porte, to: "on"}]
+  conditions: [{condition: sun, after: sunrise, after_offset: "01:00:00"}]
+  actions: [{delay: 1s}]
+"#;
+    let evaluator = paris_summer(Evaluator::new(parse(yaml).unwrap()));
+    let core = Core::new();
+    let day = date(2024, 6, 21);
+    let passes = |index, h, m| evaluator.conditions_pass(index, &core.states, day.at(h, m, 0, 0));
+    // « La nuit » : après le coucher OU avant le lever.
+    assert!(passes(0, 23, 0));
+    assert!(passes(0, 4, 0));
+    assert!(!passes(0, 12, 0));
+    // Une heure après le lever (05 h 47 → 06 h 47).
+    assert!(!passes(1, 6, 30));
+    assert!(passes(1, 7, 0));
+    // Sans position configurée, une condition `sun` est fausse.
+    let without_location = Evaluator::new(parse(yaml).unwrap());
+    assert!(!without_location.conditions_pass(0, &core.states, day.at(23, 0, 0, 0)));
+}
+
+#[test]
+fn invalid_sun_configurations_are_refused() {
+    for yaml in [
+        "- {id: a, triggers: [{trigger: sun, event: coucher}], actions: [{delay: 1s}]}",
+        "- {id: a, triggers: [{trigger: sun, event: sunset, offset: \"demain\"}], actions: [{delay: 1s}]}",
+        "- {id: a, triggers: [{trigger: sun}], actions: [{delay: 1s}]}",
+        "- {id: a, triggers: [{trigger: time, at: \"10:00\"}], conditions: [{condition: sun}], actions: [{delay: 1s}]}",
+        "- {id: a, triggers: [{trigger: time, at: \"10:00\"}], conditions: [{condition: sun, after_offset: \"01:00:00\"}], actions: [{delay: 1s}]}",
+    ] {
+        assert!(parse(yaml).is_err(), "{yaml}");
+    }
+    let time_only =
+        parse("- {id: a, triggers: [{trigger: time, at: \"10:00\"}], actions: [{delay: 1s}]}")
+            .unwrap();
+    assert!(!ha_automation::uses_sun(&time_only));
+}

@@ -6,7 +6,10 @@ use std::collections::BTreeSet;
 use std::time::SystemTime;
 
 use ha_core::{EntityId, State, StateMachine};
-use jiff::civil::{DateTime, Time};
+use ha_sun::{Location, SunEvent};
+use jiff::SignedDuration;
+use jiff::civil::{Date, DateTime, Time};
+use jiff::tz::TimeZone;
 use tokio::time::Instant;
 
 use crate::config::{Automation, Condition, Trigger};
@@ -29,6 +32,24 @@ struct Pending {
 pub struct Evaluator {
     automations: Vec<Automation>,
     pending: Vec<Pending>,
+    sun: Option<Sun>,
+}
+
+/// De quoi calculer les heures du soleil, en heure locale.
+#[derive(Debug, Clone)]
+struct Sun {
+    location: Location,
+    zone: TimeZone,
+}
+
+impl Sun {
+    /// L'heure locale de `event` (plus `offset`) le jour `date`. `None` si
+    /// l'événement n'a pas lieu ce jour-là (jour ou nuit polaire).
+    fn event_at(&self, date: Date, event: SunEvent, offset: SignedDuration) -> Option<DateTime> {
+        let time = event.time_in(&ha_sun::sun_times(date, self.location)?)?;
+        let time = time.checked_add(offset).ok()?;
+        Some(time.to_zoned(self.zone.clone()).datetime())
+    }
 }
 
 impl Evaluator {
@@ -37,7 +58,16 @@ impl Evaluator {
         Self {
             automations,
             pending: Vec::new(),
+            sun: None,
         }
+    }
+
+    /// Active les déclencheurs et conditions `sun`, pour la maison située à
+    /// `location`, dans le fuseau horaire `zone`.
+    #[must_use]
+    pub fn with_sun(mut self, location: Location, zone: TimeZone) -> Self {
+        self.sun = Some(Sun { location, zone });
+        self
     }
 
     #[must_use]
@@ -121,9 +151,17 @@ impl Evaluator {
         let mut fired = BTreeSet::new();
         for (a, automation) in self.automations.iter().enumerate() {
             for trigger in &automation.triggers {
-                if let Trigger::Time { at } = trigger
-                    && at.iter().any(|time| crossed(previous, now, *time))
-                {
+                let crossed_now = match trigger {
+                    Trigger::Time { at } => at.iter().any(|time| crossed(previous, now, *time)),
+                    Trigger::Sun { event, offset } => self.sun.as_ref().is_some_and(|sun| {
+                        [previous.date(), now.date()].into_iter().any(|date| {
+                            sun.event_at(date, *event, *offset)
+                                .is_some_and(|moment| previous < moment && moment <= now)
+                        })
+                    }),
+                    _ => false,
+                };
+                if crossed_now {
                     fired.insert(a);
                 }
             }
@@ -152,7 +190,7 @@ impl Evaluator {
         automation
             .conditions
             .iter()
-            .all(|condition| condition_passes(condition, states, now))
+            .all(|condition| condition_passes(condition, states, now, self.sun.as_ref()))
     }
 }
 
@@ -178,7 +216,12 @@ fn crossed(previous: DateTime, now: DateTime, time: Time) -> bool {
         .any(|moment| previous < moment && moment <= now)
 }
 
-fn condition_passes(condition: &Condition, states: &StateMachine, now: DateTime) -> bool {
+fn condition_passes(
+    condition: &Condition,
+    states: &StateMachine,
+    now: DateTime,
+    sun: Option<&Sun>,
+) -> bool {
     match condition {
         Condition::State {
             entity_ids,
@@ -212,6 +255,25 @@ fn condition_passes(condition: &Condition, states: &StateMachine, now: DateTime)
                 }
             };
             in_hours && (weekdays.is_empty() || weekdays.contains(&now.weekday()))
+        }
+        Condition::Sun { after, before } => {
+            let Some(sun) = sun else { return false };
+            // `Some(None)` : l'événement n'a pas lieu aujourd'hui (pays
+            // polaires) ; la condition est alors fausse.
+            let at = |limit: &Option<(SunEvent, SignedDuration)>| {
+                limit.map(|(event, offset)| sun.event_at(now.date(), event, offset))
+            };
+            match (at(after), at(before)) {
+                // « Après le coucher et avant le lever » : la plage passe
+                // minuit, comme pour la condition `time`.
+                (Some(Some(after)), Some(Some(before))) if after > before => {
+                    now >= after || now < before
+                }
+                (after, before) => {
+                    after.is_none_or(|after| after.is_some_and(|after| now >= after))
+                        && before.is_none_or(|before| before.is_some_and(|before| now < before))
+                }
+            }
         }
     }
 }
