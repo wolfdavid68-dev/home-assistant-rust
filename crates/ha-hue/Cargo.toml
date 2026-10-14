@@ -10,11 +10,10 @@ publish.workspace = true
 futures-util.workspace = true
 ha-core = { path = "../ha-core" }
 ha-storage = { path = "../ha-storage" }
+ha-tls = { path = "../ha-tls" }
 reqwest.workspace = true
-rustls.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-sha2.workspace = true
 sqlx.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["sync", "rt", "macros", "time"] }
@@ -22,6 +21,7 @@ tracing.workspace = true
 zeroize.workspace = true
 
 [dev-dependencies]
+sha2.workspace = true
 rcgen.workspace = true
 tokio = { workspace = true, features = ["sync", "rt", "macros", "time", "net", "io-util"] }
 tokio-rustls.workspace = true

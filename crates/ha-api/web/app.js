@@ -164,6 +164,7 @@ function markPending(entityId) {
 // ---------------------------------------------------------------- Affichage
 const SECTIONS = [
   { title: "Lumières", domains: ["light"] },
+  { title: "Volets", domains: ["cover"] },
   { title: "Prises et interrupteurs", domains: ["switch"] },
   { title: "Capteurs", domains: ["sensor"] },
   { title: "Détecteurs", domains: ["binary_sensor"] },
@@ -193,8 +194,10 @@ function renderAll() {
 function renderTile(state) {
   switch (domainOf(state)) {
     case "light": return lightTile(state);
+    case "cover": return coverTile(state);
     case "switch": return switchTile(state);
     case "binary_sensor": return binaryTile(state);
+    case "sensor": return state.attributes.device_class === "alarm" ? alarmTile(state) : sensorTile(state);
     default: return sensorTile(state);
   }
 }
@@ -227,6 +230,42 @@ function lightTile(state) {
   );
 }
 
+function coverTile(state) {
+  const position = state.attributes.current_position;
+  const subtitle =
+    typeof position === "number"
+      ? position >= 100 ? "Ouvert" : position <= 0 ? "Fermé" : `Ouvert à ${Math.round(position)} %`
+      : lookup(COVER_LABELS, state.state) ?? statusText(state);
+  const command = (service, data = {}) => {
+    markPending(state.entity_id);
+    callService("cover", service, { entity_id: state.entity_id, ...data });
+  };
+  const button = (service, icon, label) => {
+    const b = el("button", { type: "button", class: "round", "aria-label": `${label} ${nameOf(state)}` }, svgIcon(icon));
+    b.addEventListener("click", () => command(service));
+    return b;
+  };
+  const children = [
+    tileHead(state, ICONS.blinds, subtitle),
+    el(
+      "div",
+      { class: "cover-buttons" },
+      button("open_cover", ICONS.up, "Ouvrir"),
+      button("stop_cover", ICONS.stop, "Arrêter"),
+      button("close_cover", ICONS.down, "Fermer"),
+    ),
+  ];
+  if (typeof position === "number") {
+    const slider = el("input", {
+      type: "range", min: "0", max: "100", step: "5", value: String(Math.round(position)),
+      "aria-label": `Position de ${nameOf(state)}`,
+    });
+    slider.addEventListener("change", () => command("set_cover_position", { position: Number(slider.value) }));
+    children.push(slider);
+  }
+  return el("div", { id: tileId(state.entity_id), class: tileClass(state, "cover") }, ...children);
+}
+
 function switchTile(state) {
   const on = state.state === "on";
   const tile = el(
@@ -248,6 +287,15 @@ function binaryTile(state) {
     "div",
     { id: tileId(state.entity_id), class: tileClass(state, "binary") },
     tileHead(state, state.attributes.device_class === "motion" ? ICONS.motion : ICONS.door, text),
+  );
+}
+
+function alarmTile(state) {
+  const [text, armed] = lookup(ALARM_LABELS, state.state) ?? [statusText(state), false];
+  return el(
+    "div",
+    { id: tileId(state.entity_id), class: tileClass(state, "binary") + (armed ? " on" : "") },
+    tileHead(state, ICONS.shield, text),
   );
 }
 
@@ -274,7 +322,7 @@ function tileHead(state, icon, subtitle) {
 
 function tileClass(state, kind) {
   const classes = ["tile", kind];
-  if (state.state === "on") classes.push("on");
+  if (state.state === "on" || (kind === "cover" && state.state === "open")) classes.push("on");
   if (state.state === "unavailable" || state.state === "unknown") classes.push("unavailable");
   return classes.join(" ");
 }
@@ -283,10 +331,19 @@ function statusText(state) {
   return lookup(STATUS_LABELS, state.state) ?? state.state;
 }
 
+// Modes d'alarme Somfy : [texte affiché, activée ?]
+const ALARM_LABELS = {
+  off: ["Désactivée", false], disarmed: ["Désactivée", false],
+  total: ["Activée (totale)", true], armed: ["Activée", true],
+  partial: ["Activée (partielle)", true], partial1: ["Activée (partielle)", true], partial2: ["Activée (partielle)", true],
+  detection: ["Intrusion détectée !", true], sos: ["Alerte SOS !", true],
+};
+const COVER_LABELS = { open: "Ouvert", closed: "Fermé", opening: "Ouverture…", closing: "Fermeture…" };
 const STATUS_LABELS = { on: "Allumé", off: "Éteint", unknown: "Inconnu", unavailable: "Indisponible" };
 const BINARY_LABELS = {
   door: ["Ouverte", "Fermée"], window: ["Ouverte", "Fermée"], opening: ["Ouvert", "Fermé"],
   motion: ["Mouvement", "Calme"], occupancy: ["Présence", "Personne"],
+  smoke: ["Fumée !", "Rien à signaler"],
 };
 
 // ---------------------------------------------------------------- Utilitaires
@@ -344,6 +401,13 @@ const ICONS = {
   humidity: ["M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"],
   battery: ["M3 7h15a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z", "M22 11v2"],
   gauge: ["M12 14l4-4", "M3.3 19a10 10 0 1 1 17.4 0"],
+  shield: ["M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z"],
+  blinds: ["M3 3h18", "M4 3v13h16V3", "M4 7h16", "M4 11h16", "M12 16v4", "M10 20h4"],
+  up: ["M6 15l6-6 6 6"],
+  down: ["M6 9l6 6 6-6"],
+  stop: ["M8 8h8v8H8z"],
+  illuminance: ["M12 3v2", "M12 19v2", "M5 12H3", "M21 12h-2", "M12 8a4 4 0 1 0 0 8 4 4 0 1 0 0-8z"],
+  occupancy: ["M12 4a2 2 0 1 0 0 4 2 2 0 1 0 0-4z", "M8 21v-6l-2-1 2-5h8l2 5-2 1v6"],
 };
 
 // ---------------------------------------------------------------- Démarrage

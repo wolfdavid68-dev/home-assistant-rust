@@ -21,6 +21,8 @@ Un workspace Cargo découpé en crates :
 | `ha-automation` | Automatisations en YAML : déclencheurs, conditions, actions              |
 | `ha-mqtt`     | Première intégration : MQTT (Zigbee2MQTT, Tasmota, Shelly…)                 |
 | `ha-hue`      | Philips Hue : lampes via le pont Hue (API locale v2)                        |
+| `ha-somfy`    | Somfy TaHoma : volets, capteurs, alarme, chauffage (API locale)             |
+| `ha-tls`      | Connexions HTTPS partagées (certificat épinglé ou vérifié)                  |
 | `ha-server`   | Binaire qui assemble le tout et lit la configuration                        |
 
 Briques principales : `tokio` (asynchrone), `axum` (web), `sqlx` + SQLite, `serde` (config/JSON),
@@ -34,6 +36,7 @@ Briques principales : `tokio` (asynchrone), `axum` (web), `sqlx` + SQLite, `serd
 - [x] **3. Authentification + API** : comptes, jetons, API REST et WebSocket en local ([guide](docs/etape-3-auth-api.md))
 - [x] **4. MQTT** : piloter de vrais appareils (découverte automatique façon Home Assistant) ([guide](docs/etape-4-mqtt.md)) — sans TLS pour l'instant
 - [x] **4 bis. Philips Hue** : lampes via le pont Hue, en local, certificat épinglé ([guide](docs/hue.md))
+- [x] **4 ter. Somfy TaHoma** : volets, capteurs, alarme et chauffage en lecture, API locale ([guide](docs/somfy.md)) — commande du chauffage et de l'alarme à venir
 - [x] **5. Automatisations** : « quand X, si Y, alors Z » en YAML ([guide](docs/etape-5-automatisations.md))
 - [x] **6. Interface web** : tableau de bord en direct, ordinateur et téléphone ([guide](docs/etape-6-interface-web.md))
 - [ ] **7. Déploiement** : image Docker, accès à distance via VPN (jamais de port ouvert sur Internet)

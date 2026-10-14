@@ -29,6 +29,8 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
 
 - Pont Philips Hue : HTTPS avec certificat **épinglé** à l'association (confiance au premier usage),
   jamais de vérification TLS désactivée.
+- Box Somfy TaHoma : même principe. Le compte Somfy ne sert qu'une fois, à créer le jeton local ; le mot de
+  passe n'est jamais enregistré. Portails et portes de garage ne sont pas pilotables sans réflexion dédiée.
 
 ## Interface web
 

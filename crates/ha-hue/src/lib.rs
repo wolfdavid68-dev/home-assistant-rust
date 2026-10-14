@@ -13,8 +13,9 @@ mod error;
 pub mod lights;
 pub mod pairing;
 pub mod sse;
-pub mod tls;
 
 pub use client::Hue;
 pub use error::HueError;
+/// Les connexions HTTPS épinglées viennent de la crate commune `ha-tls`.
+pub use ha_tls as tls;
 pub use pairing::Pairing;

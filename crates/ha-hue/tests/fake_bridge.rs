@@ -236,9 +236,7 @@ async fn another_certificate_is_refused() {
         cause = current.source();
     }
     assert!(
-        messages
-            .iter()
-            .any(|m| m.contains("certificat du pont Hue inattendu")),
+        messages.iter().any(|m| m.contains("certificat inattendu")),
         "{messages:?}"
     );
 }

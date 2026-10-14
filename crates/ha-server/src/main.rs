@@ -1,5 +1,5 @@
 //! Le serveur domotique : noyau, stockage SQLite, API HTTP/WebSocket et
-//! appareils MQTT et Philips Hue. Sans MQTT configuré, quelques appareils simulés servent
+//! appareils MQTT, Philips Hue et Somfy TaHoma. Sans MQTT configuré, quelques appareils simulés servent
 //! de démonstration.
 //!
 //! Utilisation :
@@ -13,6 +13,8 @@
 //! ha-server hue pair <adresse>    associe le pont Philips Hue
 //! ha-server hue status            affiche le pont associé
 //! ha-server hue forget            oublie le pont
+//! ha-server somfy pair <adresse>  associe la box Somfy TaHoma
+//! ha-server somfy devices         liste les appareils de la box
 //! ha-server automations check     vérifie le fichier d'automatisations
 //! ```
 //!
@@ -42,6 +44,7 @@ use ha_automation::Engine;
 use ha_core::{Attributes, Core, EntityId, Event};
 use ha_hue::Hue;
 use ha_mqtt::{Mqtt, MqttConfig};
+use ha_somfy::Somfy;
 use ha_storage::{Recorder, Store};
 use serde_json::json;
 use tokio::sync::broadcast::error::RecvError;
@@ -70,6 +73,7 @@ async fn main() -> ExitCode {
         [] => run_server().await,
         ["user", rest @ ..] => cli::user_command(rest, &db_path()).await,
         ["hue", rest @ ..] => cli::hue_command(rest, &db_path()).await,
+        ["somfy", rest @ ..] => cli::somfy_command(rest, &db_path()).await,
         ["automations", "check"] => cli::check_automations(&automations_path()),
         _ => Err(cli::USAGE.into()),
     };
@@ -146,8 +150,11 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     let hue = ha_hue::pairing::load(&store)
         .await?
         .map(|pairing| Hue::start(pairing, Arc::clone(&core)));
-    let mut simulation = if mqtt.is_none() && hue.is_none() {
-        info!("ni MQTT (HA_MQTT_HOST) ni pont Hue (ha-server hue pair) : appareils simulés");
+    let somfy = ha_somfy::pairing::load(&store)
+        .await?
+        .map(|pairing| Somfy::start(pairing, Arc::clone(&core)));
+    let mut simulation = if mqtt.is_none() && hue.is_none() && somfy.is_none() {
+        info!("aucun appareil configuré (MQTT, Hue, Somfy) : appareils simulés");
         Some(tokio::spawn(simulate_devices(Arc::clone(&core))))
     } else {
         None
@@ -170,6 +177,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         simulation.abort();
     }
     engine.stop().await;
+    if let Some(somfy) = somfy {
+        somfy.stop().await;
+    }
     if let Some(hue) = hue {
         hue.stop().await;
     }

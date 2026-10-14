@@ -9,6 +9,7 @@ use std::io::{BufRead, IsTerminal};
 
 use ha_auth::{Auth, MIN_PASSWORD_LEN};
 use ha_hue::{pairing, tls};
+use ha_somfy::cloud::{CloudSession, SOMFY_EUROPE};
 use ha_storage::Store;
 use zeroize::Zeroizing;
 
@@ -22,6 +23,10 @@ utilisation :
   ha-server hue pair <adresse>    associe le pont Philips Hue
   ha-server hue status            affiche le pont associé
   ha-server hue forget            oublie le pont
+  ha-server somfy pair <adresse>  associe la box Somfy TaHoma
+  ha-server somfy devices         liste les appareils de la box
+  ha-server somfy status          affiche la box associée
+  ha-server somfy forget          oublie la box
   ha-server automations check     vérifie le fichier d'automatisations";
 
 pub async fn user_command(args: &[&str], db_path: &str) -> Result<(), Box<dyn Error>> {
@@ -159,4 +164,178 @@ pub fn check_automations(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
         );
     }
     Ok(())
+}
+
+pub async fn somfy_command(args: &[&str], db_path: &str) -> Result<(), Box<dyn Error>> {
+    let store = Store::open(db_path).await?;
+    let result = somfy_inner(args, &store).await;
+    store.close().await;
+    result
+}
+
+async fn somfy_inner(args: &[&str], store: &Store) -> Result<(), Box<dyn Error>> {
+    match args {
+        ["pair", host] => {
+            let (version, fingerprint) = ha_somfy::pairing::identify(host).await?;
+            println!("box TaHoma trouvée (API {version})");
+            println!("empreinte de son certificat :");
+            println!("  {}", tls::format_fingerprint(&fingerprint));
+            println!("seul ce certificat sera accepté à l'avenir.");
+            println!();
+            println!("Somfy impose de créer le jeton de l'API locale avec ton compte Somfy,");
+            println!(
+                "une seule fois. Ton mot de passe sert à cette connexion et n'est pas enregistré."
+            );
+            let email = ask_line("e-mail du compte Somfy : ")?;
+            let password = ask_secret("mot de passe Somfy : ")?;
+            let session =
+                CloudSession::login(ha_tls::public_client()?, SOMFY_EUROPE, &email, &password)
+                    .await?;
+            drop(password);
+            let gateways = session.gateways().await?;
+            let gateway_id = match gateways.as_slice() {
+                [] => return Err("aucune box TaHoma sur ce compte Somfy".into()),
+                [only] => only.clone(),
+                several => {
+                    for (n, id) in several.iter().enumerate() {
+                        println!("  {}. {id}", n + 1);
+                    }
+                    let choice: usize = ask_line("numéro de la box : ")?.parse()?;
+                    several
+                        .get(choice.wrapping_sub(1))
+                        .cloned()
+                        .ok_or("numéro invalide")?
+                }
+            };
+            let token = session.create_local_token(&gateway_id).await?;
+            session.logout().await;
+            pair_with_token(store, host, gateway_id, fingerprint, token).await
+        }
+        ["pair", host, "--token"] => {
+            // Pour qui a déjà un jeton (créé ailleurs) : rien ne passe par Somfy.
+            let (_, fingerprint) = ha_somfy::pairing::identify(host).await?;
+            println!(
+                "empreinte du certificat : {}",
+                tls::format_fingerprint(&fingerprint)
+            );
+            let gateway_id = ask_line("PIN de la box (sous la box, ex. 1234-5678-9012) : ")?;
+            if !ha_somfy::cloud::is_gateway_id(&gateway_id) {
+                return Err("PIN invalide".into());
+            }
+            let token = ask_secret("jeton de l'API locale : ")?;
+            pair_with_token(store, host, gateway_id, fingerprint, token).await
+        }
+        ["devices"] => {
+            let Some(paired) = ha_somfy::pairing::load(store).await? else {
+                return Err("aucune box associée (ha-server somfy pair <adresse>)".into());
+            };
+            for device in ha_somfy::pairing::verify(&paired).await? {
+                let kind = ha_somfy::devices::Kind::from_ui_class(&device.definition.ui_class);
+                println!(
+                    "{} — {} [{}]{}",
+                    device.label,
+                    device.definition.ui_class,
+                    device.controllable_name,
+                    if kind.is_some() {
+                        ""
+                    } else {
+                        " (non pris en charge)"
+                    }
+                );
+                let commands: Vec<&str> = device
+                    .definition
+                    .commands
+                    .iter()
+                    .map(|c| c.name.as_str())
+                    .collect();
+                if !commands.is_empty() {
+                    println!("    commandes : {}", commands.join(", "));
+                }
+                for state in &device.states {
+                    println!("    {} = {}", state.name, state.value);
+                }
+            }
+            Ok(())
+        }
+        ["status"] => {
+            match ha_somfy::pairing::load(store).await? {
+                Some(paired) => {
+                    println!("box {} à l'adresse {}", paired.gateway_id, paired.host);
+                    println!(
+                        "certificat : {}",
+                        tls::format_fingerprint(&paired.fingerprint)
+                    );
+                }
+                None => println!("aucune box associée (ha-server somfy pair <adresse>)"),
+            }
+            Ok(())
+        }
+        ["forget"] => {
+            if ha_somfy::pairing::forget(store).await? {
+                println!("box oubliée.");
+                println!("pour révoquer complètement le jeton, désactive puis réactive le mode");
+                println!("développeur dans ton espace Somfy.");
+            } else {
+                println!("aucune box associée.");
+            }
+            Ok(())
+        }
+        _ => Err(USAGE.into()),
+    }
+}
+
+/// Vérifie le jeton auprès de la box, puis enregistre l'association.
+async fn pair_with_token(
+    store: &Store,
+    host: &str,
+    gateway_id: String,
+    fingerprint: ha_tls::Fingerprint,
+    token: Zeroizing<String>,
+) -> Result<(), Box<dyn Error>> {
+    let paired = ha_somfy::Pairing {
+        host: (*host).to_owned(),
+        gateway_id,
+        fingerprint,
+        token,
+    };
+    // Un jeton tout juste créé peut mettre quelques secondes à être actif.
+    let mut attempt = 0;
+    let devices = loop {
+        match ha_somfy::pairing::verify(&paired).await {
+            Ok(devices) => break devices,
+            Err(ha_somfy::SomfyError::Unauthorized) if attempt < 5 => {
+                attempt += 1;
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            }
+            Err(error) => return Err(error.into()),
+        }
+    };
+    ha_somfy::pairing::save(store, &paired).await?;
+    println!(
+        "associée ! {} appareils sur la box. Relance « ha-server ».",
+        devices.len()
+    );
+    Ok(())
+}
+
+/// Lit une ligne (visible).
+fn ask_line(prompt: &str) -> Result<String, Box<dyn Error>> {
+    use std::io::Write as _;
+    print!("{prompt}");
+    std::io::stdout().flush()?;
+    let mut line = String::new();
+    std::io::stdin().lock().read_line(&mut line)?;
+    Ok(line.trim().to_owned())
+}
+
+/// Lit un secret sans l'afficher (ou une ligne si l'entrée n'est pas un terminal).
+fn ask_secret(prompt: &str) -> Result<Zeroizing<String>, Box<dyn Error>> {
+    if std::io::stdin().is_terminal() {
+        return Ok(Zeroizing::new(rpassword::prompt_password(prompt)?));
+    }
+    let mut line = Zeroizing::new(String::new());
+    std::io::stdin().lock().read_line(&mut line)?;
+    Ok(Zeroizing::new(
+        line.trim_end_matches(['\r', '\n']).to_owned(),
+    ))
 }
