@@ -130,7 +130,8 @@ Deux précautions :
 
 ### Autre solution : le VPN de ta box Internet
 
-Certaines box ont un serveur VPN **WireGuard** intégré (la Freebox, par exemple). Tu l'actives
+Certaines box ont un serveur VPN **WireGuard** intégré (la Freebox, par exemple : voir le
+[guide Freebox](freebox.md#1-laccès-à-distance-par-le-vpn-de-la-freebox) pas à pas). Tu l'actives
 dans l'interface de la box, tu installes l'appli WireGuard sur ton téléphone, et une fois connecté
 tu es « chez toi » : le tableau de bord s'ouvre à son adresse locale (avec `HA_PUBLISH`, voir
 plus haut). C'est la box qui reçoit les connexions, et WireGuard ne répond à personne qui n'a pas
