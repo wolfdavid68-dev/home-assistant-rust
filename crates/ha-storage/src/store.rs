@@ -5,8 +5,8 @@ use std::str::FromStr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use ha_core::{Attributes, EntityId, State, StateMachine};
-use sqlx::{ConnectOptions, Connection, SqlitePool};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
+use sqlx::{ConnectOptions, Connection, SqlitePool};
 use tracing::warn;
 use zeroize::Zeroizing;
 
