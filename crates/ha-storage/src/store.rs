@@ -1,0 +1,402 @@
+//! Accès à la base SQLite : ouverture, écriture des changements, lecture.
+
+use std::path::Path;
+use std::str::FromStr;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+use ha_core::{Attributes, EntityId, State, StateMachine};
+use sqlx::SqlitePool;
+use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
+use tracing::warn;
+
+use crate::error::StorageError;
+
+/// Nombre maximal de lignes renvoyées par [`Store::history`].
+pub const MAX_HISTORY_LIMIT: u32 = 10_000;
+
+/// Concept Rust : la macro `migrate!` lit les fichiers `.sql`
+/// du dossier `migrations/` **à la compilation** et les intègre dans le
+/// binaire. Pas de fichier à copier à côté du programme, et personne ne peut
+/// les modifier après coup.
+static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
+
+/// Un état relu depuis la base.
+#[derive(Debug, Clone, PartialEq)]
+pub struct StoredState {
+    pub entity_id: EntityId,
+    pub state: String,
+    pub attributes: Attributes,
+    pub last_changed: SystemTime,
+    pub last_updated: SystemTime,
+}
+
+/// Une ligne de l'historique. `state` vaut `None` si l'entité a été supprimée.
+#[derive(Debug, Clone, PartialEq)]
+pub struct HistoryEntry {
+    pub entity_id: EntityId,
+    pub state: Option<StoredState>,
+    pub recorded_at: SystemTime,
+}
+
+/// La base de données.
+///
+/// Concept Rust : `SqlitePool` est un « pool » de connexions, partagé en
+/// interne avec un `Arc`. Cloner un `Store` est donc peu coûteux et donne une
+/// deuxième poignée vers la même base.
+#[derive(Debug, Clone)]
+pub struct Store {
+    pool: SqlitePool,
+}
+
+/// Ligne brute de la table `states` : (entity_id, state, attributes, last_changed, last_updated).
+type StateRow = (String, String, String, i64, i64);
+
+/// Ligne brute de la table `state_history`, avec les colonnes qui peuvent être NULL.
+type HistoryRow = (
+    String,
+    Option<String>,
+    Option<String>,
+    Option<i64>,
+    Option<i64>,
+    i64,
+);
+
+impl Store {
+    /// Ouvre (ou crée) la base dans le fichier `path` et met le schéma à jour.
+    pub async fn open(path: impl AsRef<Path>) -> Result<Self, StorageError> {
+        let path = path.as_ref();
+        create_private_file(path)?;
+
+        let options = SqliteConnectOptions::new()
+            .filename(path)
+            .create_if_missing(true)
+            // WAL : les lectures ne bloquent pas les écritures, et un arrêt
+            // brutal ne corrompt pas la base.
+            .journal_mode(SqliteJournalMode::Wal)
+            .synchronous(SqliteSynchronous::Normal)
+            .foreign_keys(true)
+            // Efface vraiment les données supprimées au lieu de les laisser
+            // traîner dans le fichier.
+            .pragma("secure_delete", "ON")
+            .busy_timeout(Duration::from_secs(5));
+        Self::connect(options, 4).await
+    }
+
+    /// Base temporaire en mémoire, perdue à la fermeture. Utile pour les tests.
+    pub async fn open_in_memory() -> Result<Self, StorageError> {
+        let options = SqliteConnectOptions::from_str("sqlite::memory:")?.foreign_keys(true);
+        // Chaque connexion à `:memory:` aurait sa propre base vide : on n'en
+        // garde donc qu'une seule, ouverte en permanence.
+        Self::connect(options, 1).await
+    }
+
+    async fn connect(
+        options: SqliteConnectOptions,
+        max_connections: u32,
+    ) -> Result<Self, StorageError> {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(max_connections)
+            .min_connections(1)
+            .idle_timeout(None)
+            .max_lifetime(None)
+            .connect_with(options)
+            .await?;
+        MIGRATOR.run(&pool).await?;
+        Ok(Self { pool })
+    }
+
+    /// Ferme proprement toutes les connexions.
+    pub async fn close(&self) {
+        self.pool.close().await;
+    }
+
+    /// Enregistre un changement d'état : met à jour le dernier état connu et
+    /// ajoute une ligne à l'historique, dans une seule transaction.
+    ///
+    /// `new_state` vaut `None` quand l'entité a été supprimée.
+    pub async fn record_change(
+        &self,
+        entity_id: &EntityId,
+        new_state: Option<&State>,
+    ) -> Result<(), StorageError> {
+        let recorded_at = to_micros(SystemTime::now())?;
+
+        // Concept : une transaction applique tout ou rien. Si une requête
+        // échoue, `tx` est abandonnée sans `commit` et la base reste intacte.
+        let mut tx = self.pool.begin().await?;
+        match new_state {
+            Some(state) => {
+                let row = encode(state)?;
+                // Sécurité : les valeurs passent TOUJOURS par des paramètres
+                // (`?1`, `?2`…) et jamais par du texte collé dans la requête.
+                // SQLite les traite comme des données, pas comme du SQL : une
+                // valeur comme `'); DROP TABLE states; --` est stockée telle quelle.
+                sqlx::query(
+                    "INSERT INTO states (entity_id, state, attributes, last_changed, last_updated)
+                     VALUES (?1, ?2, ?3, ?4, ?5)
+                     ON CONFLICT (entity_id) DO UPDATE SET
+                         state = excluded.state,
+                         attributes = excluded.attributes,
+                         last_changed = excluded.last_changed,
+                         last_updated = excluded.last_updated",
+                )
+                .bind(&row.0)
+                .bind(&row.1)
+                .bind(&row.2)
+                .bind(row.3)
+                .bind(row.4)
+                .execute(&mut *tx)
+                .await?;
+                sqlx::query(
+                    "INSERT INTO state_history
+                         (entity_id, state, attributes, last_changed, last_updated, recorded_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                )
+                .bind(&row.0)
+                .bind(&row.1)
+                .bind(&row.2)
+                .bind(row.3)
+                .bind(row.4)
+                .bind(recorded_at)
+                .execute(&mut *tx)
+                .await?;
+            }
+            None => {
+                sqlx::query("DELETE FROM states WHERE entity_id = ?1")
+                    .bind(entity_id.as_str())
+                    .execute(&mut *tx)
+                    .await?;
+                sqlx::query("INSERT INTO state_history (entity_id, recorded_at) VALUES (?1, ?2)")
+                    .bind(entity_id.as_str())
+                    .bind(recorded_at)
+                    .execute(&mut *tx)
+                    .await?;
+            }
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+
+    /// Remplace tout le contenu de la table `states` par `states`.
+    ///
+    /// Sert à resynchroniser la base quand des événements ont été manqués.
+    /// L'historique n'est pas touché.
+    pub async fn replace_all_states(&self, states: &[State]) -> Result<(), StorageError> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query("DELETE FROM states").execute(&mut *tx).await?;
+        for state in states {
+            let row = encode(state)?;
+            sqlx::query(
+                "INSERT INTO states (entity_id, state, attributes, last_changed, last_updated)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+            )
+            .bind(row.0)
+            .bind(row.1)
+            .bind(row.2)
+            .bind(row.3)
+            .bind(row.4)
+            .execute(&mut *tx)
+            .await?;
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+
+    /// Relit le dernier état connu de chaque entité, trié par identifiant.
+    ///
+    /// Une ligne illisible (fichier modifié à la main, par exemple) est ignorée
+    /// avec un avertissement plutôt que d'empêcher le démarrage.
+    pub async fn load_states(&self) -> Result<Vec<StoredState>, StorageError> {
+        let rows: Vec<StateRow> = sqlx::query_as(
+            "SELECT entity_id, state, attributes, last_changed, last_updated
+             FROM states ORDER BY entity_id",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut states = Vec::with_capacity(rows.len());
+        for (entity_id, state, attributes, last_changed, last_updated) in rows {
+            match decode(&entity_id, state, &attributes, last_changed, last_updated) {
+                Ok(stored) => states.push(stored),
+                Err(error) => warn!("état sauvegardé ignoré pour {entity_id:?} : {error}"),
+            }
+        }
+        Ok(states)
+    }
+
+    /// Recharge les états sauvegardés dans la machine à états, sans publier
+    /// d'événement. Renvoie le nombre d'états restaurés.
+    pub async fn restore_into(&self, machine: &StateMachine) -> Result<usize, StorageError> {
+        let mut restored = 0;
+        for stored in self.load_states().await? {
+            let entity_id = stored.entity_id.clone();
+            match machine.restore(
+                stored.entity_id,
+                stored.state,
+                stored.attributes,
+                stored.last_changed,
+                stored.last_updated,
+            ) {
+                Ok(true) => restored += 1,
+                Ok(false) => {}
+                Err(error) => warn!("état sauvegardé ignoré pour {entity_id} : {error}"),
+            }
+        }
+        Ok(restored)
+    }
+
+    /// Historique d'une entité, du plus récent au plus ancien.
+    /// `limit` est plafonné à [`MAX_HISTORY_LIMIT`].
+    pub async fn history(
+        &self,
+        entity_id: &EntityId,
+        limit: u32,
+    ) -> Result<Vec<HistoryEntry>, StorageError> {
+        let rows: Vec<HistoryRow> = sqlx::query_as(
+            "SELECT entity_id, state, attributes, last_changed, last_updated, recorded_at
+             FROM state_history WHERE entity_id = ?1
+             ORDER BY id DESC LIMIT ?2",
+        )
+        .bind(entity_id.as_str())
+        .bind(limit.min(MAX_HISTORY_LIMIT))
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut entries = Vec::with_capacity(rows.len());
+        for row in rows {
+            match decode_history(row) {
+                Ok(entry) => entries.push(entry),
+                Err(error) => warn!("ligne d'historique ignorée pour {entity_id} : {error}"),
+            }
+        }
+        Ok(entries)
+    }
+
+    /// Supprime l'historique enregistré avant `older_than`.
+    /// Renvoie le nombre de lignes supprimées.
+    pub async fn purge_history(&self, older_than: SystemTime) -> Result<u64, StorageError> {
+        let result = sqlx::query("DELETE FROM state_history WHERE recorded_at < ?1")
+            .bind(to_micros(older_than)?)
+            .execute(&self.pool)
+            .await?;
+        Ok(result.rows_affected())
+    }
+}
+
+/// Convertit un `State` en valeurs prêtes à être écrites.
+fn encode(state: &State) -> Result<StateRow, StorageError> {
+    Ok((
+        state.entity_id().as_str().to_owned(),
+        state.state().to_owned(),
+        serde_json::to_string(state.attributes())?,
+        to_micros(state.last_changed())?,
+        to_micros(state.last_updated())?,
+    ))
+}
+
+/// Vérifie et convertit une ligne lue dans la base.
+///
+/// Sécurité : on ne fait pas confiance au contenu du fichier. L'identifiant
+/// repasse par la validation d'`EntityId`, et les attributs doivent être un
+/// objet JSON.
+fn decode(
+    entity_id: &str,
+    state: String,
+    attributes: &str,
+    last_changed: i64,
+    last_updated: i64,
+) -> Result<StoredState, Box<dyn std::error::Error>> {
+    let serde_json::Value::Object(attributes) = serde_json::from_str(attributes)? else {
+        return Err("les attributs ne sont pas un objet JSON".into());
+    };
+    Ok(StoredState {
+        entity_id: EntityId::new(entity_id)?,
+        state,
+        attributes,
+        last_changed: from_micros(last_changed)?,
+        last_updated: from_micros(last_updated)?,
+    })
+}
+
+fn decode_history(row: HistoryRow) -> Result<HistoryEntry, Box<dyn std::error::Error>> {
+    let (entity_id, state, attributes, last_changed, last_updated, recorded_at) = row;
+    let state =
+        match (state, attributes, last_changed, last_updated) {
+            (Some(state), Some(attributes), Some(last_changed), Some(last_updated)) => Some(
+                decode(&entity_id, state, &attributes, last_changed, last_updated)?,
+            ),
+            (None, None, None, None) => None,
+            _ => return Err("ligne incomplète".into()),
+        };
+    Ok(HistoryEntry {
+        entity_id: EntityId::new(&entity_id)?,
+        state,
+        recorded_at: from_micros(recorded_at)?,
+    })
+}
+
+/// Date → microsecondes depuis 1970.
+fn to_micros(time: SystemTime) -> Result<i64, StorageError> {
+    let since_epoch = time
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| StorageError::Timestamp("date antérieure à 1970"))?;
+    i64::try_from(since_epoch.as_micros())
+        .map_err(|_| StorageError::Timestamp("date trop lointaine"))
+}
+
+/// Microsecondes depuis 1970 → date.
+fn from_micros(micros: i64) -> Result<SystemTime, StorageError> {
+    let micros = u64::try_from(micros).map_err(|_| StorageError::Timestamp("date négative"))?;
+    UNIX_EPOCH
+        .checked_add(Duration::from_micros(micros))
+        .ok_or(StorageError::Timestamp("date trop lointaine"))
+}
+
+/// Crée le fichier de base vide, lisible uniquement par l'utilisateur courant.
+///
+/// Sécurité : l'historique révèle quand tu es chez toi, quand tu dors…
+/// Sous Linux et macOS, on crée donc le fichier avec les droits `600`
+/// (lecture/écriture pour le propriétaire seulement). SQLite donne ensuite les
+/// mêmes droits à ses fichiers annexes (`-wal`, `-shm`). Sous Windows, le
+/// fichier hérite des droits du dossier : place-le dans ton dossier utilisateur.
+fn create_private_file(path: &Path) -> Result<(), StorageError> {
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    match options.open(path) {
+        Ok(_) => Ok(()),
+        // Le fichier existe déjà : on le garde tel quel.
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+        Err(error) => Err(error.into()),
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn timestamps_round_trip_to_the_microsecond() {
+        let time = UNIX_EPOCH + Duration::from_micros(1_700_000_000_123_456);
+        assert_eq!(from_micros(to_micros(time).unwrap()).unwrap(), time);
+    }
+
+    #[test]
+    fn invalid_timestamps_are_rejected() {
+        assert!(from_micros(-1).is_err());
+        assert!(to_micros(UNIX_EPOCH - Duration::from_secs(1)).is_err());
+    }
+
+    #[test]
+    fn decode_rejects_bad_rows() {
+        assert!(decode("pas un id", "on".into(), "{}", 0, 0).is_err());
+        assert!(decode("light.salon", "on".into(), "[1, 2]", 0, 0).is_err());
+        assert!(decode("light.salon", "on".into(), "{pas du json", 0, 0).is_err());
+        assert!(decode("light.salon", "on".into(), "{}", 0, 0).is_ok());
+    }
+}

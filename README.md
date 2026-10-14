@@ -8,6 +8,7 @@ Un noyau domotique en Rust, inspiré de Home Assistant.
 ## Guides
 
 - [Étape 1 : le noyau, expliqué](docs/etape-1-noyau.md)
+- [Étape 2 : le stockage SQLite, expliqué](docs/etape-2-stockage.md)
 
 ## Lancer la démo
 

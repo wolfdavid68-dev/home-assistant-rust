@@ -4,6 +4,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::sync::Arc;
+use std::time::{Duration, UNIX_EPOCH};
 
 use ha_core::{Attributes, Core, CoreError, EntityId, Event, MAX_STATE_LEN};
 use serde_json::json;
@@ -149,6 +150,72 @@ fn all_returns_states_sorted_by_id() {
         .collect();
 
     assert_eq!(ids, ["light.a", "light.z", "switch.b"]);
+}
+
+#[test]
+fn restore_keeps_dates_and_publishes_nothing() {
+    let core = Core::new();
+    let mut rx = core.bus.subscribe();
+    let light = id("light.salon");
+    let changed_at = UNIX_EPOCH + Duration::from_secs(1_700_000_000);
+    let updated_at = changed_at + Duration::from_secs(60);
+
+    let restored = core
+        .states
+        .restore(
+            light.clone(),
+            "on",
+            attrs(json!({"brightness": 120})),
+            changed_at,
+            updated_at,
+        )
+        .unwrap();
+
+    assert!(restored);
+    assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
+    let state = core.states.get(&light).unwrap();
+    assert_eq!(state.state(), "on");
+    assert_eq!(state.last_changed(), changed_at);
+    assert_eq!(state.last_updated(), updated_at);
+}
+
+#[test]
+fn restore_never_overwrites_a_live_state() {
+    let core = Core::new();
+    let light = id("light.salon");
+    core.states
+        .set(light.clone(), "off", Attributes::new())
+        .unwrap();
+
+    let restored = core
+        .states
+        .restore(
+            light.clone(),
+            "on",
+            Attributes::new(),
+            UNIX_EPOCH,
+            UNIX_EPOCH,
+        )
+        .unwrap();
+
+    assert!(!restored);
+    assert_eq!(core.states.get(&light).unwrap().state(), "off");
+}
+
+#[test]
+fn restore_rejects_too_long_state() {
+    let core = Core::new();
+    let too_long = "x".repeat(MAX_STATE_LEN + 1);
+
+    let result = core.states.restore(
+        id("sensor.test"),
+        too_long,
+        Attributes::new(),
+        UNIX_EPOCH,
+        UNIX_EPOCH,
+    );
+
+    assert!(matches!(result, Err(CoreError::StateTooLong { .. })));
 }
 
 #[tokio::test]
