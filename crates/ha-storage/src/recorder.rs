@@ -87,6 +87,9 @@ async fn record(store: &Store, event: &Event) {
                 error!("échec d'enregistrement de {entity_id} : {error}");
             }
         }
+        // Un appel de service n'est pas un changement d'état : si l'appareil
+        // obéit, son nouvel état arrivera par un `StateChanged`.
+        Event::CallService { .. } => {}
     }
 }
 

@@ -31,7 +31,7 @@ Briques principales : `tokio` (asynchrone), `axum` (web), `sqlx` + SQLite, `serd
 - [x] **1. Noyau** : bus d'événements + machine à états + entités de démo, en ligne de commande
 - [x] **2. Stockage** : enregistrer les entités et l'historique dans SQLite ([guide](docs/etape-2-stockage.md))
 - [x] **3. Authentification + API** : comptes, jetons, API REST et WebSocket en local ([guide](docs/etape-3-auth-api.md))
-- [ ] **4. MQTT** : piloter de vrais appareils (découverte automatique façon Home Assistant)
+- [x] **4. MQTT** : piloter de vrais appareils (découverte automatique façon Home Assistant) ([guide](docs/etape-4-mqtt.md)) — sans TLS pour l'instant
 - [ ] **5. Automatisations** : « quand X, si Y, alors Z » en YAML
 - [ ] **6. Interface web** : tableau de bord simple
 - [ ] **7. Déploiement** : image Docker, accès à distance via VPN (jamais de port ouvert sur Internet)

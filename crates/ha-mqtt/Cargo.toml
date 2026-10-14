@@ -1,0 +1,19 @@
+[package]
+name = "ha-mqtt"
+description = "Intégration MQTT avec découverte automatique façon Home Assistant"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ha-core = { path = "../ha-core" }
+rumqttc.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["sync", "rt", "macros", "time"] }
+tracing.workspace = true
+zeroize.workspace = true
+
+[lints]
+workspace = true

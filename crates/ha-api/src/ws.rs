@@ -248,6 +248,23 @@ fn event_message(id: u64, event: &Event) -> Value {
                 },
             },
         }),
+        Event::CallService {
+            domain,
+            service,
+            entity_id,
+            data,
+        } => json!({
+            "id": id,
+            "type": "event",
+            "event": {
+                "event_type": "call_service",
+                "data": {
+                    "domain": domain,
+                    "service": service,
+                    "service_data": {"entity_id": entity_id.as_str(), "data": data},
+                },
+            },
+        }),
     }
 }
 

@@ -1,5 +1,6 @@
-//! Le serveur domotique : noyau, stockage SQLite, API HTTP/WebSocket et, en
-//! attendant les vrais appareils (étape 4), quelques entités simulées.
+//! Le serveur domotique : noyau, stockage SQLite, API HTTP/WebSocket et
+//! appareils MQTT. Sans MQTT configuré, quelques appareils simulés servent
+//! de démonstration.
 //!
 //! Utilisation :
 //!
@@ -15,6 +16,11 @@
 //! - `HA_DB_PATH` : fichier de la base (par défaut `ha.db`) ;
 //! - `HA_BIND` : adresse d'écoute de l'API (par défaut `127.0.0.1:8123`) ;
 //! - `HA_HISTORY_DAYS` : nombre de jours d'historique conservés (par défaut 10) ;
+//! - `HA_MQTT_HOST` : adresse du broker MQTT (sans elle : appareils simulés) ;
+//! - `HA_MQTT_PORT` : port du broker (par défaut 1883) ;
+//! - `HA_MQTT_USER` et `HA_MQTT_PASSWORD_FILE` (fichier contenant le mot de
+//!   passe, conseillé) ou `HA_MQTT_PASSWORD` : identifiants du broker ;
+//! - `HA_MQTT_DISCOVERY_PREFIX` : préfixe de découverte (par défaut `homeassistant`) ;
 //! - `RUST_LOG` : niveau de détail des logs (par défaut `info`).
 
 mod cli;
@@ -28,11 +34,13 @@ use std::time::{Duration, SystemTime};
 use ha_api::ApiState;
 use ha_auth::Auth;
 use ha_core::{Attributes, Core, EntityId, Event};
+use ha_mqtt::{Mqtt, MqttConfig};
 use ha_storage::{Recorder, Store};
 use serde_json::json;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
+use zeroize::Zeroizing;
 
 const DEFAULT_DB_PATH: &str = "ha.db";
 const DEFAULT_BIND: &str = "127.0.0.1:8123";
@@ -76,6 +84,7 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     let db_path = db_path();
     let history_days = history_days()?;
     let bind = bind_address()?;
+    let mqtt_config = mqtt_config()?;
     let store = Store::open(&db_path).await?;
     info!("base de données : {db_path}");
 
@@ -111,17 +120,35 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
 
     // On s'abonne AVANT de créer les entités, pour ne rater aucun événement.
     let logger = tokio::spawn(log_state_changes(core.bus.subscribe()));
-    let mut simulation = tokio::spawn(simulate_devices(Arc::clone(&core)));
+
+    // Vrais appareils (MQTT) ou, à défaut, appareils simulés.
+    let mqtt = mqtt_config.map(|config| Mqtt::start(config, Arc::clone(&core)));
+    let mut simulation = if mqtt.is_none() {
+        info!("MQTT non configuré (HA_MQTT_HOST) : appareils simulés");
+        Some(tokio::spawn(simulate_devices(Arc::clone(&core))))
+    } else {
+        None
+    };
 
     // Concept Rust : `select!` attend la première de plusieurs opérations.
-    // `&mut simulation` emprunte la tâche au lieu de la consommer, pour pouvoir
-    // l'arrêter ensuite.
+    // Sans simulation, la deuxième branche attend indéfiniment
+    // (`std::future::pending`) : seul Ctrl+C peut alors arrêter le serveur.
     tokio::select! {
         result = tokio::signal::ctrl_c() => result?,
-        result = &mut simulation => result??,
+        result = async {
+            match &mut simulation {
+                Some(task) => task.await,
+                None => std::future::pending().await,
+            }
+        } => result??,
     }
     // Plus aucun changement d'état après ce point.
-    simulation.abort();
+    if let Some(simulation) = simulation {
+        simulation.abort();
+    }
+    if let Some(mqtt) = mqtt {
+        mqtt.stop().await;
+    }
     api_state.shutdown();
     if let Err(error) = api.await? {
         warn!("arrêt de l'API : {error}");
@@ -149,6 +176,70 @@ fn history_days() -> Result<u32, String> {
             .filter(|days| (1..=3650).contains(days))
             .ok_or_else(|| format!("HA_HISTORY_DAYS invalide : {value:?} (entre 1 et 3650)")),
     }
+}
+
+/// Lit la configuration MQTT. `None` si `HA_MQTT_HOST` n'est pas défini.
+fn mqtt_config() -> Result<Option<MqttConfig>, String> {
+    let Ok(host) = std::env::var("HA_MQTT_HOST") else {
+        return Ok(None);
+    };
+    if host.is_empty() || host.len() > 253 || host.contains(char::is_whitespace) {
+        return Err(format!("HA_MQTT_HOST invalide : {host:?}"));
+    }
+    let port = match std::env::var("HA_MQTT_PORT") {
+        Err(_) => 1883,
+        Ok(value) => value
+            .parse::<u16>()
+            .ok()
+            .filter(|port| *port > 0)
+            .ok_or_else(|| format!("HA_MQTT_PORT invalide : {value:?}"))?,
+    };
+    let username = std::env::var("HA_MQTT_USER").ok();
+    // Un fichier est préférable à une variable d'environnement : celles-ci
+    // sont visibles par les autres programmes du même utilisateur.
+    let password = match std::env::var("HA_MQTT_PASSWORD_FILE") {
+        Ok(path) => {
+            let content =
+                Zeroizing::new(std::fs::read_to_string(&path).map_err(|error| {
+                    format!("lecture de HA_MQTT_PASSWORD_FILE ({path}) : {error}")
+                })?);
+            Some(Zeroizing::new(
+                content.trim_end_matches(['\r', '\n']).to_owned(),
+            ))
+        }
+        Err(_) => std::env::var("HA_MQTT_PASSWORD").ok().map(Zeroizing::new),
+    };
+    if password.is_some() && username.is_none() {
+        return Err("mot de passe MQTT donné sans HA_MQTT_USER".into());
+    }
+    let discovery_prefix =
+        std::env::var("HA_MQTT_DISCOVERY_PREFIX").unwrap_or_else(|_| "homeassistant".into());
+    let prefix_ok = !discovery_prefix.is_empty()
+        && !discovery_prefix.contains(['+', '#', '\0'])
+        && !discovery_prefix.starts_with('/')
+        && !discovery_prefix.ends_with('/');
+    if !prefix_ok {
+        return Err(format!(
+            "HA_MQTT_DISCOVERY_PREFIX invalide : {discovery_prefix:?}"
+        ));
+    }
+
+    let local = matches!(host.as_str(), "localhost" | "127.0.0.1" | "::1");
+    if !local {
+        warn!("MQTT vers {host} : la connexion n'est PAS chiffrée (TLS pas encore disponible).");
+        warn!("n'utilise qu'un broker sur ton réseau local de confiance, jamais via Internet.");
+    }
+    if username.is_none() {
+        warn!("MQTT sans identifiants : n'importe qui sur le réseau peut piloter tes appareils.");
+    }
+    Ok(Some(MqttConfig {
+        host,
+        port,
+        username,
+        password,
+        client_id: "ha-rust-server".into(),
+        discovery_prefix,
+    }))
 }
 
 /// Lit `HA_BIND`. Par défaut, l'API n'écoute que sur la machine elle-même.
@@ -184,6 +275,12 @@ async fn log_state_changes(mut rx: tokio::sync::broadcast::Receiver<Arc<Event>>)
                         info!("{entity_id}: {old} -> {new}");
                     }
                 }
+                Event::CallService {
+                    domain,
+                    service,
+                    entity_id,
+                    ..
+                } => info!("service {domain}.{service} appelé pour {entity_id}"),
             },
             Err(RecvError::Lagged(missed)) => {
                 warn!("{missed} événements manqués (abonné trop lent)")

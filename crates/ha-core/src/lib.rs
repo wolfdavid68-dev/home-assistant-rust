@@ -36,6 +36,37 @@ impl Core {
     }
 }
 
+impl Core {
+    /// Publie un appel de service sur le bus (voir [`Event::CallService`]).
+    ///
+    /// Le domaine et le service sont validés comme les identifiants : ils
+    /// viennent souvent de l'extérieur (API) et finissent dans des logs.
+    pub fn call_service(
+        &self,
+        domain: &str,
+        service: &str,
+        entity_id: EntityId,
+        data: Attributes,
+    ) -> Result<(), CoreError> {
+        for name in [domain, service] {
+            let valid = (1..=64).contains(&name.len())
+                && name
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_');
+            if !valid {
+                return Err(CoreError::InvalidServiceName(name.to_owned()));
+            }
+        }
+        self.bus.publish(Event::CallService {
+            domain: domain.to_owned(),
+            service: service.to_owned(),
+            entity_id,
+            data,
+        });
+        Ok(())
+    }
+}
+
 impl Default for Core {
     fn default() -> Self {
         Self::new()

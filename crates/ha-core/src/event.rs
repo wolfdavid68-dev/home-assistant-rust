@@ -6,7 +6,7 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 
 use crate::entity_id::EntityId;
-use crate::state::State;
+use crate::state::{Attributes, State};
 
 /// Nombre d'événements gardés en mémoire pour un abonné qui prend du retard.
 pub const DEFAULT_BUS_CAPACITY: usize = 1024;
@@ -25,6 +25,20 @@ pub enum Event {
         entity_id: EntityId,
         old_state: Option<State>,
         new_state: Option<State>,
+    },
+
+    /// Demande d'action sur une entité, par exemple `switch.turn_on` sur
+    /// `switch.prise_cafe`. Le noyau ne sait pas comment allumer une prise :
+    /// c'est l'intégration propriétaire de l'entité (MQTT…) qui écoute ces
+    /// événements et envoie l'ordre à l'appareil.
+    CallService {
+        /// Domaine du service : `switch`, `light`…
+        domain: String,
+        /// Nom du service : `turn_on`, `turn_off`, `toggle`…
+        service: String,
+        entity_id: EntityId,
+        /// Paramètres facultatifs, par exemple `{"brightness": 128}`.
+        data: Attributes,
     },
 }
 

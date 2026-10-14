@@ -204,3 +204,29 @@ pub(crate) async fn history(
         json!({ "entity_id": entity_id.as_str(), "history": entries }),
     ))
 }
+
+/// `POST /api/services/{domain}/{service}` : `{"entity_id": "switch.prise", …paramètres}`.
+///
+/// Comme dans Home Assistant, la réponse arrive dès que l'ordre est transmis :
+/// le nouvel état sera visible quand l'appareil l'aura confirmé.
+pub(crate) async fn call_service(
+    State(state): State<Arc<ApiState>>,
+    auth: Authenticated,
+    Path((domain, service)): Path<(String, String)>,
+    body: Bytes,
+) -> Result<Json<Value>, ApiError> {
+    let mut data: Attributes = parse_json(&body)?;
+    let entity_id = match data.remove("entity_id") {
+        Some(Value::String(entity_id)) => parse_entity_id(&entity_id)?,
+        _ => return Err(ApiError::BadRequest("champ « entity_id » attendu".into())),
+    };
+    state
+        .core
+        .call_service(&domain, &service, entity_id.clone(), data)
+        .map_err(|error| ApiError::BadRequest(error.to_string()))?;
+    tracing::info!(
+        "{domain}.{service} sur {entity_id} demandé par {}",
+        auth.user.username
+    );
+    Ok(Json(json!({})))
+}
