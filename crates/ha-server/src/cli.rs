@@ -36,6 +36,7 @@ utilisation :
   ha-server freebox untrack <nom>      arrête de le suivre
   ha-server freebox forget             oublie la Freebox
   ha-server automations check     vérifie le fichier d'automatisations
+  ha-server areas check           vérifie le fichier des pièces
   ha-server audit [nombre]        affiche le journal d'audit
   ha-server audit verify          vérifie que le journal n'a pas été modifié
   ha-server healthcheck           vérifie qu'un serveur répond (pour Docker)";
@@ -713,5 +714,19 @@ async fn freebox_pair(store: &Store, host: &str) -> Result<(), Box<dyn Error>> {
         );
     }
     println!("Ensuite : ha-server freebox devices, puis freebox track <adresse MAC> <nom>.");
+    Ok(())
+}
+
+/// `ha-server areas check` : vérifie le fichier des pièces.
+pub fn check_areas(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
+    if !path.exists() {
+        println!("{} : fichier absent (aucune pièce)", path.display());
+        return Ok(());
+    }
+    let areas = ha_areas::load(path)?;
+    println!("{} : {} pièce(s) valide(s)", path.display(), areas.len());
+    for area in &areas {
+        println!("  - {} ({} appareil(s))", area.name, area.entities.len());
+    }
     Ok(())
 }

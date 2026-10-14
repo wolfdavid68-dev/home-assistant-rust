@@ -38,7 +38,11 @@ impl TestApp {
         auth.create_user("david", PASSWORD).await.unwrap();
         let core = Arc::new(Core::new());
         let recorder = Recorder::start(store.clone(), Arc::clone(&core));
-        let state = ApiState::new(core, store, Arc::new(auth));
+        let areas = ha_areas::parse(
+            "- {area: Cuisine, entities: [{entity: switch.prise_cafe, name: Cafetière}]}",
+        )
+        .unwrap();
+        let state = ApiState::new(core, store, Arc::new(auth), areas);
         Self {
             state,
             recorder: Some(recorder),
@@ -103,6 +107,7 @@ async fn every_route_requires_a_token() {
         ("POST", "/api/auth/logout"),
         ("POST", "/api/services/switch/turn_on"),
         ("GET", "/api/audit"),
+        ("GET", "/api/areas"),
     ] {
         let (status, _) = app.request(method, uri, None, None).await;
         assert_eq!(status, StatusCode::UNAUTHORIZED, "{method} {uri}");
@@ -581,5 +586,18 @@ async fn actions_are_recorded_in_the_audit_log() {
         ha_storage::AuditCheck::Intact {
             entries: 3 + u64::from(ha_auth::limiter::MAX_FAILURES)
         }
+    );
+}
+
+#[tokio::test]
+async fn areas_are_served() {
+    let app = TestApp::new().await;
+    let token = app.login().await;
+    let (status, body) = app.request("GET", "/api/areas", Some(&token), None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        body,
+        json!({"areas": [{"name": "Cuisine",
+                          "entities": [{"entity_id": "switch.prise_cafe", "name": "Cafetière"}]}]})
     );
 }

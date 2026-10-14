@@ -48,16 +48,24 @@ pub struct ApiState {
     pub core: Arc<Core>,
     pub store: Store,
     pub auth: Arc<Auth>,
+    /// Les pièces de la maison (fichier `areas.yaml`).
+    pub areas: Vec<ha_areas::Area>,
     shutdown: CancellationToken,
 }
 
 impl ApiState {
-    pub fn new(core: Arc<Core>, store: Store, auth: Arc<Auth>) -> Arc<Self> {
+    pub fn new(
+        core: Arc<Core>,
+        store: Store,
+        auth: Arc<Auth>,
+        areas: Vec<ha_areas::Area>,
+    ) -> Arc<Self> {
         let shutdown = CancellationToken::new();
         Arc::new(Self {
             core,
             store,
             auth,
+            areas,
             shutdown,
         })
     }
@@ -88,6 +96,7 @@ pub fn router(state: Arc<ApiState>) -> Router {
         )
         .route("/api/history/{entity_id}", get(rest::history))
         .route("/api/audit", get(rest::audit_log))
+        .route("/api/areas", get(rest::areas))
         .route("/api/services/{domain}/{service}", post(rest::call_service))
         .route("/api/websocket", get(ws::handler))
         // Tableau de bord web.

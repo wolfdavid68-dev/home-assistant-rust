@@ -1,0 +1,26 @@
+# Exemple de pièces. Copie ce fichier en `areas.yaml` (avec Docker :
+# `config/areas.yaml`), adapte les noms d'entités (voir le tableau de bord ou
+# GET /api/states), puis vérifie-le avec :
+#   cargo run -p ha-server -- areas check
+#
+# Le tableau de bord affiche une section par pièce, dans cet ordre. Les
+# appareils qui ne sont dans aucune pièce restent rangés par type en dessous.
+# `name` (facultatif) remplace le nom affiché d'un appareil.
+
+- area: Salon
+  entities:
+    - entity: light.salon
+      name: Lampe
+    - entity: cover.volet_salon
+      name: Volet
+    - sensor.temperature_salon
+
+- area: Cuisine
+  entities:
+    - entity: switch.prise_cafe
+      name: Cafetière
+
+- area: Entrée
+  entities:
+    - entity: binary_sensor.porte_entree
+      name: Porte d'entrée

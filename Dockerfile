@@ -44,6 +44,7 @@ COPY --from=builder --chown=65532:65532 /data-empty /cle
 ENV HA_DB_PATH=/data/ha.db \
     HA_KEY_PATH=/cle/ha.key \
     HA_AUTOMATIONS_PATH=/config/automations.yaml \
+    HA_AREAS_PATH=/config/areas.yaml \
     HA_BIND=0.0.0.0:8123 \
     TZ=Europe/Paris
 

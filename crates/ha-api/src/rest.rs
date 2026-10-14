@@ -349,3 +349,20 @@ pub(crate) async fn audit_log(
         .collect();
     Ok(Json(json!({ "entries": entries })))
 }
+
+/// `GET /api/areas` : les pièces de la maison et leurs appareils.
+pub(crate) async fn areas(State(state): State<Arc<ApiState>>, _auth: Authenticated) -> Json<Value> {
+    let areas: Vec<Value> = state
+        .areas
+        .iter()
+        .map(|area| {
+            let entities: Vec<Value> = area
+                .entities
+                .iter()
+                .map(|entity| json!({"entity_id": entity.entity_id.as_str(), "name": entity.name}))
+                .collect();
+            json!({"name": area.name, "entities": entities})
+        })
+        .collect();
+    Json(json!({ "areas": areas }))
+}
