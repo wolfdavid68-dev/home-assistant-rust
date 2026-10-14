@@ -1,0 +1,24 @@
+# Appareils pilotables par Alexa, en local (voir docs/alexa.md).
+# Copie ce fichier en alexa.yaml (avec Docker : config/alexa.yaml).
+#
+# Rien n'est exposé par défaut : seuls les appareils listés ici le sont.
+# Types acceptés : lampes (light), prises (switch), volets (cover), scripts
+# et scènes. Jamais de serrure, d'alarme, de portail ni de porte de garage.
+#
+# « name » est le nom à prononcer : « Alexa, allume la cafetière ».
+# Deux appareils ne peuvent pas avoir le même nom. 32 caractères au plus.
+
+- entity: switch.prise_cafe
+  name: Cafetière
+
+- entity: light.salon
+  name: Lampe du salon
+
+- entity: cover.volet_salon
+  name: Volet du salon        # « Alexa, mets le volet du salon à 50 % »
+
+- entity: scene.soiree_cinema
+  name: Soirée cinéma         # « Alexa, allume soirée cinéma »
+
+- entity: script.depart
+  name: Je pars
