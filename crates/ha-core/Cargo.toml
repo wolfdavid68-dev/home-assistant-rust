@@ -9,10 +9,12 @@ publish.workspace = true
 [dependencies]
 serde_json.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["sync"] }
+tokio = { workspace = true, features = ["sync", "rt"] }
+tokio-util.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["sync", "macros", "rt"] }
+tokio = { workspace = true, features = ["sync", "macros", "rt", "time"] }
 
 [lints]
 workspace = true

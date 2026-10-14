@@ -1,6 +1,11 @@
 //! Tests de l'authentification, sur une base SQLite en mémoire.
 
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "dans un test, un échec doit simplement faire échouer le test"
+)]
 
 use std::net::{IpAddr, Ipv4Addr};
 use std::time::Duration;

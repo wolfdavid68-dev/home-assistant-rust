@@ -36,7 +36,7 @@ const MAX_MESSAGE_SIZE: usize = 64 * 1024;
 const AUTH_TIMEOUT: Duration = Duration::from_secs(10);
 /// Fréquence à laquelle on revérifie le jeton d'une connexion ouverte : un
 /// jeton révoqué (déconnexion, changement de mot de passe) coupe la connexion.
-const RECHECK_INTERVAL: Duration = Duration::from_secs(60);
+const RECHECK_INTERVAL: Duration = Duration::from_mins(1);
 
 /// Pas de `Debug` : le jeton ne doit jamais être affiché.
 #[derive(Deserialize)]
@@ -136,7 +136,7 @@ async fn session(mut socket: WebSocket, state: &ApiState, token: &str) {
     let mut subscription: Option<(u64, broadcast::Receiver<Arc<Event>>)> = None;
     let mut recheck = tokio::time::interval(RECHECK_INTERVAL);
     recheck.reset(); // pas de vérification immédiate : on vient de le faire.
-    let mut shutdown = state.shutdown_signal();
+    let shutdown = state.shutdown_signal();
 
     loop {
         tokio::select! {
@@ -149,7 +149,7 @@ async fn session(mut socket: WebSocket, state: &ApiState, token: &str) {
                     _ => break,
                 };
                 let reply = match serde_json::from_str::<Command>(&text) {
-                    Ok(command) => handle_command(command, state, &mut subscription),
+                    Ok(command) => handle_command(&command, state, &mut subscription),
                     Err(error) => json!({
                         "type": "result",
                         "success": false,
@@ -171,14 +171,14 @@ async fn session(mut socket: WebSocket, state: &ApiState, token: &str) {
                     break;
                 }
             }
-            _ = shutdown.changed() => break,
+            () = shutdown.cancelled() => break,
         }
     }
     let _ = socket.send(Message::Close(None)).await;
 }
 
 fn handle_command(
-    command: Command,
+    command: &Command,
     state: &ApiState,
     subscription: &mut Option<(u64, broadcast::Receiver<Arc<Event>>)>,
 ) -> Value {

@@ -4,13 +4,12 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ha_core::{Core, Event};
+use ha_core::{Background, CancellationToken, Core, Event};
 use jiff::civil::DateTime;
 use tokio::sync::broadcast::error::RecvError;
-use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use tokio::time::{Instant, MissedTickBehavior};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 
 use crate::config::{Action, Automation};
 use crate::evaluator::Evaluator;
@@ -20,30 +19,24 @@ use crate::evaluator::Evaluator;
 /// (Exemple de boucle : A allume la lampe quand elle s'éteint, B l'éteint
 /// quand elle s'allume…)
 const MAX_RUNS: usize = 10;
-const RUN_WINDOW: Duration = Duration::from_secs(60);
+const RUN_WINDOW: Duration = Duration::from_mins(1);
 
 /// Poignée vers le moteur d'automatisations.
 #[derive(Debug)]
-pub struct Engine {
-    shutdown: oneshot::Sender<()>,
-    task: JoinHandle<()>,
-}
+pub struct Engine(Background);
 
 impl Engine {
     /// Démarre le moteur. L'abonnement au bus est fait avant de rendre la main.
     pub fn start(automations: Vec<Automation>, core: Arc<Core>) -> Self {
         let events = core.bus.subscribe();
-        let (shutdown, shutdown_rx) = oneshot::channel();
-        let task = tokio::spawn(run(automations, core, events, shutdown_rx));
-        Self { shutdown, task }
+        Self(Background::spawn("le moteur d'automatisations", |token| {
+            run(automations, core, events, token)
+        }))
     }
 
     /// Arrête le moteur ; les actions en cours (attentes `delay`…) sont abandonnées.
     pub async fn stop(self) {
-        let _ = self.shutdown.send(());
-        if let Err(error) = self.task.await {
-            error!("le moteur d'automatisations s'est arrêté anormalement : {error}");
-        }
+        self.0.stop().await;
     }
 }
 
@@ -67,7 +60,7 @@ async fn run(
     automations: Vec<Automation>,
     core: Arc<Core>,
     mut events: tokio::sync::broadcast::Receiver<Arc<Event>>,
-    mut shutdown: oneshot::Receiver<()>,
+    token: CancellationToken,
 ) {
     let count = automations.len();
     info!("{count} automatisation(s) chargée(s)");
@@ -84,7 +77,7 @@ async fn run(
 
     loop {
         tokio::select! {
-            _ = &mut shutdown => break,
+            () = token.cancelled() => break,
 
             received = events.recv() => match received {
                 Ok(event) => {

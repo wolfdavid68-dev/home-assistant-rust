@@ -22,7 +22,7 @@ pub const MAX_FILE_SIZE: usize = 1024 * 1024;
 pub const MAX_AUTOMATIONS: usize = 200;
 const MAX_ITEMS: usize = 20;
 /// Durée maximale d'une attente (`delay`, `for`).
-const MAX_DURATION: Duration = Duration::from_secs(24 * 3600);
+const MAX_DURATION: Duration = Duration::from_hours(24);
 
 // ───────────────────────────── 1. Ce qu'on lit ─────────────────────────────
 
@@ -241,12 +241,7 @@ pub fn parse(yaml: &str) -> Result<Vec<Automation>, AutomationError> {
 
 /// Vérifie une automatisation. L'erreur est un message en français.
 fn check(config: AutomationConfig) -> Result<Automation, String> {
-    let id_ok = (1..=64).contains(&config.id.len())
-        && config
-            .id
-            .bytes()
-            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_');
-    if !id_ok {
+    if !ha_core::is_valid_name(&config.id) {
         return Err("id : 1 à 64 caractères parmi a-z, 0-9 et « _ »".into());
     }
     let alias = config.alias.unwrap_or_else(|| config.id.clone());
@@ -376,11 +371,7 @@ fn check_action(config: ActionConfig) -> Result<Action, String> {
                 ));
             };
             for part in [domain, name] {
-                let valid = (1..=64).contains(&part.len())
-                    && part
-                        .bytes()
-                        .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_');
-                if !valid {
+                if !ha_core::is_valid_name(part) {
                     return Err(format!("action {:?} invalide", service.action));
                 }
             }
@@ -483,7 +474,6 @@ fn parse_weekday(value: &str) -> Result<Weekday, String> {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
 
@@ -543,7 +533,7 @@ mod tests {
         );
         let first = &automations[0];
         assert_eq!(first.alias, "Allumer le salon quand on rentre le soir");
-        assert_eq!(first.actions[1], Action::Delay(Duration::from_secs(600)));
+        assert_eq!(first.actions[1], Action::Delay(Duration::from_mins(10)));
         let Action::Service { entity_ids, .. } = &first.actions[2] else {
             panic!("service attendu");
         };
@@ -609,12 +599,9 @@ mod tests {
 
     #[test]
     fn durations_and_times() {
-        assert_eq!(
-            parse_duration("00:05:00").unwrap(),
-            Duration::from_secs(300)
-        );
+        assert_eq!(parse_duration("00:05:00").unwrap(), Duration::from_mins(5));
         assert_eq!(parse_duration("30s").unwrap(), Duration::from_secs(30));
-        assert_eq!(parse_duration("2h").unwrap(), Duration::from_secs(7200));
+        assert_eq!(parse_duration("2h").unwrap(), Duration::from_hours(2));
         for bad in ["", "5", "5 min", "-1s", "1d", "99:00:00"] {
             assert!(parse_duration(bad).is_err(), "{bad:?}");
         }

@@ -1,7 +1,12 @@
 //! Tests du pont MQTT ⇄ entités, sans broker : on lui donne des messages
 //! comme le ferait Zigbee2MQTT ou Tasmota, et on regarde le résultat.
 
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "dans un test, un échec doit simplement faire échouer le test"
+)]
 
 use std::time::UNIX_EPOCH;
 

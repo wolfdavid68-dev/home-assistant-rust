@@ -40,6 +40,7 @@ pub fn generate_token() -> Result<Zeroizing<String>, AuthError> {
 /// Concept : contrairement aux mots de passe, un jeton est déjà parfaitement
 /// aléatoire. Un hachage rapide (SHA-256) suffit donc : il est impossible de
 /// retrouver le jeton à partir de l'empreinte, même avec beaucoup de calcul.
+#[must_use]
 pub fn hash_token(token: &str) -> [u8; 32] {
     Sha256::digest(token.as_bytes()).into()
 }

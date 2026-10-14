@@ -37,12 +37,14 @@ impl EntityId {
     }
 
     /// Le domaine : `light` dans `light.salon`.
+    #[must_use]
     pub fn domain(&self) -> &str {
         // L'identifiant a été validé dans `new`, il contient donc forcément un point.
         self.0.split_once('.').map_or("", |(domain, _)| domain)
     }
 
     /// Le nom de l'objet : `salon` dans `light.salon`.
+    #[must_use]
     pub fn object_id(&self) -> &str {
         self.0
             .split_once('.')
@@ -50,6 +52,7 @@ impl EntityId {
     }
 
     /// L'identifiant complet sous forme de texte.
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -85,7 +88,7 @@ impl FromStr for EntityId {
 /// Transforme un nom en morceau d'identifiant : `Température Salon` → `temperature_salon`.
 pub fn slugify(name: &str) -> String {
     let mut slug = String::new();
-    for c in name.chars().flat_map(fold_accent) {
+    for c in name.chars().map(fold_accent) {
         if c.is_ascii_alphanumeric() {
             slug.push(c.to_ascii_lowercase());
         } else if !slug.ends_with('_') && !slug.is_empty() {
@@ -101,19 +104,18 @@ pub fn slugify(name: &str) -> String {
 }
 
 /// Retire les accents les plus courants (é → e, ç → c…).
-fn fold_accent(c: char) -> Option<char> {
-    Some(match c {
+fn fold_accent(c: char) -> char {
+    match c {
         'à' | 'â' | 'ä' | 'á' | 'ã' | 'À' | 'Â' | 'Ä' | 'Á' => 'a',
         'é' | 'è' | 'ê' | 'ë' | 'É' | 'È' | 'Ê' | 'Ë' => 'e',
         'î' | 'ï' | 'í' | 'Î' | 'Ï' => 'i',
-        'ô' | 'ö' | 'ó' | 'õ' | 'Ô' | 'Ö' => 'o',
+        'ô' | 'ö' | 'ó' | 'õ' | 'Ô' | 'Ö' | 'œ' | 'Œ' => 'o',
         'ù' | 'û' | 'ü' | 'ú' | 'Ù' | 'Û' | 'Ü' => 'u',
         'ç' | 'Ç' => 'c',
         'ñ' | 'Ñ' => 'n',
         'ÿ' => 'y',
-        'œ' | 'Œ' => 'o',
         other => other,
-    })
+    }
 }
 
 #[cfg(test)]

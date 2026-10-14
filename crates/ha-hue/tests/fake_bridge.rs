@@ -1,7 +1,12 @@
 //! Tests avec un **faux pont Hue** : un petit serveur HTTPS local, avec un
 //! certificat auto-signé comme le vrai pont, qui répond comme l'API v2.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "dans un test, un échec doit simplement faire échouer le test"
+)]
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;

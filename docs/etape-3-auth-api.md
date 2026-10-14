@@ -83,9 +83,9 @@ tâches `async` partagent quelques fils d'exécution : un calcul long les bloque
 contiennent un secret n'ont pas de `#[derive(Debug)]`, ou un `Debug` écrit à la main qui affiche
 `<masqué>` : un `{:?}` oublié dans un log ne peut pas les révéler.
 
-**`watch` pour l'arrêt.** Un canal `watch` garde une valeur que plusieurs tâches surveillent. À
-l'arrêt, on passe la valeur à `true` : le serveur HTTP cesse d'accepter des connexions et chaque
-WebSocket ouvert se ferme proprement.
+**Un signal d'arrêt partagé.** `ApiState` garde un `CancellationToken`, copié dans chaque
+connexion WebSocket. À l'arrêt, on l'annule : le serveur HTTP cesse d'accepter des connexions et
+chaque WebSocket ouvert se ferme proprement.
 
 **Filtrage par motif sur des tranches.** Dans `main`, `match args.as_slice()` avec des motifs
 comme `["user", rest @ ..]` analyse la ligne de commande sans bibliothèque supplémentaire.

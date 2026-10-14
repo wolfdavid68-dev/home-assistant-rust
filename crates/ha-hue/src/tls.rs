@@ -129,6 +129,7 @@ pub fn client(
 }
 
 /// Empreinte au format lisible : `AB:CD:…`.
+#[must_use]
 pub fn format_fingerprint(fingerprint: &Fingerprint) -> String {
     fingerprint
         .iter()

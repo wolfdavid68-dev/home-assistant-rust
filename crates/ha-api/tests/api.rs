@@ -1,6 +1,11 @@
 //! Tests de l'API : requêtes HTTP simulées, et un vrai serveur local pour le WebSocket.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "dans un test, un échec doit simplement faire échouer le test"
+)]
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -176,13 +181,13 @@ async fn history_is_available_through_the_api() {
         )
         .await;
     assert_eq!(status, StatusCode::OK);
-    let states: Vec<&str> = body["history"]
+    let values: Vec<&str> = body["history"]
         .as_array()
         .unwrap()
         .iter()
         .map(|entry| entry["state"].as_str().unwrap())
         .collect();
-    assert_eq!(states, ["off", "on"]);
+    assert_eq!(values, ["off", "on"]);
 }
 
 #[tokio::test]
@@ -351,10 +356,7 @@ async fn websocket_rejects_a_bad_token() {
     let next = tokio::time::timeout(Duration::from_secs(5), socket.next())
         .await
         .unwrap();
-    assert!(matches!(
-        next,
-        Some(Ok(Message::Close(_))) | None | Some(Err(_))
-    ));
+    assert!(matches!(next, Some(Ok(Message::Close(_)) | Err(_)) | None));
 
     app.state.shutdown();
 }

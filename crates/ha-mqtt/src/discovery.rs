@@ -46,6 +46,7 @@ impl Component {
     }
 
     /// Le domaine de l'identifiant d'entité : `sensor`, `light`…
+    #[must_use]
     pub fn domain(self) -> &'static str {
         match self {
             Self::Sensor => "sensor",
@@ -129,6 +130,7 @@ const ABBREVIATIONS: &[(&str, &str)] = &[
 /// ou `None` si ce n'est pas un sujet de découverte.
 ///
 /// Formats : `<préfixe>/<type>/<objet>/config` ou `<préfixe>/<type>/<nœud>/<objet>/config`.
+#[must_use]
 pub fn parse_topic<'a>(prefix: &str, topic: &'a str) -> Option<(&'a str, &'a str)> {
     let rest = topic.strip_prefix(prefix)?.strip_prefix('/')?;
     let rest = rest.strip_suffix("/config")?;
@@ -290,7 +292,6 @@ fn check_topic(topic: &str, prefix: &str, key: &'static str) -> Result<String, D
 }
 
 #[cfg(test)]
-#[allow(clippy::panic)]
 mod tests {
     use super::*;
 

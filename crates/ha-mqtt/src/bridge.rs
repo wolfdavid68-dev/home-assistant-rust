@@ -57,6 +57,7 @@ impl Bridge {
     }
 
     /// Les abonnements nécessaires pour recevoir les descriptions.
+    #[must_use]
     pub fn discovery_filters(&self) -> [String; 2] {
         [
             format!("{}/+/+/config", self.prefix),
@@ -70,10 +71,12 @@ impl Bridge {
     }
 
     /// Nombre d'entités suivies.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.entities.len()
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.entities.is_empty()
     }

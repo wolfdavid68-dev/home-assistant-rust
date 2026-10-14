@@ -11,7 +11,7 @@ use crate::error::HueError;
 use crate::tls::{self, Fingerprint};
 
 /// Temps laissé pour appuyer sur le bouton du pont.
-pub const LINK_BUTTON_TIMEOUT: Duration = Duration::from_secs(60);
+pub const LINK_BUTTON_TIMEOUT: Duration = Duration::from_mins(1);
 
 /// Ce qu'il faut savoir pour se reconnecter au pont.
 pub struct Pairing {
@@ -147,7 +147,6 @@ pub async fn forget(store: &Store) -> Result<bool, HueError> {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

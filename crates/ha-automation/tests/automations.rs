@@ -1,7 +1,12 @@
 //! Tests des automatisations : logique de déclenchement avec une horloge
 //! simulée, puis le moteur complet branché sur un vrai noyau.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "dans un test, un échec doit simplement faire échouer le test"
+)]
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -52,11 +57,11 @@ fn state_trigger_from_to() {
 
 #[test]
 fn numeric_state_fires_when_entering_the_range() {
-    let yaml = r#"
+    let yaml = r"
 - id: froid
   triggers: [{trigger: numeric_state, entity_id: sensor.temperature, below: 18}]
   actions: [{delay: 1s}]
-"#;
+";
     let core = Core::new();
     let mut evaluator = Evaluator::new(parse(yaml).unwrap());
 
@@ -117,9 +122,9 @@ async fn state_trigger_with_for_waits_and_cancels() {
 
     // Ouverte, puis refermée avant 5 minutes : rien.
     assert!(change(&core, &mut evaluator, "binary_sensor.porte", "on").is_empty());
-    tokio::time::advance(Duration::from_secs(120)).await;
+    tokio::time::advance(Duration::from_mins(2)).await;
     change(&core, &mut evaluator, "binary_sensor.porte", "off");
-    tokio::time::advance(Duration::from_secs(600)).await;
+    tokio::time::advance(Duration::from_mins(10)).await;
     assert!(
         evaluator
             .on_tick(t, t, Instant::now(), &core.states)
@@ -243,11 +248,11 @@ async fn engine_runs_actions_in_order() {
 #[tokio::test]
 async fn runaway_loops_are_stopped() {
     // L'automatisation réagit à chaque changement de la lampe… et la modifie.
-    let yaml = r#"
+    let yaml = r"
 - id: boucle
   triggers: [{trigger: state, entity_id: light.a}]
   actions: [{action: light.toggle, target: {entity_id: light.a}}]
-"#;
+";
     let core = Arc::new(Core::new());
     let mut rx = core.bus.subscribe();
     let engine = Engine::start(parse(yaml).unwrap(), Arc::clone(&core));

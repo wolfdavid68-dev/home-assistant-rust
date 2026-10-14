@@ -5,10 +5,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures_util::StreamExt;
-use ha_core::{Core, Event};
+use ha_core::{Background, CancellationToken, Core, Event};
 use tokio::sync::broadcast::error::RecvError;
-use tokio::sync::oneshot;
-use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
 
 use crate::api::HueApi;
@@ -18,34 +16,28 @@ use crate::sse::SseParser;
 use crate::tls;
 
 /// Délai maximal entre deux tentatives de reconnexion.
-const MAX_BACKOFF: Duration = Duration::from_secs(60);
+const MAX_BACKOFF: Duration = Duration::from_mins(1);
 /// Sans aucune donnée pendant ce temps, on considère le flux comme coupé
 /// et on se reconnecte (ce qui relit aussi l'état de toutes les lampes).
-const STREAM_IDLE: Duration = Duration::from_secs(10 * 60);
+const STREAM_IDLE: Duration = Duration::from_mins(10);
 
 /// Poignée vers l'intégration Hue qui tourne en arrière-plan.
 #[derive(Debug)]
-pub struct Hue {
-    shutdown: oneshot::Sender<()>,
-    task: JoinHandle<()>,
-}
+pub struct Hue(Background);
 
 impl Hue {
     pub fn start(pairing: Pairing, core: Arc<Core>) -> Self {
-        let (shutdown, shutdown_rx) = oneshot::channel();
-        let task = tokio::spawn(run(pairing, core, shutdown_rx));
-        Self { shutdown, task }
+        Self(Background::spawn("l'intégration Hue", |token| {
+            run(pairing, core, token)
+        }))
     }
 
     pub async fn stop(self) {
-        let _ = self.shutdown.send(());
-        if let Err(error) = self.task.await {
-            error!("l'intégration Hue s'est arrêtée anormalement : {error}");
-        }
+        self.0.stop().await;
     }
 }
 
-async fn run(pairing: Pairing, core: Arc<Core>, mut shutdown: oneshot::Receiver<()>) {
+async fn run(pairing: Pairing, core: Arc<Core>, token: CancellationToken) {
     let http = match tls::client(Some(pairing.fingerprint)) {
         Ok((http, _)) => http,
         Err(error) => {
@@ -80,7 +72,7 @@ async fn run(pairing: Pairing, core: Arc<Core>, mut shutdown: oneshot::Receiver<
                 );
                 tokio::select! {
                     () = tokio::time::sleep(backoff) => {}
-                    _ = &mut shutdown => break 'connection,
+                    () = token.cancelled() => break 'connection,
                 }
                 backoff = (backoff * 2).min(MAX_BACKOFF);
                 continue;
@@ -93,7 +85,7 @@ async fn run(pairing: Pairing, core: Arc<Core>, mut shutdown: oneshot::Receiver<
 
         loop {
             tokio::select! {
-                _ = &mut shutdown => break 'connection,
+                () = token.cancelled() => break 'connection,
 
                 chunk = tokio::time::timeout(STREAM_IDLE, stream.next()) => {
                     let chunk = match chunk {

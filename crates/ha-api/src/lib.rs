@@ -26,10 +26,10 @@ use axum::extract::DefaultBodyLimit;
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use ha_auth::Auth;
+use ha_core::CancellationToken;
 use ha_core::Core;
 use ha_storage::Store;
 use tokio::net::TcpListener;
-use tokio::sync::watch;
 use tower_http::timeout::TimeoutLayer;
 
 pub use json::{format_timestamp, state_to_json};
@@ -45,12 +45,12 @@ pub struct ApiState {
     pub core: Arc<Core>,
     pub store: Store,
     pub auth: Arc<Auth>,
-    shutdown: watch::Sender<bool>,
+    shutdown: CancellationToken,
 }
 
 impl ApiState {
     pub fn new(core: Arc<Core>, store: Store, auth: Arc<Auth>) -> Arc<Self> {
-        let (shutdown, _) = watch::channel(false);
+        let shutdown = CancellationToken::new();
         Arc::new(Self {
             core,
             store,
@@ -62,11 +62,11 @@ impl ApiState {
     /// Demande l'arrêt du serveur : plus de nouvelles connexions, et les
     /// WebSockets ouverts sont fermés.
     pub fn shutdown(&self) {
-        self.shutdown.send_replace(true);
+        self.shutdown.cancel();
     }
 
-    fn shutdown_signal(&self) -> watch::Receiver<bool> {
-        self.shutdown.subscribe()
+    fn shutdown_signal(&self) -> CancellationToken {
+        self.shutdown.clone()
     }
 }
 
@@ -96,12 +96,9 @@ pub fn router(state: Arc<ApiState>) -> Router {
 
 /// Sert l'API sur `listener` jusqu'à l'appel de [`ApiState::shutdown`].
 pub async fn serve(listener: TcpListener, state: Arc<ApiState>) -> std::io::Result<()> {
-    let mut shutdown = state.shutdown_signal();
+    let shutdown = state.shutdown_signal();
     let app = router(state).into_make_service_with_connect_info::<SocketAddr>();
     axum::serve(listener, app)
-        .with_graceful_shutdown(async move {
-            // `wait_for` rend la main dès que la valeur vaut `true`.
-            let _ = shutdown.wait_for(|stop| *stop).await;
-        })
+        .with_graceful_shutdown(async move { shutdown.cancelled().await })
         .await
 }
