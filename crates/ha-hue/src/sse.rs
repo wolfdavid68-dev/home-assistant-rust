@@ -59,7 +59,6 @@ fn find_separator(buffer: &[u8]) -> Option<(usize, usize)> {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

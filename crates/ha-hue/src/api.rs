@@ -80,6 +80,7 @@ impl std::fmt::Debug for HueApi {
 }
 
 impl HueApi {
+    #[must_use]
     pub fn new(http: reqwest::Client, host: &str, key: Zeroizing<String>) -> Self {
         Self {
             http,
@@ -198,6 +199,7 @@ pub async fn request_app_key(
 ///
 /// Sécurité : l'identifiant vient du pont et finit dans une adresse
 /// (`…/resource/light/<id>`). On vérifie qu'il ne contient rien d'autre.
+#[must_use]
 pub fn is_resource_id(id: &str) -> bool {
     let parts: Vec<&str> = id.split('-').collect();
     parts.len() == 5
@@ -223,7 +225,6 @@ async fn read_json<T: DeserializeOwned>(response: reqwest::Response) -> Result<T
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

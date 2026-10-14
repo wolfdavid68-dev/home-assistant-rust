@@ -21,6 +21,10 @@ pub type Attributes = serde_json::Map<String, serde_json::Value>;
 #[derive(Debug, Clone, PartialEq)]
 pub struct State {
     entity_id: EntityId,
+    #[expect(
+        clippy::struct_field_names,
+        reason = "« state » est le nom utilisé par Home Assistant pour la valeur"
+    )]
     state: String,
     attributes: Attributes,
     last_changed: SystemTime,
@@ -45,25 +49,30 @@ impl State {
         }
     }
 
+    #[must_use]
     pub fn entity_id(&self) -> &EntityId {
         &self.entity_id
     }
 
     /// La valeur de l'état, par exemple `"on"`.
+    #[must_use]
     pub fn state(&self) -> &str {
         &self.state
     }
 
+    #[must_use]
     pub fn attributes(&self) -> &Attributes {
         &self.attributes
     }
 
     /// Dernière fois que la **valeur** a changé.
+    #[must_use]
     pub fn last_changed(&self) -> SystemTime {
         self.last_changed
     }
 
     /// Dernière fois que la valeur **ou** un attribut a changé.
+    #[must_use]
     pub fn last_updated(&self) -> SystemTime {
         self.last_updated
     }

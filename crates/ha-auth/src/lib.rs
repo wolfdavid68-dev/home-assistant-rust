@@ -25,7 +25,7 @@ pub use password::{MAX_PASSWORD_LEN, MIN_PASSWORD_LEN};
 pub use token::TOKEN_PREFIX;
 
 /// Durée de validité d'un jeton par défaut : 30 jours.
-pub const DEFAULT_TOKEN_LIFETIME: Duration = Duration::from_secs(30 * 24 * 3600);
+pub const DEFAULT_TOKEN_LIFETIME: Duration = Duration::from_hours(30 * 24);
 
 /// Nombre de calculs Argon2 simultanés au maximum. Chacun utilise ~19 Mo de
 /// mémoire : sans limite, une rafale de connexions pourrait saturer la machine.
@@ -81,6 +81,7 @@ impl Auth {
     }
 
     /// Change la durée de validité des nouveaux jetons.
+    #[must_use]
     pub fn with_token_lifetime(mut self, lifetime: Duration) -> Self {
         self.token_lifetime = lifetime;
         self

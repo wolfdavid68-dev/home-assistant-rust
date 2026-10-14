@@ -3,11 +3,9 @@
 
 use std::sync::Arc;
 
-use ha_core::{Core, Event};
+use ha_core::{Background, CancellationToken, Core, Event};
 use tokio::sync::broadcast::Receiver;
 use tokio::sync::broadcast::error::{RecvError, TryRecvError};
-use tokio::sync::oneshot;
-use tokio::task::JoinHandle;
 use tracing::{error, warn};
 
 use crate::store::Store;
@@ -17,10 +15,7 @@ use crate::store::Store;
 /// Si la poignée est abandonnée sans appeler [`Recorder::stop`], l'enregistreur
 /// s'arrête aussi (après avoir écrit les événements en attente).
 #[derive(Debug)]
-pub struct Recorder {
-    shutdown: oneshot::Sender<()>,
-    task: JoinHandle<()>,
-}
+pub struct Recorder(Background);
 
 impl Recorder {
     /// Démarre l'enregistreur.
@@ -29,18 +24,14 @@ impl Recorder {
     /// changement fait juste après cet appel ne peut être manqué.
     pub fn start(store: Store, core: Arc<Core>) -> Self {
         let events = core.bus.subscribe();
-        let (shutdown, shutdown_rx) = oneshot::channel();
-        let task = tokio::spawn(run(store, core, events, shutdown_rx));
-        Self { shutdown, task }
+        Self(Background::spawn("l'enregistreur", |token| {
+            run(store, core, events, token)
+        }))
     }
 
     /// Demande l'arrêt et attend que les derniers événements soient écrits.
     pub async fn stop(self) {
-        // Si la tâche est déjà terminée, il n'y a personne pour recevoir : pas grave.
-        let _ = self.shutdown.send(());
-        if let Err(error) = self.task.await {
-            error!("l'enregistreur s'est arrêté anormalement : {error}");
-        }
+        self.0.stop().await;
     }
 }
 
@@ -48,19 +39,18 @@ async fn run(
     store: Store,
     core: Arc<Core>,
     mut events: Receiver<Arc<Event>>,
-    mut shutdown: oneshot::Receiver<()>,
+    token: CancellationToken,
 ) {
     loop {
         // Concept Rust : `select!` attend le premier qui arrive, un événement
-        // ou la demande d'arrêt. `&mut shutdown` emprunte le récepteur au lieu
-        // de le consommer, pour pouvoir le réutiliser au tour suivant.
+        // ou la demande d'arrêt.
         tokio::select! {
             received = events.recv() => match received {
                 Ok(event) => record(&store, &event).await,
                 Err(RecvError::Lagged(missed)) => resync(&store, &core, missed).await,
                 Err(RecvError::Closed) => return,
             },
-            _ = &mut shutdown => break,
+            () = token.cancelled() => break,
         }
     }
 

@@ -59,12 +59,17 @@ pub struct EventBus {
 }
 
 impl EventBus {
+    #[must_use]
     pub fn new(capacity: usize) -> Self {
         let (sender, _) = broadcast::channel(capacity);
         Self { sender }
     }
 
     /// Publie un événement et renvoie le nombre d'abonnés qui le recevront.
+    #[expect(
+        clippy::must_use_candidate,
+        reason = "ignorer le nombre d'abonnés est normal : on publie et on continue"
+    )]
     pub fn publish(&self, event: Event) -> usize {
         // `send` échoue seulement s'il n'y a aucun abonné : l'événement est alors
         // simplement perdu, ce qui est normal.
@@ -75,6 +80,7 @@ impl EventBus {
     ///
     /// Un abonné trop lent qui laisse passer plus de `capacity` événements reçoit
     /// `RecvError::Lagged` : il a perdu des événements mais peut continuer.
+    #[must_use]
     pub fn subscribe(&self) -> broadcast::Receiver<Arc<Event>> {
         self.sender.subscribe()
     }

@@ -21,6 +21,7 @@ pub struct StateMachine {
 }
 
 impl StateMachine {
+    #[must_use]
     pub fn new(bus: EventBus) -> Self {
         Self {
             states: RwLock::new(HashMap::new()),

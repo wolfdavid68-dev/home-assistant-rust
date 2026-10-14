@@ -33,10 +33,12 @@ pub struct Lights {
 }
 
 impl Lights {
+    #[must_use]
     pub fn len(&self) -> usize {
         self.by_id.len()
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.by_id.is_empty()
     }
@@ -61,18 +63,17 @@ impl Lights {
                         .collect::<String>()
                 })
                 .unwrap_or_default();
-            let entity_id = match self.by_id.get(&resource.id) {
-                Some(entity_id) => entity_id.clone(),
-                None => {
-                    let Some(entity_id) = self.allocate_id(&name, &resource.id) else {
-                        continue;
-                    };
-                    info!("lampe Hue trouvée : {entity_id} ({name})");
-                    self.by_id.insert(resource.id.clone(), entity_id.clone());
-                    self.by_entity
-                        .insert(entity_id.clone(), resource.id.clone());
-                    entity_id
-                }
+            let entity_id = if let Some(entity_id) = self.by_id.get(&resource.id) {
+                entity_id.clone()
+            } else {
+                let Some(entity_id) = self.allocate_id(&name, &resource.id) else {
+                    continue;
+                };
+                info!("lampe Hue trouvée : {entity_id} ({name})");
+                self.by_id.insert(resource.id.clone(), entity_id.clone());
+                self.by_entity
+                    .insert(entity_id.clone(), resource.id.clone());
+                entity_id
             };
             present.push(resource.id.clone());
 
@@ -230,20 +231,26 @@ fn set(states: &StateMachine, entity_id: &EntityId, on: bool, attributes: Attrib
 /// Hue : 0 à 100 %. Home Assistant : 0 à 255.
 fn percent_to_255(percent: f64) -> u64 {
     // `as` sur un flottant borné entre 0 et 255 : pas de dépassement possible.
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "valeur bornée entre 0 et 255 juste avant"
+    )]
     let value = (percent.clamp(0.0, 100.0) * 255.0 / 100.0).round() as u64;
     value
 }
 
 fn brightness_to_percent(brightness: u64) -> f64 {
     // Valeur entre 1 et 255 : la conversion en flottant est exacte.
-    #[allow(clippy::cast_precision_loss)]
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "valeur entre 1 et 255 : exacte en flottant"
+    )]
     let percent = brightness as f64 * 100.0 / 255.0;
     (percent * 100.0).round() / 100.0
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

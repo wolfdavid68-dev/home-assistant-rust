@@ -310,7 +310,7 @@ async fn log_state_changes(mut rx: tokio::sync::broadcast::Receiver<Arc<Event>>)
                 } => info!("service {domain}.{service} appelé pour {entity_id}"),
             },
             Err(RecvError::Lagged(missed)) => {
-                warn!("{missed} événements manqués (abonné trop lent)")
+                warn!("{missed} événements manqués (abonné trop lent)");
             }
             Err(RecvError::Closed) => break,
         }

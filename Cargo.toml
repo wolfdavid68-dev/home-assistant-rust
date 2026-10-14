@@ -38,6 +38,8 @@ sqlx = { version = "0.9.0", default-features = false, features = ["runtime-tokio
 thiserror = "2.0.21"
 tokio = { version = "1.53.3", default-features = false }
 tracing = "0.1.44"
+# Arrêt propre des tâches de fond (`CancellationToken`).
+tokio-util = { version = "0.7.20", default-features = false }
 # Uniquement pour les tests (sauf futures-util, aussi utilisé par ha-hue).
 futures-util = { version = "0.3.34", default-features = false, features = ["sink"] }
 rcgen = "0.14.10"
@@ -51,6 +53,12 @@ unsafe_code = "forbid"
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
+# Règles plus strictes (« pédantes ») : code plus lisible et plus sûr.
+pedantic = { level = "warn", priority = -1 }
+# … sauf celles qui gênent plus qu'elles n'aident ici :
+missing_errors_doc = "allow"  # chaque fonction n'a pas besoin d'une section « # Errors »
+doc_markdown = "allow"        # se trompe sur les mots français et les noms de marques
+too_many_lines = "allow"      # une fonction longue mais linéaire reste lisible
 # Pas de panique sur des données externes : on gère les erreurs avec Result.
 unwrap_used = "warn"
 expect_used = "warn"

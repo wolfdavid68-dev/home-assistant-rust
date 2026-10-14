@@ -1,7 +1,12 @@
 //! Tests des automatisations : logique de déclenchement avec une horloge
 //! simulée, puis le moteur complet branché sur un vrai noyau.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "dans un test, un échec doit simplement faire échouer le test"
+)]
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -47,27 +52,39 @@ fn state_trigger_from_to() {
         [0]
     );
     // Une autre entité ne déclenche rien.
-    assert!(change(&core, &mut evaluator, "binary_sensor.fenetre", "on").is_empty());
+    assert_eq!(
+        change(&core, &mut evaluator, "binary_sensor.fenetre", "on"),
+        Vec::<usize>::new()
+    );
 }
 
 #[test]
 fn numeric_state_fires_when_entering_the_range() {
-    let yaml = r#"
+    let yaml = r"
 - id: froid
   triggers: [{trigger: numeric_state, entity_id: sensor.temperature, below: 18}]
   actions: [{delay: 1s}]
-"#;
+";
     let core = Core::new();
     let mut evaluator = Evaluator::new(parse(yaml).unwrap());
 
-    assert!(change(&core, &mut evaluator, "sensor.temperature", "19.5").is_empty());
+    assert_eq!(
+        change(&core, &mut evaluator, "sensor.temperature", "19.5"),
+        Vec::<usize>::new()
+    );
     assert_eq!(
         change(&core, &mut evaluator, "sensor.temperature", "17.9"),
         [0]
     );
     // On y reste : pas de nouveau déclenchement à chaque mesure.
-    assert!(change(&core, &mut evaluator, "sensor.temperature", "17.5").is_empty());
-    assert!(change(&core, &mut evaluator, "sensor.temperature", "indisponible").is_empty());
+    assert_eq!(
+        change(&core, &mut evaluator, "sensor.temperature", "17.5"),
+        Vec::<usize>::new()
+    );
+    assert_eq!(
+        change(&core, &mut evaluator, "sensor.temperature", "indisponible"),
+        Vec::<usize>::new()
+    );
     assert_eq!(
         change(&core, &mut evaluator, "sensor.temperature", "16"),
         [0]
@@ -87,7 +104,10 @@ fn time_trigger_including_midnight() {
     let day = date(2026, 10, 14);
 
     let tick = |e: &mut Evaluator, a, b| e.on_tick(a, b, now, &core.states);
-    assert!(tick(&mut evaluator, day.at(6, 59, 58, 0), day.at(6, 59, 59, 0)).is_empty());
+    assert_eq!(
+        tick(&mut evaluator, day.at(6, 59, 58, 0), day.at(6, 59, 59, 0)),
+        Vec::<usize>::new()
+    );
     assert_eq!(
         tick(&mut evaluator, day.at(6, 59, 59, 0), day.at(7, 0, 0, 0)),
         [0]
@@ -116,23 +136,24 @@ async fn state_trigger_with_for_waits_and_cancels() {
     let t = date(2026, 10, 14).at(12, 0, 0, 0);
 
     // Ouverte, puis refermée avant 5 minutes : rien.
-    assert!(change(&core, &mut evaluator, "binary_sensor.porte", "on").is_empty());
-    tokio::time::advance(Duration::from_secs(120)).await;
+    assert_eq!(
+        change(&core, &mut evaluator, "binary_sensor.porte", "on"),
+        Vec::<usize>::new()
+    );
+    tokio::time::advance(Duration::from_mins(2)).await;
     change(&core, &mut evaluator, "binary_sensor.porte", "off");
-    tokio::time::advance(Duration::from_secs(600)).await;
-    assert!(
-        evaluator
-            .on_tick(t, t, Instant::now(), &core.states)
-            .is_empty()
+    tokio::time::advance(Duration::from_mins(10)).await;
+    assert_eq!(
+        evaluator.on_tick(t, t, Instant::now(), &core.states),
+        Vec::<usize>::new()
     );
 
     // Ouverte et restée ouverte 5 minutes : déclenché.
     change(&core, &mut evaluator, "binary_sensor.porte", "on");
     tokio::time::advance(Duration::from_secs(299)).await;
-    assert!(
-        evaluator
-            .on_tick(t, t, Instant::now(), &core.states)
-            .is_empty()
+    assert_eq!(
+        evaluator.on_tick(t, t, Instant::now(), &core.states),
+        Vec::<usize>::new()
     );
     tokio::time::advance(Duration::from_secs(1)).await;
     assert_eq!(evaluator.on_tick(t, t, Instant::now(), &core.states), [0]);
@@ -243,11 +264,11 @@ async fn engine_runs_actions_in_order() {
 #[tokio::test]
 async fn runaway_loops_are_stopped() {
     // L'automatisation réagit à chaque changement de la lampe… et la modifie.
-    let yaml = r#"
+    let yaml = r"
 - id: boucle
   triggers: [{trigger: state, entity_id: light.a}]
   actions: [{action: light.toggle, target: {entity_id: light.a}}]
-"#;
+";
     let core = Arc::new(Core::new());
     let mut rx = core.bus.subscribe();
     let engine = Engine::start(parse(yaml).unwrap(), Arc::clone(&core));

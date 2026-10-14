@@ -21,8 +21,13 @@ env:
 # Dependabot les met à jour.
 jobs:
   check:
-    name: fmt, clippy, tests
-    runs-on: ubuntu-latest
+    name: clippy et tests (${{ matrix.os }})
+    # Linux (comme un futur serveur) et Windows (comme ton PC).
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -34,14 +39,46 @@ jobs:
 
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
-      - name: Format
-        run: cargo fmt --all --check
-
       - name: Clippy
         run: cargo clippy --workspace --all-targets --all-features --locked
 
       - name: Tests
         run: cargo test --workspace --all-features --locked
+
+  fmt:
+    name: format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install toolchain
+        run: rustup toolchain install
+
+      - name: Format
+        run: cargo fmt --all --check
+
+  msrv:
+    # Vérifie que le projet compile avec la version minimale annoncée dans
+    # Cargo.toml (`rust-version`), et pas seulement avec la dernière.
+    name: version minimale de Rust
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install toolchain
+        run: |
+          MSRV=$(grep -m1 '^rust-version' Cargo.toml | cut -d '"' -f2)
+          rustup toolchain install "$MSRV" --profile minimal
+          echo "MSRV=$MSRV" >> "$GITHUB_ENV"
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+
+      - name: Check
+        run: cargo +"$MSRV" check --workspace --all-targets --locked
 
   deny:
     name: dépendances (failles, licences, sources)

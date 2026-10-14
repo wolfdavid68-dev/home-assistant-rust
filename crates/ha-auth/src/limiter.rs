@@ -8,9 +8,9 @@ use std::time::{Duration, Instant};
 /// Échecs autorisés dans la fenêtre avant blocage.
 pub const MAX_FAILURES: u32 = 5;
 /// Fenêtre pendant laquelle les échecs sont comptés.
-pub const FAILURE_WINDOW: Duration = Duration::from_secs(15 * 60);
+pub const FAILURE_WINDOW: Duration = Duration::from_mins(15);
 /// Durée du blocage.
-pub const LOCKOUT: Duration = Duration::from_secs(15 * 60);
+pub const LOCKOUT: Duration = Duration::from_mins(15);
 /// Nombre maximal d'adresses suivies, pour que la table ne remplisse pas la mémoire.
 const MAX_TRACKED: usize = 10_000;
 
@@ -30,6 +30,7 @@ pub struct LoginLimiter {
 }
 
 impl LoginLimiter {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }

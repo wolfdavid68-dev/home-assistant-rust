@@ -1,7 +1,11 @@
 //! Tests du stockage, sur une base SQLite en mémoire (ou un fichier temporaire).
 
-// Dans un test, un `unwrap` qui échoue fait simplement échouer le test : c'est voulu.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "dans un test, un échec doit simplement faire échouer le test"
+)]
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -16,7 +20,10 @@ fn id(value: &str) -> EntityId {
 }
 
 fn attrs(value: serde_json::Value) -> Attributes {
-    value.as_object().unwrap().clone()
+    match value {
+        serde_json::Value::Object(map) => map,
+        other => panic!("objet JSON attendu, reçu {other}"),
+    }
 }
 
 /// Démarre un noyau et un enregistreur sur une base en mémoire.
@@ -104,7 +111,10 @@ async fn removed_entity_leaves_a_trace_in_history() {
     core.states.remove(&plug);
     recorder.stop().await;
 
-    assert!(store.load_states().await.unwrap().is_empty());
+    assert_eq!(
+        store.load_states().await.unwrap(),
+        Vec::<ha_storage::StoredState>::new()
+    );
     let history = store.history(&plug, 10).await.unwrap();
     assert_eq!(history.len(), 2);
     assert!(
@@ -203,12 +213,15 @@ async fn purge_removes_only_old_history() {
         .unwrap();
     recorder.stop().await;
 
-    let yesterday = SystemTime::now() - Duration::from_secs(24 * 3600);
+    let yesterday = SystemTime::now() - Duration::from_hours(24);
     assert_eq!(store.purge_history(yesterday).await.unwrap(), 0);
 
-    let in_one_minute = SystemTime::now() + Duration::from_secs(60);
+    let in_one_minute = SystemTime::now() + Duration::from_mins(1);
     assert_eq!(store.purge_history(in_one_minute).await.unwrap(), 1);
-    assert!(store.history(&light, 10).await.unwrap().is_empty());
+    assert_eq!(
+        store.history(&light, 10).await.unwrap(),
+        Vec::<ha_storage::HistoryEntry>::new()
+    );
     // Le dernier état connu, lui, est conservé.
     assert_eq!(store.load_states().await.unwrap().len(), 1);
 }

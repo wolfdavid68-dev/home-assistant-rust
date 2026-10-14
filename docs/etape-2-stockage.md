@@ -84,9 +84,9 @@ et personne ne peut les modifier ensuite.
 comme un tuple : le type de chaque colonne est vérifié à la lecture. Une colonne qui peut être
 `NULL` se lit en `Option<String>` : le compilateur oblige à traiter le cas vide.
 
-**Arrêt propre avec un canal `oneshot`.** Un `oneshot` est un canal qui ne transporte qu'un seul
-message. `Recorder::stop` l'utilise pour dire « arrête-toi », puis attend la fin de la tâche
-(`self.task.await`). Dans la boucle, `tokio::select!` attend « un événement **ou** l'ordre
+**Arrêt propre.** `Recorder::stop` envoie un signal d'arrêt (un `CancellationToken`, voir
+[la modernisation](modernisation.md#2-un-seul-outil-pour-arrêter-les-tâches-de-fond)), puis
+attend la fin de la tâche. Dans la boucle, `tokio::select!` attend « un événement **ou** l'ordre
 d'arrêt ». Après l'ordre d'arrêt, on vide les événements restants avec `try_recv`.
 
 **`#[cfg(unix)]`.** Ce bloc n'est compilé que sous Linux/macOS. Il sert à régler les droits du

@@ -32,6 +32,7 @@ pub enum Segment {
 
 impl Template {
     /// Analyse un modèle. `None` si on ne le comprend pas.
+    #[must_use]
     pub fn parse(template: &str) -> Option<Self> {
         let inner = template
             .trim()
@@ -75,6 +76,7 @@ impl Template {
 
     /// Applique le modèle à un message. `None` si la valeur est absente
     /// (champ manquant, JSON invalide, valeur `null`).
+    #[must_use]
     pub fn render(&self, payload: &str) -> Option<String> {
         match self {
             Self::Raw => Some(payload.trim().to_owned()),
@@ -98,7 +100,6 @@ impl Template {
 }
 
 #[cfg(test)]
-#[allow(clippy::panic)]
 mod tests {
     use super::*;
 

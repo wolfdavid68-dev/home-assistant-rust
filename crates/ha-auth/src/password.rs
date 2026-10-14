@@ -51,6 +51,7 @@ pub fn hash_password(password: &str) -> Result<String, AuthError> {
 
 /// Vérifie un mot de passe contre une empreinte. Renvoie `false` aussi si
 /// l'empreinte est illisible.
+#[must_use]
 pub fn verify_password(password: &str, hash: &str) -> bool {
     let Ok(parsed) = PasswordHash::new(hash) else {
         return false;

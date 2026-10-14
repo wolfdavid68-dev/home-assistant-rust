@@ -9,12 +9,28 @@ mod error;
 mod event;
 mod state;
 mod state_machine;
+pub mod task;
 
 pub use entity_id::{EntityId, MAX_ENTITY_ID_LEN, slugify};
 pub use error::CoreError;
 pub use event::{DEFAULT_BUS_CAPACITY, Event, EventBus};
 pub use state::{Attributes, MAX_STATE_LEN, State};
 pub use state_machine::StateMachine;
+pub use task::Background;
+pub use tokio_util::sync::CancellationToken;
+
+/// Un nom simple (domaine, service, identifiant d'automatisation…) :
+/// 1 à 64 caractères parmi `a-z`, `0-9` et `_`.
+///
+/// Ces noms viennent souvent de l'extérieur (API, fichiers) et finissent
+/// dans des logs : on n'accepte rien d'autre.
+#[must_use]
+pub fn is_valid_name(name: &str) -> bool {
+    (1..=64).contains(&name.len())
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
+}
 
 /// Version du noyau, reprise de `Cargo.toml`.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -29,6 +45,7 @@ pub struct Core {
 }
 
 impl Core {
+    #[must_use]
     pub fn new() -> Self {
         let bus = EventBus::default();
         let states = StateMachine::new(bus.clone());
@@ -49,11 +66,7 @@ impl Core {
         data: Attributes,
     ) -> Result<(), CoreError> {
         for name in [domain, service] {
-            let valid = (1..=64).contains(&name.len())
-                && name
-                    .bytes()
-                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_');
-            if !valid {
+            if !is_valid_name(name) {
                 return Err(CoreError::InvalidServiceName(name.to_owned()));
             }
         }

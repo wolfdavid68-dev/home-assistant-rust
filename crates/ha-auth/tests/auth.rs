@@ -1,6 +1,11 @@
 //! Tests de l'authentification, sur une base SQLite en mémoire.
 
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "dans un test, un échec doit simplement faire échouer le test"
+)]
 
 use std::net::{IpAddr, Ipv4Addr};
 use std::time::Duration;
@@ -112,7 +117,10 @@ async fn deleting_a_user_revokes_their_tokens() {
     assert!(auth.delete_user("david").await.unwrap());
 
     assert!(auth.authenticate(&issued.token).await.unwrap().is_none());
-    assert!(auth.list_users().await.unwrap().is_empty());
+    assert_eq!(
+        auth.list_users().await.unwrap(),
+        Vec::<ha_auth::User>::new()
+    );
 }
 
 #[tokio::test]

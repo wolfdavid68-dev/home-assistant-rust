@@ -107,6 +107,7 @@ impl Store {
 
     /// Accès direct aux connexions, pour les crates qui ont leurs propres
     /// tables dans la même base (comptes et jetons dans `ha-auth`).
+    #[must_use]
     pub fn pool(&self) -> &SqlitePool {
         &self.pool
     }
@@ -130,54 +131,51 @@ impl Store {
         // Concept : une transaction applique tout ou rien. Si une requête
         // échoue, `tx` est abandonnée sans `commit` et la base reste intacte.
         let mut tx = self.pool.begin().await?;
-        match new_state {
-            Some(state) => {
-                let row = encode(state)?;
-                // Sécurité : les valeurs passent TOUJOURS par des paramètres
-                // (`?1`, `?2`…) et jamais par du texte collé dans la requête.
-                // SQLite les traite comme des données, pas comme du SQL : une
-                // valeur comme `'); DROP TABLE states; --` est stockée telle quelle.
-                sqlx::query(
-                    "INSERT INTO states (entity_id, state, attributes, last_changed, last_updated)
-                     VALUES (?1, ?2, ?3, ?4, ?5)
-                     ON CONFLICT (entity_id) DO UPDATE SET
-                         state = excluded.state,
-                         attributes = excluded.attributes,
-                         last_changed = excluded.last_changed,
-                         last_updated = excluded.last_updated",
-                )
-                .bind(&row.0)
-                .bind(&row.1)
-                .bind(&row.2)
-                .bind(row.3)
-                .bind(row.4)
+        if let Some(state) = new_state {
+            let row = encode(state)?;
+            // Sécurité : les valeurs passent TOUJOURS par des paramètres
+            // (`?1`, `?2`…) et jamais par du texte collé dans la requête.
+            // SQLite les traite comme des données, pas comme du SQL : une
+            // valeur comme `'); DROP TABLE states; --` est stockée telle quelle.
+            sqlx::query(
+                "INSERT INTO states (entity_id, state, attributes, last_changed, last_updated)
+                 VALUES (?1, ?2, ?3, ?4, ?5)
+                 ON CONFLICT (entity_id) DO UPDATE SET
+                     state = excluded.state,
+                     attributes = excluded.attributes,
+                     last_changed = excluded.last_changed,
+                     last_updated = excluded.last_updated",
+            )
+            .bind(&row.0)
+            .bind(&row.1)
+            .bind(&row.2)
+            .bind(row.3)
+            .bind(row.4)
+            .execute(&mut *tx)
+            .await?;
+            sqlx::query(
+                "INSERT INTO state_history
+                     (entity_id, state, attributes, last_changed, last_updated, recorded_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            )
+            .bind(&row.0)
+            .bind(&row.1)
+            .bind(&row.2)
+            .bind(row.3)
+            .bind(row.4)
+            .bind(recorded_at)
+            .execute(&mut *tx)
+            .await?;
+        } else {
+            sqlx::query("DELETE FROM states WHERE entity_id = ?1")
+                .bind(entity_id.as_str())
                 .execute(&mut *tx)
                 .await?;
-                sqlx::query(
-                    "INSERT INTO state_history
-                         (entity_id, state, attributes, last_changed, last_updated, recorded_at)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                )
-                .bind(&row.0)
-                .bind(&row.1)
-                .bind(&row.2)
-                .bind(row.3)
-                .bind(row.4)
+            sqlx::query("INSERT INTO state_history (entity_id, recorded_at) VALUES (?1, ?2)")
+                .bind(entity_id.as_str())
                 .bind(recorded_at)
                 .execute(&mut *tx)
                 .await?;
-            }
-            None => {
-                sqlx::query("DELETE FROM states WHERE entity_id = ?1")
-                    .bind(entity_id.as_str())
-                    .execute(&mut *tx)
-                    .await?;
-                sqlx::query("INSERT INTO state_history (entity_id, recorded_at) VALUES (?1, ?2)")
-                    .bind(entity_id.as_str())
-                    .bind(recorded_at)
-                    .execute(&mut *tx)
-                    .await?;
-            }
         }
         tx.commit().await?;
         Ok(())
@@ -382,7 +380,6 @@ fn create_private_file(path: &Path) -> Result<(), StorageError> {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

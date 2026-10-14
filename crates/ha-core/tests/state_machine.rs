@@ -1,7 +1,11 @@
 //! Tests du noyau, vu de l'extérieur (seulement l'API publique).
 
-// Dans un test, un `unwrap` qui échoue fait simplement échouer le test : c'est voulu.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "dans un test, un échec doit simplement faire échouer le test"
+)]
 
 use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
@@ -15,7 +19,10 @@ fn id(value: &str) -> EntityId {
 }
 
 fn attrs(value: serde_json::Value) -> Attributes {
-    value.as_object().unwrap().clone()
+    match value {
+        serde_json::Value::Object(map) => map,
+        other => panic!("objet JSON attendu, reçu {other}"),
+    }
 }
 
 /// Récupère le prochain événement `StateChanged` reçu.
@@ -161,7 +168,7 @@ fn restore_keeps_dates_and_publishes_nothing() {
     let mut rx = core.bus.subscribe();
     let light = id("light.salon");
     let changed_at = UNIX_EPOCH + Duration::from_secs(1_700_000_000);
-    let updated_at = changed_at + Duration::from_secs(60);
+    let updated_at = changed_at + Duration::from_mins(1);
 
     let restored = core
         .states

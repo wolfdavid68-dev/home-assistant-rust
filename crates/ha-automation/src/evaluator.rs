@@ -32,6 +32,7 @@ pub struct Evaluator {
 }
 
 impl Evaluator {
+    #[must_use]
     pub fn new(automations: Vec<Automation>) -> Self {
         Self {
             automations,
@@ -39,6 +40,7 @@ impl Evaluator {
         }
     }
 
+    #[must_use]
     pub fn automations(&self) -> &[Automation] {
         &self.automations
     }

@@ -6,6 +6,7 @@ use ha_core::State;
 use serde_json::{Value, json};
 
 /// `{"entity_id": …, "state": …, "attributes": {…}, "last_changed": …, "last_updated": …}`
+#[must_use]
 pub fn state_to_json(state: &State) -> Value {
     json!({
         "entity_id": state.entity_id().as_str(),
@@ -20,6 +21,7 @@ pub fn state_to_json(state: &State) -> Value {
 ///
 /// On le calcule nous-mêmes (quelques lignes) plutôt que d'ajouter une
 /// bibliothèque de dates entière : moins de dépendances, moins de risques.
+#[must_use]
 pub fn format_timestamp(time: SystemTime) -> String {
     let since_epoch = time.duration_since(UNIX_EPOCH).unwrap_or_default();
     let secs = since_epoch.as_secs();
