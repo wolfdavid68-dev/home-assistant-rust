@@ -1,0 +1,16 @@
+# Ce qui n'est jamais envoyé à Docker pendant la construction :
+# fichiers compilés, historique git, et surtout tes données et secrets.
+target
+.git
+.github
+docs
+config
+secrets
+.env
+.env.*
+*.db
+*.db-*
+*.pem
+*.key
+automations.yaml
+sauvegardes

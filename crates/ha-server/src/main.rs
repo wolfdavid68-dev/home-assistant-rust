@@ -16,6 +16,7 @@
 //! ha-server somfy pair <adresse>  associe la box Somfy TaHoma
 //! ha-server somfy devices         liste les appareils de la box
 //! ha-server automations check     vérifie le fichier d'automatisations
+//! ha-server healthcheck           vérifie qu'un serveur répond (pour Docker)
 //! ```
 //!
 //! Variables d'environnement :
@@ -31,8 +32,10 @@
 //! - `RUST_LOG` : niveau de détail des logs (par défaut `info`).
 
 mod cli;
+mod health;
 
 use std::error::Error;
+use std::io::IsTerminal;
 use std::net::SocketAddr;
 use std::process::ExitCode;
 use std::sync::Arc;
@@ -63,8 +66,11 @@ const DEFAULT_AUTOMATIONS_PATH: &str = "automations.yaml";
 #[tokio::main]
 async fn main() -> ExitCode {
     // Logs : niveau `info` par défaut, modifiable avec la variable RUST_LOG.
+    // Couleurs seulement dans un vrai terminal : dans les logs de Docker,
+    // elles deviendraient des codes illisibles.
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
+        .with_ansi(std::io::stdout().is_terminal())
         .init();
 
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -75,6 +81,10 @@ async fn main() -> ExitCode {
         ["hue", rest @ ..] => cli::hue_command(rest, &db_path()).await,
         ["somfy", rest @ ..] => cli::somfy_command(rest, &db_path()).await,
         ["automations", "check"] => cli::check_automations(&automations_path()),
+        ["healthcheck"] => match parse_bind() {
+            Ok(bind) => health::check(bind).await,
+            Err(error) => Err(error.into()),
+        },
         _ => Err(cli::USAGE.into()),
     };
     // On affiche le message lisible de l'erreur (`Display`), pas sa forme
@@ -164,7 +174,7 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     // Sans simulation, la deuxième branche attend indéfiniment
     // (`std::future::pending`) : seul Ctrl+C peut alors arrêter le serveur.
     tokio::select! {
-        result = tokio::signal::ctrl_c() => result?,
+        result = shutdown_signal() => result?,
         result = async {
             match &mut simulation {
                 Some(task) => task.await,
@@ -279,12 +289,46 @@ fn mqtt_config() -> Result<Option<MqttConfig>, String> {
     }))
 }
 
+/// Attend une demande d'arrêt : Ctrl+C, ou (Linux, macOS) le signal
+/// `SIGTERM` que Docker et systemd envoient pour arrêter un programme.
+///
+/// Dans un conteneur, le programme est le « processus n° 1 », que le noyau
+/// ne tue pas d'office : sans ce code, `SIGTERM` serait ignoré et Docker
+/// finirait par le tuer brutalement (`SIGKILL`), sans enregistrer les
+/// derniers états.
+///
+/// Concept Rust : `#[cfg(unix)]` ne compile un bloc que sur les systèmes
+/// Unix. Windows n'a pas de `SIGTERM` : seul Ctrl+C y est attendu.
+async fn shutdown_signal() -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{SignalKind, signal};
+        let mut terminate = signal(SignalKind::terminate())?;
+        tokio::select! {
+            result = tokio::signal::ctrl_c() => result,
+            _ = terminate.recv() => {
+                info!("signal d'arrêt reçu (SIGTERM)");
+                Ok(())
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        tokio::signal::ctrl_c().await
+    }
+}
+
+/// Lit `HA_BIND`, sans rien afficher.
+fn parse_bind() -> Result<SocketAddr, String> {
+    let value = std::env::var("HA_BIND").unwrap_or_else(|_| DEFAULT_BIND.to_owned());
+    value
+        .parse()
+        .map_err(|_| format!("HA_BIND invalide : {value:?} (exemple : 127.0.0.1:8123)"))
+}
+
 /// Lit `HA_BIND`. Par défaut, l'API n'écoute que sur la machine elle-même.
 fn bind_address() -> Result<SocketAddr, String> {
-    let value = std::env::var("HA_BIND").unwrap_or_else(|_| DEFAULT_BIND.to_owned());
-    let addr: SocketAddr = value
-        .parse()
-        .map_err(|_| format!("HA_BIND invalide : {value:?} (exemple : 127.0.0.1:8123)"))?;
+    let addr = parse_bind()?;
     if !addr.ip().is_loopback() {
         warn!("l'API écoute sur {addr} : elle est joignable depuis le réseau.");
         warn!("ne l'expose JAMAIS directement sur Internet : passe par un VPN.");
