@@ -10,12 +10,26 @@ publish = false
 
 # Versions des dépendances, définies une seule fois pour tout le workspace.
 [workspace.dependencies]
+# Mots de passe : Argon2id. Jetons : générateur aléatoire du système + SHA-256.
+argon2 = "0.6.0"
+getrandom = "0.4.3"
+sha2 = "0.11.1"
+zeroize = "1.9.1"
+rpassword = "7.5.4"
+# Serveur web : HTTP/1 et WebSocket uniquement.
+axum = { version = "0.8.9", default-features = false, features = ["http1", "json", "query", "tokio", "tracing", "ws"] }
+tower-http = { version = "0.7.1", features = ["timeout"] }
+serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 # SQLite uniquement : pas de MySQL (qui tire `rsa`, faille connue) ni de PostgreSQL.
 sqlx = { version = "0.9.0", default-features = false, features = ["runtime-tokio", "sqlite", "migrate", "macros"] }
 thiserror = "2.0.21"
 tokio = { version = "1.53.3", default-features = false }
 tracing = "0.1.44"
+# Uniquement pour les tests.
+futures-util = { version = "0.3.34", default-features = false, features = ["sink"] }
+tokio-tungstenite = "0.30.0"
+tower = { version = "0.5.3", features = ["util"] }
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt", "ansi", "env-filter", "std"] }
 
 [workspace.lints.rust]
@@ -34,3 +48,11 @@ dbg_macro = "warn"
 lto = true
 codegen-units = 1
 strip = true
+
+# Argon2 est volontairement coûteux : sans optimisation (mode debug), une
+# connexion prendrait plusieurs secondes pendant le développement et les tests.
+[profile.dev.package.argon2]
+opt-level = 3
+
+[profile.dev.package.blake2]
+opt-level = 3

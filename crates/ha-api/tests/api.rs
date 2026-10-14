@@ -1,0 +1,359 @@
+//! Tests de l'API : requêtes HTTP simulées, et un vrai serveur local pour le WebSocket.
+
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
+use std::net::SocketAddr;
+use std::sync::Arc;
+use std::time::Duration;
+
+use axum::Router;
+use axum::body::Body;
+use axum::extract::connect_info::MockConnectInfo;
+use axum::http::{Request, StatusCode, header};
+use futures_util::{SinkExt, StreamExt};
+use ha_api::ApiState;
+use ha_auth::Auth;
+use ha_core::{Attributes, Core};
+use ha_storage::{Recorder, Store};
+use serde_json::{Value, json};
+use tokio_tungstenite::tungstenite::Message;
+use tower::ServiceExt;
+
+const PASSWORD: &str = "cafe chaud sur la terrasse";
+
+struct TestApp {
+    state: Arc<ApiState>,
+    recorder: Option<Recorder>,
+}
+
+impl TestApp {
+    async fn new() -> Self {
+        let store = Store::open_in_memory().await.unwrap();
+        let auth = Auth::new(&store).await.unwrap();
+        auth.create_user("david", PASSWORD).await.unwrap();
+        let core = Arc::new(Core::new());
+        let recorder = Recorder::start(store.clone(), Arc::clone(&core));
+        let state = ApiState::new(core, store, Arc::new(auth));
+        Self {
+            state,
+            recorder: Some(recorder),
+        }
+    }
+
+    fn router(&self) -> Router {
+        ha_api::router(Arc::clone(&self.state))
+            .layer(MockConnectInfo(SocketAddr::from(([127, 0, 0, 1], 50_000))))
+    }
+
+    /// Envoie une requête et renvoie (statut, corps JSON).
+    async fn request(
+        &self,
+        method: &str,
+        uri: &str,
+        token: Option<&str>,
+        body: Option<Value>,
+    ) -> (StatusCode, Value) {
+        let mut request = Request::builder().method(method).uri(uri);
+        if let Some(token) = token {
+            request = request.header(header::AUTHORIZATION, format!("Bearer {token}"));
+        }
+        let body = body.map_or_else(Body::empty, |b| Body::from(b.to_string()));
+        let response = self
+            .router()
+            .oneshot(request.body(body).unwrap())
+            .await
+            .unwrap();
+        let status = response.status();
+        let bytes = axum::body::to_bytes(response.into_body(), 1 << 20)
+            .await
+            .unwrap();
+        let json = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
+        (status, json)
+    }
+
+    async fn login(&self) -> String {
+        let (status, body) = self
+            .request(
+                "POST",
+                "/api/auth/login",
+                None,
+                Some(json!({"username": "david", "password": PASSWORD})),
+            )
+            .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        body["access_token"].as_str().unwrap().to_owned()
+    }
+}
+
+#[tokio::test]
+async fn every_route_requires_a_token() {
+    let app = TestApp::new().await;
+    for (method, uri) in [
+        ("GET", "/api/"),
+        ("GET", "/api/states"),
+        ("GET", "/api/states/light.salon"),
+        ("POST", "/api/states/light.salon"),
+        ("DELETE", "/api/states/light.salon"),
+        ("GET", "/api/history/light.salon"),
+        ("POST", "/api/auth/logout"),
+    ] {
+        let (status, _) = app.request(method, uri, None, None).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED, "{method} {uri}");
+
+        let fake = format!("hat_{}", "a".repeat(64));
+        let (status, _) = app.request(method, uri, Some(&fake), None).await;
+        assert_eq!(
+            status,
+            StatusCode::UNAUTHORIZED,
+            "{method} {uri} (faux jeton)"
+        );
+    }
+}
+
+#[tokio::test]
+async fn login_then_read_and_write_states() {
+    let app = TestApp::new().await;
+    let token = app.login().await;
+
+    let (status, body) = app.request("GET", "/api/", Some(&token), None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["user"], "david");
+
+    let (status, body) = app
+        .request(
+            "POST",
+            "/api/states/light.salon",
+            Some(&token),
+            Some(json!({"state": "on", "attributes": {"brightness": 200}})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(body["state"], "on");
+    assert!(body["last_changed"].as_str().unwrap().ends_with('Z'));
+
+    let (status, body) = app
+        .request("GET", "/api/states/light.salon", Some(&token), None)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["attributes"]["brightness"], 200);
+
+    let (status, body) = app.request("GET", "/api/states", Some(&token), None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body.as_array().unwrap().len(), 1);
+
+    let (status, _) = app
+        .request("DELETE", "/api/states/light.salon", Some(&token), None)
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, _) = app
+        .request("GET", "/api/states/light.salon", Some(&token), None)
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn history_is_available_through_the_api() {
+    let mut app = TestApp::new().await;
+    let token = app.login().await;
+    for value in ["on", "off"] {
+        app.request(
+            "POST",
+            "/api/states/switch.prise",
+            Some(&token),
+            Some(json!({"state": value})),
+        )
+        .await;
+    }
+    app.recorder.take().unwrap().stop().await;
+
+    let (status, body) = app
+        .request(
+            "GET",
+            "/api/history/switch.prise?limit=10",
+            Some(&token),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let states: Vec<&str> = body["history"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|entry| entry["state"].as_str().unwrap())
+        .collect();
+    assert_eq!(states, ["off", "on"]);
+}
+
+#[tokio::test]
+async fn bad_input_is_rejected_cleanly() {
+    let app = TestApp::new().await;
+    let token = app.login().await;
+
+    // Identifiant invalide.
+    let (status, body) = app
+        .request("GET", "/api/states/pas-valide", Some(&token), None)
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(body["error"].is_string());
+
+    // Champ inconnu : refusé grâce à `deny_unknown_fields`.
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/states/light.salon",
+            Some(&token),
+            Some(json!({"state": "on", "admin": true})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    // État trop long.
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/states/light.salon",
+            Some(&token),
+            Some(json!({"state": "x".repeat(300)})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    // Corps trop gros (> 64 Kio).
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/states/light.salon",
+            Some(&token),
+            Some(json!({"state": "on", "attributes": {"x": "y".repeat(100_000)}})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::PAYLOAD_TOO_LARGE);
+}
+
+#[tokio::test]
+async fn failed_logins_are_limited() {
+    let app = TestApp::new().await;
+    let wrong = json!({"username": "david", "password": "mauvais mot de passe"});
+    for _ in 0..ha_auth::limiter::MAX_FAILURES {
+        let (status, body) = app
+            .request("POST", "/api/auth/login", None, Some(wrong.clone()))
+            .await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert_eq!(body["error"], "nom d'utilisateur ou mot de passe incorrect");
+    }
+
+    let right = json!({"username": "david", "password": PASSWORD});
+    let (status, _) = app
+        .request("POST", "/api/auth/login", None, Some(right))
+        .await;
+    assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
+}
+
+#[tokio::test]
+async fn logout_revokes_the_token() {
+    let app = TestApp::new().await;
+    let token = app.login().await;
+
+    let (status, _) = app
+        .request("POST", "/api/auth/logout", Some(&token), None)
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    let (status, _) = app.request("GET", "/api/", Some(&token), None).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+/// Démarre un vrai serveur sur un port libre de 127.0.0.1.
+async fn spawn_server(app: &TestApp) -> SocketAddr {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(ha_api::serve(listener, Arc::clone(&app.state)));
+    addr
+}
+
+type Socket =
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
+
+async fn ws_send(socket: &mut Socket, value: Value) {
+    socket
+        .send(Message::Text(value.to_string().into()))
+        .await
+        .unwrap();
+}
+
+async fn ws_recv(socket: &mut Socket) -> Value {
+    let message = tokio::time::timeout(Duration::from_secs(5), socket.next())
+        .await
+        .expect("pas de message reçu à temps")
+        .unwrap()
+        .unwrap();
+    match message {
+        Message::Text(text) => serde_json::from_str(&text).unwrap(),
+        other => panic!("message inattendu : {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn websocket_auth_and_events() {
+    let app = TestApp::new().await;
+    let token = app.login().await;
+    let addr = spawn_server(&app).await;
+
+    let (mut socket, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/api/websocket"))
+        .await
+        .unwrap();
+    assert_eq!(ws_recv(&mut socket).await["type"], "auth_required");
+    ws_send(&mut socket, json!({"type": "auth", "access_token": token})).await;
+    assert_eq!(ws_recv(&mut socket).await["type"], "auth_ok");
+
+    ws_send(&mut socket, json!({"id": 1, "type": "subscribe_events"})).await;
+    let reply = ws_recv(&mut socket).await;
+    assert_eq!(reply["success"], true);
+
+    app.state
+        .core
+        .states
+        .set("light.salon".parse().unwrap(), "on", Attributes::new())
+        .unwrap();
+    let event = ws_recv(&mut socket).await;
+    assert_eq!(event["id"], 1);
+    assert_eq!(event["event"]["event_type"], "state_changed");
+    assert_eq!(event["event"]["data"]["new_state"]["state"], "on");
+
+    ws_send(&mut socket, json!({"id": 2, "type": "get_states"})).await;
+    let reply = ws_recv(&mut socket).await;
+    assert_eq!(reply["result"][0]["entity_id"], "light.salon");
+
+    ws_send(&mut socket, json!({"id": 3, "type": "rm -rf"})).await;
+    assert_eq!(
+        ws_recv(&mut socket).await["error"]["code"],
+        "unknown_command"
+    );
+
+    app.state.shutdown();
+}
+
+#[tokio::test]
+async fn websocket_rejects_a_bad_token() {
+    let app = TestApp::new().await;
+    let addr = spawn_server(&app).await;
+
+    let (mut socket, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/api/websocket"))
+        .await
+        .unwrap();
+    assert_eq!(ws_recv(&mut socket).await["type"], "auth_required");
+    let fake = format!("hat_{}", "b".repeat(64));
+    ws_send(&mut socket, json!({"type": "auth", "access_token": fake})).await;
+    assert_eq!(ws_recv(&mut socket).await["type"], "auth_invalid");
+
+    // Le serveur ferme ensuite la connexion.
+    let next = tokio::time::timeout(Duration::from_secs(5), socket.next())
+        .await
+        .unwrap();
+    assert!(matches!(
+        next,
+        Some(Ok(Message::Close(_))) | None | Some(Err(_))
+    ));
+
+    app.state.shutdown();
+}
