@@ -4,11 +4,13 @@
 //! - À la connexion, l'utilisateur reçoit un **jeton d'accès** aléatoire de
 //!   256 bits ([`token`]) ; seule son empreinte SHA-256 est stockée.
 //! - Les tentatives de connexion sont limitées par adresse IP ([`limiter`]).
+//! - Double authentification facultative par code à usage unique ([`totp`]).
 
 mod error;
 pub mod limiter;
 pub mod password;
 pub mod token;
+pub mod totp;
 
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -23,6 +25,13 @@ pub use error::AuthError;
 pub use limiter::LoginLimiter;
 pub use password::{MAX_PASSWORD_LEN, MIN_PASSWORD_LEN};
 pub use token::TOKEN_PREFIX;
+
+/// Usage du secret TOTP, pour son chiffrement dans la base.
+const TOTP_CONTEXT: &str = "users.totp_secret";
+
+/// Ligne de `users` lue à la connexion :
+/// (id, empreinte du mot de passe, secret TOTP chiffré, dernier créneau TOTP).
+type UserRow = (i64, String, Option<String>, Option<i64>);
 
 /// Durée de validité d'un jeton par défaut : 30 jours.
 pub const DEFAULT_TOKEN_LIFETIME: Duration = Duration::from_hours(30 * 24);
@@ -59,6 +68,8 @@ impl std::fmt::Debug for IssuedToken {
 /// Le service d'authentification.
 #[derive(Debug)]
 pub struct Auth {
+    /// Pour chiffrer les secrets TOTP.
+    store: Store,
     pool: SqlitePool,
     limiter: LoginLimiter,
     /// Empreinte d'un mot de passe bidon : voir [`Auth::login`].
@@ -72,6 +83,7 @@ impl Auth {
     pub async fn new(store: &Store) -> Result<Self, AuthError> {
         let dummy_hash = hash_blocking(Zeroizing::new("mot de passe bidon".to_owned())).await?;
         Ok(Self {
+            store: store.clone(),
             pool: store.pool().clone(),
             limiter: LoginLimiter::new(),
             dummy_hash: dummy_hash.into(),
@@ -161,24 +173,32 @@ impl Auth {
             .collect())
     }
 
-    /// Connexion par nom et mot de passe. Renvoie un nouveau jeton d'accès.
+    /// Connexion par nom, mot de passe et, si la double authentification
+    /// est activée pour ce compte, code à usage unique. Renvoie un nouveau
+    /// jeton d'accès.
     ///
-    /// `ip` est l'adresse du client, pour limiter les tentatives.
+    /// `ip` est l'adresse du client, pour limiter les tentatives. Toutes les
+    /// erreurs donnent le même message : un attaquant n'apprend pas si c'est
+    /// le nom, le mot de passe ou le code qui est faux.
     pub async fn login(
         &self,
         username: &str,
         password: &str,
+        code: Option<&str>,
         ip: IpAddr,
     ) -> Result<IssuedToken, AuthError> {
         if let Err(retry_after) = self.limiter.check(ip) {
             return Err(AuthError::TooManyAttempts { retry_after });
         }
 
-        let user: Option<(i64, String, String)> = if check_username(username).is_ok() {
-            sqlx::query_as("SELECT id, username, password_hash FROM users WHERE username = ?1")
-                .bind(username)
-                .fetch_optional(&self.pool)
-                .await?
+        let user: Option<UserRow> = if check_username(username).is_ok() {
+            sqlx::query_as(
+                "SELECT id, password_hash, totp_secret, totp_last_step
+                 FROM users WHERE username = ?1",
+            )
+            .bind(username)
+            .fetch_optional(&self.pool)
+            .await?
         } else {
             None
         };
@@ -189,18 +209,137 @@ impl Auth {
         // temps pour découvrir quels comptes existent.
         let hash = user.as_ref().map_or_else(
             || Arc::clone(&self.dummy_hash),
-            |(_, _, hash)| hash.as_str().into(),
+            |(_, hash, _, _)| hash.as_str().into(),
         );
         let password_ok =
             password.chars().count() <= MAX_PASSWORD_LEN && self.verify(password, hash).await?;
 
-        let Some((user_id, _, _)) = user.filter(|_| password_ok) else {
+        let Some((user_id, _, totp_secret, last_step)) = user.filter(|_| password_ok) else {
             self.limiter.record_failure(ip);
             tracing::warn!("échec de connexion depuis {ip}");
             return Err(AuthError::InvalidCredentials);
         };
+        if let Some(sealed) = totp_secret {
+            let code_ok = match code {
+                Some(code) => self.check_totp(user_id, &sealed, code, last_step).await?,
+                None => false,
+            };
+            if !code_ok {
+                self.limiter.record_failure(ip);
+                tracing::warn!("échec de connexion depuis {ip} (code de vérification)");
+                return Err(AuthError::InvalidCredentials);
+            }
+        }
         self.limiter.record_success(ip);
         self.issue_token(user_id).await
+    }
+
+    /// Vérifie un code à usage unique et mémorise son créneau, pour qu'il ne
+    /// puisse pas resservir.
+    async fn check_totp(
+        &self,
+        user_id: i64,
+        sealed: &str,
+        code: &str,
+        last_step: Option<i64>,
+    ) -> Result<bool, AuthError> {
+        let secret = match self.totp_secret(sealed) {
+            Ok(secret) => secret,
+            Err(error) => {
+                tracing::error!(
+                    "secret de double authentification illisible ({error}) : \
+                     désactive-la avec « ha-server user totp-off <nom> »"
+                );
+                return Ok(false);
+            }
+        };
+        let last_step = last_step.and_then(|step| u64::try_from(step).ok());
+        let Some(step) = totp::verify(&secret, code, totp::step_at(SystemTime::now()), last_step)
+        else {
+            return Ok(false);
+        };
+        // La condition `totp_last_step < ?1` rend l'opération atomique : si
+        // deux connexions arrivent en même temps avec le même code, une seule
+        // modifie la ligne, donc une seule est acceptée.
+        let updated = sqlx::query(
+            "UPDATE users SET totp_last_step = ?1
+             WHERE id = ?2 AND (totp_last_step IS NULL OR totp_last_step < ?1)",
+        )
+        .bind(i64::try_from(step).map_err(|_| AuthError::Internal("créneau".into()))?)
+        .bind(user_id)
+        .execute(&self.pool)
+        .await?
+        .rows_affected();
+        Ok(updated == 1)
+    }
+
+    fn totp_secret(&self, sealed: &str) -> Result<Zeroizing<Vec<u8>>, AuthError> {
+        let base32 = self.store.unseal(TOTP_CONTEXT, sealed)?;
+        totp::base32_decode(&base32)
+            .map(Zeroizing::new)
+            .ok_or_else(|| AuthError::Internal("secret TOTP invalide".into()))
+    }
+
+    /// Active (ou remplace) la double authentification d'un compte.
+    ///
+    /// `code` est le code affiché par l'appli juste après avoir scanné le QR
+    /// code : il prouve que l'appli a bien le secret, sinon on risquerait de
+    /// s'enfermer dehors. Tous les jetons du compte sont révoqués : il faudra
+    /// se reconnecter, avec un code. Renvoie `false` si le compte n'existe pas.
+    pub async fn enable_totp(
+        &self,
+        username: &str,
+        secret: &[u8],
+        code: &str,
+    ) -> Result<bool, AuthError> {
+        let Some(step) = totp::verify(secret, code, totp::step_at(SystemTime::now()), None) else {
+            return Err(AuthError::InvalidTotpCode);
+        };
+        let sealed = self
+            .store
+            .seal(TOTP_CONTEXT, &totp::base32_encode(secret))?;
+        let mut tx = self.pool.begin().await?;
+        let updated = sqlx::query(
+            "UPDATE users SET totp_secret = ?1, totp_last_step = ?2 WHERE username = ?3",
+        )
+        .bind(&sealed)
+        .bind(i64::try_from(step).map_err(|_| AuthError::Internal("créneau".into()))?)
+        .bind(username)
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+        sqlx::query(
+            "DELETE FROM access_tokens WHERE user_id = (SELECT id FROM users WHERE username = ?1)",
+        )
+        .bind(username)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(updated > 0)
+    }
+
+    /// Désactive la double authentification d'un compte. Renvoie `false` si
+    /// le compte n'existe pas.
+    pub async fn disable_totp(&self, username: &str) -> Result<bool, AuthError> {
+        let updated = sqlx::query(
+            "UPDATE users SET totp_secret = NULL, totp_last_step = NULL WHERE username = ?1",
+        )
+        .bind(username)
+        .execute(&self.pool)
+        .await?
+        .rows_affected();
+        Ok(updated > 0)
+    }
+
+    /// La double authentification est-elle activée ? `None` si le compte
+    /// n'existe pas.
+    pub async fn has_totp(&self, username: &str) -> Result<Option<bool>, AuthError> {
+        let row: Option<(Option<String>,)> =
+            sqlx::query_as("SELECT totp_secret FROM users WHERE username = ?1")
+                .bind(username)
+                .fetch_optional(&self.pool)
+                .await?;
+        Ok(row.map(|(secret,)| secret.is_some()))
     }
 
     /// Retrouve l'utilisateur d'un jeton. `None` si le jeton est inconnu,

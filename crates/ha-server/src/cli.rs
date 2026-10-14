@@ -20,6 +20,8 @@ utilisation :
   ha-server user passwd <nom>     change un mot de passe
   ha-server user delete <nom>     supprime un compte
   ha-server user list             liste les comptes
+  ha-server user totp <nom>       active la double authentification
+  ha-server user totp-off <nom>   la désactive
   ha-server hue pair <adresse>    associe le pont Philips Hue
   ha-server hue status            affiche le pont associé
   ha-server hue forget            oublie le pont
@@ -60,14 +62,89 @@ pub async fn user_command(args: &[&str]) -> Result<(), Box<dyn Error>> {
         }
         ["list"] => {
             for user in auth.list_users().await? {
-                println!("{}", user.username);
+                let two_factor = auth.has_totp(&user.username).await? == Some(true);
+                let suffix = if two_factor {
+                    "  (double authentification)"
+                } else {
+                    ""
+                };
+                println!("{}{suffix}", user.username);
             }
             Ok(())
+        }
+        ["totp", name] => enable_totp(&auth, name).await,
+        ["totp-off", name] => {
+            if auth.disable_totp(name).await? {
+                println!("double authentification désactivée pour « {name} »");
+                Ok(())
+            } else {
+                Err(format!("le compte « {name} » n'existe pas").into())
+            }
         }
         _ => Err(USAGE.into()),
     };
     store.close().await;
     result
+}
+
+/// Active la double authentification : affiche un QR code à scanner avec
+/// l'appli d'authentification, puis demande un premier code pour vérifier.
+async fn enable_totp(auth: &Auth, name: &str) -> Result<(), Box<dyn Error>> {
+    match auth.has_totp(name).await? {
+        None => return Err(format!("le compte « {name} » n'existe pas").into()),
+        Some(true) => println!("(elle est déjà activée : l'ancien code sera remplacé)"),
+        Some(false) => {}
+    }
+    let setup = ha_auth::totp::new_setup(name)?;
+    // Les terminaux (PowerShell, Windows Terminal…) ont en général un fond
+    // sombre : on dessine donc les cases claires du QR code avec des blocs
+    // (qui s'affichent en clair), et les cases sombres avec des espaces.
+    let qr = qrcode::QrCode::new(setup.uri.as_bytes())?
+        .render::<qrcode::render::unicode::Dense1x2>()
+        .dark_color(qrcode::render::unicode::Dense1x2::Light)
+        .light_color(qrcode::render::unicode::Dense1x2::Dark)
+        .quiet_zone(true)
+        .build();
+    println!("Scanne ce QR code avec ton appli d'authentification");
+    println!("(Aegis, 2FAS, Google Authenticator, ton gestionnaire de mots de passe…).");
+    println!("Vérifie que personne ne regarde ton écran.");
+    println!("(Si l'appli ne le lit pas, saisis le code affiché en dessous.)\n");
+    println!("{qr}");
+    println!(
+        "Ou saisis ce code à la main : {}\n",
+        group_by_four(&setup.secret_base32).as_str()
+    );
+
+    for _ in 0..3 {
+        let code = ask_line("code à 6 chiffres affiché par l'appli : ")?;
+        match auth.enable_totp(name, &setup.secret, &code).await {
+            Ok(true) => {
+                println!(
+                    "double authentification activée pour « {name} » ; \
+                     toutes ses sessions sont fermées"
+                );
+                return Ok(());
+            }
+            Ok(false) => return Err(format!("le compte « {name} » n'existe pas").into()),
+            Err(ha_auth::AuthError::InvalidTotpCode) => {
+                println!("code incorrect (vérifie que l'heure du téléphone est juste)");
+            }
+            Err(error) => return Err(error.into()),
+        }
+    }
+    Err("double authentification non activée : réessaie".into())
+}
+
+/// « ABCDEFGH… » → « ABCD EFGH … », plus facile à recopier.
+fn group_by_four(text: &str) -> Zeroizing<String> {
+    let mut out = Zeroizing::new(String::with_capacity(text.len() * 5 / 4));
+    for (index, c) in text.chars().enumerate() {
+        if index > 0 && index % 4 == 0 {
+            out.push(' ');
+        }
+        out.push(c);
+    }
+    out
 }
 
 /// Demande un nouveau mot de passe deux fois, sans l'afficher à l'écran.

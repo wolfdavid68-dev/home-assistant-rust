@@ -32,6 +32,9 @@ const DEFAULT_HISTORY_LIMIT: u32 = 100;
 struct LoginRequest {
     username: String,
     password: String,
+    /// Code de double authentification, si elle est activée pour ce compte.
+    #[serde(default)]
+    code: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -73,7 +76,12 @@ pub(crate) async fn login(
 
     let issued = state
         .auth
-        .login(&request.username, &password, client.ip())
+        .login(
+            &request.username,
+            &password,
+            request.code.as_deref(),
+            client.ip(),
+        )
         .await?;
     tracing::info!("connexion de {} depuis {}", request.username, client.ip());
     Ok(Json(json!({

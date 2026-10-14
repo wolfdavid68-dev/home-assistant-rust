@@ -10,6 +10,8 @@ publish.workspace = true
 argon2.workspace = true
 getrandom.workspace = true
 ha-storage = { path = "../ha-storage" }
+hmac.workspace = true
+sha1.workspace = true
 sha2.workspace = true
 sqlx.workspace = true
 thiserror.workspace = true

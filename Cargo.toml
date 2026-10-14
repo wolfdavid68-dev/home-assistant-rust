@@ -14,6 +14,11 @@ publish = false
 argon2 = "0.6.0"
 getrandom = "0.4.3"
 sha2 = "0.11.1"
+# Double authentification (TOTP, RFC 6238) : HMAC-SHA1, l'algorithme que
+# toutes les applis d'authentification connaissent. QR code affiché dans le terminal.
+hmac = "0.13.0"
+sha1 = "0.11.0"
+qrcode = { version = "0.14.1", default-features = false }
 zeroize = "1.9.1"
 # Chiffrement des secrets rangés dans la base (jetons Hue et Somfy) :
 # XChaCha20-Poly1305, en Rust pur (RustCrypto). L'aléatoire vient de `getrandom`.

@@ -245,7 +245,10 @@ async fn failed_logins_are_limited() {
             .request("POST", "/api/auth/login", None, Some(wrong.clone()))
             .await;
         assert_eq!(status, StatusCode::UNAUTHORIZED);
-        assert_eq!(body["error"], "nom d'utilisateur ou mot de passe incorrect");
+        assert_eq!(
+            body["error"],
+            "nom d'utilisateur, mot de passe ou code incorrect"
+        );
     }
 
     let right = json!({"username": "david", "password": PASSWORD});
@@ -479,4 +482,29 @@ fn dashboard_never_uses_inner_html() {
             "{forbidden} interdit dans app.js"
         );
     }
+}
+
+#[tokio::test]
+async fn login_accepts_an_optional_two_factor_code() {
+    let app = TestApp::new().await;
+    // Sans double authentification activée, un code envoyé est ignoré.
+    let (status, body) = app
+        .request(
+            "POST",
+            "/api/auth/login",
+            None,
+            Some(json!({"username": "david", "password": PASSWORD, "code": "123456"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    // Un champ inconnu reste refusé.
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/auth/login",
+            None,
+            Some(json!({"username": "david", "password": PASSWORD, "otp": "123456"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
 }

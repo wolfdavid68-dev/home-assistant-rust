@@ -7,8 +7,11 @@ use std::time::Duration;
 /// pourrait d'abord deviner les noms de compte existants.
 #[derive(Debug, thiserror::Error)]
 pub enum AuthError {
-    #[error("nom d'utilisateur ou mot de passe incorrect")]
+    #[error("nom d'utilisateur, mot de passe ou code incorrect")]
     InvalidCredentials,
+
+    #[error("code de vérification incorrect (vérifie l'heure du téléphone)")]
+    InvalidTotpCode,
 
     #[error("trop de tentatives de connexion, réessayer dans {} s", retry_after.as_secs())]
     TooManyAttempts { retry_after: Duration },

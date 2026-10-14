@@ -29,6 +29,11 @@
         Mot de passe
         <input name="password" type="password" autocomplete="current-password" required>
       </label>
+      <label>
+        <span>Code de vérification <small>(si la double authentification est activée)</small></span>
+        <input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7"
+               pattern="[0-9 ]{6,7}" placeholder="123 456">
+      </label>
       <p id="login-error" class="error" role="alert" hidden></p>
       <button type="submit" class="primary">Se connecter</button>
     </form>

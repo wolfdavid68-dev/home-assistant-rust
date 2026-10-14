@@ -38,11 +38,14 @@ $("#login-form").addEventListener("submit", async (event) => {
       body: JSON.stringify({
         username: form.username.value.trim(),
         password: form.password.value,
+        // Le code n'est envoyé que s'il a été saisi.
+        ...(form.code.value.trim() && { code: form.code.value.trim() }),
       }),
     });
     form.password.value = "";
+    form.code.value = "";
     if (response.status === 429) return showLogin("Trop de tentatives. Réessaie dans 15 minutes.");
-    if (!response.ok) return showLogin("Nom d'utilisateur ou mot de passe incorrect.");
+    if (!response.ok) return showLogin("Nom d'utilisateur, mot de passe ou code incorrect.");
     token.set((await response.json()).access_token);
     showDashboard();
   } catch {
