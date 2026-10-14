@@ -10,6 +10,8 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
 - Toutes les entrées sont désérialisées dans des types stricts (`serde`, `deny_unknown_fields`) et validées.
 - Requêtes SQL uniquement paramétrées (`sqlx`), jamais de concaténation de chaînes.
 - Les logs ne contiennent jamais de mot de passe, de jeton ou de secret.
+- Journal d'audit (connexions, échecs, commandes, gestion des comptes et des appareils), signé et chaîné
+  (HMAC-SHA256) : une modification de la base se détecte (`ha-server audit verify`, et à chaque démarrage).
 
 ## Authentification
 

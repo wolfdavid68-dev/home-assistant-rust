@@ -87,6 +87,7 @@ pub fn router(state: Arc<ApiState>) -> Router {
                 .delete(rest::delete_state),
         )
         .route("/api/history/{entity_id}", get(rest::history))
+        .route("/api/audit", get(rest::audit_log))
         .route("/api/services/{domain}/{service}", post(rest::call_service))
         .route("/api/websocket", get(ws::handler))
         // Tableau de bord web.

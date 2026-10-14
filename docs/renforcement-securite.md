@@ -4,7 +4,7 @@ Trois améliorations, dans l'ordre :
 
 1. [les jetons des appareils chiffrés dans la base](#1-les-jetons-des-appareils-chiffrés) ;
 2. [la double authentification](#2-la-double-authentification-totp) ;
-3. un journal d'audit (à venir).
+3. [le journal d'audit](#3-le-journal-daudit).
 
 ## 1. Les jetons des appareils, chiffrés
 
@@ -182,3 +182,111 @@ la RFC 6238.
 - Secret illisible : connexion refusée sans planter, `totp-off` répare.
 - De bout en bout : activation en ligne de commande, QR code **décodé** comme le ferait un
   téléphone (sur fond sombre, comme PowerShell), puis connexion dans Chromium avec le code.
+
+## 3. Le journal d'audit
+
+### À quoi ça sert
+
+Savoir **qui a fait quoi, quand, et d'où**. Qui a ouvert les volets à 3 h du matin ? Y a-t-il
+eu des tentatives de connexion depuis une adresse inconnue ? Quand la double authentification
+a-t-elle été désactivée ? C'est aussi indispensable avant de pouvoir piloter l'alarme.
+
+### Ce qui est enregistré
+
+| Action | Qui | D'où |
+|---|---|---|
+| Connexion, **échec de connexion**, déconnexion | le compte (ou le nom tapé) | adresse IP |
+| Commande (allumer, ouvrir un volet…), état modifié ou supprimé par l'API | le compte | adresse IP |
+| Compte créé, supprimé, mot de passe changé, double authentification activée ou désactivée | « ligne de commande » | local |
+| Pont Hue ou box Somfy associé ou oublié | « ligne de commande » | local |
+| Démarrage et arrêt du serveur | « serveur » | local |
+
+Jamais de mot de passe, de code ni de jeton. Les tentatives **bloquées** (après 5 échecs) ne sont
+pas enregistrées, sinon un attaquant pourrait remplir le journal à volonté. Les actions des
+automatisations ne sont pas encore enregistrées.
+
+Le journal est gardé **365 jours** (variable `HA_AUDIT_DAYS` pour changer).
+
+### Le consulter
+
+Sur le tableau de bord, en bas : **Journal d'activité** (les échecs de connexion sont en rouge).
+
+![Journal d'activité](images/journal.png)
+
+En ligne de commande :
+
+```powershell
+cargo run -p ha-server -- audit          # les 50 dernières actions
+cargo run -p ha-server -- audit 200      # les 200 dernières
+cargo run -p ha-server -- audit verify   # le journal a-t-il été modifié ?
+```
+
+```
+14/10/2026 21:37:27  ligne de commande  compte créé                        david  (local)
+14/10/2026 21:37:30  david              ÉCHEC de connexion                   (127.0.0.1)
+14/10/2026 21:37:30  david              connexion                            (127.0.0.1)
+14/10/2026 21:38:21  david              commande                           switch.prise_cafe switch.toggle  (127.0.0.1)
+```
+
+### Un journal qu'on ne peut pas falsifier en douce
+
+Un journal n'a de valeur que si un intrus ne peut pas effacer ses traces. Chaque ligne est donc :
+
+- **signée** : HMAC-SHA256 de tout son contenu, avec une clé dérivée de `ha.key`. Sans la clé,
+  impossible de modifier une ligne ou d'en fabriquer une fausse avec une signature valide ;
+- **chaînée** : elle contient la signature de la ligne précédente. Supprimer ou remplacer une
+  ligne au milieu casse la chaîne.
+
+```
+ligne 1 : …, signature S1 = HMAC(clé, contenu 1 + 000…0)
+ligne 2 : …, signature S2 = HMAC(clé, contenu 2 + S1)
+ligne 3 : …, signature S3 = HMAC(clé, contenu 3 + S2)
+```
+
+`ha-server audit verify` recalcule tout. **Le serveur le fait aussi à chaque démarrage**, et
+prévient dans les logs si le journal a été touché pendant qu'il était arrêté.
+
+Les limites, honnêtement :
+
+- Supprimer les **dernières** lignes ne casse pas la chaîne. On peut seulement remarquer qu'il
+  en manque (les numéros de ligne).
+- Quelqu'un qui a la base **et** la clé peut tout réécrire. Comme pour la partie 1, c'est le rôle
+  des droits du système et du chiffrement du disque.
+
+### Les autres protections
+
+- **Les champs sont nettoyés** avant d'être écrits : longueur limitée, et aucun caractère de
+  contrôle. Sinon, un attaquant pourrait taper comme nom d'utilisateur une séquence
+  d'échappement qui efface ou maquille l'affichage de ton terminal quand tu lis le journal.
+- **Deux écritures en même temps** (le serveur, et une commande `ha-server user …` lancée à côté)
+  ne cassent pas la chaîne : chaque écriture réserve la base (`BEGIN IMMEDIATE`) le temps de lire
+  la dernière ligne et d'ajouter la sienne. Un test lance 20 écritures simultanées depuis deux
+  connexions.
+- **Si le journal ne peut pas être écrit** (disque plein…), l'action se fait quand même et
+  l'erreur est signalée dans les logs. Mieux vaut pouvoir encore fermer ses volets.
+
+### Concepts Rust rencontrés
+
+- **Les motifs « ou » avec liaison.** `["add" | "passwd" | "delete", name]` reconnaît plusieurs
+  commandes d'un coup, et `command @ (…)` garde au passage le mot qui a correspondu.
+- **Une clé par usage.** La clé du journal est *dérivée* de la clé principale
+  (`HMAC(clé, "ha-rust audit log v1")`), au lieu de réutiliser la même clé pour deux choses
+  différentes (chiffrer et signer). C'est une bonne pratique de cryptographie.
+- **La longueur avant chaque champ.** Si on signait `"ab" + "c"` en collant simplement les
+  champs, la signature serait la même que pour `"a" + "bc"`. Chaque champ est donc précédé de sa
+  longueur.
+- **`pub(crate)`.** La fonction de signature n'est visible que dans la crate `ha-storage` : aucun
+  autre code ne peut s'en servir pour signer n'importe quoi.
+
+### Testé
+
+- Les lignes se relisent dans l'ordre, avec acteur, cible, détail et adresse.
+- Ligne modifiée, ligne supprimée au milieu, ligne ajoutée sans la clé : **détectées**. Purge des
+  lignes anciennes : la chaîne reste valide.
+- 20 écritures simultanées depuis deux connexions : chaîne intacte.
+- API : échec de connexion, connexion et commande enregistrés, avec l'adresse IP ; nom piégé
+  (séquence d'échappement) neutralisé ; mot de passe absent ; tentatives bloquées non
+  enregistrées ; `/api/audit` exige d'être connecté.
+- De bout en bout : compte créé en ligne de commande, échec puis connexion et commande dans
+  Chromium, journal affiché sur le tableau de bord, `audit` et `audit verify` ; base falsifiée à
+  la main → `audit verify` et le démarrage du serveur le signalent.

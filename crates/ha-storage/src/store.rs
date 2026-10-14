@@ -122,6 +122,10 @@ impl Store {
         Ok(Self { pool, secrets })
     }
 
+    pub(crate) fn secrets(&self) -> &SecretKey {
+        &self.secrets
+    }
+
     /// Accès direct aux connexions, pour les crates qui ont leurs propres
     /// tables dans la même base (comptes et jetons dans `ha-auth`).
     #[must_use]

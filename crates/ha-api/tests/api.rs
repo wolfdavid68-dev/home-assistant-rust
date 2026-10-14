@@ -102,6 +102,7 @@ async fn every_route_requires_a_token() {
         ("GET", "/api/history/light.salon"),
         ("POST", "/api/auth/logout"),
         ("POST", "/api/services/switch/turn_on"),
+        ("GET", "/api/audit"),
     ] {
         let (status, _) = app.request(method, uri, None, None).await;
         assert_eq!(status, StatusCode::UNAUTHORIZED, "{method} {uri}");
@@ -507,4 +508,78 @@ async fn login_accepts_an_optional_two_factor_code() {
         )
         .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn actions_are_recorded_in_the_audit_log() {
+    let app = TestApp::new().await;
+    // Un échec de connexion, avec un nom piégé (séquence d'échappement).
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/auth/login",
+            None,
+            Some(json!({"username": "x\u{1b}[2J", "password": "mauvais mot de passe"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    let token = app.login().await;
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/services/switch/turn_on",
+            Some(&token),
+            Some(json!({"entity_id": "switch.prise_cafe"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = app
+        .request("GET", "/api/audit?limit=10", Some(&token), None)
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let entries = body["entries"].as_array().unwrap();
+    let actions: Vec<&str> = entries
+        .iter()
+        .map(|e| e["action"].as_str().unwrap())
+        .collect();
+    assert_eq!(actions, ["service", "login", "login_failed"]);
+    assert_eq!(entries[0]["actor"], "david");
+    assert_eq!(entries[0]["target"], "switch.prise_cafe");
+    assert_eq!(entries[0]["detail"], "switch.turn_on");
+    assert_eq!(entries[0]["source"], "127.0.0.1");
+    // Les caractères de contrôle ont été neutralisés.
+    let failed_actor = entries[2]["actor"].as_str().unwrap();
+    assert!(!failed_actor.contains('\u{1b}'), "{failed_actor:?}");
+    // Le mot de passe n'apparaît nulle part.
+    assert!(!body.to_string().contains("mauvais mot de passe"));
+
+    // Les tentatives bloquées (après trop d'échecs) ne remplissent pas le journal.
+    for _ in 0..10 {
+        app.request(
+            "POST",
+            "/api/auth/login",
+            None,
+            Some(json!({"username": "david", "password": "encore faux encore"})),
+        )
+        .await;
+    }
+    let (_, body) = app
+        .request("GET", "/api/audit?limit=100", Some(&token), None)
+        .await;
+    let failures = body["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|e| e["action"] == "login_failed")
+        .count();
+    // 1 échec au début, puis 5 avant le blocage ; les 5 suivants, bloqués,
+    // ne sont pas enregistrés.
+    assert_eq!(failures, 1 + ha_auth::limiter::MAX_FAILURES as usize);
+    assert_eq!(
+        app.state.store.verify_audit().await.unwrap(),
+        ha_storage::AuditCheck::Intact {
+            entries: 3 + u64::from(ha_auth::limiter::MAX_FAILURES)
+        }
+    );
 }
