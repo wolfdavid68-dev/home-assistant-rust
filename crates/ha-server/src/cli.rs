@@ -8,6 +8,7 @@ use std::error::Error;
 use std::io::{BufRead, IsTerminal};
 
 use ha_auth::{Auth, MIN_PASSWORD_LEN};
+use ha_hue::{pairing, tls};
 use ha_storage::Store;
 use zeroize::Zeroizing;
 
@@ -17,7 +18,10 @@ utilisation :
   ha-server user add <nom>        crée un compte
   ha-server user passwd <nom>     change un mot de passe
   ha-server user delete <nom>     supprime un compte
-  ha-server user list             liste les comptes";
+  ha-server user list             liste les comptes
+  ha-server hue pair <adresse>    associe le pont Philips Hue
+  ha-server hue status            affiche le pont associé
+  ha-server hue forget            oublie le pont";
 
 pub async fn user_command(args: &[&str], db_path: &str) -> Result<(), Box<dyn Error>> {
     let store = Store::open(db_path).await?;
@@ -78,4 +82,56 @@ fn ask_new_password() -> Result<Zeroizing<String>, Box<dyn Error>> {
         return Err("les deux mots de passe sont différents".into());
     }
     Ok(first)
+}
+
+pub async fn hue_command(args: &[&str], db_path: &str) -> Result<(), Box<dyn Error>> {
+    let store = Store::open(db_path).await?;
+    let result = hue_inner(args, &store).await;
+    store.close().await;
+    result
+}
+
+async fn hue_inner(args: &[&str], store: &Store) -> Result<(), Box<dyn Error>> {
+    match args {
+        ["pair", host] => {
+            let (bridge_id, fingerprint) = pairing::identify(host).await?;
+            println!("pont Hue trouvé : {bridge_id}");
+            println!("empreinte de son certificat :");
+            println!("  {}", tls::format_fingerprint(&fingerprint));
+            println!("seul ce certificat sera accepté à l'avenir.");
+            println!();
+            println!(
+                "appuie maintenant sur le gros bouton rond du pont (tu as {} secondes)…",
+                pairing::LINK_BUTTON_TIMEOUT.as_secs()
+            );
+            let paired = pairing::request_key(host, bridge_id, fingerprint).await?;
+            pairing::save(store, &paired).await?;
+            println!("associé ! relance « ha-server » pour piloter tes lampes.");
+            Ok(())
+        }
+        ["status"] => {
+            match pairing::load(store).await? {
+                Some(paired) => {
+                    println!("pont {} à l'adresse {}", paired.bridge_id, paired.host);
+                    println!(
+                        "certificat : {}",
+                        tls::format_fingerprint(&paired.fingerprint)
+                    );
+                }
+                None => println!("aucun pont associé (ha-server hue pair <adresse>)"),
+            }
+            Ok(())
+        }
+        ["forget"] => {
+            if pairing::forget(store).await? {
+                println!("pont oublié.");
+                println!("retire aussi « ha_rust » des applications autorisées dans l'appli Hue");
+                println!("(Paramètres > Ponts Hue > i > Applications) pour révoquer la clé.");
+            } else {
+                println!("aucun pont associé.");
+            }
+            Ok(())
+        }
+        _ => Err(USAGE.into()),
+    }
 }

@@ -289,40 +289,6 @@ fn check_topic(topic: &str, prefix: &str, key: &'static str) -> Result<String, D
     }
 }
 
-/// Transforme un nom en morceau d'identifiant : `Température Salon` → `temperature_salon`.
-pub fn slugify(name: &str) -> String {
-    let mut slug = String::new();
-    for c in name.chars().flat_map(fold_accent) {
-        if c.is_ascii_alphanumeric() {
-            slug.push(c.to_ascii_lowercase());
-        } else if !slug.ends_with('_') && !slug.is_empty() {
-            slug.push('_');
-        }
-    }
-    let slug = slug.trim_end_matches('_');
-    slug.chars()
-        .take(100)
-        .collect::<String>()
-        .trim_end_matches('_')
-        .to_owned()
-}
-
-/// Retire les accents les plus courants (é → e, ç → c…).
-fn fold_accent(c: char) -> Option<char> {
-    Some(match c {
-        'à' | 'â' | 'ä' | 'á' | 'ã' | 'À' | 'Â' | 'Ä' | 'Á' => 'a',
-        'é' | 'è' | 'ê' | 'ë' | 'É' | 'È' | 'Ê' | 'Ë' => 'e',
-        'î' | 'ï' | 'í' | 'Î' | 'Ï' => 'i',
-        'ô' | 'ö' | 'ó' | 'õ' | 'Ô' | 'Ö' => 'o',
-        'ù' | 'û' | 'ü' | 'ú' | 'Ù' | 'Û' | 'Ü' => 'u',
-        'ç' | 'Ç' => 'c',
-        'ñ' | 'Ñ' => 'n',
-        'ÿ' => 'y',
-        'œ' | 'Œ' => 'o',
-        other => other,
-    })
-}
-
 #[cfg(test)]
 #[allow(clippy::panic)]
 mod tests {
@@ -435,14 +401,5 @@ mod tests {
             parse(PREFIX, "sensor", "x", huge.as_bytes()),
             Err(DiscoveryError::TooLarge(_))
         ));
-    }
-
-    #[test]
-    fn slugs() {
-        assert_eq!(slugify("Température Salon"), "temperature_salon");
-        assert_eq!(slugify("  Prise -- café!! "), "prise_cafe");
-        assert_eq!(slugify("0x00158d0001"), "0x00158d0001");
-        assert_eq!(slugify("___"), "");
-        assert_eq!(slugify("日本"), "");
     }
 }

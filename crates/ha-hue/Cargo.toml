@@ -1,0 +1,30 @@
+[package]
+name = "ha-hue"
+description = "Intégration Philips Hue (pont Hue, API locale v2)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+futures-util.workspace = true
+ha-core = { path = "../ha-core" }
+ha-storage = { path = "../ha-storage" }
+reqwest.workspace = true
+rustls.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+sqlx.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["sync", "rt", "macros", "time"] }
+tracing.workspace = true
+zeroize.workspace = true
+
+[dev-dependencies]
+rcgen.workspace = true
+tokio = { workspace = true, features = ["sync", "rt", "macros", "time", "net", "io-util"] }
+tokio-rustls.workspace = true
+
+[lints]
+workspace = true

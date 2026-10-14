@@ -11,6 +11,7 @@ Un noyau domotique en Rust, inspiré de Home Assistant.
 - [Étape 2 : le stockage SQLite, expliqué](docs/etape-2-stockage.md)
 - [Étape 3 : comptes, authentification et API, expliqués](docs/etape-3-auth-api.md)
 - [Étape 4 : les vrais appareils avec MQTT, expliqué](docs/etape-4-mqtt.md)
+- [Philips Hue : piloter tes lampes, expliqué](docs/hue.md)
 
 ## Lancer le serveur
 

@@ -27,6 +27,9 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
   vulnérables, refusées par `cargo deny`). D'ici là, broker sur la même machine ou sur le réseau local
   uniquement, jamais joignable depuis Internet.
 
+- Pont Philips Hue : HTTPS avec certificat **épinglé** à l'association (confiance au premier usage),
+  jamais de vérification TLS désactivée.
+
 ## Secrets
 
 - Aucun secret dans le dépôt Git. Ils vont dans `secrets.yaml` ou `.env`, ignorés par Git.
