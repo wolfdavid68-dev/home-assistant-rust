@@ -240,7 +240,7 @@ impl Bridge {
         let domain = config.component.domain();
         let slug = [config.object_id.as_str(), topic_object_id]
             .into_iter()
-            .map(discovery::slugify)
+            .map(ha_core::slugify)
             .find(|slug| !slug.is_empty())
             .unwrap_or_else(|| "mqtt".to_owned());
         (1..=MAX_ENTITIES).find_map(|n| {

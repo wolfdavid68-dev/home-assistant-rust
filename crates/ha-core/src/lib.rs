@@ -10,7 +10,7 @@ mod event;
 mod state;
 mod state_machine;
 
-pub use entity_id::{EntityId, MAX_ENTITY_ID_LEN};
+pub use entity_id::{EntityId, MAX_ENTITY_ID_LEN, slugify};
 pub use error::CoreError;
 pub use event::{DEFAULT_BUS_CAPACITY, Event, EventBus};
 pub use state::{Attributes, MAX_STATE_LEN, State};

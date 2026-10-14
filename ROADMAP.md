@@ -20,6 +20,7 @@ Un workspace Cargo découpé en crates :
 | `ha-api`      | API HTTP + WebSocket (axum), authentifiée                                   |
 | `ha-automation` | Automatisations en YAML : déclencheurs, conditions, actions              |
 | `ha-mqtt`     | Première intégration : MQTT (Zigbee2MQTT, Tasmota, Shelly…)                 |
+| `ha-hue`      | Philips Hue : lampes via le pont Hue (API locale v2)                        |
 | `ha-server`   | Binaire qui assemble le tout et lit la configuration                        |
 
 Briques principales : `tokio` (asynchrone), `axum` (web), `sqlx` + SQLite, `serde` (config/JSON),
@@ -32,6 +33,7 @@ Briques principales : `tokio` (asynchrone), `axum` (web), `sqlx` + SQLite, `serd
 - [x] **2. Stockage** : enregistrer les entités et l'historique dans SQLite ([guide](docs/etape-2-stockage.md))
 - [x] **3. Authentification + API** : comptes, jetons, API REST et WebSocket en local ([guide](docs/etape-3-auth-api.md))
 - [x] **4. MQTT** : piloter de vrais appareils (découverte automatique façon Home Assistant) ([guide](docs/etape-4-mqtt.md)) — sans TLS pour l'instant
+- [x] **4 bis. Philips Hue** : lampes via le pont Hue, en local, certificat épinglé ([guide](docs/hue.md))
 - [ ] **5. Automatisations** : « quand X, si Y, alors Z » en YAML
 - [ ] **6. Interface web** : tableau de bord simple
 - [ ] **7. Déploiement** : image Docker, accès à distance via VPN (jamais de port ouvert sur Internet)
