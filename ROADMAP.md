@@ -70,6 +70,7 @@ Les fonctions de Home Assistant les plus utiles au quotidien, une par une, dans 
 - [x] **22. Automatisations encore plus riches** : déclencheur `time_pattern` (« toutes les 15 minutes »), actions `repeat` et `wait_for_trigger` (« attendre que la porte se ferme, 10 min au plus ») ([guide](docs/automatisations-encore.md))
 - [x] **23. Comptes avec rôles** : administrateur, famille (tout piloter, pas modifier les automatisations), invité (lumières, prises, volets ; pas la présence, ni le garage) ([guide](docs/roles.md))
 - [x] **24. Statistiques long terme** : un résumé par heure de chaque capteur (moyenne, min, max, consommation des compteurs), gardé des années ; courbes sur 30 jours et 1 an ([guide](docs/statistiques.md))
+- [x] **25. Nouvelle mise en forme** : « Tout est calme, sauf… », plan des pièces, vue par pièce, cadran du thermostat, barre du bas sur téléphone ; thème clair le jour, sombre le soir ; polices embarquées, rien chargé depuis Internet ([guide](docs/mise-en-forme.md))
 
 En parallèle, dès que tu me donnes les informations : commande du chauffage Somfy (résultat de
 `somfy devices`), puis de l'alarme (avec confirmation et journal).
