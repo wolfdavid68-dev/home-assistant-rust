@@ -1525,8 +1525,8 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
    `[data-theme|="plan"]` vise les deux.
    ====================================================================== */
 
-/* Ce qui n'existe que dans le style « plan ». */
-.house, .gauges, .title-block, .room-hum { display: none; }
+/* Ce qui n'existe que dans les styles « plan » et la mise en page « tableau ». */
+.house, .gauges, .title-block, .room-hum, .room-line, .board-covers, .house-actions { display: none; }
 
 :root[data-theme="plan"] {
   --bar: #f3f5f9;
@@ -1708,11 +1708,11 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 
 /* ---------- Les repères du haut ---------- */
 
-[data-theme|="plan"] .gauges:not([hidden]) { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.9rem; }
+[data-layout="board"] .gauges:not([hidden]) { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.5rem; }
 /* Sur téléphone : une seule ligne, qu'on fait défiler du doigt. */
 @media (max-width: 640px) {
-  [data-theme|="plan"] .gauges:not([hidden]) { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-inline: calc(-1 * var(--gutter)) calc(-1 * var(--gutter-r)); padding-inline: var(--gutter) var(--gutter-r); }
-  [data-theme|="plan"] .gauges::-webkit-scrollbar { display: none; }
+  [data-layout="board"] .gauges:not([hidden]) { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  [data-layout="board"] .gauges::-webkit-scrollbar { display: none; }
 }
 .gauge {
   display: inline-flex;
@@ -1732,24 +1732,27 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 
 /* ---------- Le dessin de la maison ---------- */
 
-[data-theme|="plan"] .house:not([hidden]) { display: grid; }
+[data-layout="board"] .house:not([hidden]) { display: grid; }
 .house {
   position: relative;
   margin: 0;
   padding: 10px;
-  gap: 8px;
+  gap: 10px;
+  min-width: 0;
   background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
 }
 /* Deux repères de coupe, en haut à gauche et en bas à droite. */
-.house::before, .house::after {
+[data-theme|="plan"] .house::before, [data-theme|="plan"] .house::after {
   content: "";
   position: absolute;
   width: 14px;
   height: 14px;
   pointer-events: none;
 }
-.house::before { top: -7px; left: -7px; border-top: 1px solid var(--ink); border-left: 1px solid var(--ink); }
-.house::after { bottom: -7px; right: -7px; border-bottom: 1px solid var(--ink); border-right: 1px solid var(--ink); }
+[data-theme|="plan"] .house::before { top: -7px; left: -7px; border-top: 1px solid var(--ink); border-left: 1px solid var(--ink); }
+[data-theme|="plan"] .house::after { bottom: -7px; right: -7px; border-bottom: 1px solid var(--ink); border-right: 1px solid var(--ink); }
 
 .house-stage { position: relative; overflow: hidden; border-radius: 3px; user-select: none; container-type: inline-size; }
 .house-stage img { display: block; width: 100%; height: auto; }
@@ -1764,7 +1767,8 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 }
 .house-stage .house-layer.off { opacity: 0; }
 /* Le dessin d'exemple en tirage de nuit : l'encre devient blanche. */
-[data-theme="plan-nuit"] .house-stage.default-drawing .house-base { filter: invert(1) hue-rotate(180deg) brightness(1.15); mix-blend-mode: screen; }
+[data-theme="plan-nuit"] .house-stage.default-drawing .house-base,
+[data-theme="maquette"] .house-stage.default-drawing .house-base { filter: invert(1) hue-rotate(180deg) brightness(1.15); mix-blend-mode: screen; }
 .house-caption {
   display: flex;
   align-items: center;
@@ -1851,17 +1855,174 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .title-block .wide dd { font-size: 1.05rem; }
 @media (max-width: 520px) { .title-block dl > div.wide { grid-column: auto; } }
 
-/* ---------- Ordinateur et grande télé : le dessin prend de la place ---------- */
+/* ======================================================================
+   Mise en page « tableau » (étape 37) : comme les tableaux de bord
+   isométriques de Home Assistant. Les pièces en petites tuiles à gauche, le
+   dessin au centre avec ses repères et ses boutons, les volets en lignes, puis
+   tous les appareils. Sur téléphone : le dessin d'abord.
+   ====================================================================== */
+
+[data-layout="board"] .house { order: -1; }
+/* Un accueil plus court : la place va au dessin. */
+[data-layout="board"] .greeting { font-size: clamp(1.5rem, 1.1rem + 1.2vw, 2.1rem); margin-top: 0.7rem; }
+[data-layout="board"] .board-covers:not([hidden]) { display: grid; gap: 0.75rem; min-width: 0; }
+[data-layout="board"] .house-actions:not([hidden]) { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: 8px; }
+
+/* Les pièces : une ligne, l'icône, le nom, « 25,1 °C | 49 % ». */
+[data-layout="board"] .plan-card { background: none; box-shadow: none; border: 0; padding: 0; }
+[data-layout="board"] .plan-head { display: none; }
+[data-layout="board"] .plan { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: auto; }
+[data-layout="board"] .room.big { grid-column: auto; grid-row: auto; }
+[data-layout="board"] .room { padding: 8px 10px; min-height: 58px; justify-content: center; background: var(--card); box-shadow: var(--shadow); border-radius: calc(var(--radius) * 0.7); }
+[data-layout="board"] :is(.room-name, .room-foot) { display: none; }
+[data-layout="board"] .room-line { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
+.room-icon {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: var(--card-2);
+  color: var(--text-2);
+}
+.room-icon svg { width: 18px; height: 18px; }
+.room-text { display: grid; min-width: 0; line-height: 1.25; }
+.room-line-name { font-weight: 600; font-size: 0.86rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.room-line-info { font-size: 0.74rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+[data-layout="board"] .room.lit { background: var(--card); }
+[data-layout="board"] .room.lit .room-icon { background: var(--glow); color: #3b2a05; }
+[data-layout="board"] .room.alert .room-icon { background: var(--alert); color: #ffffff; }
+[data-layout="board"] .room.alert .room-line-info { color: var(--alert); }
+
+/* Les boutons rapides et les volets : une icône, un nom, un état. */
+:is(.house-action, .cover-row) {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  padding: 0.5rem 0.6rem;
+  border: 0;
+  border-radius: calc(var(--radius) * 0.7);
+  background: var(--card);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+}
+.house .house-action { background: var(--card-2); box-shadow: none; }
+.house-action { cursor: pointer; }
+.house-action.readonly { cursor: default; }
+.house-action:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.house-action-icon {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: var(--card-2);
+  color: var(--text-2);
+}
+.house .house-action-icon { background: var(--card); }
+.house-action-icon svg { width: 18px; height: 18px; }
+.house-action-text { display: grid; min-width: 0; line-height: 1.25; }
+.house-action-text b { font-weight: 600; font-size: 0.86rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.house-action-text span { font-size: 0.74rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.house-action.on .house-action-icon { background: var(--glow); color: #3b2a05; }
+.cover-row.on .house-action-icon { background: var(--accent-soft); color: var(--accent); }
+:is(.house-action, .cover-row).pending { animation: pulse 1s ease-in-out infinite; }
+.cover-rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 8px; }
+.cover-row-buttons { margin-left: auto; display: flex; gap: 4px; flex: none; }
+.cover-row-buttons .round { flex: none; width: 40px; height: 36px; }
+.board-covers > h2 { margin: 0; }
 
 @media (min-width: 1000px) {
-  [data-theme|="plan"] .layout { grid-template-columns: minmax(400px, 40%) minmax(0, 1fr); }
-  [data-theme|="plan"] .grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+  [data-layout="board"] .hero > * { max-width: 1760px; }
+  [data-layout="board"] .layout {
+    max-width: 1760px;
+    grid-template-columns: minmax(300px, 30%) minmax(0, 1fr);
+    grid-template-areas: "overview house" "overview covers" "sections sections" "title title";
+  }
+  [data-layout="board"] .overview { grid-area: overview; position: static; }
+  [data-layout="board"] .house { grid-area: house; }
+  /* Le dessin tient dans la hauteur de l'écran : les boutons et les volets
+     restent visibles sans défiler, sur une télé comme sur un ordinateur. */
+  [data-layout="board"] #house-stage { width: min(100%, calc((100dvh - 330px) * var(--ratio, 1.35))); justify-self: center; }
+  [data-layout="board"] .board-covers { grid-area: covers; }
+  [data-layout="board"] .sections { grid-area: sections; }
+  [data-layout="board"] .title-block { grid-area: title; }
+  [data-layout="board"] .grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+}
+@media (min-width: 1400px) {
+  [data-theme|="plan"] .hero::after { max-width: 1760px; }
 }
 
-@media (min-width: 1400px) {
-  [data-theme|="plan"] .hero > *, [data-theme|="plan"] .hero::after { max-width: 1760px; }
-  [data-theme|="plan"] .layout { max-width: 1760px; grid-template-columns: minmax(520px, 42%) minmax(0, 1fr); }
+/* Les styles plan : l'encre partout. */
+[data-theme|="plan"] :is(.room, .house-action, .cover-row) { border: 1px solid var(--ink-line); box-shadow: none; border-radius: 4px; }
+[data-theme|="plan"] .house .house-action { background: var(--card); }
+[data-theme|="plan"] :is(.room-icon, .house-action-icon) { background: transparent; border: 1px solid var(--ink-line); border-radius: 4px; color: var(--ink); }
+[data-theme|="plan"] .room-line-info { font-family: var(--font-mono); }
+[data-theme|="plan"] .board-covers > h2 { display: flex; align-items: center; gap: 0.8rem; font-family: var(--font-mono); font-weight: 500; letter-spacing: 0.14em; color: var(--ink); }
+[data-theme|="plan"] .board-covers > h2::after { content: ""; flex: 1; height: 1px; background: var(--ink-line); }
+
+/* ======================================================================
+   Maquette (étape 37) : un fond sombre dégradé, violet vers bleu nuit, des
+   tuiles translucides. Pour une maquette 3D sur fond sombre.
+   ====================================================================== */
+
+:root[data-theme="maquette"] {
+  --bar: #1a1030;
+  --bg: #1a1030;
+  --sky-1: transparent;
+  --sky-2: transparent;
+  --card: rgb(255 255 255 / 0.06);
+  --card-2: rgb(255 255 255 / 0.1);
+  --line: rgb(255 255 255 / 0.14);
+  --text: #f4f0fc;
+  --text-2: #ddd4f0;
+  --muted: #ab9fc8;
+  --accent: #b9a0ff;
+  --accent-ink: #1a1030;
+  --accent-soft: rgb(185 160 255 / 0.18);
+  --glow: #ffc04d;
+  --glow-ink: #ffe4a8;
+  --glow-soft: rgb(255 176 64 / 0.16);
+  --glow-line: rgb(255 192 77 / 0.45);
+  --glow-bar: #ffc04d;
+  --heat: #ff8a5c;
+  --heat-ink: #ffc4ab;
+  --heat-soft: rgb(255 138 92 / 0.18);
+  --ok: #5fe0a8;
+  --ok-soft: rgb(95 224 168 / 0.16);
+  --alert: #ff6b7a;
+  --alert-ink: #ffcbd1;
+  --alert-soft: rgb(255 107 122 / 0.16);
+  --alert-stripe: rgb(255 107 122 / 0.3);
+  --shadow: inset 0 0 0 1px rgb(255 255 255 / 0.07), 0 10px 26px rgb(0 0 0 / 0.22);
+  --shadow-float: inset 0 0 0 1px rgb(255 255 255 / 0.08), 0 20px 48px rgb(0 0 0 / 0.55);
+  --radius: 16px;
+  color-scheme: dark;
 }
+[data-theme="maquette"] body {
+  background:
+    radial-gradient(1100px 760px at 78% 12%, rgb(168 52 128 / 0.32), transparent 62%),
+    radial-gradient(1000px 760px at 8% 95%, rgb(18 118 140 / 0.34), transparent 60%),
+    linear-gradient(160deg, #1a1030 0%, #261040 46%, #0e2533 100%) fixed;
+  background-color: var(--bg);
+}
+[data-theme="maquette"] :is(.hero, .login) { background: none; }
+/* Ce qui flotte au-dessus de la page reste opaque. */
+[data-theme="maquette"] :is(.history-dialog, .canvas-panel, .canvas-menu, .login-card) { background: #22163a; }
+[data-theme="maquette"] .dock { background: rgb(34 22 58 / 0.92); }
+[data-theme="maquette"] .house { background: rgb(8 4 20 / 0.28); }
+[data-theme="maquette"] .gauge { background: rgb(255 255 255 / 0.07); border: 0; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1); }
+[data-theme="maquette"] .gauge svg { color: var(--accent); }
+[data-theme="maquette"] .house-label::before { box-shadow: 0 0 0 1.5px #ffffff; }
+[data-theme="maquette"] .house-label::after { background: #ffffff; }
+[data-theme="maquette"] .house-tag { border-color: rgb(255 255 255 / 0.5); background: rgb(26 16 48 / 0.82); }
+[data-theme="maquette"] .tile.light.on { background: linear-gradient(140deg, rgb(255 176 64 / 0.24), rgb(255 176 64 / 0.08)); }
+[data-theme="maquette"] .scene.on { background: var(--accent); color: var(--accent-ink); }
 
 /* ---------- Réglage du dessin ---------- */
 

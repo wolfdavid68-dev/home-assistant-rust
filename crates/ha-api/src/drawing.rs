@@ -46,6 +46,7 @@ const MAX_IMAGES: usize = 16;
 const MAX_NAME_CHARS: usize = 40;
 const MAX_LAYERS: usize = 16;
 const MAX_LABELS: usize = 30;
+const MAX_ACTIONS: usize = 12;
 const MAX_STATES: usize = 10;
 const MAX_TEXT_CHARS: usize = 60;
 
@@ -67,6 +68,9 @@ struct DrawingConfig {
     layers: Vec<Layer>,
     #[serde(default)]
     labels: Vec<Label>,
+    /// Les boutons rapides sous le dessin (porche, parking, garage…).
+    #[serde(default)]
+    actions: Vec<String>,
 }
 
 /// Un calque : visible quand l'appareil est dans l'un des états (ou dans
@@ -192,6 +196,20 @@ fn check_config(config: &DrawingConfig, images: &HashSet<String>) -> Result<(), 
             check_text(&format!("calque {n}, état"), value)?;
         }
     }
+    if config.actions.len() > MAX_ACTIONS {
+        return Err(ApiError::BadRequest(format!(
+            "{MAX_ACTIONS} boutons au plus"
+        )));
+    }
+    let mut seen = HashSet::new();
+    for entity_id in &config.actions {
+        check_entity(entity_id)?;
+        if !seen.insert(entity_id) {
+            return Err(ApiError::BadRequest(format!(
+                "bouton « {entity_id} » en double"
+            )));
+        }
+    }
     if config.labels.len() > MAX_LABELS {
         return Err(ApiError::BadRequest(format!(
             "{MAX_LABELS} valeurs au plus"
@@ -234,6 +252,7 @@ fn visible_to(state: &ApiState, user: &User, mut config: DrawingConfig) -> Drawi
     };
     config.layers.retain(|layer| can_see(&layer.entity_id));
     config.labels.retain(|label| can_see(&label.entity_id));
+    config.actions.retain(|entity_id| can_see(entity_id));
     config
 }
 
@@ -307,9 +326,10 @@ pub(crate) async fn put(
         .map_err(|error| ApiError::Internal(error.to_string()))?;
     tracing::info!("dessin de la maison réglé par {username}");
     let detail = format!(
-        "{} calque(s), {} valeur(s)",
+        "{} calque(s), {} valeur(s), {} bouton(s)",
         config.layers.len(),
-        config.labels.len()
+        config.labels.len(),
+        config.actions.len()
     );
     audit(&state, username, "drawing_set", None, Some(&detail), client).await;
     Ok(Json(json!({ "config": config })))
@@ -474,6 +494,8 @@ mod tests {
             r#"{"layers":[{"image":"garage","entity_id":"pas un appareil","states":["on"]}]}"#,
             r#"{"labels":[{"entity_id":"sensor.a","x":101,"y":0}]}"#,
             r#"{"labels":[{"entity_id":"sensor.a","x":1,"y":1,"name":"a\nb"}]}"#,
+            r#"{"actions":["light.porche","light.porche"]}"#,
+            r#"{"actions":["pas un appareil"]}"#,
         ] {
             assert!(check_config(&config(bad), &images).is_err(), "{bad}");
         }

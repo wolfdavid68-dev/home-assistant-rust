@@ -1,5 +1,6 @@
-// Le style « plan d'architecte » du tableau de bord : le dessin de la maison,
-// ses calques et ses valeurs, les repères du haut et le cartouche.
+// La mise en page « tableau » (styles plan et maquette) : le dessin de la
+// maison, ses calques et ses valeurs, les repères, les boutons rapides, les
+// volets en lignes, et le cartouche des styles plan.
 //
 // Comme les tableaux de bord isométriques de Home Assistant : un fond (de
 // jour, et de nuit si on veut), des calques transparents de la même taille
@@ -11,7 +12,7 @@
 "use strict";
 
 const house = {
-  config: { layers: [], labels: [] },
+  config: emptyDrawing(),
   images: [],
   editable: false,
   // Images lues avec le jeton, gardées en mémoire : « nom@date » → blob:…
@@ -27,7 +28,7 @@ const WHEN_LABELS = [["always", "Toujours"], ["day", "Le jour"], ["night", "La n
 // ---------------------------------------------------------------- Chargement
 
 function emptyDrawing() {
-  return { layers: [], labels: [] };
+  return { layers: [], labels: [], actions: [] };
 }
 
 /** Recopie l'assemblage reçu en ne gardant que ce qu'on attend. */
@@ -49,6 +50,9 @@ function cleanDrawing(config) {
     const entry = { entity_id: text(label.entity_id) ?? "", x: Number(label.x) || 0, y: Number(label.y) || 0 };
     if (text(label.name)) entry.name = label.name;
     out.labels.push(entry);
+  }
+  for (const id of Array.isArray(config?.actions) ? config.actions : []) {
+    if (text(id)) out.actions.push(id);
   }
   return out;
 }
@@ -166,8 +170,12 @@ function drawHouse(stage, config, { interactive }) {
   });
   stage.replaceChildren(...parts);
   const view = { stage, night, layers, labels };
-  // La taille du dessin n'est connue qu'une fois l'image chargée.
-  base.addEventListener("load", () => fitLabels(view));
+  // La taille du dessin n'est connue qu'une fois l'image chargée : ses
+  // proportions servent à le faire tenir dans la hauteur de l'écran.
+  base.addEventListener("load", () => {
+    if (base.naturalWidth > 0 && base.naturalHeight > 0) stage.style.setProperty("--ratio", String(base.naturalWidth / base.naturalHeight));
+    fitLabels(view);
+  });
   return view;
 }
 
@@ -205,6 +213,10 @@ function buildHouse() {
   house.view = drawHouse($("#house-stage"), house.config, { interactive: true });
   updateHouse(house.view);
   houseCaption();
+  if (isBoard()) {
+    renderActions();
+    renderCovers();
+  }
 }
 
 function houseCaption() {
@@ -270,19 +282,113 @@ function renderTitleBlock() {
   );
 }
 
+// ---------------------------------------------------------------- Boutons rapides
+// Sous le dessin : le porche, le parking, les portes de garage… choisis dans
+// le réglage. Un toucher allume, éteint, ouvre ou ferme.
+
+const ACTION_ICONS = {
+  light: ICONS.bulb, switch: ICONS.plug, fan: ICONS.fan, cover: ICONS.blinds, lock: ICONS.lock,
+  scene: ICONS.sparkle, script: ICONS.play, input_boolean: ICONS.toggle, button: ICONS.button,
+  input_button: ICONS.button, siren: ICONS.siren,
+};
+
+/** Le service d'un toucher : [domaine, service], ou null (lecture seule). */
+function actionCommand(state) {
+  const domain = domainOf(state);
+  const on = state.state === "on";
+  if (["light", "switch", "fan", "input_boolean", "siren"].includes(domain)) return [domain, on ? "turn_off" : "turn_on"];
+  if (domain === "cover") return ["cover", ["open", "opening"].includes(state.state) ? "close_cover" : "open_cover"];
+  if (domain === "scene" || domain === "script") return [domain, "turn_on"];
+  if (domain === "button" || domain === "input_button") return [domain, "press"];
+  return null;
+}
+
+function coverText(state) {
+  const position = state.attributes.current_position;
+  if (typeof position === "number") {
+    return agree(state, position >= 100 ? "Ouvert" : position <= 0 ? "Fermé" : `Ouvert à ${Math.round(position)}\u202f%`);
+  }
+  return agree(state, lookup(COVER_LABELS, state.state) ?? statusText(state));
+}
+
+function actionChip(state) {
+  const domain = domainOf(state);
+  const garage = domain === "cover" && ALERT_COVERS.includes(state.attributes.device_class);
+  const icon = garage ? ICONS.car : lookup(ACTION_ICONS, domain) ?? ICONS.toggle;
+  const status = domain === "cover" ? coverText(state) : statusText(state);
+  const active = ["on", "open", "opening", "unlocked"].includes(state.state);
+  const command = actionCommand(state);
+  const chip = el("button", { type: "button", class: `house-action${active ? " on" : ""}` },
+    el("span", { class: "house-action-icon" }, svgIcon(icon)),
+    el("span", { class: "house-action-text" }, el("b", { text: nameOf(state) }), el("span", { text: status })));
+  chip.setAttribute("aria-label", `${nameOf(state)} : ${status}`);
+  if (command === null || !canControl(state)) {
+    chip.disabled = true;
+    chip.classList.add("readonly");
+    return chip;
+  }
+  chip.addEventListener("click", () => {
+    chip.classList.add("pending");
+    setTimeout(() => chip.classList.remove("pending"), 5000);
+    callService(command[0], command[1], { entity_id: state.entity_id });
+  });
+  return chip;
+}
+
+function renderActions() {
+  const box = $("#house-actions");
+  const states = house.config.actions.map((id) => entities.get(id)).filter((state) => state !== undefined);
+  box.hidden = states.length === 0;
+  box.replaceChildren(...states.map(actionChip));
+}
+
+// ---------------------------------------------------------------- Volets en lignes
+
+function coverRow(state) {
+  const buttons = [["open_cover", ICONS.up, "Ouvrir"], ["stop_cover", ICONS.stop, "Arrêter"], ["close_cover", ICONS.down, "Fermer"]]
+    .map(([service, icon, label]) => {
+      const button = el("button", { type: "button", class: "round", "aria-label": `${label} ${nameOf(state)}` }, svgIcon(icon));
+      button.addEventListener("click", () => {
+        row.classList.add("pending");
+        setTimeout(() => row.classList.remove("pending"), 5000);
+        callService("cover", service, { entity_id: state.entity_id });
+      });
+      return button;
+    });
+  const row = el("div", { class: `cover-row${state.state === "open" ? " on" : ""}` },
+    el("span", { class: "house-action-icon" }, svgIcon(ICONS.blinds)),
+    el("span", { class: "house-action-text" }, el("b", { text: nameOf(state) }), el("span", { text: coverText(state) })),
+    canControl(state) ? el("span", { class: "cover-row-buttons" }, ...buttons) : "");
+  return row;
+}
+
+/** Les volets (pas les portes de garage ni les portails, ni ceux déjà en
+ *  boutons rapides), en lignes sous le dessin. */
+function renderCovers() {
+  const box = $("#board-covers");
+  const covers = [...entities.values()]
+    .filter((s) => domainOf(s) === "cover" && !ALERT_COVERS.includes(s.attributes.device_class)
+      && !house.config.actions.includes(s.entity_id))
+    .sort((a, b) => nameOf(a).localeCompare(nameOf(b), "fr"));
+  box.hidden = covers.length === 0;
+  box.replaceChildren(el("h2", { text: "Volets" }), el("div", { class: "cover-rows" }, ...covers.map(coverRow)));
+}
+
 /** Appelé par app.js à chaque changement (au plus une fois par image). */
 function renderHouse() {
-  const plan = isPlan();
-  $("#house").hidden = !plan;
-  $("#title-block").hidden = !plan;
-  if (!plan) {
-    $("#gauges").hidden = true;
+  const board = isBoard();
+  $("#house").hidden = !board;
+  $("#title-block").hidden = !isPlan();
+  if (!board) {
+    $("#board-covers").hidden = true;
     return;
   }
   if (house.loading === null && token.get()) loadHouse();
   updateHouse(house.view);
   renderGauges();
-  renderTitleBlock();
+  renderActions();
+  renderCovers();
+  if (isPlan()) renderTitleBlock();
 }
 
 // ---------------------------------------------------------------- Apparence
@@ -507,7 +613,29 @@ function renderDrawingEditor() {
     addLabel,
   );
 
-  $("#drawing-form").replaceChildren(images, backgrounds, layers, labels);
+  // Les boutons rapides sous le dessin.
+  const actionRows = draft.actions.map((id, index) => {
+    const entity = el("input", { type: "text", list: "entity-list", value: id, placeholder: "light.porche", autocapitalize: "none", spellcheck: "false", "aria-label": `Bouton ${index + 1}` });
+    entity.addEventListener("change", () => { draft.actions[index] = entity.value.trim(); });
+    const remove = el("button", { type: "button", class: "ghost small danger", text: "Retirer" });
+    remove.addEventListener("click", () => { draft.actions.splice(index, 1); refresh(); });
+    return el("li", { class: "drawing-row" }, entity, remove);
+  });
+  const addAction = el("button", { type: "button", class: "ghost small", text: "+ Ajouter un bouton" });
+  addAction.disabled = draft.actions.length >= 12;
+  addAction.addEventListener("click", () => {
+    draft.actions.push("");
+    refresh();
+    $("#drawing-form fieldset:last-of-type li:last-child input")?.focus();
+  });
+  const actions = drawingFieldset(
+    "Boutons sous le dessin",
+    "Le porche, le parking, les portes de garage… : un toucher allume, éteint, ouvre ou ferme (12 au plus).",
+    el("ol", { class: "drawing-items" }, ...actionRows),
+    addAction,
+  );
+
+  $("#drawing-form").replaceChildren(images, backgrounds, layers, labels, actions);
 }
 
 // Poser une valeur : un toucher sur l'aperçu donne sa place, en % de l'image.
@@ -527,6 +655,7 @@ $("#drawing-preview").addEventListener("click", (event) => {
 $("#drawing-save").addEventListener("click", async () => {
   const draft = drawingEdit.draft;
   if (!draft) return;
+  draft.actions = draft.actions.filter((id) => id !== "");
   const button = $("#drawing-save");
   button.disabled = true;
   const { status, data } = await api("PUT", "/api/home/drawing", draft).catch(() => ({ status: 0, data: {} }));
