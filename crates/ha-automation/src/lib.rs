@@ -6,8 +6,9 @@
 //! - [`Engine`] : la tâche qui écoute le bus et l'horloge et exécute les actions.
 //!
 //! Sécurité : une automatisation ne peut **que** appeler des services sur des
-//! entités et attendre. Pas de commande système, pas de code, pas de modèle
-//! Jinja : un fichier d'automatisations ne peut rien faire d'autre.
+//! entités et attendre. Pas de commande système, pas de code. Les
+//! [`template`]s (`{{ states('sensor.x') }}`) ne savent que **lire** des
+//! états : un fichier d'automatisations ne peut rien faire d'autre.
 
 pub mod config;
 pub mod editor;
@@ -15,6 +16,7 @@ mod engine;
 mod error;
 pub mod evaluator;
 pub mod scripts;
+pub mod template;
 pub mod trace;
 
 use std::path::Path;
@@ -27,6 +29,7 @@ pub use editor::Editor;
 pub use engine::{AUTOMATION_TRIGGERED, Engine, Reloader, Reloads, Setup, reload_channel};
 pub use error::AutomationError;
 pub use scripts::{Scene, Script, parse_scenes, parse_scripts};
+pub use template::{Template, TriggerData};
 pub use trace::{Outcome, StepStatus, Trace, Traces};
 
 /// Lit et vérifie le fichier d'automatisations, et renvoie celles qui sont

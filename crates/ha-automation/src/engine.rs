@@ -16,6 +16,7 @@ use tracing::{debug, info, warn};
 use crate::config::{Action, Automation, Condition, MAX_REPEAT, RepeatUntil, RunMode, Trigger};
 use crate::evaluator::{Checker, Evaluator, Fired};
 use crate::scripts::{Scene, Script};
+use crate::template::{Scope, TriggerData};
 use crate::trace::{Check, Outcome, Recorder, StepStatus, Traces};
 use ha_sun::Location;
 
@@ -211,6 +212,7 @@ impl Library {
             core: Arc::clone(core),
             checker: self.checker.clone(),
             trigger: None,
+            trigger_data: None,
             origin: Origin::Script(alias.clone()),
             trace: None,
         };
@@ -257,6 +259,7 @@ impl Library {
             core: Arc::clone(core),
             checker: self.checker.clone(),
             trigger: None,
+            trigger_data: None,
             origin: Origin::Scene(scene.name.clone()),
             trace: None,
         };
@@ -560,12 +563,18 @@ impl Runner {
         if let Err(error) = self.core.fire(AUTOMATION_TRIGGERED, data) {
             warn!("« {alias} » : événement refusé ({error})");
         }
+        // Pour les modèles : `trigger.id`, `trigger.to_state`…
+        let trigger_data = TriggerData {
+            id: trigger.clone(),
+            ..fired.data.unwrap_or_default()
+        };
         let mut context = Context {
             origin: Origin::Automation(alias.clone()),
             alias: alias.into(),
             core: Arc::clone(&self.core),
             checker,
             trigger,
+            trigger_data: Some(Arc::new(trigger_data)),
             trace: Some(recorder),
         };
         let actions = automation.actions.clone();
@@ -616,6 +625,8 @@ pub(crate) struct Context {
     pub(crate) checker: Checker,
     /// L'identifiant du déclencheur (pour la condition `trigger`).
     pub(crate) trigger: Option<String>,
+    /// Ce qui a déclenché l'exécution, pour les modèles (`trigger.…`).
+    pub(crate) trigger_data: Option<Arc<TriggerData>>,
     /// Qui envoie les commandes (pour le journal de bord).
     pub(crate) origin: Origin,
     /// L'historique de cette exécution (automatisations seulement).
@@ -749,7 +760,21 @@ pub(crate) fn run_actions<'a>(
                     service,
                     entity_ids,
                     data,
+                    templates,
                 } => {
+                    // Les modèles sont calculés au moment de l'action, avec
+                    // les états de cet instant.
+                    let data = if templates.is_empty() {
+                        data.clone()
+                    } else {
+                        templates.render(
+                            data,
+                            &Scope {
+                                states: &context.core.states,
+                                trigger: context.trigger_data.as_deref(),
+                            },
+                        )
+                    };
                     let mut errors = Vec::new();
                     for entity_id in entity_ids {
                         debug!("« {alias} » : {domain}.{service} sur {entity_id}");

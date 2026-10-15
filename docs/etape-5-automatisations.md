@@ -104,8 +104,9 @@ coupe en deux.
 ## Choix de sécurité de cette étape
 
 - **Une automatisation ne peut qu'appeler des services et attendre.** Pas de commande système
-  (Home Assistant a `shell_command`), pas de modèle Jinja, pas de code : le fichier ne peut rien
-  faire d'autre que ce que permet déjà l'API.
+  (Home Assistant a `shell_command`), pas de vrai Jinja, pas de code : le fichier ne peut rien
+  faire d'autre que ce que permet déjà l'API. (Depuis l'étape 34, de petits [modèles](modeles.md)
+  `{{ … }}` peuvent **lire** des états dans les messages, rien de plus.)
 - **Lecture stricte** : tout champ inconnu est refusé (`too:` au lieu de `to:` donne une erreur
   avec la ligne et la colonne), chaque entité, heure, durée et nom de service est vérifié.
   Un fichier invalide **empêche le démarrage**, avec un message clair, plutôt que de tourner à
@@ -142,7 +143,8 @@ pas aux ordres, mais on voit les appels de service dans les logs.
 
 ## Pas encore pris en charge
 
-Déclencheurs d'événements et modèles (templates). Le soleil est arrivé à l'étape 8, l'édition
+Tout est arrivé depuis : les déclencheurs d'événements à l'étape 20, les modèles à l'étape 34
+([modèles](modeles.md)). Le soleil est arrivé à l'étape 8, l'édition
 depuis le tableau de bord à l'étape 13 ([l'éditeur](editeur-automatisations.md)), et les conditions
 « ou », les actions `if` / `choose` et les modes `restart` / `queued` / `parallel` à l'étape 17
 ([automatisations avancées](automatisations-avancees.md)).

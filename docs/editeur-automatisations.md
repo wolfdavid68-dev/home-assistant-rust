@@ -56,7 +56,7 @@ automatisation est donc protégé plus fortement que le reste :
   téléphone resté déverrouillé, ne suffit donc pas. Les essais sont limités comme à la connexion.
 - **Les mêmes vérifications que le fichier**, à chaque enregistrement et à chaque démarrage : une
   automatisation ne peut toujours **que** commander des appareils et attendre. Pas de commande système,
-  pas de code, pas de modèle. Champs inconnus refusés, durées limitées à 24 h, 200 automatisations au
+  pas de code ; les modèles `{{ … }}` (étape 34) ne savent que lire des états. Champs inconnus refusés, durées limitées à 24 h, 200 automatisations au
   plus, 20 déclencheurs, conditions ou actions par automatisation.
 - **Tout est tracé.** Le journal d'activité signé note les confirmations (et leurs échecs), les
   créations, modifications et suppressions, avec qui et depuis quelle adresse.

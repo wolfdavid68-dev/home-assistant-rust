@@ -2918,8 +2918,9 @@ function triggerKindFields(t) {
     case "state":
       return [
         entityField(t, "entity_id"),
-        textField("De (facultatif)", t, "from", { placeholder: "ex. : off" }),
-        textField("À (facultatif)", t, "to", { placeholder: "ex. : on" }),
+        textField("Attribut (facultatif)", t, "attribute", { placeholder: "ex. : brightness" }),
+        textField("De (facultatif)", t, "from", { placeholder: "ex. : off", list: true }),
+        textField("À (facultatif)", t, "to", { placeholder: "ex. : Orange, Rouge", list: true }),
         durationField("Depuis au moins (facultatif)", t, "for", true),
       ];
     case "numeric_state":
@@ -2966,7 +2967,11 @@ function conditionFields(c) {
     case "trigger":
       return [textField("Identifiant du déclencheur", c, "id", { placeholder: "arrivee", list: true })];
     case "state":
-      return [entityField(c, "entity_id"), textField("État", c, "state", { placeholder: "ex. : on", list: true })];
+      return [
+        entityField(c, "entity_id"),
+        textField("Attribut (facultatif)", c, "attribute", { placeholder: "ex. : niveau_actuel" }),
+        textField("État", c, "state", { placeholder: "ex. : on", list: true }),
+      ];
     case "numeric_state":
       return [entityField(c, "entity_id"), numberField("Au-dessus de", c, "above"), numberField("Au-dessous de", c, "below")];
     case "time":
@@ -3110,11 +3115,11 @@ function actionFields(a, refresh) {
     fields.push(durationField("Durée (facultatif, sinon celle du fichier)", a.data, "duration", true));
     delete extra.duration;
   } else if (a.action === "persistent_notification.create") {
-    fields.push(textField("Titre (facultatif)", a.data, "title"), textField("Message", a.data, "message"));
+    fields.push(textField("Titre (facultatif)", a.data, "title"), textField("Message", a.data, "message", { placeholder: MESSAGE_EXAMPLE }));
     delete extra.title;
     delete extra.message;
   } else if (a.action === "notify.send_message") {
-    fields.push(textField("Titre (facultatif)", a.data, "title"), textField("Message", a.data, "message"));
+    fields.push(textField("Titre (facultatif)", a.data, "title"), textField("Message", a.data, "message", { placeholder: MESSAGE_EXAMPLE }));
     fields.push(selectField("Priorité", a.data, "priority", [[1, "1 (discrète)"], [2, "2"], [3, "3 (normale)"], [4, "4"], [5, "5 (urgente)"]], true));
     delete extra.title;
     delete extra.message;
@@ -3125,6 +3130,9 @@ function actionFields(a, refresh) {
   }
   return fields;
 }
+
+// Un message peut contenir des valeurs (modèles, voir docs/modeles.md).
+const MESSAGE_EXAMPLE = "ex. : Il fait {{ states('sensor.meteo_temperature') }} °C";
 
 // ----- Champs du formulaire (chacun lit et modifie une clé de l'objet)
 
