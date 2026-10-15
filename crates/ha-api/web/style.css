@@ -531,3 +531,4 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 /* Blocs imbriqués de l'éditeur (« ou », « si… alors… sinon ») */
 .auto-block.nested { grid-column: 1 / -1; background: var(--card); }
 .auto-block.nested .auto-item { background: var(--bg); }
+.value.small-value { font-size: 1.3rem; }

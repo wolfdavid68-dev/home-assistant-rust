@@ -26,6 +26,7 @@ Un noyau domotique en Rust, inspiré de Home Assistant.
 - [Étape 15 : la météo locale, expliquée](docs/meteo.md)
 - [Étape 16 : le thermostat, expliqué](docs/thermostat.md)
 - [Étape 17 : des automatisations plus riches, expliqué](docs/automatisations-avancees.md)
+- [Étape 18 : les sauvegardes automatiques, expliqué](docs/sauvegardes.md)
 - [Étape 5 : les automatisations, expliqué](docs/etape-5-automatisations.md)
 - [Modernisation du code, expliquée](docs/modernisation.md)
 - [Étape 6 : l'interface web, expliquée](docs/etape-6-interface-web.md)

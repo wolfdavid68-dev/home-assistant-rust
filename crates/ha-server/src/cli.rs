@@ -43,6 +43,9 @@ utilisation :
   ha-server thermostats check     vérifie le fichier des thermostats
   ha-server audit [nombre]        affiche le journal d'audit
   ha-server audit verify          vérifie que le journal n'a pas été modifié
+  ha-server backup now            sauvegarde la base (même serveur en marche)
+  ha-server backup list           liste les sauvegardes
+  ha-server backup restore <fichier> [--force]  restaure une sauvegarde (serveur arrêté)
   ha-server healthcheck           vérifie qu'un serveur répond (pour Docker)";
 
 pub async fn user_command(args: &[&str]) -> Result<(), Box<dyn Error>> {
@@ -568,6 +571,9 @@ fn action_label(action: &str) -> &str {
         "automation_create" => "automatisation créée",
         "automation_update" => "automatisation modifiée",
         "automation_delete" => "automatisation supprimée",
+        "backup" => "sauvegarde",
+        "backup_failed" => "ÉCHEC de sauvegarde",
+        "backup_restore" => "sauvegarde restaurée",
         "server_start" => "démarrage du serveur",
         "server_stop" => "arrêt du serveur",
         other => other,

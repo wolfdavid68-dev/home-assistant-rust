@@ -32,6 +32,9 @@ services:
       # HA_NTFY_TOPIC: maison-un-sujet-long-et-aleatoire
       # HA_NTFY_TOKEN_FILE: /run/secrets/ntfy_token
       # Position de la maison, pour le soleil (deux décimales suffisent) :
+      # Sauvegardes automatiques (déjà actives dans l'image) : heure et nombre gardé.
+      # HA_BACKUP_TIME: "03:30"
+      # HA_BACKUP_KEEP: "7"
       # HA_LATITUDE: "48.85"
       # HA_LONGITUDE: "2.35"
       # Météo locale avec Open-Meteo (voir docs/meteo.md), il faut la position :
@@ -49,6 +52,8 @@ services:
       - ha-data:/data
       # La clé qui chiffre les jetons Hue et Somfy, à part de la base.
       - ha-cle:/cle
+      # Sauvegardes automatiques de chaque nuit (voir docs/sauvegardes.md).
+      - ha-sauvegardes:/sauvegardes
       # Tes fichiers d'automatisations et de pièces : config/automations.yaml et
       # config/areas.yaml (lecture seule).
       - ./config:/config:ro
@@ -87,11 +92,13 @@ services:
     volumes:
       - ha-data:/data
       - ha-cle:/cle
+      - ha-sauvegardes:/automatiques
       - ./sauvegardes:/sauvegardes
 
 volumes:
   ha-data:
   ha-cle:
+  ha-sauvegardes:
 
 # secrets:
 #   mqtt_password:

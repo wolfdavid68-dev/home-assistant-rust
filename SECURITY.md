@@ -64,6 +64,8 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
 - Les secrets que le serveur doit relire (clé du pont Hue, jeton Somfy) sont **chiffrés** dans la base
   (XChaCha20-Poly1305), avec une clé rangée dans un fichier séparé (`ha.key`, droits 600). Une copie
   de la base seule ne permet pas de piloter les appareils.
+- Sauvegardes automatiques : fichiers en droits 600, vérifiées après copie, sans la clé `ha.key` (gardée à
+  part) ; restauration refusée si le serveur semble en marche, avec copie de sécurité de la base actuelle.
 - Si un secret est poussé par erreur, on le **change** immédiatement (le supprimer de Git ne suffit pas).
 
 ## Dépendances

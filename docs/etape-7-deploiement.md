@@ -150,6 +150,10 @@ certificat, renouvelé tout seul : c'est plus sûr que ce qu'on écrirait nous-m
 
 ## Sauvegarder et restaurer
 
+> **Depuis l'étape 18**, le serveur fait une sauvegarde automatique chaque nuit, sans s'arrêter,
+> et `ha-server backup restore` restaure en une commande : voir
+> [les sauvegardes automatiques](sauvegardes.md). La méthode manuelle ci-dessous reste valable.
+
 Toutes tes données sont dans `ha.db` : comptes, historique, associations Hue et Somfy. Le petit
 outil `sauvegarde` de [compose.yaml](../compose.yaml) la copie dans le dossier `sauvegardes/`
 (ignoré par Git). On arrête le serveur pendant la copie, pour avoir une base cohérente.

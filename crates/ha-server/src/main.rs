@@ -28,6 +28,9 @@
 //! ha-server thermostats check     vérifie le fichier des thermostats
 //! ha-server audit [nombre]        affiche le journal d'audit
 //! ha-server audit verify          vérifie que le journal n'a pas été modifié
+//! ha-server backup now          sauvegarde la base (même serveur en marche)
+//! ha-server backup list          liste les sauvegardes
+//! ha-server backup restore <f>   restaure une sauvegarde (serveur arrêté)
 //! ha-server healthcheck           vérifie qu'un serveur répond (pour Docker)
 //! ```
 //!
@@ -46,6 +49,8 @@
 //! - `HA_LATITUDE` et `HA_LONGITUDE` : position de la maison, pour le soleil
 //!   (deux décimales suffisent, par exemple 48.85 et 2.35) ;
 //! - `HA_THERMOSTATS_PATH` : fichier des thermostats (par défaut `thermostats.yaml`) ;
+//! - `HA_BACKUP_DIR`, `HA_BACKUP_TIME` (03:30), `HA_BACKUP_KEEP` (7) :
+//!   sauvegardes automatiques chaque nuit ;
 //! - `HA_METEO` : `on` pour la météo locale avec Open-Meteo (il faut la
 //!   position de la maison) ; `HA_METEO_URL` pour un serveur auto-hébergé ;
 //! - `HA_SCRIPTS_PATH` et `HA_SCENES_PATH` : scripts et scènes (par défaut
@@ -61,6 +66,7 @@
 //!   d'automatisations en lecture seule dans le tableau de bord ;
 //! - `RUST_LOG` : niveau de détail des logs (par défaut `info`).
 
+mod backup;
 mod cli;
 mod health;
 
@@ -120,6 +126,7 @@ async fn main() -> ExitCode {
         ["alexa", "check"] => cli::check_alexa(&alexa_path()),
         ["thermostats", "check"] => cli::check_thermostats(&thermostats_path()),
         ["audit", rest @ ..] => cli::audit_command(rest).await,
+        ["backup", rest @ ..] => backup::command(rest).await,
         ["healthcheck"] => match parse_bind() {
             Ok(bind) => health::check(bind).await,
             Err(error) => Err(error.into()),
@@ -203,6 +210,7 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     let location = location()?;
     let ntfy = ntfy_config()?;
     let alexa_settings = alexa_settings()?;
+    let backup_settings = backup::settings()?;
     let weather_config = weather_config(location)?;
     let thermostat_configs = ha_thermostat::load(&thermostats_path())
         .map_err(|error| format!("{} : {error}", thermostats_path().display()))?;
@@ -293,6 +301,16 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     // consigne et son mode d'avant l'arrêt.
     let thermostats = (!thermostat_configs.is_empty())
         .then(|| ha_thermostat::Thermostats::start(thermostat_configs, Arc::clone(&core)));
+    let backups = if let Some(settings) = backup_settings {
+        Some(backup::Scheduler::start(
+            settings,
+            store.clone(),
+            Arc::clone(&core),
+        ))
+    } else {
+        info!("sauvegardes automatiques désactivées (indique HA_BACKUP_DIR pour les activer)");
+        None
+    };
     let weather = match weather_config {
         Some(config) => Some(ha_weather::Weather::start(config, Arc::clone(&core))?),
         None => None,
@@ -378,6 +396,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     }
     if let Some(alexa) = alexa {
         alexa.stop().await;
+    }
+    if let Some(backups) = backups {
+        backups.stop().await;
     }
     if let Some(thermostats) = thermostats {
         thermostats.stop().await;
@@ -678,7 +699,7 @@ async fn shutdown_signal() -> std::io::Result<()> {
 }
 
 /// Lit `HA_BIND`, sans rien afficher.
-fn parse_bind() -> Result<SocketAddr, String> {
+pub(crate) fn parse_bind() -> Result<SocketAddr, String> {
     let value = std::env::var("HA_BIND").unwrap_or_else(|_| DEFAULT_BIND.to_owned());
     value
         .parse()
