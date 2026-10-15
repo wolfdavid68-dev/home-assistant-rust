@@ -29,7 +29,9 @@ pub fn describe_change(old: Option<&State>, new: Option<&State>) -> Option<Strin
 
 fn phrase(old: &State, new: &State) -> Option<String> {
     let value = new.state();
-    if old.state() == value || value == "unknown" {
+    // Un appareil qui annonce son état après un redémarrage (« inconnu » →
+    // « désarmée ») : rien ne s'est passé dans la maison.
+    if old.state() == value || value == "unknown" || old.state() == "unknown" {
         return None;
     }
     let attributes = new.attributes();
@@ -138,10 +140,31 @@ fn phrase(old: &State, new: &State) -> Option<String> {
         ),
         // Leur état est une date : celle du dernier usage.
         "scene" => Some("activée".into()),
-        "input_button" => Some("a été appuyé".into()),
+        // Leur état est l'heure du dernier appui.
+        "input_button" | "button" => Some("a été appuyé".into()),
         "notify" => Some("notification envoyée".into()),
         "script" => (value == "on").then(|| "lancé".into()),
-        "input_number" => Some(match text(attributes, "unit_of_measurement") {
+        // Une télécommande : laquelle de ses touches.
+        "event" => text(attributes, "event_type").map(|kind| format!("signale « {kind} »")),
+        // Un texte « mot de passe » n'est jamais écrit dans le journal.
+        "text" if text(attributes, "mode") == Some("password") => Some("a été modifié".into()),
+        "alarm_control_panel" => Some(
+            match value {
+                "disarmed" => "a été désarmé",
+                "armed_home" => "est en mode présence",
+                "armed_away" => "est en mode absence",
+                "armed_night" => "est en mode nuit",
+                "armed_vacation" => "est en mode vacances",
+                "armed_custom_bypass" => "est en mode personnalisé",
+                "pending" => "va sonner (délai d'entrée)",
+                "triggered" => "sonne : intrusion !",
+                "arming" => "s'arme…",
+                "disarming" => "se désarme…",
+                _ => return Some(format!("passe à « {value} »")),
+            }
+            .into(),
+        ),
+        "input_number" | "number" => Some(match text(attributes, "unit_of_measurement") {
             Some(unit) => format!("réglé à {value} {unit}"),
             None => format!("réglé à {value}"),
         }),
@@ -406,6 +429,12 @@ mod tests {
             ("timer.lessive", "idle", "active", none.clone()),
             ("light.salon", "on", "on", none.clone()),
             ("light.salon", "unavailable", "unknown", none.clone()),
+            (
+                "alarm_control_panel.maison",
+                "unknown",
+                "disarmed",
+                none.clone(),
+            ),
             ("script.depart", "on", "off", none.clone()),
         ] {
             assert_eq!(
@@ -479,6 +508,34 @@ mod tests {
                 "on",
                 none.clone(),
                 "s'est allumé",
+            ),
+            (
+                "alarm_control_panel.maison",
+                "armed_away",
+                "disarmed",
+                json!({"friendly_name": "Alarme"}),
+                "a été désarmée",
+            ),
+            (
+                "event.telecommande",
+                "2026-10-15T05:00:00Z",
+                "2026-10-15T05:00:09Z",
+                json!({"event_type": "double"}),
+                "signale « double »",
+            ),
+            (
+                "text.code_portail",
+                "a",
+                "b",
+                json!({"mode": "password"}),
+                "a été modifié",
+            ),
+            (
+                "number.luminosite_led",
+                "100",
+                "200",
+                none.clone(),
+                "réglé à 200",
             ),
             (
                 "calendar.maison",

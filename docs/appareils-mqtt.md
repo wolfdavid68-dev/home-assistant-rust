@@ -115,3 +115,105 @@ mosquitto_pub -h <broker> -u <compte> -P <mot de passe> -t maison/serrure -m LOC
 ```
 
 et regarder les ordres envoyés : `mosquitto_sub -t maison/serrure/set -v`.
+
+---
+
+# Étape 29 : volets, ventilateurs, thermostats, boutons, réglages, télécommandes et alarmes
+
+![Les appareils de l'étape 29](images/appareils-mqtt-2.png)
+
+## Le but
+
+En comparant avec le code de Home Assistant (`homeassistant/components/mqtt/`), il manquait neuf
+types que Zigbee2MQTT, ESPHome ou Tasmota annoncent tous les jours. Ils sont maintenant compris,
+avec les **mêmes valeurs par défaut et les mêmes abréviations** que Home Assistant :
+
+| Type MQTT             | Exemple                               | Sur le tableau de bord                          |
+| --------------------- | ------------------------------------- | ----------------------------------------------- |
+| `cover`               | volet roulant, store, porte de garage | Ouvrir / Arrêter / Fermer, position             |
+| `fan`                 | ventilateur, VMC                      | marche / arrêt, vitesse, modes, oscillation     |
+| `climate`             | tête thermostatique Zigbee, clim      | le cadran de l'étape 25 (consigne, mesure)      |
+| `button`              | « redémarrer », « tester la sonnette » | Appuyer (l'état : la date du dernier appui)     |
+| `number`              | luminosité d'une LED, durée           | curseur ou − / +                                |
+| `select`              | effet lumineux, mode                  | liste déroulante                                |
+| `text`                | message d'un écran                    | champ de texte (masqué en mode « mot de passe ») |
+| `event`               | télécommande, interrupteur sans fil   | dernière touche (« double ») et quand            |
+| `alarm_control_panel` | centrale d'alarme                     | Absence / Présence / Nuit, Désarmer (mot de passe) |
+
+## Une télécommande dans une automatisation
+
+Chaque appui publie l'événement `event_received`, avec l'appareil et la touche :
+
+```yaml
+- id: telecommande_double
+  alias: Double appui = tout éteindre
+  triggers:
+    - trigger: event
+      event_type: event_received
+      event_data: {entity_id: event.telecommande, event_type: double}
+  actions:
+    - action: scene.turn_on
+      target: {entity_id: scene.bonne_nuit}
+```
+
+Une sorte d'appui que l'appareil n'a pas annoncée (`event_types`) est ignorée.
+
+## La sécurité
+
+- **Désarmer l'alarme redemande le mot de passe**, comme déverrouiller une porte (étape 27). Armer
+  est immédiat. L'alarme est cachée aux invités.
+- **Le code d'une alarme** (`code` dans la description) n'est ni gardé ni affiché : la vraie
+  protection est le mot de passe redemandé par le serveur, pas un code à 4 chiffres tapé dans le
+  navigateur.
+- **Pas de modèles de commande** : une alarme qui demande un `command_template` autre que
+  `{{ action }}` est refusée. Un modèle Jinja est un petit langage de programmation ; on n'en exécute
+  jamais un venu du réseau.
+- **Tout ce qui part vers l'appareil est vérifié** : un nombre entre les bornes annoncées (une
+  position de 0 à 100 %, convertie en 0 à 255 si l'appareil le demande), un choix dans la liste
+  annoncée, un texte de la bonne longueur sans caractère de contrôle, un oui / non pour
+  l'oscillation.
+- **Un texte en mode « mot de passe »** n'est jamais affiché sur le tableau de bord ni écrit dans le
+  journal de bord (« a été modifié »).
+
+## Une erreur corrigée en lisant le code de Home Assistant
+
+En comparant notre table d'abréviations avec `abbreviations.py`, deux erreurs de l'étape 27 sont
+apparues : un état de vanne fermée s'abrège `stat_clsd` (et non `stat_closed`), et « en train de se
+fermer » `stat_closing` (et non `stat_clsing`). Une vanne qui utilisait ces abréviations aurait
+gardé ses valeurs par défaut sans prévenir. C'est corrigé.
+
+## Le journal de bord, plus calme
+
+Après un redémarrage, chaque appareil annonce son état (« inconnu » → « désarmée »). Ce n'est pas un
+événement de la maison : ces lignes ne sont plus écrites.
+
+## Les concepts Rust
+
+**Une énumération dont chaque cas porte ses données.** Ce qu'on publie pour un service :
+
+```rust
+pub enum Payload {
+    Fixed(String),
+    Number { field: &'static str, min: f64, max: f64, scale: Option<(f64, f64)> },
+    Flag { field: &'static str, on: String, off: String },
+    Text { field: &'static str, min: usize, max: usize },
+    Choice { field: &'static str, options: Vec<String> },
+}
+```
+
+Un `match` sur `Payload` oblige à traiter **chaque** cas : en ajoutant `Flag` et `Text`, le
+compilateur a montré tous les endroits à compléter.
+
+**`if let … && let …` (« let chains »).** Pour ne traiter un message que s'il vient du bon sujet
+**et** qu'il est compris :
+
+```rust
+if config.state_topic.as_deref() == Some(topic)
+    && let Some(action) = event_received(config, id, payload, states)
+{
+    actions.push(action);
+}
+```
+
+Chaque `let` ne réussit que si la valeur a la bonne forme ; sinon tout le `if` est sauté, sans
+`unwrap`.

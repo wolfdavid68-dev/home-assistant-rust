@@ -15,13 +15,14 @@ use crate::error::ApiError;
 
 /// Domaines cachés aux invités : la présence de la famille, les messages, et
 /// ce qui dit si la maison est fermée (serrures, sirènes).
-const HIDDEN_FROM_GUESTS: [&str; 8] = [
+const HIDDEN_FROM_GUESTS: [&str; 9] = [
     "person",
     "device_tracker",
     "zone",
     "notify",
     "lock",
     "siren",
+    "alarm_control_panel",
     // L'agenda dit quand la maison est vide (« Vacances »), les listes sont
     // celles de la famille.
     "calendar",
@@ -79,12 +80,16 @@ pub(crate) fn can_control(user: &User, entity_id: &EntityId, state: Option<&Stat
         && device_class(state).is_some_and(|c| FORBIDDEN_COVER_CLASSES.contains(&c)))
 }
 
-/// Les commandes qui ouvrent la maison : même un administrateur doit
-/// redonner son mot de passe (valable 15 minutes), comme pour modifier une
-/// automatisation. Un téléphone oublié déverrouillé ne suffit pas.
+/// Les commandes qui ouvrent la maison (déverrouiller, désarmer l'alarme) :
+/// même un administrateur doit redonner son mot de passe (valable 15
+/// minutes), comme pour modifier une automatisation. Un téléphone oublié
+/// déverrouillé ne suffit pas.
 #[must_use]
 pub(crate) fn needs_confirmation(domain: &str, service: &str) -> bool {
-    matches!((domain, service), ("lock", "unlock" | "open"))
+    matches!(
+        (domain, service),
+        ("lock", "unlock" | "open") | ("alarm_control_panel", "alarm_disarm")
+    )
 }
 
 /// Les droits du compte, pour que le tableau de bord cache ce qui ne sert à

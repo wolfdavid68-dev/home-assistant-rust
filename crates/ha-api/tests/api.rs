@@ -1309,7 +1309,18 @@ async fn unlocking_a_door_asks_for_the_password_again() {
         assert_eq!(status, StatusCode::FORBIDDEN, "{service}");
         assert_eq!(body["confirm"], true, "{service}");
     }
-    // Rien n'est parti vers la serrure.
+    // Désarmer l'alarme aussi.
+    let (status, body) = app
+        .request(
+            "POST",
+            "/api/services/alarm_control_panel/alarm_disarm",
+            Some(&token),
+            Some(json!({"entity_id": "alarm_control_panel.maison"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body["confirm"], true);
+    // Rien n'est parti vers la serrure ni l'alarme.
     assert!(events.try_recv().is_err());
 
     let (status, _) = app

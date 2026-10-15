@@ -16,7 +16,9 @@
 
 use serde_json::{Map, Value, json};
 
-use crate::profile::{AttributeTopic, Payload, Profile, ServiceCommand};
+use crate::profile::{
+    AttrKind, AttributeTopic, FreeState, Optimistic, Payload, Profile, ServiceCommand,
+};
 use crate::template::{Segment, Template};
 
 /// Taille maximale d'une description de découverte.
@@ -39,6 +41,15 @@ pub enum Component {
     Vacuum,
     Humidifier,
     WaterHeater,
+    Cover,
+    Fan,
+    Climate,
+    Button,
+    Number,
+    Select,
+    Text,
+    Event,
+    AlarmControlPanel,
 }
 
 impl Component {
@@ -54,6 +65,15 @@ impl Component {
             "vacuum" => Some(Self::Vacuum),
             "humidifier" => Some(Self::Humidifier),
             "water_heater" => Some(Self::WaterHeater),
+            "cover" => Some(Self::Cover),
+            "fan" => Some(Self::Fan),
+            "climate" => Some(Self::Climate),
+            "button" => Some(Self::Button),
+            "number" => Some(Self::Number),
+            "select" => Some(Self::Select),
+            "text" => Some(Self::Text),
+            "event" => Some(Self::Event),
+            "alarm_control_panel" => Some(Self::AlarmControlPanel),
             _ => None,
         }
     }
@@ -72,6 +92,15 @@ impl Component {
             Self::Vacuum => "vacuum",
             Self::Humidifier => "humidifier",
             Self::WaterHeater => "water_heater",
+            Self::Cover => "cover",
+            Self::Fan => "fan",
+            Self::Climate => "climate",
+            Self::Button => "button",
+            Self::Number => "number",
+            Self::Select => "select",
+            Self::Text => "text",
+            Self::Event => "event",
+            Self::AlarmControlPanel => "alarm_control_panel",
         }
     }
 
@@ -80,7 +109,12 @@ impl Component {
     pub fn is_on_off(self) -> bool {
         matches!(
             self,
-            Self::BinarySensor | Self::Switch | Self::Light | Self::Siren | Self::Humidifier
+            Self::BinarySensor
+                | Self::Switch
+                | Self::Light
+                | Self::Siren
+                | Self::Humidifier
+                | Self::Fan
         )
     }
 }
@@ -167,8 +201,8 @@ const ABBREVIATIONS: &[(&str, &str)] = &[
     ("stat_jam", "state_jammed"),
     ("stat_open", "state_open"),
     ("stat_opening", "state_opening"),
-    ("stat_closed", "state_closed"),
-    ("stat_clsing", "state_closing"),
+    ("stat_clsd", "state_closed"),
+    ("stat_closing", "state_closing"),
     ("pl_strt", "payload_start"),
     ("pl_paus", "payload_pause"),
     ("pl_ret", "payload_return_to_base"),
@@ -192,6 +226,45 @@ const ABBREVIATIONS: &[(&str, &str)] = &[
     ("curr_temp_t", "current_temperature_topic"),
     ("curr_temp_tpl", "current_temperature_template"),
     ("pow_cmd_t", "power_command_topic"),
+    // Volet.
+    ("pos_t", "position_topic"),
+    ("pos_tpl", "position_template"),
+    ("set_pos_t", "set_position_topic"),
+    ("pos_open", "position_open"),
+    ("pos_clsd", "position_closed"),
+    ("stat_stopped", "state_stopped"),
+    // Ventilateur.
+    ("pct_cmd_t", "percentage_command_topic"),
+    ("pct_stat_t", "percentage_state_topic"),
+    ("pct_val_tpl", "percentage_value_template"),
+    ("spd_rng_min", "speed_range_min"),
+    ("spd_rng_max", "speed_range_max"),
+    ("osc_cmd_t", "oscillation_command_topic"),
+    ("osc_stat_t", "oscillation_state_topic"),
+    ("osc_val_tpl", "oscillation_value_template"),
+    ("pl_osc_on", "payload_oscillation_on"),
+    ("pl_osc_off", "payload_oscillation_off"),
+    ("pr_mode_cmd_t", "preset_mode_command_topic"),
+    ("pr_mode_stat_t", "preset_mode_state_topic"),
+    ("pr_mode_val_tpl", "preset_mode_value_template"),
+    ("pr_modes", "preset_modes"),
+    // Thermostat.
+    ("act_t", "action_topic"),
+    ("act_tpl", "action_template"),
+    // Bouton, nombre, liste, texte, événement, alarme.
+    ("pl_prs", "payload_press"),
+    ("ops", "options"),
+    ("ptrn", "pattern"),
+    ("evt_typ", "event_types"),
+    ("sup_feat", "supported_features"),
+    ("cmd_tpl", "command_template"),
+    ("pl_arm_away", "payload_arm_away"),
+    ("pl_arm_home", "payload_arm_home"),
+    ("pl_arm_nite", "payload_arm_night"),
+    ("pl_arm_vacation", "payload_arm_vacation"),
+    ("pl_arm_custom_b", "payload_arm_custom_bypass"),
+    ("pl_disarm", "payload_disarm"),
+    ("pl_trig", "payload_trigger"),
 ];
 
 /// Les modes d'un chauffe-eau quand l'appareil n'en annonce pas.
@@ -204,10 +277,34 @@ const WATER_HEATER_MODES: [&str; 7] = [
     "high_demand",
     "performance",
 ];
+/// Les modes d'un thermostat quand l'appareil n'en annonce pas.
+const CLIMATE_MODES: [&str; 6] = ["auto", "off", "cool", "heat", "dry", "fan_only"];
+/// Les états d'une alarme (ceux de Home Assistant, reçus tels quels).
+const ALARM_STATES: [&str; 10] = [
+    "disarmed",
+    "armed_home",
+    "armed_away",
+    "armed_night",
+    "armed_vacation",
+    "armed_custom_bypass",
+    "pending",
+    "triggered",
+    "arming",
+    "disarming",
+];
+/// Ce qu'une alarme sait faire, quand elle ne le dit pas : tout.
+const ALARM_FEATURES: [&str; 6] = [
+    "arm_home",
+    "arm_away",
+    "arm_night",
+    "arm_vacation",
+    "arm_custom_bypass",
+    "trigger",
+];
 /// Les états d'un aspirateur (ceux de Home Assistant).
 const VACUUM_STATES: [&str; 6] = ["cleaning", "docked", "paused", "idle", "returning", "error"];
-/// Nombre maximal de modes annoncés par un appareil.
-const MAX_OPTIONS: usize = 20;
+/// Nombre maximal de choix annoncés par un appareil (modes, options…).
+const MAX_OPTIONS: usize = 50;
 
 /// Découpe un sujet de découverte. Renvoie le type et l'identifiant d'objet,
 /// ou `None` si ce n'est pas un sujet de découverte.
@@ -260,8 +357,9 @@ pub fn parse(
         check_topic(&value, prefix, key).map(Some)
     };
     // Un chauffe-eau n'a pas de sujet d'état : son état, c'est son mode.
+    // Un thermostat non plus : son état est son mode (`heat`, `off`…).
     let (state_key, command_key) = match component {
-        Component::WaterHeater => ("mode_state_topic", "mode_command_topic"),
+        Component::WaterHeater | Component::Climate => ("mode_state_topic", "mode_command_topic"),
         _ => ("state_topic", "command_topic"),
     };
     let state_topic = topic(state_key)?;
@@ -269,8 +367,8 @@ pub fn parse(
 
     // Pour une lumière, le modèle de l'état s'appelle `state_value_template`.
     let template_key = match component {
-        Component::Light => "state_value_template",
-        Component::WaterHeater => "mode_state_template",
+        Component::Light | Component::Fan => "state_value_template",
+        Component::WaterHeater | Component::Climate => "mode_state_template",
         _ => "value_template",
     };
     let value_template = match (template(&config, template_key)?, component) {
@@ -345,8 +443,12 @@ pub fn parse(
     })))
 }
 
-/// Ce que sait faire un verrou, une vanne, un aspirateur, un humidificateur
-/// ou un chauffe-eau, avec les valeurs par défaut de Home Assistant.
+/// Ce que sait faire chaque type d'appareil, avec les valeurs par défaut de
+/// Home Assistant (`homeassistant/components/mqtt/*.py`).
+#[allow(
+    clippy::too_many_lines,
+    reason = "une branche par type d'appareil : les séparer n'apporterait rien"
+)]
 fn profile(
     component: Component,
     config: &Map<String, Value>,
@@ -356,200 +458,42 @@ fn profile(
     payload_off: &str,
 ) -> Result<Profile, DiscoveryError> {
     let mut profile = Profile::default();
-    // `état` ← `state_xxx` reçu (ou la valeur par défaut).
-    let mut map_state = |key: &'static str, default: &str, state: &str| {
-        text(config, key).map(|value| {
-            let received = value.unwrap_or_else(|| default.to_owned());
-            profile.states.push((received, state.to_owned()));
+    let command_topic = topic(match component {
+        Component::Climate | Component::WaterHeater => "mode_command_topic",
+        _ => "command_topic",
+    })?;
+    // Un texte de la description, ou sa valeur par défaut.
+    let or = |key: &'static str, default: &str| -> Result<String, DiscoveryError> {
+        Ok(text(config, key)?.unwrap_or_else(|| default.to_owned()))
+    };
+    // Un service qui publie toujours le même texte sur le sujet de commande.
+    let fixed = |service: &'static str, payload: String, optimistic: Optimistic| {
+        command_topic.as_ref().map(|topic| ServiceCommand {
+            service,
+            topic: topic.clone(),
+            payload: Payload::Fixed(payload),
+            optimistic,
         })
     };
-    match component {
-        Component::Lock => {
-            map_state("state_locked", "LOCKED", "locked")?;
-            map_state("state_unlocked", "UNLOCKED", "unlocked")?;
-            map_state("state_locking", "LOCKING", "locking")?;
-            map_state("state_unlocking", "UNLOCKING", "unlocking")?;
-            map_state("state_jammed", "JAMMED", "jammed")?;
-            map_state("state_open", "OPEN", "open")?;
-            map_state("state_opening", "OPENING", "opening")?;
-        }
-        Component::Valve => {
-            map_state("state_open", "open", "open")?;
-            map_state("state_closed", "closed", "closed")?;
-            map_state("state_opening", "opening", "opening")?;
-            map_state("state_closing", "closing", "closing")?;
-        }
-        Component::Vacuum => {
-            for state in VACUUM_STATES {
-                profile.states.push((state.to_owned(), state.to_owned()));
-            }
-        }
-        _ => {}
-    }
-
-    let command_topic = topic("command_topic")?;
-    let fixed = |payload_key: &'static str, default: Option<&str>| {
-        text(config, payload_key).map(|value| value.or_else(|| default.map(str::to_owned)))
+    // Un service sur son propre sujet (`set_position_topic`…), s'il est annoncé.
+    let on_topic = |service: &'static str,
+                    key: &'static str,
+                    payload: Payload,
+                    optimistic: Optimistic|
+     -> Result<Option<ServiceCommand>, DiscoveryError> {
+        Ok(topic(key)?.map(|topic| ServiceCommand {
+            service,
+            topic,
+            payload,
+            optimistic,
+        }))
     };
-    let mut add = |service: &'static str, topic: Option<&String>, payload: Payload, optimistic| {
-        if let Some(topic) = topic {
-            profile.services.push(ServiceCommand {
-                service,
-                topic: topic.clone(),
-                payload,
-                optimistic,
-            });
-        }
-    };
-    match component {
-        Component::Lock => {
-            for (service, key, default, optimistic) in [
-                ("lock", "payload_lock", Some("LOCK"), "locked"),
-                ("unlock", "payload_unlock", Some("UNLOCK"), "unlocked"),
-                // Ouvrir la porte (pas seulement déverrouiller) : seulement si
-                // l'appareil le propose.
-                ("open", "payload_open", None, "open"),
-            ] {
-                if let Some(payload) = fixed(key, default)? {
-                    add(
-                        service,
-                        command_topic.as_ref(),
-                        Payload::Fixed(payload),
-                        Some(optimistic),
-                    );
-                }
-            }
-        }
-        Component::Valve => {
-            for (service, key, default, optimistic) in [
-                ("open_valve", "payload_open", Some("OPEN"), Some("open")),
-                (
-                    "close_valve",
-                    "payload_close",
-                    Some("CLOSE"),
-                    Some("closed"),
-                ),
-                ("stop_valve", "payload_stop", None, None),
-            ] {
-                if let Some(payload) = fixed(key, default)? {
-                    add(
-                        service,
-                        command_topic.as_ref(),
-                        Payload::Fixed(payload),
-                        optimistic,
-                    );
-                }
-            }
-        }
-        Component::Vacuum => {
-            for (service, key, default) in [
-                ("start", "payload_start", "start"),
-                ("pause", "payload_pause", "pause"),
-                ("stop", "payload_stop", "stop"),
-                ("return_to_base", "payload_return_to_base", "return_to_base"),
-                ("locate", "payload_locate", "locate"),
-                ("clean_spot", "payload_clean_spot", "clean_spot"),
-            ] {
-                if let Some(payload) = fixed(key, Some(default))? {
-                    add(
-                        service,
-                        command_topic.as_ref(),
-                        Payload::Fixed(payload),
-                        None,
-                    );
-                }
-            }
-        }
-        Component::Humidifier => {
-            let min = number(config, "min_humidity")?.unwrap_or(0.0);
-            let max = number(config, "max_humidity")?.unwrap_or(100.0);
-            if !(0.0..=100.0).contains(&min) || !(min..=100.0).contains(&max) {
-                return Err(DiscoveryError::InvalidField("max_humidity"));
-            }
-            add(
-                "set_humidity",
-                topic("target_humidity_command_topic")?.as_ref(),
-                Payload::Number {
-                    field: "humidity",
-                    min,
-                    max,
-                },
-                None,
-            );
-            profile.fixed.push(("min_humidity", json!(min)));
-            profile.fixed.push(("max_humidity", json!(max)));
-        }
-        Component::WaterHeater => {
-            let modes = match config.get("modes") {
-                None => WATER_HEATER_MODES.iter().map(|m| (*m).to_owned()).collect(),
-                Some(Value::Array(list)) if !list.is_empty() && list.len() <= MAX_OPTIONS => list
-                    .iter()
-                    .map(|mode| {
-                        mode.as_str()
-                            .filter(|m| is_short_text(m))
-                            .map(str::to_owned)
-                            .ok_or(DiscoveryError::InvalidField("modes"))
-                    })
-                    .collect::<Result<Vec<_>, _>>()?,
-                Some(_) => return Err(DiscoveryError::InvalidField("modes")),
-            };
-            for mode in &modes {
-                profile.states.push((mode.clone(), mode.clone()));
-            }
-            let min = number(config, "min_temp")?.unwrap_or(43.3);
-            let max = number(config, "max_temp")?.unwrap_or(60.0);
-            if !(-50.0..=150.0).contains(&min) || !(min..=150.0).contains(&max) {
-                return Err(DiscoveryError::InvalidField("max_temp"));
-            }
-            add(
-                "set_operation_mode",
-                topic("mode_command_topic")?.as_ref(),
-                Payload::Choice {
-                    field: "operation_mode",
-                    options: modes.clone(),
-                },
-                None,
-            );
-            add(
-                "set_temperature",
-                topic("temperature_command_topic")?.as_ref(),
-                Payload::Number {
-                    field: "temperature",
-                    min,
-                    max,
-                },
-                None,
-            );
-            let power = topic("power_command_topic")?;
-            add(
-                "turn_on",
-                power.as_ref(),
-                Payload::Fixed(payload_on.to_owned()),
-                None,
-            );
-            add(
-                "turn_off",
-                power.as_ref(),
-                Payload::Fixed(payload_off.to_owned()),
-                None,
-            );
-            profile.fixed.push(("operation_list", json!(modes)));
-            profile.fixed.push(("min_temp", json!(min)));
-            profile.fixed.push(("max_temp", json!(max)));
-        }
-        _ => {}
-    }
-    if component == Component::Lock {
-        let supports_open = profile.command("open").is_some();
-        profile.fixed.push(("supports_open", json!(supports_open)));
-    }
-
-    // Les sujets d'attributs.
+    // Un sujet d'attribut, s'il est annoncé (sinon : le sujet d'état).
     let attribute = |name: &'static str,
                      topic_key: Option<&'static str>,
                      template_key: Option<&'static str>,
                      default_template: Template,
-                     numeric: bool|
+                     kind: AttrKind|
      -> Result<Option<AttributeTopic>, DiscoveryError> {
         let topic = match topic_key {
             Some(key) => topic(key)?,
@@ -563,51 +507,604 @@ fn profile(
             name,
             topic,
             template: template.unwrap_or(default_template),
-            numeric,
+            kind,
         }))
     };
     let json_key = |key: &str| Template::Json(vec![Segment::Key(key.to_owned())]);
-    let wanted = match component {
-        Component::Vacuum => vec![
-            attribute("battery_level", None, None, json_key("battery_level"), true)?,
-            attribute("fan_speed", None, None, json_key("fan_speed"), false)?,
-        ],
-        Component::Humidifier => vec![
-            attribute(
+    let mut services: Vec<Option<ServiceCommand>> = Vec::new();
+    let mut attributes: Vec<Option<AttributeTopic>> = Vec::new();
+    let mut map_state = |received: String, state: &str| {
+        profile.states.push((received, state.to_owned()));
+    };
+
+    match component {
+        Component::Lock => {
+            for (key, default, state) in [
+                ("state_locked", "LOCKED", "locked"),
+                ("state_unlocked", "UNLOCKED", "unlocked"),
+                ("state_locking", "LOCKING", "locking"),
+                ("state_unlocking", "UNLOCKING", "unlocking"),
+                ("state_jammed", "JAMMED", "jammed"),
+                ("state_open", "OPEN", "open"),
+                ("state_opening", "OPENING", "opening"),
+            ] {
+                map_state(or(key, default)?, state);
+            }
+            services.push(fixed(
+                "lock",
+                or("payload_lock", "LOCK")?,
+                Optimistic::State("locked"),
+            ));
+            services.push(fixed(
+                "unlock",
+                or("payload_unlock", "UNLOCK")?,
+                Optimistic::State("unlocked"),
+            ));
+            // Ouvrir la porte (pas seulement déverrouiller) : seulement si
+            // l'appareil le propose.
+            if let Some(open) = text(config, "payload_open")? {
+                services.push(fixed("open", open, Optimistic::State("open")));
+            }
+        }
+        Component::Valve | Component::Cover => {
+            let (open, closed) = if component == Component::Valve {
+                ("open_valve", "close_valve")
+            } else {
+                ("open_cover", "close_cover")
+            };
+            for (key, state) in [
+                ("state_open", "open"),
+                ("state_closed", "closed"),
+                ("state_opening", "opening"),
+                ("state_closing", "closing"),
+            ] {
+                map_state(or(key, state)?, state);
+            }
+            // Un volet arrêté à mi-course est « ouvert », comme dans Home Assistant.
+            if component == Component::Cover {
+                map_state(or("state_stopped", "stopped")?, "open");
+            }
+            services.push(fixed(
+                open,
+                or("payload_open", "OPEN")?,
+                Optimistic::State("open"),
+            ));
+            services.push(fixed(
+                closed,
+                or("payload_close", "CLOSE")?,
+                Optimistic::State("closed"),
+            ));
+            let stop_default = (component == Component::Cover).then_some("STOP");
+            if let Some(stop) = text(config, "payload_stop")?.or(stop_default.map(str::to_owned)) {
+                let service = if component == Component::Valve {
+                    "stop_valve"
+                } else {
+                    "stop_cover"
+                };
+                services.push(fixed(service, stop, Optimistic::Keep));
+            }
+            if component == Component::Cover {
+                // La position, de `position_closed` à `position_open` côté appareil.
+                let closed = number(config, "position_closed")?.unwrap_or(0.0);
+                let open = number(config, "position_open")?.unwrap_or(100.0);
+                if (closed - open).abs() < 1.0
+                    || !(-1e6..=1e6).contains(&closed)
+                    || !(-1e6..=1e6).contains(&open)
+                {
+                    return Err(DiscoveryError::InvalidField("position_open"));
+                }
+                services.push(on_topic(
+                    "set_cover_position",
+                    "set_position_topic",
+                    Payload::Number {
+                        field: "position",
+                        min: 0.0,
+                        max: 100.0,
+                        scale: Some((closed, open)),
+                    },
+                    Optimistic::Keep,
+                )?);
+                attributes.push(attribute(
+                    "current_position",
+                    Some("position_topic"),
+                    Some("position_template"),
+                    Template::Raw,
+                    AttrKind::Percent {
+                        min: closed,
+                        max: open,
+                    },
+                )?);
+            }
+        }
+        Component::Vacuum => {
+            for state in VACUUM_STATES {
+                map_state(state.to_owned(), state);
+            }
+            for (service, key, default) in [
+                ("start", "payload_start", "start"),
+                ("pause", "payload_pause", "pause"),
+                ("stop", "payload_stop", "stop"),
+                ("return_to_base", "payload_return_to_base", "return_to_base"),
+                ("locate", "payload_locate", "locate"),
+                ("clean_spot", "payload_clean_spot", "clean_spot"),
+            ] {
+                services.push(fixed(service, or(key, default)?, Optimistic::Keep));
+            }
+            attributes.push(attribute(
+                "battery_level",
+                None,
+                None,
+                json_key("battery_level"),
+                AttrKind::Number,
+            )?);
+            attributes.push(attribute(
+                "fan_speed",
+                None,
+                None,
+                json_key("fan_speed"),
+                AttrKind::Text,
+            )?);
+        }
+        Component::Humidifier => {
+            let (min, max) = bounds(
+                config,
+                "min_humidity",
+                "max_humidity",
+                (0.0, 100.0),
+                (0.0, 100.0),
+            )?;
+            services.push(on_topic(
+                "set_humidity",
+                "target_humidity_command_topic",
+                Payload::Number {
+                    field: "humidity",
+                    min,
+                    max,
+                    scale: None,
+                },
+                Optimistic::Keep,
+            )?);
+            profile.fixed.push(("min_humidity", json!(min)));
+            profile.fixed.push(("max_humidity", json!(max)));
+            attributes.push(attribute(
                 "humidity",
                 Some("target_humidity_state_topic"),
                 Some("target_humidity_state_template"),
                 Template::Raw,
-                true,
-            )?,
-            attribute(
+                AttrKind::Number,
+            )?);
+            attributes.push(attribute(
                 "current_humidity",
                 Some("current_humidity_topic"),
                 Some("current_humidity_template"),
                 Template::Raw,
-                true,
-            )?,
-        ],
-        Component::WaterHeater => vec![
-            attribute(
+                AttrKind::Number,
+            )?);
+        }
+        Component::WaterHeater | Component::Climate => {
+            let heater = component == Component::WaterHeater;
+            let defaults: &[&str] = if heater {
+                &WATER_HEATER_MODES
+            } else {
+                &CLIMATE_MODES
+            };
+            let modes = options(config, "modes", defaults)?;
+            for mode in &modes {
+                map_state(mode.clone(), mode);
+            }
+            let (min, max) = if heater {
+                bounds(config, "min_temp", "max_temp", (43.3, 60.0), (-50.0, 150.0))?
+            } else {
+                bounds(config, "min_temp", "max_temp", (7.0, 35.0), (-50.0, 150.0))?
+            };
+            let (service, field) = if heater {
+                ("set_operation_mode", "operation_mode")
+            } else {
+                ("set_hvac_mode", "hvac_mode")
+            };
+            services.push(on_topic(
+                service,
+                "mode_command_topic",
+                Payload::Choice {
+                    field,
+                    options: modes.clone(),
+                },
+                Optimistic::Sent,
+            )?);
+            services.push(on_topic(
+                "set_temperature",
+                "temperature_command_topic",
+                Payload::Number {
+                    field: "temperature",
+                    min,
+                    max,
+                    scale: None,
+                },
+                Optimistic::Keep,
+            )?);
+            services.push(on_topic(
+                "turn_on",
+                "power_command_topic",
+                Payload::Fixed(payload_on.to_owned()),
+                Optimistic::Keep,
+            )?);
+            services.push(on_topic(
+                "turn_off",
+                "power_command_topic",
+                Payload::Fixed(payload_off.to_owned()),
+                Optimistic::Keep,
+            )?);
+            profile.fixed.push((
+                if heater {
+                    "operation_list"
+                } else {
+                    "hvac_modes"
+                },
+                json!(modes),
+            ));
+            profile.fixed.push(("min_temp", json!(min)));
+            profile.fixed.push(("max_temp", json!(max)));
+            attributes.push(attribute(
                 "temperature",
                 Some("temperature_state_topic"),
                 Some("temperature_state_template"),
                 Template::Raw,
-                true,
-            )?,
-            attribute(
+                AttrKind::Number,
+            )?);
+            attributes.push(attribute(
                 "current_temperature",
                 Some("current_temperature_topic"),
                 Some("current_temperature_template"),
                 Template::Raw,
-                true,
-            )?,
-        ],
-        _ => Vec::new(),
-    };
-    profile.attributes = wanted.into_iter().flatten().collect();
+                AttrKind::Number,
+            )?);
+            if !heater {
+                let step = number(config, "temp_step")?.unwrap_or(1.0);
+                if !(0.01..=10.0).contains(&step) {
+                    return Err(DiscoveryError::InvalidField("temp_step"));
+                }
+                profile.fixed.push(("target_temp_step", json!(step)));
+                attributes.push(attribute(
+                    "hvac_action",
+                    Some("action_topic"),
+                    Some("action_template"),
+                    Template::Raw,
+                    AttrKind::Text,
+                )?);
+                attributes.push(attribute(
+                    "current_humidity",
+                    Some("current_humidity_topic"),
+                    Some("current_humidity_template"),
+                    Template::Raw,
+                    AttrKind::Number,
+                )?);
+                preset_modes(
+                    config,
+                    &on_topic,
+                    &attribute,
+                    &mut services,
+                    &mut attributes,
+                    &mut profile.fixed,
+                )?;
+            }
+        }
+        Component::Fan => {
+            let low = number(config, "speed_range_min")?.unwrap_or(1.0);
+            let high = number(config, "speed_range_max")?.unwrap_or(100.0);
+            if !(0.0..=1000.0).contains(&low) || !(low + 1.0..=1000.0).contains(&high) {
+                return Err(DiscoveryError::InvalidField("speed_range_max"));
+            }
+            services.push(on_topic(
+                "set_percentage",
+                "percentage_command_topic",
+                Payload::Number {
+                    field: "percentage",
+                    min: 0.0,
+                    max: 100.0,
+                    scale: Some((low - 1.0, high)),
+                },
+                Optimistic::Keep,
+            )?);
+            attributes.push(attribute(
+                "percentage",
+                Some("percentage_state_topic"),
+                Some("percentage_value_template"),
+                Template::Raw,
+                AttrKind::Percent {
+                    min: low - 1.0,
+                    max: high,
+                },
+            )?);
+            let on = or("payload_oscillation_on", "oscillate_on")?;
+            let off = or("payload_oscillation_off", "oscillate_off")?;
+            services.push(on_topic(
+                "oscillate",
+                "oscillation_command_topic",
+                Payload::Flag {
+                    field: "oscillating",
+                    on: on.clone(),
+                    off: off.clone(),
+                },
+                Optimistic::Keep,
+            )?);
+            attributes.push(attribute(
+                "oscillating",
+                Some("oscillation_state_topic"),
+                Some("oscillation_value_template"),
+                Template::Raw,
+                AttrKind::Flag { on, off },
+            )?);
+            preset_modes(
+                config,
+                &on_topic,
+                &attribute,
+                &mut services,
+                &mut attributes,
+                &mut profile.fixed,
+            )?;
+        }
+        Component::Button => {
+            services.push(fixed(
+                "press",
+                or("payload_press", "PRESS")?,
+                Optimistic::Now,
+            ));
+        }
+        Component::Number => {
+            let min = number(config, "min")?.unwrap_or(1.0);
+            let max = number(config, "max")?.unwrap_or(100.0);
+            let step = number(config, "step")?.unwrap_or(1.0);
+            if min >= max
+                || !(-1e9..=1e9).contains(&min)
+                || !(-1e9..=1e9).contains(&max)
+                || !(0.001..=1e6).contains(&step)
+            {
+                return Err(DiscoveryError::InvalidField("max"));
+            }
+            profile.free = FreeState::Number;
+            services.push(fixed_number(command_topic.as_ref(), min, max));
+            profile.fixed.push(("min", json!(min)));
+            profile.fixed.push(("max", json!(max)));
+            profile.fixed.push(("step", json!(step)));
+            let mode = or("mode", "auto")?;
+            if !["auto", "box", "slider"].contains(&mode.as_str()) {
+                return Err(DiscoveryError::InvalidField("mode"));
+            }
+            profile.fixed.push(("mode", json!(mode)));
+        }
+        Component::Select => {
+            let choices = options(config, "options", &[])?;
+            for choice in &choices {
+                map_state(choice.clone(), choice);
+            }
+            services.push(command_topic.as_ref().map(|topic| ServiceCommand {
+                service: "select_option",
+                topic: topic.clone(),
+                payload: Payload::Choice {
+                    field: "option",
+                    options: choices.clone(),
+                },
+                optimistic: Optimistic::Sent,
+            }));
+            profile.fixed.push(("options", json!(choices)));
+        }
+        Component::Text => {
+            let min = usize_field(config, "min")?.unwrap_or(0);
+            let max = usize_field(config, "max")?.unwrap_or(255).min(255);
+            if min > max {
+                return Err(DiscoveryError::InvalidField("min"));
+            }
+            let mode = or("mode", "text")?;
+            if !["text", "password"].contains(&mode.as_str()) {
+                return Err(DiscoveryError::InvalidField("mode"));
+            }
+            profile.free = FreeState::Text { max };
+            services.push(command_topic.as_ref().map(|topic| ServiceCommand {
+                service: "set_value",
+                topic: topic.clone(),
+                payload: Payload::Text {
+                    field: "value",
+                    min,
+                    max,
+                },
+                optimistic: Optimistic::Sent,
+            }));
+            profile.fixed.push(("min", json!(min)));
+            profile.fixed.push(("max", json!(max)));
+            profile.fixed.push(("mode", json!(mode)));
+        }
+        Component::Event => {
+            profile.event_types = options(config, "event_types", &[])?;
+            profile
+                .fixed
+                .push(("event_types", json!(profile.event_types)));
+        }
+        Component::AlarmControlPanel => {
+            for state in ALARM_STATES {
+                map_state(state.to_owned(), state);
+            }
+            // Le modèle de commande : seulement `{{ action }}` (le défaut). Un
+            // vrai modèle Jinja pourrait faire n'importe quoi ; il est refusé.
+            if let Some(source) = text(config, "command_template")? {
+                let compact: String = source.chars().filter(|c| !c.is_whitespace()).collect();
+                if compact != "{{action}}" {
+                    return Err(DiscoveryError::UnsupportedTemplate(source));
+                }
+            }
+            let supported = match config.get("supported_features") {
+                None => ALARM_FEATURES.iter().map(|f| (*f).to_owned()).collect(),
+                Some(_) => options(config, "supported_features", &[])?,
+            };
+            for (feature, service, key, default) in [
+                ("arm_home", "alarm_arm_home", "payload_arm_home", "ARM_HOME"),
+                ("arm_away", "alarm_arm_away", "payload_arm_away", "ARM_AWAY"),
+                (
+                    "arm_night",
+                    "alarm_arm_night",
+                    "payload_arm_night",
+                    "ARM_NIGHT",
+                ),
+                (
+                    "arm_vacation",
+                    "alarm_arm_vacation",
+                    "payload_arm_vacation",
+                    "ARM_VACATION",
+                ),
+                (
+                    "arm_custom_bypass",
+                    "alarm_arm_custom_bypass",
+                    "payload_arm_custom_bypass",
+                    "ARM_CUSTOM_BYPASS",
+                ),
+                ("trigger", "alarm_trigger", "payload_trigger", "TRIGGER"),
+            ] {
+                if supported.iter().any(|f| f == feature) {
+                    services.push(fixed(service, or(key, default)?, Optimistic::Keep));
+                }
+            }
+            services.push(fixed(
+                "alarm_disarm",
+                or("payload_disarm", "DISARM")?,
+                Optimistic::Keep,
+            ));
+            profile.fixed.push(("supported_features", json!(supported)));
+        }
+        Component::Sensor
+        | Component::BinarySensor
+        | Component::Switch
+        | Component::Light
+        | Component::Siren => {}
+    }
+    if component == Component::Lock {
+        let supports_open = services.iter().flatten().any(|c| c.service == "open");
+        profile.fixed.push(("supports_open", json!(supports_open)));
+    }
+    profile.services = services.into_iter().flatten().collect();
+    profile.attributes = attributes.into_iter().flatten().collect();
     Ok(profile)
+}
+
+/// Fabrique un service sur son propre sujet (voir `profile`).
+type CommandOn<'a> = dyn Fn(
+        &'static str,
+        &'static str,
+        Payload,
+        Optimistic,
+    ) -> Result<Option<ServiceCommand>, DiscoveryError>
+    + 'a;
+/// Fabrique un sujet d'attribut (voir `profile`).
+type AttributeOn<'a> = dyn Fn(
+        &'static str,
+        Option<&'static str>,
+        Option<&'static str>,
+        Template,
+        AttrKind,
+    ) -> Result<Option<AttributeTopic>, DiscoveryError>
+    + 'a;
+
+/// `set_value` d'une entité `number`, entre ses bornes.
+fn fixed_number(command_topic: Option<&String>, min: f64, max: f64) -> Option<ServiceCommand> {
+    command_topic.map(|topic| ServiceCommand {
+        service: "set_value",
+        topic: topic.clone(),
+        payload: Payload::Number {
+            field: "value",
+            min,
+            max,
+            scale: None,
+        },
+        optimistic: Optimistic::Sent,
+    })
+}
+
+/// Les préréglages d'un ventilateur ou d'un thermostat (« eco », « boost »).
+fn preset_modes(
+    config: &Map<String, Value>,
+    on_topic: &CommandOn<'_>,
+    attribute: &AttributeOn<'_>,
+    services: &mut Vec<Option<ServiceCommand>>,
+    attributes: &mut Vec<Option<AttributeTopic>>,
+    fixed: &mut Vec<(&'static str, Value)>,
+) -> Result<(), DiscoveryError> {
+    if config.get("preset_modes").is_none() {
+        return Ok(());
+    }
+    let presets = options(config, "preset_modes", &[])?;
+    services.push(on_topic(
+        "set_preset_mode",
+        "preset_mode_command_topic",
+        Payload::Choice {
+            field: "preset_mode",
+            options: presets.clone(),
+        },
+        Optimistic::Keep,
+    )?);
+    attributes.push(attribute(
+        "preset_mode",
+        Some("preset_mode_state_topic"),
+        Some("preset_mode_value_template"),
+        Template::Raw,
+        AttrKind::Text,
+    )?);
+    fixed.push(("preset_modes", json!(presets)));
+    Ok(())
+}
+
+/// Une liste de choix annoncée par l'appareil (modes, options…) : 1 à
+/// `MAX_OPTIONS` textes courts. `defaults` si elle est absente (et qu'il y
+/// en a).
+fn options(
+    config: &Map<String, Value>,
+    key: &'static str,
+    defaults: &[&str],
+) -> Result<Vec<String>, DiscoveryError> {
+    match config.get(key) {
+        None if !defaults.is_empty() => Ok(defaults.iter().map(|m| (*m).to_owned()).collect()),
+        Some(Value::Array(list)) if !list.is_empty() && list.len() <= MAX_OPTIONS => list
+            .iter()
+            .map(|item| {
+                item.as_str()
+                    .filter(|m| is_short_text(m))
+                    .map(str::to_owned)
+                    .ok_or(DiscoveryError::InvalidField(key))
+            })
+            .collect(),
+        _ => Err(DiscoveryError::InvalidField(key)),
+    }
+}
+
+/// Deux bornes (`min_temp`, `max_temp`…) : par défaut `defaults`, et dans
+/// `limits`, avec min < max.
+fn bounds(
+    config: &Map<String, Value>,
+    min_key: &'static str,
+    max_key: &'static str,
+    defaults: (f64, f64),
+    limits: (f64, f64),
+) -> Result<(f64, f64), DiscoveryError> {
+    let min = number(config, min_key)?.unwrap_or(defaults.0);
+    let max = number(config, max_key)?.unwrap_or(defaults.1);
+    let inside = |v: f64| (limits.0..=limits.1).contains(&v);
+    if inside(min) && inside(max) && min < max {
+        Ok((min, max))
+    } else {
+        Err(DiscoveryError::InvalidField(max_key))
+    }
+}
+
+/// Un entier positif facultatif.
+fn usize_field(
+    config: &Map<String, Value>,
+    key: &'static str,
+) -> Result<Option<usize>, DiscoveryError> {
+    match config.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(value) => value
+            .as_u64()
+            .and_then(|n| usize::try_from(n).ok())
+            .map(Some)
+            .ok_or(DiscoveryError::InvalidField(key)),
+    }
 }
 
 /// Un modèle facultatif, refusé s'il n'est pas compris.

@@ -191,8 +191,9 @@ const SECTIONS = [
   { title: "Chauffage", domains: ["climate"] },
   { title: "Lumières", domains: ["light"] },
   { title: "Volets", domains: ["cover"] },
-  { title: "Prises et interrupteurs", domains: ["switch"] },
-  { title: "Serrures et sirènes", domains: ["lock", "siren"] },
+  { title: "Prises et interrupteurs", domains: ["switch", "fan"] },
+  { title: "Alarme, serrures et sirènes", domains: ["alarm_control_panel", "lock", "siren"] },
+  { title: "Boutons et réglages", domains: ["button", "number", "select", "text", "event"] },
   { title: "Eau et air", domains: ["valve", "humidifier", "water_heater"] },
   { title: "Aspirateurs", domains: ["vacuum"] },
   { title: "Capteurs", domains: ["sensor"] },
@@ -308,6 +309,7 @@ function alertText(state) {
   if (domain === "lock" && state.state === "jammed") return agree(state, "bloqué");
   if (domain === "vacuum" && state.state === "error") return "en erreur";
   if (domain === "siren" && state.state === "on") return "sonne";
+  if (domain === "alarm_control_panel" && state.state === "triggered") return "intrusion";
   return null;
 }
 
@@ -516,6 +518,13 @@ function renderTileContent(state) {
     case "vacuum": return vacuumTile(state);
     case "water_heater": return waterHeaterTile(state);
     case "todo": return todoTile(state);
+    case "fan": return fanTile(state);
+    case "button": return inputButtonTile(state);
+    case "number": return inputNumberTile(state);
+    case "select": return inputSelectTile(state);
+    case "text": return textTile(state);
+    case "event": return eventTile(state);
+    case "alarm_control_panel": return alarmPanelTile(state);
     case "calendar": return calendarTile(state);
     case "binary_sensor": return binaryTile(state);
     case "sensor": return state.attributes.device_class === "alarm" ? alarmTile(state) : sensorTile(state);
@@ -673,6 +682,101 @@ function vacuumTile(state) {
         : commandButton(state, "start", "Lancer le ménage", { icon: ICONS.play }),
       commandButton(state, "stop", "Arrêter", { icon: ICONS.stop }),
       commandButton(state, "return_to_base", "Renvoyer à sa base", { icon: ICONS.home })),
+  );
+}
+
+// ----- Ventilateur, texte, télécommande, alarme (MQTT)
+
+function fanTile(state) {
+  const a = state.attributes;
+  const on = state.state === "on";
+  const speed = finite(a.percentage) && on ? ` · ${Math.round(a.percentage)}\u202f%` : "";
+  const toggle = el(
+    "button",
+    { class: "tile-toggle", type: "button", "aria-pressed": String(on) },
+    tileHead(state, ICONS.fan, `${statusText(state)}${speed}`, knob()),
+  );
+  toggle.addEventListener("click", () => inputCommand(state, "toggle"));
+  const children = [toggle];
+  if (finite(a.percentage)) {
+    const slider = el("input", { type: "range", min: "0", max: "100", step: "1", value: String(Math.round(a.percentage)), "aria-label": `Vitesse de ${nameOf(state)}` });
+    fillSlider(slider);
+    slider.addEventListener("change", () => inputCommand(state, "set_percentage", { percentage: Number(slider.value) }));
+    children.push(slider);
+  }
+  const presets = (Array.isArray(a.preset_modes) ? a.preset_modes : []).filter((p) => typeof p === "string");
+  if (presets.length > 0) {
+    children.push(el("div", { class: "presets", role: "group", "aria-label": "Modes" }, ...presets.map((preset) => {
+      const label = lookup(PRESET_LABELS, preset) ?? preset.replaceAll("_", " ");
+      const button = el("button", { type: "button", class: "period", text: label.charAt(0).toUpperCase() + label.slice(1), "aria-pressed": String(a.preset_mode === preset) });
+      button.addEventListener("click", () => inputCommand(state, "set_preset_mode", { preset_mode: preset }));
+      return button;
+    })));
+  }
+  if (typeof a.oscillating === "boolean") {
+    const oscillate = el("button", { type: "button", class: "ghost small", "aria-pressed": String(a.oscillating), text: a.oscillating ? "Oscillation : oui" : "Oscillation : non" });
+    oscillate.addEventListener("click", () => inputCommand(state, "oscillate", { oscillating: !a.oscillating }));
+    children.push(oscillate);
+  }
+  return el("div", { id: tileId(state.entity_id), class: `${tileClass(state, "switch")} has-knob` }, ...children);
+}
+
+function textTile(state) {
+  const a = state.attributes;
+  const secret = a.mode === "password";
+  const max = Number.isInteger(a.max) ? a.max : 255;
+  const input = el("input", { type: secret ? "password" : "text", maxlength: String(max), "aria-label": `Nouvelle valeur de ${nameOf(state)}`, autocomplete: "off" });
+  if (!secret && !["unknown", "unavailable"].includes(state.state)) input.value = state.state;
+  const form = el("form", { class: "add-form" }, input, el("button", { type: "submit", class: "action-button", text: "Envoyer" }));
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    inputCommand(state, "set_value", { value: input.value });
+    if (secret) input.value = "";
+  });
+  // Un texte « mot de passe » n'est jamais affiché.
+  const shown = secret ? "••••••" : ["unknown", "unavailable"].includes(state.state) ? statusText(state) : state.state;
+  return el("div", { id: tileId(state.entity_id), class: "tile sensor" }, tileHead(state, ICONS.list, shown), form);
+}
+
+function eventTile(state) {
+  const kind = typeof state.attributes.event_type === "string" ? state.attributes.event_type : null;
+  const when = Number.isNaN(Date.parse(state.state)) ? "" : ` · il y a ${ago(state.state)}`;
+  return el(
+    "div",
+    { id: tileId(state.entity_id), class: tileClass(state, "binary") },
+    tileHead(state, ICONS.button, kind ? `« ${kind} »${when}` : "Aucun appui reçu"),
+  );
+}
+
+const ALARM_PANEL_LABELS = {
+  disarmed: "Désarmée", armed_home: "Armée (présence)", armed_away: "Armée (absence)",
+  armed_night: "Armée (nuit)", armed_vacation: "Armée (vacances)", armed_custom_bypass: "Armée (personnalisé)",
+  pending: "Délai d'entrée…", triggered: "Intrusion !", arming: "Armement…", disarming: "Désarmement…",
+};
+const ALARM_PANEL_ACTIONS = [
+  ["arm_away", "alarm_arm_away", "Absence"], ["arm_home", "alarm_arm_home", "Présence"],
+  ["arm_night", "alarm_arm_night", "Nuit"], ["arm_vacation", "alarm_arm_vacation", "Vacances"],
+];
+
+function alarmPanelTile(state) {
+  const features = Array.isArray(state.attributes.supported_features) ? state.attributes.supported_features : [];
+  const armed = state.state.startsWith("armed") || state.state === "triggered" || state.state === "pending";
+  const buttons = [];
+  if (state.state !== "disarmed") {
+    // Désarmer : le serveur redemande le mot de passe (voir callService).
+    buttons.push(commandButton(state, "alarm_disarm", "Désarmer"));
+  }
+  for (const [feature, service, label] of ALARM_PANEL_ACTIONS) {
+    if (features.includes(feature) && !state.state.startsWith("armed")) buttons.push(commandButton(state, service, label));
+  }
+  const classes = [tileClass(state, "lock")];
+  if (armed) classes.push("on");
+  if (state.state === "triggered") classes.push("alert");
+  return el(
+    "div",
+    { id: tileId(state.entity_id), class: classes.join(" ") },
+    tileHead(state, ICONS.shield, lookup(ALARM_PANEL_LABELS, state.state) ?? statusText(state)),
+    el("div", { class: "tile-actions" }, ...buttons),
   );
 }
 
@@ -1025,7 +1129,10 @@ function inputNumberTile(state) {
   if (a.mode === "box") {
     const adjust = (service, text, label) => {
       const button = el("button", { type: "button", class: "round", "aria-label": `${label} ${nameOf(state)}`, text });
-      button.addEventListener("click", () => inputCommand(state, service));
+      // Un `number` MQTT n'a pas increment / decrement : on envoie la valeur.
+      button.addEventListener("click", () => (domainOf(state) === "number"
+        ? inputCommand(state, "set_value", { value: Math.min(max, Math.max(min, (Number.isFinite(value) ? value : min) + (service === "increment" ? step : -step))) })
+        : inputCommand(state, service)));
       return button;
     };
     children.push(el("div", { class: "setpoint" }, adjust("decrement", "−", "Diminuer"), shown, adjust("increment", "+", "Augmenter")));
@@ -1430,6 +1537,7 @@ const ICONS = {
   vacuum: ["M12 3a9 9 0 1 0 0 18 9 9 0 1 0 0-18z", "M12 8a4 4 0 1 0 0 8 4 4 0 1 0 0-8z", "M12 3v2"],
   pause: ["M9 5v14", "M15 5v14"],
   calendar: ["M4 6h16v15H4z", "M4 10h16", "M8 3v4", "M16 3v4"],
+  fan: ["M12 12a2 2 0 1 0 0-.01", "M12 10c0-4 1-7 4-7 2 0 3 2 1 4l-5 3", "M14 12c4 0 7 1 7 4 0 2-2 3-4 1l-3-5", "M12 14c0 4-1 7-4 7-2 0-3-2-1-4l5-3", "M10 12c-4 0-7-1-7-4 0-2 2-3 4-1l3 5"],
   bulb: ["M9 18h6", "M10 22h4", "M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"],
   plug: ["M9 2v6", "M15 2v6", "M6 8h12v3a6 6 0 0 1-12 0z", "M12 17v5"],
   door: ["M5 22V3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v19", "M3 22h18", "M15 12h.01"],
@@ -1933,6 +2041,12 @@ const SERVICES = {
   humidifier: [["turn_on", "Allumer"], ["turn_off", "Éteindre"], ["set_humidity", "Régler l'humidité voulue"]],
   water_heater: [["set_operation_mode", "Choisir un mode"], ["set_temperature", "Régler la température"]],
   todo: [["add_item", "Ajouter à la liste"], ["remove_completed_items", "Retirer ce qui est fait"]],
+  fan: [["turn_on", "Allumer"], ["turn_off", "Éteindre"], ["toggle", "Inverser"], ["set_percentage", "Régler la vitesse"], ["set_preset_mode", "Choisir un mode"]],
+  button: [["press", "Appuyer"]],
+  number: [["set_value", "Régler la valeur"]],
+  select: [["select_option", "Choisir"]],
+  text: [["set_value", "Écrire"]],
+  alarm_control_panel: [["alarm_arm_away", "Armer (absence)"], ["alarm_arm_home", "Armer (présence)"], ["alarm_arm_night", "Armer (nuit)"], ["alarm_disarm", "Désarmer"]],
   calendar: [["create_event", "Ajouter un rendez-vous"]],
 };
 const SUN_EVENTS = [["sunrise", "lever du soleil"], ["sunset", "coucher du soleil"], ["dawn", "aube"], ["dusk", "crépuscule"]];
@@ -2481,6 +2595,21 @@ function actionFields(a, refresh) {
   } else if (a.action === "climate.set_preset_mode") {
     fields.push(textField("Préréglage", a.data, "preset_mode", { placeholder: "eco" }));
     delete extra.preset_mode;
+  } else if (a.action === "fan.set_percentage") {
+    fields.push(numberField("Vitesse (%)", a.data, "percentage"));
+    delete extra.percentage;
+  } else if (a.action === "fan.set_preset_mode") {
+    fields.push(textField("Mode", a.data, "preset_mode"));
+    delete extra.preset_mode;
+  } else if (a.action === "number.set_value") {
+    fields.push(numberField("Valeur", a.data, "value"));
+    delete extra.value;
+  } else if (a.action === "select.select_option") {
+    fields.push(textField("Choix", a.data, "option"));
+    delete extra.option;
+  } else if (a.action === "text.set_value") {
+    fields.push(textField("Texte", a.data, "value"));
+    delete extra.value;
   } else if (a.action === "todo.add_item") {
     fields.push(textField("Élément", a.data, "item", { placeholder: "Lait" }));
     delete extra.item;

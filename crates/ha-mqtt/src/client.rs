@@ -73,7 +73,13 @@ async fn run(config: MqttConfig, core: Arc<Core>, token: CancellationToken) {
                 }
                 Ok(MqttEvent::Incoming(Packet::Publish(message))) => {
                     for action in bridge.handle_message(&message.topic, &message.payload, &core.states) {
-                        apply(&client, &action);
+                        if let Action::Fire { event_type, data } = action {
+                            if let Err(error) = core.fire(&event_type, data) {
+                                warn!("MQTT : événement refusé ({error})");
+                            }
+                        } else {
+                            apply(&client, &action);
+                        }
                     }
                 }
                 Ok(_) => {}
@@ -119,6 +125,8 @@ fn apply(client: &AsyncClient, action: &Action) {
         Action::Publish { topic, payload } => {
             client.try_publish(topic, QoS::AtLeastOnce, false, payload.as_bytes().to_vec())
         }
+        // Traité par la boucle (il faut le noyau).
+        Action::Fire { .. } => return,
     };
     if let Err(error) = result {
         warn!("MQTT : action {action:?} impossible : {error}");
