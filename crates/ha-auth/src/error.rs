@@ -28,6 +28,9 @@ pub enum AuthError {
     #[error("ce nom d'utilisateur existe déjà")]
     UserExists,
 
+    #[error("c'est le dernier administrateur : il en faut toujours au moins un")]
+    LastAdmin,
+
     #[error("erreur de base de données : {0}")]
     Database(#[from] sqlx::Error),
 

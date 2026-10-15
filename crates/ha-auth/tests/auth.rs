@@ -114,15 +114,21 @@ async fn changing_password_revokes_all_tokens() {
 #[tokio::test]
 async fn deleting_a_user_revokes_their_tokens() {
     let auth = setup().await;
+    // Il faut garder un administrateur : on en crée un deuxième.
+    auth.create_user("alice", PASSWORD).await.unwrap();
     let issued = auth.login("david", PASSWORD, None, IP).await.unwrap();
 
     assert!(auth.delete_user("david").await.unwrap());
 
     assert!(auth.authenticate(&issued.token).await.unwrap().is_none());
-    assert_eq!(
-        auth.list_users().await.unwrap(),
-        Vec::<ha_auth::User>::new()
-    );
+    let names: Vec<String> = auth
+        .list_users()
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|u| u.username)
+        .collect();
+    assert_eq!(names, ["alice"]);
 }
 
 #[tokio::test]
@@ -291,4 +297,92 @@ async fn confirming_checks_the_password_without_issuing_a_token() {
         auth.confirm("david", PASSWORD, None, IP).await,
         Err(AuthError::TooManyAttempts { .. })
     ));
+}
+
+#[tokio::test]
+async fn roles_follow_the_session_and_change_at_once() {
+    let auth = setup().await;
+    let guest = auth
+        .create_user_as("visiteur", PASSWORD, ha_auth::Role::Guest)
+        .await
+        .unwrap();
+    assert_eq!(guest.role, ha_auth::Role::Guest);
+
+    let issued = auth.login("visiteur", PASSWORD, None, IP).await.unwrap();
+    let user = auth.authenticate(&issued.token).await.unwrap().unwrap();
+    assert_eq!(user.role, ha_auth::Role::Guest);
+    assert!(!user.can(ha_auth::Permission::ReadHistory));
+
+    // Le nouveau rôle vaut tout de suite, avec le même jeton.
+    assert!(
+        auth.set_role("visiteur", ha_auth::Role::Family)
+            .await
+            .unwrap()
+    );
+    let user = auth.authenticate(&issued.token).await.unwrap().unwrap();
+    assert_eq!(user.role, ha_auth::Role::Family);
+    assert!(user.can(ha_auth::Permission::ReadHistory));
+    assert!(!user.can(ha_auth::Permission::EditAutomations));
+
+    assert!(
+        !auth
+            .set_role("inconnu", ha_auth::Role::Guest)
+            .await
+            .unwrap()
+    );
+    let roles: Vec<_> = auth
+        .list_users()
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|u| (u.username, u.role))
+        .collect();
+    assert_eq!(
+        roles,
+        [
+            ("david".to_owned(), ha_auth::Role::Admin),
+            ("visiteur".to_owned(), ha_auth::Role::Family)
+        ]
+    );
+}
+
+#[tokio::test]
+async fn the_last_admin_is_kept() {
+    let auth = setup().await;
+    assert!(matches!(
+        auth.set_role("david", ha_auth::Role::Family).await,
+        Err(AuthError::LastAdmin)
+    ));
+    assert!(matches!(
+        auth.delete_user("david").await,
+        Err(AuthError::LastAdmin)
+    ));
+    // Avec un deuxième administrateur, c'est possible.
+    auth.create_user_as("alice", PASSWORD, ha_auth::Role::Admin)
+        .await
+        .unwrap();
+    assert!(auth.set_role("david", ha_auth::Role::Family).await.unwrap());
+    assert!(matches!(
+        auth.delete_user("alice").await,
+        Err(AuthError::LastAdmin)
+    ));
+    // Un compte « famille » se supprime sans souci.
+    assert!(auth.delete_user("david").await.unwrap());
+}
+
+#[tokio::test]
+async fn an_unknown_role_in_the_database_gives_the_fewest_rights() {
+    let store = Store::open_in_memory().await.unwrap();
+    let auth = Auth::new(&store).await.unwrap();
+    auth.create_user("david", PASSWORD).await.unwrap();
+    // La base refuse un rôle inconnu…
+    let forced = sqlx::query("UPDATE users SET role = 'root' WHERE username = 'david'")
+        .execute(store.pool())
+        .await;
+    assert!(forced.is_err(), "contrainte CHECK de la base");
+    // … et les comptes d'avant cette étape sont administrateurs.
+    assert_eq!(
+        auth.list_users().await.unwrap()[0].role,
+        ha_auth::Role::Admin
+    );
 }

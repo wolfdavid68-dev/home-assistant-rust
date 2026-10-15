@@ -7,6 +7,7 @@
 //! volé, ou un téléphone resté déverrouillé, ne suffit pas à installer une
 //! automatisation qui ouvrirait les volets en pleine nuit.
 
+use ha_auth::Permission;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -27,6 +28,7 @@ use crate::auth::Authenticated;
 use crate::error::ApiError;
 use crate::json::format_timestamp;
 use crate::rest::{audit, parse_json};
+use crate::roles;
 
 /// Durée pendant laquelle une confirmation reste valable.
 pub const CONFIRMATION_LIFETIME: Duration = Duration::from_mins(15);
@@ -206,6 +208,7 @@ pub(crate) async fn list(
     State(state): State<Arc<ApiState>>,
     auth: Authenticated,
 ) -> Result<Json<Value>, ApiError> {
+    roles::require(&auth.user, Permission::ReadAutomations)?;
     let automations = editor(&state)?;
     let entries = automations
         .editor
@@ -214,7 +217,7 @@ pub(crate) async fn list(
         .map_err(automation_error)?;
     let list: Vec<Value> = entries.iter().map(entry_json).collect();
     Ok(Json(json!({
-        "editable": automations.editable,
+        "editable": automations.editable && auth.user.can(Permission::EditAutomations),
         "confirmed_for": confirmation_left(&state, &auth.token).map(|left| left.as_secs()),
         "automations": list,
     })))
@@ -224,9 +227,10 @@ pub(crate) async fn list(
 /// passer du formulaire au YAML et inversement.
 pub(crate) async fn check(
     State(state): State<Arc<ApiState>>,
-    _auth: Authenticated,
+    auth: Authenticated,
     body: Bytes,
 ) -> Result<Json<Value>, ApiError> {
+    roles::require(&auth.user, Permission::ReadAutomations)?;
     let editor = &editor(&state)?.editor;
     let config = parse_json::<AutomationRequest>(&body)?.into_config()?;
     let automation = editor.check(&config).map_err(automation_error)?;
@@ -243,6 +247,7 @@ pub(crate) async fn save(
     Path(id): Path<String>,
     body: Bytes,
 ) -> Result<(StatusCode, Json<Value>), ApiError> {
+    roles::require(&auth.user, Permission::EditAutomations)?;
     let editor = require_confirmation(&state, &auth)?;
     let config = parse_json::<AutomationRequest>(&body)?.into_config()?;
     if config.id() != id {
@@ -294,6 +299,7 @@ pub(crate) async fn delete(
     auth: Authenticated,
     Path(id): Path<String>,
 ) -> Result<StatusCode, ApiError> {
+    roles::require(&auth.user, Permission::EditAutomations)?;
     let editor = require_confirmation(&state, &auth)?;
     let username = &auth.user.username;
     if !editor
@@ -320,9 +326,10 @@ pub(crate) async fn delete(
 /// `GET /api/automations/{id}/versions` : les versions précédentes.
 pub(crate) async fn versions(
     State(state): State<Arc<ApiState>>,
-    _auth: Authenticated,
+    auth: Authenticated,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, ApiError> {
+    roles::require(&auth.user, Permission::ReadAutomations)?;
     let editor = &editor(&state)?.editor;
     let versions: Vec<Value> = editor
         .versions(&id)

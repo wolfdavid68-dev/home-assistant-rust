@@ -23,6 +23,7 @@ mod automations;
 mod error;
 mod json;
 mod rest;
+mod roles;
 mod web;
 mod ws;
 

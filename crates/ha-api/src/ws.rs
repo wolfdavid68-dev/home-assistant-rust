@@ -13,6 +13,7 @@
 //! Le jeton passe dans le premier message, et non dans l'adresse
 //! (`?token=…`) : les adresses se retrouvent souvent dans des logs.
 
+use ha_auth::Permission;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -29,6 +30,7 @@ use zeroize::Zeroizing;
 
 use crate::ApiState;
 use crate::json::state_to_json;
+use crate::roles;
 
 /// Taille maximale d'un message reçu : nos commandes font quelques dizaines d'octets.
 const MAX_MESSAGE_SIZE: usize = 64 * 1024;
@@ -92,8 +94,9 @@ async fn connection(mut socket: WebSocket, state: Arc<ApiState>) {
     }
     tracing::debug!("WebSocket ouvert pour {}", user.username);
 
-    session(socket, &state, &token).await;
-    tracing::debug!("WebSocket fermé pour {}", user.username);
+    let username = user.username.clone();
+    session(socket, &state, user, &token).await;
+    tracing::debug!("WebSocket fermé pour {username}");
 }
 
 /// Attend le message d'authentification. `None` si absent, invalide ou trop tardif.
@@ -131,7 +134,7 @@ async fn authenticate(
 }
 
 /// Boucle principale d'une connexion authentifiée.
-async fn session(mut socket: WebSocket, state: &ApiState, token: &str) {
+async fn session(mut socket: WebSocket, state: &ApiState, mut user: User, token: &str) {
     // `Some((id, abonnement))` une fois `subscribe_events` reçu.
     let mut subscription: Option<(u64, broadcast::Receiver<Arc<Event>>)> = None;
     let mut recheck = tokio::time::interval(RECHECK_INTERVAL);
@@ -149,7 +152,7 @@ async fn session(mut socket: WebSocket, state: &ApiState, token: &str) {
                     _ => break,
                 };
                 let reply = match serde_json::from_str::<Command>(&text) {
-                    Ok(command) => handle_command(&command, state, &mut subscription),
+                    Ok(command) => handle_command(&command, state, &user, &mut subscription),
                     Err(error) => json!({
                         "type": "result",
                         "success": false,
@@ -162,13 +165,19 @@ async fn session(mut socket: WebSocket, state: &ApiState, token: &str) {
             }
             event = next_event(&mut subscription) => {
                 let Some((id, event)) = event else { continue };
+                // Un invité ne reçoit que ce qu'il a le droit de voir.
+                if !visible(&user, &event) {
+                    continue;
+                }
                 if send(&mut socket, event_message(id, &event)).await.is_err() {
                     break;
                 }
             }
             _ = recheck.tick() => {
-                if !matches!(state.auth.authenticate(token).await, Ok(Some(_))) {
-                    break;
+                // Jeton révoqué : on ferme. Rôle changé : il s'applique ici.
+                match state.auth.authenticate(token).await {
+                    Ok(Some(current)) => user = current,
+                    _ => break,
                 }
             }
             () = shutdown.cancelled() => break,
@@ -177,16 +186,37 @@ async fn session(mut socket: WebSocket, state: &ApiState, token: &str) {
     let _ = socket.send(Message::Close(None)).await;
 }
 
+/// Cet événement peut-il être envoyé à ce compte ?
+fn visible(user: &User, event: &Event) -> bool {
+    match event {
+        Event::StateChanged {
+            entity_id,
+            old_state,
+            new_state,
+        } => roles::can_see(user, entity_id, new_state.as_ref().or(old_state.as_ref())),
+        // Commandes et événements nommés (qui a fait quoi) : pas pour un invité.
+        Event::CallService { .. } | Event::Fired { .. } => user.can(Permission::AllDevices),
+    }
+}
+
 fn handle_command(
     command: &Command,
     state: &ApiState,
+    user: &User,
     subscription: &mut Option<(u64, broadcast::Receiver<Arc<Event>>)>,
 ) -> Value {
     let id = command.id;
     match command.kind.as_str() {
         "ping" => json!({"id": id, "type": "pong"}),
         "get_states" => {
-            let states: Vec<Value> = state.core.states.all().iter().map(state_to_json).collect();
+            let states: Vec<Value> = state
+                .core
+                .states
+                .all()
+                .iter()
+                .filter(|s| roles::can_see(user, s.entity_id(), Some(s)))
+                .map(state_to_json)
+                .collect();
             json!({"id": id, "type": "result", "success": true, "result": states})
         }
         "subscribe_events" if subscription.is_none() => {

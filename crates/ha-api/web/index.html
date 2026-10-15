@@ -48,6 +48,7 @@
       </div>
       <div class="topbar-right">
         <span id="connection" class="status" aria-live="polite">Connexion…</span>
+        <span id="account" class="account"></span>
         <button id="open-logbook" class="ghost" type="button">Journal de bord</button>
         <button id="open-automations" class="ghost" type="button">Automatisations</button>
         <button id="logout" class="ghost" type="button">Déconnexion</button>
@@ -156,6 +157,7 @@
       </form>
     </dialog>
     <datalist id="entity-list"></datalist>
+    <p id="flash" class="flash" role="status" hidden></p>
     <details id="journal" class="journal">
       <summary>Journal d'activité</summary>
       <p class="journal-hint">Qui a fait quoi, et d'où : les 50 dernières actions.</p>

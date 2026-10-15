@@ -160,6 +160,10 @@ async function callService(domain, service, data) {
     token.clear();
     live.close();
     showLogin("Session expirée : reconnecte-toi.");
+  } else if (response.status === 403) {
+    const body = await response.json().catch(() => ({}));
+    flash(typeof body.error === "string" ? `${body.error}.` : "Ton compte ne permet pas cette commande.");
+    document.getElementById(tileId(data.entity_id))?.classList.remove("pending");
   }
 }
 
@@ -238,7 +242,7 @@ function renderAll() {
 
 function renderTile(state) {
   const tile = renderTileContent(state);
-  tile.append(historyButton(state));
+  if (account.permissions.history !== false) tile.append(historyButton(state));
   return tile;
 }
 
@@ -2121,10 +2125,38 @@ function refreshEntityList() {
 }
 
 // ---------------------------------------------------------------- Démarrage
+// ---------------------------------------------------------------- Compte
+// Ce que le compte connecté peut faire (GET /api/). Le tableau de bord cache
+// ce qui ne lui sert à rien ; le serveur, lui, vérifie chaque demande.
+const account = { user: "", roleLabel: "", permissions: { history: true, automations: true, audit: true } };
+
+async function loadAccount() {
+  const { status, data } = await api("GET", "/api/");
+  if (status !== 200) return;
+  account.user = typeof data.user === "string" ? data.user : "";
+  account.roleLabel = typeof data.role_label === "string" ? data.role_label : "";
+  account.permissions = data.permissions ?? {};
+  $("#account").textContent = account.roleLabel ? `${account.user} · ${account.roleLabel}` : account.user;
+  $("#open-logbook").hidden = !account.permissions.history;
+  $("#open-automations").hidden = !account.permissions.automations;
+  $("#journal").hidden = !account.permissions.audit;
+  renderAll();
+}
+
+/** Un message bref en bas de l'écran (une commande refusée…). */
+function flash(text) {
+  const box = $("#flash");
+  box.textContent = text.charAt(0).toUpperCase() + text.slice(1);
+  box.hidden = false;
+  clearTimeout(flash.timer);
+  flash.timer = setTimeout(() => { box.hidden = true; }, 4000);
+}
+
 function showDashboard() {
   $("#login-view").hidden = true;
   $("#dashboard-view").hidden = false;
   live.open();
+  loadAccount().catch(() => {});
   loadAreas().catch(() => {});
 }
 

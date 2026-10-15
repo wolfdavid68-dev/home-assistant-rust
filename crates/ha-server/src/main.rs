@@ -6,7 +6,9 @@
 //!
 //! ```text
 //! ha-server                       démarre le serveur (Ctrl+C pour arrêter)
-//! ha-server user add <nom>        crée un compte (le mot de passe est demandé)
+//! ha-server user add <nom> [rôle] crée un compte (admin, famille ou invité ;
+//!                                 le mot de passe est demandé)
+//! ha-server user role <nom> <rôle> change le rôle d'un compte
 //! ha-server user passwd <nom>     change un mot de passe (déconnecte partout)
 //! ha-server user delete <nom>     supprime un compte
 //! ha-server user list             liste les comptes

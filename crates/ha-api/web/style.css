@@ -552,3 +552,19 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
   .logbook-list li small { grid-column: 2; margin-left: 0; text-align: left; }
 }
 #history-logbook { margin-top: 0.75rem; }
+/* Compte connecté, et message bref (commande refusée…) */
+.account { font-size: 0.8rem; color: var(--muted); }
+.flash {
+  position: fixed;
+  left: 50%;
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  max-width: calc(100vw - 2rem);
+  margin: 0;
+  padding: 0.7rem 1.1rem;
+  border-radius: 12px;
+  background: var(--text);
+  color: var(--bg);
+  box-shadow: var(--shadow);
+  z-index: 10;
+}

@@ -95,6 +95,25 @@ impl TestApp {
         (status, json)
     }
 
+    /// Crée un compte avec ce rôle et renvoie son jeton.
+    async fn login_as(&self, username: &str, role: ha_auth::Role) -> String {
+        self.state
+            .auth
+            .create_user_as(username, PASSWORD, role)
+            .await
+            .unwrap();
+        let (status, body) = self
+            .request(
+                "POST",
+                "/api/auth/login",
+                None,
+                Some(json!({"username": username, "password": PASSWORD})),
+            )
+            .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        body["access_token"].as_str().unwrap().to_owned()
+    }
+
     async fn login(&self) -> String {
         let (status, body) = self
             .request(
@@ -988,4 +1007,199 @@ async fn the_logbook_is_read_with_filters() {
         let (status, _) = app.request("GET", bad, Some(&token), None).await;
         assert_eq!(status, StatusCode::BAD_REQUEST, "{bad}");
     }
+}
+
+/// La maison des tests de rôles : une lumière, une porte de garage, un volet,
+/// une personne, l'alarme.
+fn furnish(app: &TestApp) {
+    let set = |entity: &str, value: &str, attributes: Value| {
+        let Value::Object(attributes) = attributes else {
+            panic!("un objet est attendu")
+        };
+        app.state
+            .core
+            .states
+            .set(entity.parse().unwrap(), value, attributes)
+            .unwrap();
+    };
+    set("light.salon", "off", json!({}));
+    set("cover.garage", "closed", json!({"device_class": "garage"}));
+    set("cover.salon", "open", json!({"device_class": "shutter"}));
+    set("person.david", "home", json!({}));
+    set(
+        "sensor.alarme",
+        "disarmed",
+        json!({"device_class": "alarm"}),
+    );
+    set("lock.entree", "locked", json!({}));
+}
+
+#[tokio::test]
+async fn a_guest_sees_and_controls_only_safe_devices() {
+    let app = TestApp::new().await;
+    furnish(&app);
+    let guest = app.login_as("visiteur", ha_auth::Role::Guest).await;
+
+    let (_, body) = app.request("GET", "/api/", Some(&guest), None).await;
+    assert_eq!(body["role"], "guest");
+    assert_eq!(body["permissions"]["history"], false);
+
+    // La présence et l'alarme sont cachées, même en les demandant directement.
+    let (_, listed) = app.request("GET", "/api/states", Some(&guest), None).await;
+    let mut ids: Vec<&str> = listed
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["entity_id"].as_str().unwrap())
+        .collect();
+    ids.sort_unstable();
+    assert_eq!(
+        ids,
+        ["cover.garage", "cover.salon", "light.salon", "lock.entree"]
+    );
+    for hidden in ["person.david", "sensor.alarme"] {
+        let (status, _) = app
+            .request("GET", &format!("/api/states/{hidden}"), Some(&guest), None)
+            .await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{hidden}");
+    }
+
+    // Lumière et volet : oui. Garage, serrure, alarme : non.
+    let call = |service: &str, entity: &str| {
+        let body = json!({"entity_id": entity});
+        let uri = format!("/api/services/{service}");
+        let app = &app;
+        let guest = guest.clone();
+        async move { app.request("POST", &uri, Some(&guest), Some(body)).await.0 }
+    };
+    assert_eq!(call("light/turn_on", "light.salon").await, StatusCode::OK);
+    assert_eq!(
+        call("cover/close_cover", "cover.salon").await,
+        StatusCode::OK
+    );
+    for (service, entity) in [
+        ("cover/open_cover", "cover.garage"),
+        ("lock/unlock", "lock.entree"),
+        ("alarm_control_panel/alarm_disarm", "sensor.alarme"),
+        ("notify/send_message", "notify.telephone"),
+    ] {
+        assert_eq!(
+            call(service, entity).await,
+            StatusCode::FORBIDDEN,
+            "{entity}"
+        );
+    }
+
+    for uri in [
+        "/api/history/light.salon",
+        "/api/history/light.salon/series",
+        "/api/logbook",
+        "/api/audit",
+        "/api/automations",
+    ] {
+        let (status, _) = app.request("GET", uri, Some(&guest), None).await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{uri}");
+    }
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/states/light.salon",
+            Some(&guest),
+            Some(json!({"state": "on"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn the_family_controls_everything_but_cannot_edit_automations() {
+    let app = TestApp::new().await;
+    furnish(&app);
+    let family = app.login_as("alice", ha_auth::Role::Family).await;
+
+    let (_, listed) = app.request("GET", "/api/states", Some(&family), None).await;
+    assert_eq!(listed.as_array().unwrap().len(), 6, "tout est visible");
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/services/cover/open_cover",
+            Some(&family),
+            Some(json!({"entity_id": "cover.garage"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    for uri in ["/api/history/light.salon", "/api/logbook"] {
+        let (status, _) = app.request("GET", uri, Some(&family), None).await;
+        assert_eq!(status, StatusCode::OK, "{uri}");
+    }
+    // Les automatisations : lecture seule.
+    let (status, body) = app
+        .request("GET", "/api/automations", Some(&family), None)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["editable"], false);
+    let (status, _) = app
+        .request("DELETE", "/api/automations/matin", Some(&family), None)
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    // Ni journal d'audit, ni écriture directe d'un état.
+    let (status, _) = app.request("GET", "/api/audit", Some(&family), None).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, _) = app
+        .request("DELETE", "/api/states/light.salon", Some(&family), None)
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn a_guest_websocket_never_receives_hidden_devices() {
+    let app = TestApp::new().await;
+    furnish(&app);
+    let guest = app.login_as("visiteur", ha_auth::Role::Guest).await;
+    let addr = spawn_server(&app).await;
+    let (mut socket, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/api/websocket"))
+        .await
+        .unwrap();
+    assert_eq!(ws_recv(&mut socket).await["type"], "auth_required");
+    ws_send(&mut socket, json!({"type": "auth", "access_token": guest})).await;
+    assert_eq!(ws_recv(&mut socket).await["type"], "auth_ok");
+
+    ws_send(&mut socket, json!({"id": 1, "type": "get_states"})).await;
+    let reply = ws_recv(&mut socket).await;
+    let ids: Vec<&str> = reply["result"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["entity_id"].as_str().unwrap())
+        .collect();
+    assert!(!ids.contains(&"person.david"), "{ids:?}");
+
+    ws_send(&mut socket, json!({"id": 2, "type": "subscribe_events"})).await;
+    assert_eq!(ws_recv(&mut socket).await["success"], true);
+    // David part (caché), une commande passe (cachée), puis la lumière s'allume.
+    let set = |entity: &str, value: &str| {
+        app.state
+            .core
+            .states
+            .set(entity.parse().unwrap(), value, Attributes::new())
+            .unwrap();
+    };
+    set("person.david", "not_home");
+    app.state
+        .core
+        .call_service(
+            "light",
+            "turn_on",
+            "light.salon".parse().unwrap(),
+            Attributes::new(),
+        )
+        .unwrap();
+    set("light.salon", "on");
+    let event = ws_recv(&mut socket).await;
+    assert_eq!(
+        event["event"]["data"]["entity_id"], "light.salon",
+        "le premier événement reçu est la lumière : {event}"
+    );
+
+    app.state.shutdown();
 }

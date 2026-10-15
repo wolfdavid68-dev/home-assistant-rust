@@ -16,7 +16,8 @@ use zeroize::Zeroizing;
 pub const USAGE: &str = "\
 utilisation :
   ha-server                       démarre le serveur
-  ha-server user add <nom>        crée un compte
+  ha-server user add <nom> [rôle] crée un compte (admin, famille ou invité)
+  ha-server user role <nom> <rôle> change le rôle d'un compte
   ha-server user passwd <nom>     change un mot de passe
   ha-server user delete <nom>     supprime un compte
   ha-server user list             liste les comptes
@@ -50,16 +51,46 @@ utilisation :
   ha-server backup restore <fichier> [--force]  restaure une sauvegarde (serveur arrêté)
   ha-server healthcheck           vérifie qu'un serveur répond (pour Docker)";
 
+fn parse_role(value: &str) -> Result<ha_auth::Role, Box<dyn Error>> {
+    ha_auth::Role::parse(value)
+        .ok_or_else(|| format!("rôle « {value} » inconnu : admin, famille ou invité").into())
+}
+
+/// `user add <nom> [rôle]`. Sans rôle : le tout premier compte est
+/// administrateur, les suivants sont « famille » (le moins de droits utile).
+async fn add_user(auth: &Auth, name: &str, role: Option<&str>) -> Result<(), Box<dyn Error>> {
+    let role = match role {
+        Some(role) => parse_role(role)?,
+        None if auth.list_users().await?.is_empty() => ha_auth::Role::Admin,
+        None => ha_auth::Role::Family,
+    };
+    let password = ask_new_password()?;
+    auth.create_user_as(name, &password, role).await?;
+    println!("compte « {name} » créé ({})", role.label());
+    if role == ha_auth::Role::Family {
+        println!("pour en faire un administrateur : ha-server user role {name} admin");
+    }
+    Ok(())
+}
+
 pub async fn user_command(args: &[&str]) -> Result<(), Box<dyn Error>> {
     let store = crate::open_store().await?;
     let auth = Auth::new(&store).await?;
 
     let result = match args {
-        ["add", name] => {
-            let password = ask_new_password()?;
-            auth.create_user(name, &password).await?;
-            println!("compte « {name} » créé");
-            Ok(())
+        ["add", name] => add_user(&auth, name, None).await,
+        ["add", name, role] => add_user(&auth, name, Some(role)).await,
+        ["role", name, role] => {
+            let role = parse_role(role)?;
+            if auth.set_role(name, role).await? {
+                println!(
+                    "« {name} » est maintenant {} (tout de suite, même connecté)",
+                    role.label()
+                );
+                Ok(())
+            } else {
+                Err(format!("le compte « {name} » n'existe pas").into())
+            }
         }
         ["passwd", name] => {
             let password = ask_new_password()?;
@@ -86,7 +117,7 @@ pub async fn user_command(args: &[&str]) -> Result<(), Box<dyn Error>> {
                 } else {
                     ""
                 };
-                println!("{}{suffix}", user.username);
+                println!("{:<20} {}{suffix}", user.username, user.role.label());
             }
             Ok(())
         }
