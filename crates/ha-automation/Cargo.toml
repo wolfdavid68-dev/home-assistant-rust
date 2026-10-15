@@ -8,6 +8,7 @@ publish.workspace = true
 
 [dependencies]
 ha-core = { path = "../ha-core" }
+ha-notices = { path = "../ha-notices" }
 ha-storage = { path = "../ha-storage" }
 ha-sun = { path = "../ha-sun" }
 jiff.workspace = true

@@ -16,6 +16,7 @@
 //! | POST | `/api/automations/check` | Vérifie une automatisation sans l'enregistrer |
 //! | PUT / DELETE | `/api/automations/{id}` | Crée, modifie, supprime (confirmation requise) |
 //! | GET | `/api/automations/{id}/versions` | Versions précédentes |
+//! | GET | `/api/automations/{id}/traces` | Dernières exécutions (historique) |
 //! | GET | `/api/websocket` | API WebSocket (authentification dans le 1er message) |
 //! | GET | `/` | Tableau de bord web (page publique ; les données demandent un jeton) |
 
@@ -113,6 +114,7 @@ pub fn router(state: Arc<ApiState>) -> Router {
             put(automations::save).delete(automations::delete),
         )
         .route("/api/automations/{id}/versions", get(automations::versions))
+        .route("/api/automations/{id}/traces", get(automations::traces))
         .route("/api/states", get(rest::list_states))
         .route(
             "/api/states/{entity_id}",

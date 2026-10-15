@@ -17,7 +17,7 @@ use axum::body::Bytes;
 use axum::extract::{ConnectInfo, Path, State};
 use axum::http::StatusCode;
 use ha_automation::editor::{Entry, Source};
-use ha_automation::{Automation, AutomationConfig, AutomationError, Editor};
+use ha_automation::{Automation, AutomationConfig, AutomationError, Editor, Trace, Traces};
 use ha_core::{Attributes, EntityId};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -43,6 +43,8 @@ pub struct AutomationEditor {
     pub editor: Arc<Editor>,
     /// `false` : on peut consulter, mais pas modifier (`HA_AUTOMATION_EDITOR=off`).
     pub editable: bool,
+    /// L'historique des exécutions (partagé avec le moteur).
+    pub traces: Traces,
 }
 
 /// Pas de `#[derive(Debug)]` : le mot de passe ne doit jamais être affiché.
@@ -215,7 +217,20 @@ pub(crate) async fn list(
         .entries()
         .await
         .map_err(automation_error)?;
-    let list: Vec<Value> = entries.iter().map(entry_json).collect();
+    let latest = automations.traces.latest();
+    let list: Vec<Value> = entries
+        .iter()
+        .map(|entry| {
+            let mut value = entry_json(entry);
+            if let Some(trace) = latest.get(&entry.id) {
+                value["last_run"] = json!({
+                    "started": trace.started.to_string(),
+                    "outcome": trace.outcome.name(),
+                });
+            }
+            value
+        })
+        .collect();
     Ok(Json(json!({
         "editable": automations.editable && auth.user.can(Permission::EditAutomations),
         "confirmed_for": confirmation_left(&state, &auth.token).map(|left| left.as_secs()),
@@ -348,6 +363,43 @@ pub(crate) async fn versions(
         })
         .collect();
     Ok(Json(json!({ "id": id, "versions": versions })))
+}
+
+fn trace_json(trace: &Trace) -> Value {
+    json!({
+        "run": trace.run,
+        "alias": trace.alias,
+        "started": trace.started.to_string(),
+        "finished": trace.finished.map(|t| t.to_string()),
+        "trigger": trace.trigger,
+        "conditions": trace.conditions.iter().map(|check| json!({
+            "description": check.description,
+            "passed": check.passed,
+        })).collect::<Vec<_>>(),
+        "steps": trace.steps.iter().map(|step| json!({
+            "path": step.path,
+            "description": step.description,
+            "at": step.at.to_string(),
+            "status": step.status.name(),
+            "detail": step.detail,
+        })).collect::<Vec<_>>(),
+        "truncated": trace.truncated,
+        "outcome": trace.outcome.name(),
+    })
+}
+
+/// `GET /api/automations/{id}/traces` : les dernières exécutions, la plus
+/// récente en premier. Vide si l'automatisation ne s'est pas déclenchée
+/// depuis le démarrage du serveur.
+pub(crate) async fn traces(
+    State(state): State<Arc<ApiState>>,
+    auth: Authenticated,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, ApiError> {
+    roles::require(&auth.user, Permission::ReadAutomations)?;
+    let automations = editor(&state)?;
+    let list: Vec<Value> = automations.traces.of(&id).iter().map(trace_json).collect();
+    Ok(Json(json!({ "id": id, "traces": list })))
 }
 
 /// Prévient le téléphone d'une modification : si quelqu'un d'autre a pris la

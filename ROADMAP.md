@@ -76,6 +76,7 @@ Les fonctions de Home Assistant les plus utiles au quotidien, une par une, dans 
 - [x] **28. Agenda et listes** : liste de courses, tâches et agenda de la maison gardés chez toi ; déclencheur `calendar` (« 30 minutes avant un rendez-vous ») ([guide](docs/agenda.md))
 - [x] **29. MQTT complet** : volets, ventilateurs, thermostats, boutons, nombres, listes, textes, télécommandes (événements) et alarmes (désarmer redemande le mot de passe), comme Home Assistant ([guide](docs/appareils-mqtt.md#étape-29--volets-ventilateurs-thermostats-boutons-réglages-télécommandes-et-alarmes))
 - [x] **30. Assistants du quotidien** : compteur, texte, date et heure (réveil réglable comme déclencheur) ; groupes, plages horaires, moyenne / min / max, seuil avec hystérésis, consommation par période ([guide](docs/assistants.md))
+- [x] **31. Historique des exécutions et notifications** : pour chaque automatisation, ses 10 dernières exécutions pas à pas (« pourquoi la lumière ne s'est pas allumée ? ») ; notifications sur le tableau de bord ; alertes de réparation (appareil injoignable, entité inconnue, boucle) ([guide](docs/historique-executions.md))
 
 En parallèle, dès que tu me donnes les informations : commande du chauffage Somfy (résultat de
 `somfy devices`), puis de l'alarme (avec confirmation et journal).

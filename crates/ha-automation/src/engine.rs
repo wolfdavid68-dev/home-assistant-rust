@@ -16,6 +16,7 @@ use tracing::{debug, info, warn};
 use crate::config::{Action, Automation, Condition, MAX_REPEAT, RepeatUntil, RunMode, Trigger};
 use crate::evaluator::{Checker, Evaluator, Fired};
 use crate::scripts::{Scene, Script};
+use crate::trace::{Check, Outcome, Recorder, StepStatus, Traces};
 use ha_sun::Location;
 
 /// Protection contre les boucles : une automatisation qui se déclenche plus
@@ -27,6 +28,12 @@ use ha_sun::Location;
 pub const AUTOMATION_TRIGGERED: &str = "automation_triggered";
 const MAX_RUNS: usize = 10;
 const RUN_WINDOW: Duration = Duration::from_mins(1);
+/// Les entités citées par les automatisations sont vérifiées après ce délai
+/// (le temps que les appareils se connectent), puis régulièrement.
+const FIRST_ENTITY_CHECK: Duration = Duration::from_mins(2);
+const ENTITY_CHECK_EVERY: Duration = Duration::from_mins(5);
+/// Le début de l'identifiant des alertes « entité inconnue ».
+const MISSING_PREFIX: &str = "repair_automation_";
 
 /// Poignée vers le moteur d'automatisations.
 #[derive(Debug)]
@@ -64,8 +71,9 @@ impl Engine {
         }
         let library = Library::publish(setup.scripts, setup.scenes, &core, evaluator.checker());
         let reloads = setup.reloads.map(|reloads| reloads.0);
+        let traces = setup.traces;
         Self(Background::spawn("le moteur d'automatisations", |token| {
-            run(evaluator, library, core, events, reloads, token)
+            run(evaluator, library, core, events, reloads, traces, token)
         }))
     }
 
@@ -86,6 +94,8 @@ pub struct Setup {
     /// Pour recharger les automatisations sans redémarrer (voir
     /// [`reload_channel`]).
     pub reloads: Option<Reloads>,
+    /// Où enregistrer l'historique des exécutions (partagé avec l'API).
+    pub traces: Traces,
 }
 
 /// Côté « envoi » du rechargement : on lui passe la nouvelle liste.
@@ -202,10 +212,11 @@ impl Library {
             checker: self.checker.clone(),
             trigger: None,
             origin: Origin::Script(alias.clone()),
+            trace: None,
         };
         *slot = Some(tokio::spawn(async move {
             set_entity(&context.core, entity.clone(), "on", &alias);
-            run_actions(&context, &actions).await;
+            run_actions(&context, &actions, "").await;
             set_entity(&context.core, entity, "off", &alias);
         }));
     }
@@ -247,10 +258,11 @@ impl Library {
             checker: self.checker.clone(),
             trigger: None,
             origin: Origin::Scene(scene.name.clone()),
+            trace: None,
         };
         let actions = scene.actions.clone();
         tokio::spawn(async move {
-            run_actions(&context, &actions).await;
+            run_actions(&context, &actions, "").await;
         });
     }
 
@@ -286,6 +298,10 @@ struct Runner {
     queues: Vec<Arc<Mutex<()>>>,
     /// Dates des derniers déclenchements, pour la protection contre les boucles.
     recent_runs: Vec<VecDeque<Instant>>,
+    traces: Traces,
+    started: Instant,
+    /// Prochaine vérification des entités citées.
+    next_check: Instant,
 }
 
 async fn run(
@@ -294,6 +310,7 @@ async fn run(
     core: Arc<Core>,
     mut events: tokio::sync::broadcast::Receiver<Arc<Event>>,
     mut reloads: Option<watch::Receiver<Arc<Vec<Automation>>>>,
+    traces: Traces,
     token: CancellationToken,
 ) {
     let count = evaluator.automations().len();
@@ -308,6 +325,9 @@ async fn run(
         running: (0..count).map(|_| Vec::new()).collect(),
         queues: (0..count).map(|_| Arc::default()).collect(),
         recent_runs: vec![VecDeque::new(); count],
+        traces,
+        started: Instant::now(),
+        next_check: Instant::now() + FIRST_ENTITY_CHECK,
     };
     let mut ticker = tokio::time::interval(Duration::from_secs(1));
     // Si la machine était en veille, on ne rattrape pas toutes les secondes perdues.
@@ -348,6 +368,9 @@ async fn run(
                 let fired = runner.evaluator.fire_on_tick(previous, now, Instant::now(), &runner.core.states);
                 previous = now;
                 runner.launch_all(fired);
+                if Instant::now() >= runner.next_check {
+                    runner.check_entities();
+                }
             }
         }
     }
@@ -387,11 +410,54 @@ impl Runner {
         for handle in old_running.into_iter().flatten() {
             handle.abort();
         }
+        // L'historique des automatisations supprimées ne sert plus à rien.
+        let ids: Vec<&str> = self
+            .evaluator
+            .automations()
+            .iter()
+            .map(|a| a.id.as_str())
+            .collect();
+        self.traces.retain(|id| ids.contains(&id));
+        // Les entités des automatisations modifiées sont vérifiées bientôt
+        // (mais pas avant que les appareils aient eu le temps de se connecter).
+        self.next_check = (Instant::now() + Duration::from_secs(5))
+            .max(self.started + FIRST_ENTITY_CHECK)
+            .min(self.next_check);
         let unchanged = previous.iter().filter(|old| old.is_some()).count();
         info!(
             "automatisations rechargées : {count} au total, {} nouvelle(s) ou modifiée(s)",
             count - unchanged
         );
+    }
+
+    /// Une alerte de réparation pour chaque automatisation qui cite des
+    /// entités inconnues (souvent un appareil renommé ou retiré).
+    fn check_entities(&mut self) {
+        self.next_check = Instant::now() + ENTITY_CHECK_EVERY;
+        let issues: Vec<ha_notices::Issue> = self
+            .evaluator
+            .automations()
+            .iter()
+            .filter_map(|automation| {
+                let missing: Vec<&str> = automation
+                    .entity_ids()
+                    .into_iter()
+                    .filter(|id| self.core.states.get(id).is_none())
+                    .map(EntityId::as_str)
+                    .collect();
+                (!missing.is_empty()).then(|| ha_notices::Issue {
+                    key: automation.id.clone(),
+                    title: format!("« {} » vise des entités inconnues", automation.alias),
+                    message: format!(
+                        "Ces entités n'existent pas : {}. Vérifie que l'appareil est \
+                         connecté, ou corrige l'automatisation.",
+                        missing.join(", ")
+                    ),
+                    severity: ha_notices::Severity::Error,
+                })
+            })
+            .collect();
+        ha_notices::reconcile(&self.core.states, MISSING_PREFIX, &issues);
     }
 
     fn launch_all(&mut self, fired: Vec<Fired>) {
@@ -407,14 +473,34 @@ impl Runner {
         };
         let alias = automation.alias.clone();
         let trigger = automation.trigger_ids.get(fired.trigger).cloned();
+        // Pour le journal de bord et l'historique : pourquoi.
+        let because = automation
+            .triggers
+            .get(fired.trigger)
+            .map(|t| t.describe(&self.core.states));
 
-        if !self.evaluator.conditions_pass_for(
-            index,
-            &self.core.states,
-            local_now(),
-            trigger.as_deref(),
-        ) {
+        // Les conditions, une par une, pour l'historique : on s'arrête à la
+        // première fausse (comme `all`).
+        let checker = self.evaluator.checker();
+        let now = local_now();
+        let mut checks = Vec::new();
+        let mut conditions_pass = true;
+        for condition in &automation.conditions {
+            conditions_pass = checker.passes(condition, &self.core.states, now, trigger.as_deref());
+            checks.push(Check {
+                description: condition.describe(&self.core.states),
+                passed: conditions_pass,
+            });
+            if !conditions_pass {
+                break;
+            }
+        }
+        let recorder = self
+            .traces
+            .begin(&automation.id, &alias, because.clone(), checks);
+        if !conditions_pass {
             debug!("« {alias} » : conditions non remplies");
+            recorder.finish(Outcome::ConditionsFailed);
             return;
         }
         let Some(running) = self.running.get_mut(index) else {
@@ -424,6 +510,7 @@ impl Runner {
         match automation.mode {
             RunMode::Single if !running.is_empty() => {
                 warn!("« {alias} » est déjà en cours : nouveau déclenchement ignoré");
+                recorder.finish(Outcome::AlreadyRunning);
                 return;
             }
             RunMode::Restart if !running.is_empty() => {
@@ -438,6 +525,7 @@ impl Runner {
                      nouveau déclenchement ignoré",
                     automation.max
                 );
+                recorder.finish(Outcome::TooMany);
                 return;
             }
             _ => {}
@@ -455,17 +543,14 @@ impl Runner {
                     "« {alias} » s'est déclenchée {MAX_RUNS} fois en une minute : \
                      boucle probable, déclenchement ignoré"
                 );
+                recorder.finish(Outcome::Loop);
+                warn_loop(&self.core, &automation.id, &alias);
                 return;
             }
             runs.push_back(now);
         }
 
         info!("automatisation « {alias} » déclenchée");
-        // Pour le journal de bord : quelle automatisation, et pourquoi.
-        let because = automation
-            .triggers
-            .get(fired.trigger)
-            .map(|t| t.describe(&self.core.states));
         let mut data = Attributes::new();
         data.insert("id".into(), automation.id.clone().into());
         data.insert("name".into(), alias.clone().into());
@@ -475,12 +560,13 @@ impl Runner {
         if let Err(error) = self.core.fire(AUTOMATION_TRIGGERED, data) {
             warn!("« {alias} » : événement refusé ({error})");
         }
-        let context = Context {
+        let mut context = Context {
             origin: Origin::Automation(alias.clone()),
             alias: alias.into(),
             core: Arc::clone(&self.core),
-            checker: self.evaluator.checker(),
+            checker,
             trigger,
+            trace: Some(recorder),
         };
         let actions = automation.actions.clone();
         let queue = (automation.mode == RunMode::Queued)
@@ -493,8 +579,33 @@ impl Runner {
                 Some(queue) => Some(queue.lock().await),
                 None => None,
             };
-            run_actions(&context, &actions).await;
+            let flow = run_actions(&context, &actions, "").await;
+            if let Some(recorder) = context.trace.take() {
+                recorder.finish(match flow {
+                    Flow::Continue => Outcome::Finished,
+                    Flow::Stop => Outcome::Stopped,
+                });
+            }
         }));
+    }
+}
+
+/// Prévient sur le tableau de bord qu'une automatisation boucle.
+fn warn_loop(core: &Core, id: &str, alias: &str) {
+    let Ok(entity_id) = ha_notices::notice_id(&format!("automation_loop_{id}")) else {
+        return;
+    };
+    let message = format!(
+        "« {alias} » s'est déclenchée {MAX_RUNS} fois en une minute : ses nouveaux \
+         déclenchements sont ignorés. Regarde son historique pour trouver la boucle."
+    );
+    if let Err(error) = ha_notices::notify(
+        &core.states,
+        &entity_id,
+        Some("Automatisation en boucle"),
+        &message,
+    ) {
+        warn!("notification refusée : {error}");
     }
 }
 
@@ -507,6 +618,34 @@ pub(crate) struct Context {
     pub(crate) trigger: Option<String>,
     /// Qui envoie les commandes (pour le journal de bord).
     pub(crate) origin: Origin,
+    /// L'historique de cette exécution (automatisations seulement).
+    pub(crate) trace: Option<Recorder>,
+}
+
+impl Context {
+    /// Note une étape dans l'historique. La description n'est calculée que
+    /// s'il y a un historique (elle lit les noms des appareils).
+    fn record(
+        &self,
+        path: &str,
+        at: jiff::Timestamp,
+        action: &Action,
+        status: StepStatus,
+        detail: Option<String>,
+    ) {
+        if let Some(recorder) = &self.trace {
+            recorder.step(path, at, action.describe(&self.core.states), status, detail);
+        }
+    }
+}
+
+/// La place d'une action : `"2"`, ou `"3 › alors › 1"`.
+fn step_path(prefix: &str, index: usize) -> String {
+    if prefix.is_empty() {
+        (index + 1).to_string()
+    } else {
+        format!("{prefix} › {}", index + 1)
+    }
 }
 
 /// Faut-il continuer après une action ?
@@ -575,7 +714,8 @@ async fn wait_for_trigger(
     }
 }
 
-/// Exécute les actions l'une après l'autre.
+/// Exécute les actions l'une après l'autre. `prefix` : la place de ces
+/// actions dans l'automatisation (vide au premier niveau), pour l'historique.
 ///
 /// Concept Rust : une fonction `async` qui s'appelle elle-même (pour `if` et
 /// `choose`) doit renvoyer son `Future` dans une `Box` (`Box::pin`) : sinon
@@ -583,6 +723,7 @@ async fn wait_for_trigger(
 pub(crate) fn run_actions<'a>(
     context: &'a Context,
     actions: &'a [Action],
+    prefix: &'a str,
 ) -> Pin<Box<dyn Future<Output = Flow> + Send + 'a>> {
     Box::pin(async move {
         let alias = &context.alias;
@@ -594,10 +735,13 @@ pub(crate) fn run_actions<'a>(
                 context.trigger.as_deref(),
             )
         };
-        for action in actions {
+        for (index, action) in actions.iter().enumerate() {
+            let path = step_path(prefix, index);
+            let at = jiff::Timestamp::now();
             let flow = match action {
                 Action::Delay(duration) => {
                     tokio::time::sleep(*duration).await;
+                    context.record(&path, at, action, StepStatus::Done, None);
                     Flow::Continue
                 }
                 Action::Service {
@@ -606,6 +750,7 @@ pub(crate) fn run_actions<'a>(
                     entity_ids,
                     data,
                 } => {
+                    let mut errors = Vec::new();
                     for entity_id in entity_ids {
                         debug!("« {alias} » : {domain}.{service} sur {entity_id}");
                         if let Err(error) = context.core.call_service_from(
@@ -616,15 +761,25 @@ pub(crate) fn run_actions<'a>(
                             data.clone(),
                         ) {
                             warn!("« {alias} » : action refusée : {error}");
+                            errors.push(error.to_string());
                         }
+                    }
+                    if errors.is_empty() {
+                        context.record(&path, at, action, StepStatus::Done, None);
+                    } else {
+                        let detail = Some(errors.join(" ; "));
+                        context.record(&path, at, action, StepStatus::Failed, detail);
                     }
                     Flow::Continue
                 }
                 Action::Condition(condition) => {
                     if passes(std::slice::from_ref(condition)) {
+                        context.record(&path, at, action, StepStatus::Done, Some("vraie".into()));
                         Flow::Continue
                     } else {
                         debug!("« {alias} » : condition fausse, on s'arrête là");
+                        let detail = Some("fausse : on s'arrête là".into());
+                        context.record(&path, at, action, StepStatus::Stopped, detail);
                         Flow::Stop
                     }
                 }
@@ -633,17 +788,30 @@ pub(crate) fn run_actions<'a>(
                     then,
                     otherwise,
                 } => {
-                    let branch = if passes(conditions) { then } else { otherwise };
-                    run_actions(context, branch).await
+                    let (branch, name) = if passes(conditions) {
+                        (then, "alors")
+                    } else {
+                        (otherwise, "sinon")
+                    };
+                    context.record(&path, at, action, StepStatus::Done, Some(name.into()));
+                    run_actions(context, branch, &format!("{path} › {name}")).await
                 }
                 Action::Choose { options, default } => {
-                    let branch = options
+                    let chosen = options
                         .iter()
-                        .find(|(conditions, _)| passes(conditions))
-                        .map_or(default.as_slice(), |(_, actions)| actions.as_slice());
-                    run_actions(context, branch).await
+                        .position(|(conditions, _)| passes(conditions));
+                    let (branch, name) = match chosen.and_then(|i| options.get(i).map(|o| (i, o))) {
+                        Some((i, (_, actions))) => {
+                            (actions.as_slice(), format!("option {}", i + 1))
+                        }
+                        None if default.is_empty() => (default.as_slice(), "aucune option".into()),
+                        None => (default.as_slice(), "par défaut".into()),
+                    };
+                    context.record(&path, at, action, StepStatus::Done, Some(name.clone()));
+                    run_actions(context, branch, &format!("{path} › {name}")).await
                 }
                 Action::Repeat { until, actions } => {
+                    context.record(&path, at, action, StepStatus::Done, None);
                     let mut flow = Flow::Continue;
                     for round in 1..=MAX_REPEAT {
                         let go_on = match until {
@@ -654,7 +822,8 @@ pub(crate) fn run_actions<'a>(
                         if !go_on {
                             break;
                         }
-                        flow = run_actions(context, actions).await;
+                        flow =
+                            run_actions(context, actions, &format!("{path} › tour {round}")).await;
                         if flow == Flow::Stop {
                             break;
                         }
@@ -676,10 +845,18 @@ pub(crate) fn run_actions<'a>(
                     timeout,
                     continue_on_timeout,
                 } => {
-                    if wait_for_trigger(context, triggers, *timeout).await || *continue_on_timeout {
+                    if wait_for_trigger(context, triggers, *timeout).await {
+                        let detail = Some("déclencheur arrivé".into());
+                        context.record(&path, at, action, StepStatus::Done, detail);
+                        Flow::Continue
+                    } else if *continue_on_timeout {
+                        let detail = Some("délai dépassé, on continue".into());
+                        context.record(&path, at, action, StepStatus::Done, detail);
                         Flow::Continue
                     } else {
                         debug!("« {alias} » : attente dépassée, on s'arrête là");
+                        let detail = Some("délai dépassé : on s'arrête là".into());
+                        context.record(&path, at, action, StepStatus::Stopped, detail);
                         Flow::Stop
                     }
                 }

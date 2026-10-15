@@ -259,7 +259,8 @@ function renderAll() {
   });
   // … puis, par type, les appareils qui ne sont dans aucune pièce. Les scènes
   // et les scripts sont déjà en haut, en boutons.
-  const loose = sorted.filter((s) => !used.has(s.entity_id) && !["scene", "script"].includes(domainOf(s)));
+  // Les notifications ont leur cloche, en haut.
+  const loose = sorted.filter((s) => !used.has(s.entity_id) && !["scene", "script", "persistent_notification"].includes(domainOf(s)));
   const groups = SECTIONS.map(({ title, domains, extra }) => {
     const items = loose.filter((s) => !used.has(s.entity_id) && (domains.includes(domainOf(s)) || extra?.(s)));
     items.forEach((s) => used.add(s.entity_id));
@@ -327,6 +328,7 @@ function renderHome() {
   const now = new Date();
   $("#today").textContent = fullDate.format(now);
   $("#clock").textContent = hourMinute.format(now);
+  renderNotices();
 
   // La salutation, et ce qui demande de l'attention.
   const hour = now.getHours();
@@ -2094,6 +2096,7 @@ const SERVICES = {
   script: [["turn_on", "Lancer"], ["turn_off", "Arrêter"]],
   scene: [["turn_on", "Activer"]],
   notify: [["send_message", "Envoyer une notification"]],
+  persistent_notification: [["create", "Afficher sur le tableau de bord"], ["dismiss", "Retirer du tableau de bord"]],
   climate: [["set_preset_mode", "Choisir un préréglage"], ["set_temperature", "Régler la consigne"], ["turn_on", "Allumer"], ["turn_off", "Éteindre"]],
   input_boolean: [["turn_on", "Activer"], ["turn_off", "Désactiver"], ["toggle", "Inverser"]],
   input_number: [["set_value", "Régler la valeur"], ["increment", "Augmenter d'un pas"], ["decrement", "Diminuer d'un pas"]],
@@ -2142,6 +2145,66 @@ async function api(method, url, body) {
   return { status: response.status, data };
 }
 
+// ---------------------------------------------------------------- Notifications
+// Les entités persistent_notification.* : celles des automatisations, et les
+// alertes de réparation du serveur (kind = "repair").
+
+function noticeStates() {
+  return [...entities.values()].filter((state) => domainOf(state) === "persistent_notification");
+}
+
+function renderNotices() {
+  const all = noticeStates();
+  const active = all
+    .filter((state) => state.state === "notifying")
+    .sort((a, b) => {
+      const rank = (s) => (s.attributes.kind === "repair" ? lookup({ error: 0, warning: 1 }, s.attributes.severity) ?? 2 : 3);
+      return rank(a) - rank(b) || String(b.attributes.created_at).localeCompare(String(a.attributes.created_at));
+    });
+  const bell = $("#open-notices");
+  bell.hidden = active.length === 0;
+  bell.classList.toggle("urgent", active.some((s) => s.attributes.kind === "repair" && s.attributes.severity === "error"));
+  $("#notice-count").textContent = active.length > 9 ? "9+" : String(active.length);
+  bell.setAttribute("aria-label", `Notifications (${active.length})`);
+  if (!$("#notices").open) return;
+  const list = $("#notice-list");
+  list.replaceChildren(...active.map(noticeItem));
+  if (active.length === 0) list.replaceChildren(el("li", { class: "auto-empty", text: "Rien à signaler." }));
+  const ignored = all.filter((state) => state.state === "ignored").length;
+  $("#notice-ignored").hidden = ignored === 0;
+  $("#notice-ignored").textContent = ignored === 1
+    ? "1 alerte ignorée : elle disparaîtra quand le problème sera réglé."
+    : `${ignored} alertes ignorées : elles disparaîtront quand les problèmes seront réglés.`;
+}
+
+function noticeItem(state) {
+  const repair = state.attributes.kind === "repair";
+  const severity = repair ? String(state.attributes.severity ?? "warning") : "info";
+  const head = el("div", { class: "notice-head" }, el("strong", { text: String(state.attributes.title ?? "Notification") }));
+  if (repair) head.append(el("span", { class: `badge ${severity === "error" ? "bad" : ""}`, text: "à réparer" }));
+  const item = el("li", { class: `notice-item sev-${severity}` }, head, el("p", { class: "notice-message", text: String(state.attributes.message ?? "") }));
+  const meta = el("div", { class: "notice-meta" });
+  if (typeof state.attributes.created_at === "string") {
+    meta.append(el("small", { text: `il y a ${ago(state.attributes.created_at)}` }));
+  }
+  if (canControl(state)) {
+    const dismiss = el("button", { type: "button", class: "ghost small", text: repair ? "Ignorer" : "Retirer" });
+    dismiss.addEventListener("click", () => {
+      dismiss.disabled = true;
+      callService("persistent_notification", "dismiss", { entity_id: state.entity_id });
+    });
+    meta.append(dismiss);
+  }
+  item.append(meta);
+  return item;
+}
+
+$("#open-notices").addEventListener("click", () => {
+  $("#notices").showModal();
+  renderNotices();
+});
+$("#notices-close").addEventListener("click", () => $("#notices").close());
+
 $("#open-automations").addEventListener("click", () => {
   $("#automations").showModal();
   showAutoList();
@@ -2152,6 +2215,7 @@ $("#automations-close").addEventListener("click", () => $("#automations").close(
 
 async function showAutoList(notice = "") {
   $("#auto-edit-view").hidden = true;
+  $("#auto-trace-view").hidden = true;
   $("#auto-list-view").hidden = false;
   const message = $("#auto-notice");
   message.textContent = notice;
@@ -2184,10 +2248,21 @@ function autoCard(entry) {
   if (entry.updated_by && entry.updated_at) {
     card.append(el("small", { class: "auto-meta", text: `Modifiée par ${entry.updated_by} le ${dateTime.format(new Date(entry.updated_at))}` }));
   }
+  if (entry.last_run) {
+    card.append(el("small", {
+      class: `auto-meta run-${entry.last_run.outcome}`,
+      text: `Dernière exécution il y a ${ago(entry.last_run.started)} · ${outcomeLabel(entry.last_run.outcome)}`,
+    }));
+  }
   const buttons = el("div", { class: "auto-card-buttons" });
   const open = el("button", { type: "button", class: "action-button", text: entry.source === "editor" && auto.editable ? "Modifier" : "Voir" });
   open.addEventListener("click", () => openAutoEditor(entry));
   buttons.append(open);
+  if (!entry.error) {
+    const history = el("button", { type: "button", class: "action-button", text: "Historique" });
+    history.addEventListener("click", () => openTraces(entry));
+    buttons.append(history);
+  }
   if (entry.source === "editor" && auto.editable && entry.config) {
     const toggle = el("button", { type: "button", class: "action-button", text: entry.enabled ? "Désactiver" : "Activer" });
     toggle.addEventListener("click", () => {
@@ -2317,6 +2392,7 @@ function openAutoEditor(entry) {
   auto.config = structuredClone(entry.config ?? { id: entry.id, triggers: [], actions: [] });
   auto.mode = entry.source === "file" || !auto.editable ? "yaml" : "form";
   $("#auto-list-view").hidden = true;
+  $("#auto-trace-view").hidden = true;
   $("#auto-edit-view").hidden = false;
   $("#auto-version-list").hidden = true;
   $("#auto-file-note").hidden = entry.source !== "file";
@@ -2719,6 +2795,10 @@ function actionFields(a, refresh) {
   } else if (a.action === "timer.start") {
     fields.push(durationField("Durée (facultatif, sinon celle du fichier)", a.data, "duration", true));
     delete extra.duration;
+  } else if (a.action === "persistent_notification.create") {
+    fields.push(textField("Titre (facultatif)", a.data, "title"), textField("Message", a.data, "message"));
+    delete extra.title;
+    delete extra.message;
   } else if (a.action === "notify.send_message") {
     fields.push(textField("Titre (facultatif)", a.data, "title"), textField("Message", a.data, "message"));
     fields.push(selectField("Priorité", a.data, "priority", [[1, "1 (discrète)"], [2, "2"], [3, "3 (normale)"], [4, "4"], [5, "5 (urgente)"]], true));
@@ -3001,6 +3081,114 @@ $("#auto-versions").addEventListener("click", async () => {
 });
 
 $("#auto-cancel").addEventListener("click", () => showAutoList());
+
+// ----- Historique des exécutions
+
+const OUTCOMES = {
+  running: "en cours",
+  finished: "terminée",
+  conditions_failed: "conditions non remplies",
+  stopped: "arrêtée par une condition",
+  already_running: "ignorée : déjà en cours",
+  too_many: "ignorée : trop d'exécutions",
+  loop: "ignorée : boucle",
+  aborted: "interrompue",
+};
+const outcomeLabel = (outcome) => lookup(OUTCOMES, outcome) ?? String(outcome);
+const timeOnly = new Intl.DateTimeFormat("fr", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+const trace = { entry: null, runs: [], selected: 0 };
+
+async function openTraces(entry) {
+  trace.entry = entry;
+  trace.selected = 0;
+  $("#auto-list-view").hidden = true;
+  $("#auto-edit-view").hidden = true;
+  $("#auto-trace-view").hidden = false;
+  $("#trace-title").textContent = entry.alias;
+  await loadTraces();
+}
+
+async function loadTraces() {
+  const detail = $("#trace-detail");
+  const { status, data } = await api("GET", `/api/automations/${encodeURIComponent(trace.entry.id)}/traces`);
+  if (status !== 200) {
+    $("#trace-runs").replaceChildren();
+    return detail.replaceChildren(el("p", { class: "auto-empty", text: "Historique indisponible." }));
+  }
+  trace.runs = data.traces ?? [];
+  trace.selected = Math.min(trace.selected, Math.max(0, trace.runs.length - 1));
+  renderTraces();
+}
+
+function renderTraces() {
+  const runs = $("#trace-runs");
+  if (trace.runs.length === 0) {
+    runs.replaceChildren();
+    return $("#trace-detail").replaceChildren(
+      el("p", { class: "auto-empty", text: "Pas encore d'exécution depuis le démarrage du serveur." }),
+    );
+  }
+  runs.replaceChildren(
+    ...trace.runs.map((run, index) => {
+      const button = el(
+        "button",
+        { type: "button", class: `trace-run run-${run.outcome}`, "aria-pressed": String(index === trace.selected) },
+        el("span", { class: "trace-dot", "aria-hidden": "true" }),
+        el("span", { text: timeOnly.format(new Date(run.started)) }),
+      );
+      button.title = outcomeLabel(run.outcome);
+      button.addEventListener("click", () => {
+        trace.selected = index;
+        renderTraces();
+      });
+      return button;
+    }),
+  );
+  $("#trace-detail").replaceChildren(traceDetail(trace.runs[trace.selected]));
+}
+
+/** Une durée courte : « 0,4 s », « 12 s », « 3 min 05 s ». */
+function shortDuration(ms) {
+  if (ms < 10_000) return `${(ms / 1000).toLocaleString("fr", { maximumFractionDigits: 1 })} s`;
+  const seconds = Math.round(ms / 1000);
+  if (seconds < 60) return `${seconds} s`;
+  return `${Math.floor(seconds / 60)} min ${String(seconds % 60).padStart(2, "0")} s`;
+}
+
+function traceDetail(run) {
+  const started = new Date(run.started);
+  const length = run.finished ? ` · ${shortDuration(Date.parse(run.finished) - started.getTime())}` : "";
+  const summary = el(
+    "div",
+    { class: "trace-summary" },
+    el("span", { class: `badge trace-outcome run-${run.outcome}`, text: outcomeLabel(run.outcome) }),
+    el("small", { text: `${dateTime.format(started)}${length}` }),
+  );
+  const steps = el("ol", { class: "trace" });
+  const step = (kind, title, detail, extra = "") =>
+    el("li", { class: `trace-step ${kind}` },
+      el("span", { class: "trace-mark", "aria-hidden": "true" }),
+      el("div", {}, el("p", { text: title }), ...(detail ? [el("small", { text: detail })] : []), ...(extra ? [el("small", { class: "trace-path", text: extra })] : [])),
+    );
+  steps.append(step("trigger", "Déclenchée", run.trigger ?? "lancée à la main"));
+  for (const check of run.conditions) {
+    steps.append(step(check.passed ? "done" : "stopped", `Condition : ${check.description}`, check.passed ? "vraie" : "fausse : rien n'est fait"));
+  }
+  for (const s of run.steps) {
+    const at = timeOnly.format(new Date(s.at));
+    const status = s.status === "failed" ? "refusée" : "";
+    steps.append(step(s.status, s.description, [status, s.detail].filter(Boolean).join(" · "), `Action ${s.path} · ${at}`));
+  }
+  if (run.truncated) steps.append(step("stopped", "…", "La suite n'a pas été enregistrée (trop d'étapes)."));
+  if (["already_running", "too_many", "loop"].includes(run.outcome)) {
+    steps.append(step("stopped", "Pas lancée", outcomeLabel(run.outcome)));
+  }
+  if (run.outcome === "running") steps.append(step("running", "En cours…", ""));
+  return el("div", {}, summary, steps);
+}
+
+$("#trace-refresh").addEventListener("click", () => loadTraces());
+$("#trace-back").addEventListener("click", () => showAutoList());
 
 // ----- Confirmation d'identité
 

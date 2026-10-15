@@ -15,6 +15,7 @@ mod engine;
 mod error;
 pub mod evaluator;
 pub mod scripts;
+pub mod trace;
 
 use std::path::Path;
 
@@ -26,6 +27,7 @@ pub use editor::Editor;
 pub use engine::{AUTOMATION_TRIGGERED, Engine, Reloader, Reloads, Setup, reload_channel};
 pub use error::AutomationError;
 pub use scripts::{Scene, Script, parse_scenes, parse_scripts};
+pub use trace::{Outcome, StepStatus, Trace, Traces};
 
 /// Lit et vérifie le fichier d'automatisations, et renvoie celles qui sont
 /// activées. Un fichier absent donne une liste vide.

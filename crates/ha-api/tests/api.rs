@@ -56,6 +56,7 @@ impl TestApp {
         let automations = ha_api::AutomationEditor {
             editor: Arc::new(editor),
             editable,
+            traces: ha_automation::Traces::new(),
         };
         let state = ApiState::new(core, store, Arc::new(auth), areas, Some(automations));
         Self {
@@ -151,6 +152,7 @@ async fn every_route_requires_a_token() {
         ("PUT", "/api/automations/soir"),
         ("DELETE", "/api/automations/soir"),
         ("GET", "/api/automations/soir/versions"),
+        ("GET", "/api/automations/matin/traces"),
     ] {
         let (status, _) = app.request(method, uri, None, None).await;
         assert_eq!(status, StatusCode::UNAUTHORIZED, "{method} {uri}");
@@ -1402,4 +1404,71 @@ async fn a_guest_cannot_open_the_garage_through_a_group() {
         )
         .await;
     assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn the_run_history_is_readable_by_the_family_only() {
+    let app = TestApp::new().await;
+    let traces = &app.state.automations.as_ref().unwrap().traces;
+    let recorder = traces.begin(
+        "matin",
+        "Matin",
+        Some("il est 07:30".into()),
+        vec![ha_automation::trace::Check {
+            description: "après 07:00".into(),
+            passed: true,
+        }],
+    );
+    recorder.step(
+        "1",
+        jiff::Timestamp::now(),
+        "cover.open_cover sur cover.salon".into(),
+        ha_automation::StepStatus::Done,
+        None,
+    );
+    recorder.finish(ha_automation::Outcome::Finished);
+
+    let token = app.login().await;
+    let (status, body) = app
+        .request("GET", "/api/automations/matin/traces", Some(&token), None)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let trace = &body["traces"][0];
+    assert_eq!(trace["trigger"], "il est 07:30");
+    assert_eq!(trace["outcome"], "finished");
+    assert_eq!(trace["conditions"][0]["passed"], true);
+    assert_eq!(trace["steps"][0]["status"], "done");
+    assert_eq!(
+        trace["steps"][0]["description"],
+        "cover.open_cover sur cover.salon"
+    );
+
+    // La liste dit quand chaque automatisation a tourné pour la dernière fois.
+    let (_, body) = app
+        .request("GET", "/api/automations", Some(&token), None)
+        .await;
+    let matin = body["automations"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|a| a["id"] == "matin")
+        .unwrap();
+    assert_eq!(matin["last_run"]["outcome"], "finished");
+
+    // Une automatisation sans exécution : une liste vide.
+    let (_, body) = app
+        .request(
+            "GET",
+            "/api/automations/inconnue/traces",
+            Some(&token),
+            None,
+        )
+        .await;
+    assert_eq!(body["traces"], json!([]));
+
+    let guest = app.login_as("visiteur", ha_auth::Role::Guest).await;
+    let (status, _) = app
+        .request("GET", "/api/automations/matin/traces", Some(&guest), None)
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
 }
