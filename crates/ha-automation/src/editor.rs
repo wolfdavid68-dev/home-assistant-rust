@@ -10,6 +10,7 @@
 //! Chaque enregistrement passe par **les mêmes vérifications** que le
 //! fichier, puis le moteur est rechargé, sans redémarrer le serveur.
 
+use std::collections::HashMap;
 use std::time::SystemTime;
 
 use ha_storage::Store;
@@ -49,6 +50,44 @@ pub struct Version {
     pub config: Option<AutomationConfig>,
     pub changed_at: SystemTime,
     pub changed_by: String,
+}
+
+/// Blocs placés au plus dans le schéma d'une automatisation.
+const MAX_LAYOUT_NODES: usize = 400;
+/// Les coordonnées restent raisonnables : le schéma n'a pas à être immense.
+const MAX_COORDINATE: f64 = 100_000.0;
+
+/// Vérifie la place des blocs (`{"1 › alors › 2": [x, y], …}`) et la
+/// renvoie sous une forme propre. Le contenu vient du navigateur : rien
+/// d'autre que des positions n'est gardé.
+fn check_layout(layout: &serde_json::Value) -> Result<String, String> {
+    let serde_json::Value::Object(map) = layout else {
+        return Err("schéma : un objet { bloc: [x, y] } attendu".into());
+    };
+    if map.len() > MAX_LAYOUT_NODES {
+        return Err(format!("schéma : {MAX_LAYOUT_NODES} blocs au plus"));
+    }
+    let mut clean = serde_json::Map::new();
+    for (key, value) in map {
+        if key.is_empty() || key.chars().count() > 120 || key.chars().any(char::is_control) {
+            return Err("schéma : nom de bloc invalide".into());
+        }
+        let point = value
+            .as_array()
+            .filter(|point| point.len() == 2)
+            .and_then(|point| Some((point[0].as_f64()?, point[1].as_f64()?)))
+            .filter(|(x, y)| {
+                [x, y]
+                    .iter()
+                    .all(|v| v.is_finite() && v.abs() <= MAX_COORDINATE)
+            });
+        let Some((x, y)) = point else {
+            return Err(format!("schéma : position de « {key} » invalide"));
+        };
+        // Au pixel près : inutile de garder des décimales.
+        clean.insert(key.clone(), serde_json::json!([x.round(), y.round()]));
+    }
+    Ok(serde_json::Value::Object(clean).to_string())
 }
 
 /// Résultat d'un enregistrement.
@@ -224,6 +263,38 @@ impl Editor {
             self.reload().await?;
         }
         Ok(deleted)
+    }
+
+    /// La place des blocs dans le schéma, pour chaque automatisation qui en a
+    /// une. Une valeur illisible est ignorée (le schéma se replace tout seul).
+    pub async fn layouts(&self) -> Result<HashMap<String, serde_json::Value>, AutomationError> {
+        Ok(self
+            .store
+            .automation_layouts()
+            .await?
+            .into_iter()
+            .filter_map(|(id, text)| Some((id, serde_json::from_str(&text).ok()?)))
+            .collect())
+    }
+
+    /// Enregistre la place des blocs d'une automatisation (du fichier ou de
+    /// l'éditeur). Rien ne change dans ce qu'elle fait : pas de nouvelle
+    /// version, pas de rechargement.
+    pub async fn save_layout(
+        &self,
+        id: &str,
+        layout: &serde_json::Value,
+    ) -> Result<(), AutomationError> {
+        let invalid = |reason: String| AutomationError::Invalid {
+            id: id.to_owned(),
+            reason,
+        };
+        if !self.entries().await?.iter().any(|entry| entry.id == id) {
+            return Err(invalid("automatisation inconnue".into()));
+        }
+        let layout = check_layout(layout).map_err(invalid)?;
+        self.store.save_automation_layout(id, &layout).await?;
+        Ok(())
     }
 
     /// Les versions d'une automatisation de l'éditeur, de la plus récente à

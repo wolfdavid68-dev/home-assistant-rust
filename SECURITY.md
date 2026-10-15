@@ -27,6 +27,10 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
 - Les **modèles** des automatisations (`{{ … }}`) ne sont pas du Jinja : un petit interpréteur qui ne sait
   que **lire** un état ou un attribut et appliquer quelques filtres. Pas de boucles, de calculs, de fichiers
   ni de réseau ; vérifiés au chargement, 2 000 caractères et 20 expressions au plus, résultat tronqué.
+- Le **schéma** des automatisations n'est qu'une vue : ce qui est enregistré reste la configuration
+  vérifiée par le serveur, avec la même confirmation d'identité. La place des blocs, rangée à part, s'enregistre
+  sans confirmation (elle ne change rien à ce que fait l'automatisation) mais seulement avec le droit de modifier
+  les automatisations ; elle est vérifiée (400 blocs, coordonnées bornées) et rien d'autre n'est gardé.
 - **Rôles** (administrateur, famille, invité) vérifiés **par le serveur** à chaque demande, WebSocket
   compris ; tout droit non accordé explicitement est refusé. Un invité ne voit pas la présence de la
   famille ni l'alarme, et ne commande jamais un portail, une porte de garage ou une serrure. Il reste

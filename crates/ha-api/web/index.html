@@ -13,6 +13,7 @@
   <!-- Tout le code est dans app.js : la politique de sécurité (CSP) interdit
        le JavaScript écrit directement dans la page. -->
   <script src="/app.js" defer></script>
+  <script src="/canvas.js" defer></script>
 </head>
 <body>
   <!-- Écran de connexion -->
@@ -173,6 +174,7 @@
       <!-- Édition -->
       <section id="auto-edit-view" hidden>
         <div class="tabs" role="group" aria-label="Mode d'édition">
+          <button type="button" class="period" id="auto-tab-canvas">Schéma</button>
           <button type="button" class="period" id="auto-tab-form">Formulaire</button>
           <button type="button" class="period" id="auto-tab-yaml">YAML</button>
         </div>
@@ -180,6 +182,31 @@
           Cette automatisation est définie dans <code>automations.yaml</code> : elle se
           modifie dans le fichier, sur le serveur. Tu peux la dupliquer dans l'éditeur.
         </p>
+        <!-- Le schéma : des blocs reliés, façon n8n (canvas.js) -->
+        <div id="auto-canvas-wrap" class="auto-canvas-wrap" hidden>
+          <div id="auto-canvas-meta" class="auto-canvas-meta"></div>
+          <div id="auto-canvas" class="auto-canvas" tabindex="-1">
+            <div id="canvas-stage" class="canvas-stage">
+              <svg id="canvas-wires" class="canvas-wires" width="1" height="1" aria-hidden="true"></svg>
+              <div id="canvas-nodes" class="canvas-nodes"></div>
+            </div>
+            <div class="canvas-tools" role="toolbar" aria-label="Schéma">
+              <button id="canvas-add" type="button" class="primary small">+ Ajouter un bloc</button>
+              <button id="canvas-fit" type="button" class="ghost small" title="Tout afficher">Tout voir</button>
+              <button id="canvas-tidy" type="button" class="ghost small" title="Replacer les blocs automatiquement">Ranger</button>
+              <button id="canvas-zoom-out" type="button" class="ghost small" aria-label="Zoom arrière">−</button>
+              <button id="canvas-zoom-in" type="button" class="ghost small" aria-label="Zoom avant">+</button>
+              <button id="canvas-wire-delete" type="button" class="ghost danger small" hidden>Retirer le fil</button>
+              <select id="canvas-run" aria-label="Afficher une exécution sur le schéma" hidden></select>
+            </div>
+            <ul id="canvas-errors" class="canvas-errors" aria-live="polite"></ul>
+            <aside id="canvas-panel" class="canvas-panel" aria-label="Réglages du bloc" hidden></aside>
+            <div id="canvas-menu" class="canvas-menu" hidden></div>
+          </div>
+          <p class="journal-hint canvas-help">Glisse un bloc pour le déplacer, tire un fil depuis le rond
+            de droite d'un bloc vers un autre bloc (ou dans le vide pour en ajouter un), touche un bloc
+            pour le régler. Molette ou deux doigts : se déplacer et zoomer.</p>
+        </div>
         <div id="auto-form" class="auto-form"></div>
         <label id="auto-yaml-label" hidden>
           Automatisation en YAML

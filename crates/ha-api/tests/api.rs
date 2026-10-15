@@ -160,6 +160,7 @@ async fn every_route_requires_a_token() {
         ("DELETE", "/api/automations/soir"),
         ("GET", "/api/automations/soir/versions"),
         ("GET", "/api/automations/matin/traces"),
+        ("PUT", "/api/automations/matin/layout"),
         ("GET", "/api/energy"),
     ] {
         let (status, _) = app.request(method, uri, None, None).await;
@@ -479,6 +480,7 @@ async fn dashboard_files_are_served_with_security_headers() {
     for (uri, content_type) in [
         ("/", "text/html; charset=utf-8"),
         ("/app.js", "text/javascript; charset=utf-8"),
+        ("/canvas.js", "text/javascript; charset=utf-8"),
         ("/style.css", "text/css; charset=utf-8"),
         ("/icon.svg", "image/svg+xml"),
         ("/manifest.webmanifest", "application/manifest+json"),
@@ -557,7 +559,15 @@ async fn api_errors_also_carry_security_headers() {
 fn dashboard_never_uses_inner_html() {
     // Règle de sécurité : les noms d'appareils viennent du réseau. La page ne
     // doit jamais les insérer comme du HTML.
-    let script = include_str!("../web/app.js");
+    for (name, script) in [
+        ("app.js", include_str!("../web/app.js")),
+        ("canvas.js", include_str!("../web/canvas.js")),
+    ] {
+        dashboard_script_is_safe(name, script);
+    }
+}
+
+fn dashboard_script_is_safe(name: &str, script: &str) {
     for forbidden in [
         ".innerHTML",
         ".outerHTML",
@@ -568,7 +578,7 @@ fn dashboard_never_uses_inner_html() {
     ] {
         assert!(
             !script.contains(forbidden),
-            "{forbidden} interdit dans app.js"
+            "{forbidden} interdit dans {name}"
         );
     }
 }
@@ -821,6 +831,70 @@ async fn automations_are_listed_and_checked() {
         assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
         assert!(body["error"].as_str().is_some_and(|e| !e.is_empty()));
     }
+}
+
+#[tokio::test]
+async fn the_place_of_the_blocks_is_kept_without_confirmation() {
+    let app = TestApp::new().await;
+    let token = app.login().await;
+    // Pas de confirmation d'identité : seule la place des blocs change.
+    let layout = json!({"déclencheur 1": [40.4, 80], "1": [320, 80], "1 › alors › 1": [600, -40]});
+    let (status, body) = app
+        .request(
+            "PUT",
+            "/api/automations/matin/layout",
+            Some(&token),
+            Some(layout),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT, "{body}");
+    let (_, body) = app
+        .request("GET", "/api/automations", Some(&token), None)
+        .await;
+    assert_eq!(
+        body["automations"][0]["layout"],
+        json!({"déclencheur 1": [40.0, 80.0], "1": [320.0, 80.0], "1 › alors › 1": [600.0, -40.0]})
+    );
+
+    for bad in [
+        json!([1, 2]),
+        json!({"1": [1]}),
+        json!({"1": ["a", 2]}),
+        json!({"1": [1, 1e9]}),
+        json!({"": [1, 2]}),
+        json!({"1": {"x": 1}}),
+    ] {
+        let (status, body) = app
+            .request(
+                "PUT",
+                "/api/automations/matin/layout",
+                Some(&token),
+                Some(bad.clone()),
+            )
+            .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{bad} : {body}");
+    }
+    let (status, _) = app
+        .request(
+            "PUT",
+            "/api/automations/inconnue/layout",
+            Some(&token),
+            Some(json!({})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    // Un membre de la famille ne modifie pas les automatisations.
+    let family = app.login_as("alice", ha_auth::Role::Family).await;
+    let (status, _) = app
+        .request(
+            "PUT",
+            "/api/automations/matin/layout",
+            Some(&family),
+            Some(json!({})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
 }
 
 #[tokio::test]
@@ -1422,6 +1496,7 @@ async fn the_run_history_is_readable_by_the_family_only() {
         "matin",
         "Matin",
         Some("il est 07:30".into()),
+        Some(0),
         vec![ha_automation::trace::Check {
             description: "après 07:00".into(),
             passed: true,
@@ -1443,6 +1518,7 @@ async fn the_run_history_is_readable_by_the_family_only() {
     assert_eq!(status, StatusCode::OK);
     let trace = &body["traces"][0];
     assert_eq!(trace["trigger"], "il est 07:30");
+    assert_eq!(trace["trigger_index"], 0);
     assert_eq!(trace["outcome"], "finished");
     assert_eq!(trace["conditions"][0]["passed"], true);
     assert_eq!(trace["steps"][0]["status"], "done");

@@ -42,6 +42,7 @@ Un noyau domotique en Rust, inspiré de Home Assistant.
 - [Étape 32 : le compteur Linky et le bilan énergétique, expliqué](docs/energie.md)
 - [Étape 33 : la vigilance Météo-France, expliquée](docs/vigilance.md)
 - [Étape 34 : les modèles et les déclencheurs plus fins, expliqués](docs/modeles.md)
+- [Étape 35 : le schéma des automatisations façon n8n, expliqué](docs/schema.md)
 - [Étape 5 : les automatisations, expliqué](docs/etape-5-automatisations.md)
 - [Modernisation du code, expliquée](docs/modernisation.md)
 - [Étape 6 : l'interface web, expliquée](docs/etape-6-interface-web.md)

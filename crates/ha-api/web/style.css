@@ -1077,3 +1077,263 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .vigilance-list li.level-orange::before { background: var(--vig-orange); }
 .vigilance-list li.level-red::before { background: var(--vig-red); }
 .vigilance-tomorrow { margin: 0.6rem 0 0; padding-top: 0.5rem; border-top: 1px solid var(--line); color: var(--text-2); }
+
+/* ---------------------------------------------------------------- Schéma (étape 35) */
+.automations-dialog.canvas-mode { width: min(1480px, calc(100vw - 2rem)); }
+.auto-canvas-wrap { display: grid; gap: 0.6rem; }
+.canvas-meta summary { cursor: pointer; font-weight: 600; padding: 0.3rem 0; }
+.canvas-meta[open] summary { margin-bottom: 0.5rem; }
+.canvas-meta-row { grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); align-items: end; }
+.auto-canvas {
+  position: relative;
+  height: min(66dvh, 760px);
+  min-height: 360px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  /* Un quadrillage de points, comme une feuille : on voit qu'on peut s'y déplacer. */
+  background-color: var(--card-2);
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--muted) 35%, transparent) 1px, transparent 1.4px);
+  background-size: 20px 20px;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.auto-canvas:focus { outline: none; }
+.canvas-stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.canvas-wires { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.canvas-nodes { position: absolute; left: 0; top: 0; }
+.wire { fill: none; stroke: var(--muted); stroke-width: 2; }
+.wire.selected { stroke: var(--accent); stroke-width: 3.5; }
+.wire.drafting { stroke: var(--accent); stroke-width: 2.5; stroke-dasharray: 6 5; }
+.wire.reached { stroke: var(--ok); stroke-width: 3; }
+.wire-hit { fill: none; stroke: transparent; stroke-width: 18; pointer-events: stroke; cursor: pointer; }
+
+.node {
+  position: absolute;
+  border: 2px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+/* La couleur de la sorte de bloc : une barre à gauche (et toujours écrite en toutes lettres). */
+.node::before {
+  content: "";
+  position: absolute;
+  left: -2px;
+  top: 14px;
+  bottom: 14px;
+  width: 4px;
+  border-radius: 0 4px 4px 0;
+  background: var(--accent);
+}
+.node-trigger::before { background: var(--glow-bar); }
+.node-condition::before, .node-if::before, .node-choose::before { background: var(--heat); }
+.node-delay::before, .node-wait_for_trigger::before, .node-repeat::before { background: var(--series-6); }
+.node-body {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 0.6rem 1.4rem 0.6rem 0.9rem;
+  border: 0;
+  border-radius: 14px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: grab;
+}
+.node-body:active { cursor: grabbing; }
+.node-body:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.node-head { display: flex; align-items: center; gap: 0.5rem; min-width: 0; font-size: 0.74rem; font-weight: 600; color: var(--muted); }
+.node-icon {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.node-icon svg { width: 15px; height: 15px; }
+.node-trigger .node-icon { background: var(--glow-soft); color: var(--glow-ink); }
+.node-condition .node-icon, .node-if .node-icon, .node-choose .node-icon { background: var(--heat-soft); color: var(--heat-ink); }
+.node-kind { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.node-text {
+  font-size: 0.86rem;
+  line-height: 1.3;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
+}
+.node.selected { border-color: var(--accent); }
+.node.loose { border-style: dashed; border-color: var(--alert); }
+
+.port {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--muted);
+  background: var(--card);
+  transform: translateY(-50%);
+}
+/* Une zone plus grande que le rond, pour l'attraper au doigt. */
+.port::after { content: ""; position: absolute; inset: -11px; border-radius: 50%; }
+.port-in { left: -9px; top: 50%; }
+.port-out { right: -9px; cursor: crosshair; }
+.port-out:hover { border-color: var(--accent); background: var(--accent-soft); }
+/* Les noms des sorties, dans le bloc, en face de leur rond (comme n8n). */
+.node-ports .node-body { padding-right: 5.2rem; }
+.port-label {
+  position: absolute;
+  right: 14px;
+  transform: translateY(-50%);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.port-add {
+  position: absolute;
+  left: calc(100% + 18px);
+  transform: translateY(-50%);
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1.5px dashed var(--muted);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--muted);
+  font: 700 1rem/1 var(--font);
+  cursor: pointer;
+}
+.port-add::before {
+  content: "";
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  width: 12px;
+  border-top: 2px solid var(--muted);
+}
+.port-add:hover, .port-add:focus-visible { border-color: var(--accent); color: var(--accent); }
+
+/* Une exécution affichée : le chemin suivi, en vert ; l'arrêt, en rouge. */
+.tracing .node.run-none { opacity: 0.45; }
+.node.run-done { border-color: var(--ok); }
+.node.run-failed, .node.run-stopped { border-color: var(--alert); }
+.node-run {
+  position: absolute;
+  left: 12px;
+  bottom: -11px;
+  max-width: calc(100% - 24px);
+  padding: 0.05rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.run-failed .node-run, .run-stopped .node-run { background: var(--alert-soft); color: var(--alert-ink); }
+
+.canvas-tools {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  pointer-events: none;
+}
+.canvas-tools > * { pointer-events: auto; box-shadow: var(--shadow); }
+.canvas-tools .ghost { background: var(--card); }
+.canvas-tools select { max-width: 100%; }
+.canvas-errors {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  max-width: min(560px, calc(100% - 24px));
+  margin: 0;
+  padding: 0.5rem 0.8rem;
+  list-style: none;
+  border-radius: 12px;
+  background: var(--alert-soft);
+  color: var(--alert-ink);
+  font-size: 0.85rem;
+}
+.canvas-errors:empty { display: none; }
+.canvas-panel {
+  position: absolute;
+  z-index: 3;
+  top: 12px;
+  right: 12px;
+  bottom: 12px;
+  width: min(390px, calc(100% - 24px));
+  overflow: auto;
+  padding: 0.9rem;
+  display: grid;
+  align-content: start;
+  gap: 0.7rem;
+  border-radius: 18px;
+  background: var(--card);
+  box-shadow: var(--shadow-float);
+  user-select: text;
+  -webkit-user-select: text;
+  touch-action: auto;
+}
+.canvas-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.canvas-panel .auto-fields { grid-template-columns: minmax(0, 1fr); }
+.canvas-menu {
+  position: absolute;
+  z-index: 4;
+  width: 270px;
+  max-height: 320px;
+  overflow: auto;
+  padding: 0.5rem;
+  display: grid;
+  gap: 0.3rem;
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: var(--shadow-float);
+  touch-action: auto;
+}
+.canvas-menu-title {
+  margin: 0.4rem 0.4rem 0.1rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.canvas-menu-item {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.canvas-menu-item:hover, .canvas-menu-item:focus-visible { background: var(--card-2); }
+.canvas-help { margin: 0; }
+
+@media (max-width: 700px) {
+  .automations-dialog.canvas-mode { width: 100vw; max-width: 100vw; max-height: 100dvh; border-radius: 0; padding: 0.9rem; }
+  .auto-canvas { height: 64dvh; }
+  /* Sur téléphone, les réglages du bloc montent du bas, comme une feuille. */
+  .canvas-panel { top: auto; left: 8px; right: 8px; bottom: 8px; width: auto; max-height: 62%; }
+}

@@ -32,6 +32,9 @@ pub struct Trace {
     pub finished: Option<Timestamp>,
     /// La raison du déclenchement : « Porte d'entrée passe à « on » ».
     pub trigger: Option<String>,
+    /// La place du déclencheur dans la liste (0 pour le premier), pour le
+    /// montrer sur le schéma.
+    pub trigger_index: Option<usize>,
     /// Les conditions vérifiées, dans l'ordre (on s'arrête à la première fausse).
     pub conditions: Vec<Check>,
     pub steps: Vec<Step>,
@@ -183,6 +186,7 @@ impl Traces {
         automation: &str,
         alias: &str,
         trigger: Option<String>,
+        trigger_index: Option<usize>,
         conditions: Vec<Check>,
     ) -> Recorder {
         let run = self.inner.next_run.fetch_add(1, Ordering::Relaxed) + 1;
@@ -192,6 +196,7 @@ impl Traces {
             started: Timestamp::now(),
             finished: None,
             trigger,
+            trigger_index,
             conditions,
             steps: Vec::new(),
             truncated: false,
@@ -295,7 +300,7 @@ mod tests {
         let traces = Traces::new();
         for _ in 0..STORED_TRACES + 3 {
             traces
-                .begin("a", "A", None, Vec::new())
+                .begin("a", "A", None, None, Vec::new())
                 .finish(Outcome::Finished);
         }
         let list = traces.of("a");
@@ -308,7 +313,7 @@ mod tests {
     #[test]
     fn an_interrupted_run_is_marked_aborted() {
         let traces = Traces::new();
-        let recorder = traces.begin("a", "A", Some("il est 07:30".into()), Vec::new());
+        let recorder = traces.begin("a", "A", Some("il est 07:30".into()), Some(0), Vec::new());
         recorder.step(
             "1",
             Timestamp::now(),
@@ -327,7 +332,7 @@ mod tests {
     #[test]
     fn steps_are_limited() {
         let traces = Traces::new();
-        let recorder = traces.begin("a", "A", None, Vec::new());
+        let recorder = traces.begin("a", "A", None, None, Vec::new());
         for _ in 0..MAX_STEPS + 5 {
             recorder.step("1", Timestamp::now(), "x".into(), StepStatus::Done, None);
         }

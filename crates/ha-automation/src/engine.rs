@@ -498,9 +498,13 @@ impl Runner {
                 break;
             }
         }
-        let recorder = self
-            .traces
-            .begin(&automation.id, &alias, because.clone(), checks);
+        let recorder = self.traces.begin(
+            &automation.id,
+            &alias,
+            because.clone(),
+            Some(fired.trigger),
+            checks,
+        );
         if !conditions_pass {
             debug!("« {alias} » : conditions non remplies");
             recorder.finish(Outcome::ConditionsFailed);

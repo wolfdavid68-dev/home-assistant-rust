@@ -17,7 +17,8 @@ Bouton **Automatisations** en haut du tableau de bord.
 - La **liste** montre chaque automatisation avec un résumé en français (« Quand porte entrée passe
   à « on » · alors allumer salon »), d'où elle vient (**fichier** ou **éditeur**) et si elle est
   désactivée ou invalide.
-- **Nouvelle automatisation** ouvre le formulaire en trois blocs :
+- **Nouvelle automatisation** ouvre le **schéma** (étape 35) : des blocs reliés, façon n8n, expliqué
+  dans [son guide](schema.md). L'onglet **Formulaire** montre la même automatisation en trois blocs :
   - **Quand…** : un appareil change d'état, une valeur passe un seuil, une heure, le soleil ;
   - **Si…** (facultatif) : un appareil est dans un état, une plage horaire et des jours, il fait jour
     ou nuit ;
@@ -105,6 +106,7 @@ Les routes de l'API :
 | PUT | `/api/automations/{id}` | Crée ou modifie (confirmation requise) |
 | DELETE | `/api/automations/{id}` | Supprime (confirmation requise) |
 | GET | `/api/automations/{id}/versions` | Les versions précédentes |
+| PUT | `/api/automations/{id}/layout` | La place des blocs du schéma (sans confirmation, voir [le schéma](schema.md)) |
 | POST | `/api/auth/confirm` | Confirme son identité pour 15 minutes |
 
 **Le rechargement sans redémarrage.** Après un enregistrement, l'éditeur envoie la nouvelle liste au

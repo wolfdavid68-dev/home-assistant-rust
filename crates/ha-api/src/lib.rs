@@ -18,6 +18,7 @@
 //! | PUT / DELETE | `/api/automations/{id}` | Crée, modifie, supprime (confirmation requise) |
 //! | GET | `/api/automations/{id}/versions` | Versions précédentes |
 //! | GET | `/api/automations/{id}/traces` | Dernières exécutions (historique) |
+//! | PUT | `/api/automations/{id}/layout` | Place des blocs dans le schéma |
 //! | GET | `/api/websocket` | API WebSocket (authentification dans le 1er message) |
 //! | GET | `/` | Tableau de bord web (page publique ; les données demandent un jeton) |
 
@@ -119,6 +120,10 @@ pub fn router(state: Arc<ApiState>) -> Router {
             put(automations::save).delete(automations::delete),
         )
         .route("/api/automations/{id}/versions", get(automations::versions))
+        .route(
+            "/api/automations/{id}/layout",
+            put(automations::save_layout),
+        )
         .route("/api/automations/{id}/traces", get(automations::traces))
         .route("/api/states", get(rest::list_states))
         .route(
@@ -139,6 +144,7 @@ pub fn router(state: Arc<ApiState>) -> Router {
         // Tableau de bord web.
         .route("/", get(web::index))
         .route("/app.js", get(web::app_js))
+        .route("/canvas.js", get(web::canvas_js))
         .route("/style.css", get(web::style_css))
         .route("/icon.svg", get(web::icon_svg))
         .route("/fonts/geist.woff2", get(web::font_geist))
