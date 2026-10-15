@@ -317,6 +317,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     // pas un changement qui déclenche), et démarrées APRÈS (un minuteur qui a
     // sonné pendant l'arrêt doit atteindre les automatisations).
     let inputs = (!input_config.is_empty()).then(|| ha_input::Inputs::prepare(input_config, &core));
+    // Les listes (courses, tâches) et l'agenda : publiés avant les
+    // automatisations, pour que leur création ne déclenche rien.
+    let agenda = ha_agenda::Agenda::start(store.clone(), Arc::clone(&core)).await;
 
     // Vrais appareils (MQTT) ou, à défaut, appareils simulés.
     let mqtt = mqtt_config.map(|config| Mqtt::start(config, Arc::clone(&core)));
@@ -446,6 +449,7 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     if let Some(inputs) = inputs {
         inputs.stop().await;
     }
+    agenda.stop().await;
     engine.stop().await;
     logbook.stop().await;
     statistics.stop().await;

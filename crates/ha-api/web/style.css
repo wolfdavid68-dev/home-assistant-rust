@@ -530,6 +530,40 @@ input[type="range"]::-moz-range-track { background: transparent; }
   font-variant-numeric: tabular-nums;
 }
 
+/* Listes et agenda : une tuile plus large, des lignes cochables. */
+@media (min-width: 760px) { .tile.wide-tile { grid-column: span 2; } }
+.todo-list, .agenda-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.todo-list li, .agenda-list li.event {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.35rem 0.25rem; border-radius: 10px;
+}
+.todo-list li:hover, .agenda-list li.event:hover { background: var(--card-2); }
+.todo-list label { flex: 1; display: flex; align-items: center; gap: 0.6rem; min-width: 0; cursor: pointer; }
+.todo-list label span:first-of-type { overflow-wrap: break-word; min-width: 0; }
+.todo-list input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent); flex: none; }
+.todo-list li.done label span:first-of-type { color: var(--muted); text-decoration: line-through; }
+.item-due { margin-left: auto; font-size: 0.78rem; color: var(--muted); white-space: nowrap; }
+.item-remove {
+  flex: none; width: 28px; height: 28px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--muted); font-size: 1.1rem; line-height: 1; cursor: pointer;
+}
+.item-remove:hover { background: var(--alert-soft); color: var(--alert); }
+.agenda-list li.day {
+  margin-top: 0.5rem; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--muted);
+}
+.agenda-list li.day:first-child { margin-top: 0; }
+.event-time { width: 3.6rem; flex: none; font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-2); }
+.event-name { flex: 1; min-width: 0; overflow-wrap: break-word; }
+.agenda-list li.now { background: var(--accent-soft); }
+.agenda-list li.now .event-time { color: var(--accent); }
+.add-form { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.add-form input[type="text"] { flex: 1 1 10rem; min-width: 0; }
+.add-when { display: flex; gap: 0.5rem; flex: 1 1 100%; }
+.add-when input { flex: 1; min-width: 0; }
+.muted { margin: 0; color: var(--muted); font-size: 0.9rem; }
+.ghost.small { justify-self: start; padding: 0.3rem 0.8rem; font-size: 0.85rem; }
+
 /* Minuteur : un anneau qui se vide. */
 .timer-row { display: flex; align-items: center; gap: 12px; }
 .ring { width: 48px; height: 48px; flex: none; transform: rotate(-90deg); }

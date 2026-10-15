@@ -35,6 +35,7 @@ Un noyau domotique en Rust, inspiré de Home Assistant.
 - [Étape 24 : les statistiques long terme, expliqué](docs/statistiques.md)
 - [Étape 25 : la nouvelle mise en forme (thèmes clair et sombre), expliquée](docs/mise-en-forme.md)
 - [Étape 27 : serrures, sirènes, vannes, aspirateurs, humidificateurs, chauffe-eau, expliqué](docs/appareils-mqtt.md)
+- [Étape 28 : l'agenda et les listes de la maison, expliqué](docs/agenda.md)
 - [Étape 5 : les automatisations, expliqué](docs/etape-5-automatisations.md)
 - [Modernisation du code, expliquée](docs/modernisation.md)
 - [Étape 6 : l'interface web, expliquée](docs/etape-6-interface-web.md)

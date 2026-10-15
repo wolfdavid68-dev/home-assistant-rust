@@ -44,7 +44,20 @@ fn phrase(old: &State, new: &State) -> Option<String> {
     };
     match domain {
         // Mesures et choses qui changent sans cesse : l'historique s'en charge.
-        "weather" | "timer" => None,
+        // Une liste : son état n'est qu'un nombre d'éléments.
+        "weather" | "timer" | "todo" => None,
+        // L'agenda : le rendez-vous qui commence, ou celui qui se termine.
+        "calendar" => {
+            let (state, verb) = match value {
+                "on" => (new, "début de"),
+                "off" => (old, "fin de"),
+                _ => return None,
+            };
+            Some(match text(state.attributes(), "message") {
+                Some(message) => format!("{verb} « {message} »"),
+                None => format!("{verb} rendez-vous"),
+            })
+        }
         "sensor" if attributes.contains_key("unit_of_measurement") => None,
         "sensor" if text(attributes, "device_class") == Some("timestamp") => None,
         "light" | "switch" | "fan" | "humidifier" => on_off("s'est allumé", "s'est éteint"),
@@ -460,7 +473,20 @@ mod tests {
                 json!({"friendly_name": "Sirène"}),
                 "s'est arrêtée",
             ),
-            ("humidifier.salon", "off", "on", none, "s'est allumé"),
+            (
+                "humidifier.salon",
+                "off",
+                "on",
+                none.clone(),
+                "s'est allumé",
+            ),
+            (
+                "calendar.maison",
+                "off",
+                "on",
+                json!({"message": "Dentiste"}),
+                "début de « Dentiste »",
+            ),
         ] {
             assert_eq!(
                 change(entity, from, to, attributes).as_deref(),
