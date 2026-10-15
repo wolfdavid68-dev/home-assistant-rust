@@ -12,7 +12,7 @@ use jiff::civil::{Date, DateTime, Time};
 use jiff::tz::TimeZone;
 use tokio::time::Instant;
 
-use crate::config::{Automation, Condition, Trigger};
+use crate::config::{Automation, Condition, Pattern, Trigger};
 
 /// Un déclencheur `state` avec `for:` en attente : « la porte est ouverte…
 /// on vérifiera dans 5 minutes qu'elle l'est toujours ».
@@ -280,6 +280,11 @@ impl Evaluator {
             for (t, trigger) in automation.triggers.iter().enumerate() {
                 let crossed_now = match trigger {
                     Trigger::Time { at } => at.iter().any(|time| crossed(previous, now, *time)),
+                    Trigger::TimePattern {
+                        hours,
+                        minutes,
+                        second,
+                    } => pattern_crossed(previous, now, *hours, *minutes, *second),
                     Trigger::Sun { event, offset } => self.sun.as_ref().is_some_and(|sun| {
                         [previous.date(), now.date()].into_iter().any(|date| {
                             sun.event_at(date, *event, *offset)
@@ -366,6 +371,39 @@ fn crossed(previous: DateTime, now: DateTime, time: Time) -> bool {
         .into_iter()
         .map(|date| date.to_datetime(time))
         .any(|moment| previous < moment && moment <= now)
+}
+
+/// Un moment du motif est-il passé entre `previous` (exclu) et `now` ?
+/// On regarde les minutes de l'intervalle (deux heures au plus : après une
+/// mise en veille plus longue, on ne rattrape pas tout).
+fn pattern_crossed(
+    previous: DateTime,
+    now: DateTime,
+    hours: Pattern,
+    minutes: Pattern,
+    second: i8,
+) -> bool {
+    let Ok(mut minute) = previous.with().second(0).subsec_nanosecond(0).build() else {
+        return false;
+    };
+    for _ in 0..=120 {
+        if minute > now {
+            break;
+        }
+        if hours.matches(minute.hour())
+            && minutes.matches(minute.minute())
+            && let Ok(moment) = minute.with().second(second).build()
+            && previous < moment
+            && moment <= now
+        {
+            return true;
+        }
+        let Ok(next) = minute.checked_add(SignedDuration::from_mins(1)) else {
+            break;
+        };
+        minute = next;
+    }
+    false
 }
 
 fn condition_passes(

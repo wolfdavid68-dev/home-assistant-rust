@@ -305,3 +305,49 @@
       data:
         title: Lessive
         message: La machine est finie, pense à étendre le linge.
+
+# Encore plus riches (voir docs/automatisations-encore.md).
+# La porte du garage reste ouverte : prévenir, et insister toutes les 10 min.
+- id: garage_ouvert
+  alias: Porte du garage restée ouverte
+  mode: restart
+  triggers:
+    - trigger: state
+      entity_id: binary_sensor.porte_garage
+      to: "on"
+  actions:
+    - wait_for_trigger:
+        - trigger: state
+          entity_id: binary_sensor.porte_garage
+          to: "off"
+      timeout: 10min
+      continue_on_timeout: true
+    - repeat:
+        while:
+          - condition: state
+            entity_id: binary_sensor.porte_garage
+            state: "on"
+        sequence:
+          - action: notify.send_message
+            target: {entity_id: notify.telephone}
+            data:
+              title: Garage
+              message: La porte du garage est ouverte.
+          - delay: 10min
+
+# Toutes les 15 minutes, la nuit : vérifier que le portail est fermé.
+- id: ronde_portail
+  alias: Ronde du portail
+  triggers:
+    - trigger: time_pattern
+      minutes: "/15"
+  conditions:
+    - condition: time
+      after: "23:00"
+      before: "06:00"
+    - condition: state
+      entity_id: cover.portail
+      state: open
+  actions:
+    - action: cover.close_cover
+      target: {entity_id: cover.portail}
