@@ -19,8 +19,8 @@ pub mod scripts;
 use std::path::Path;
 
 pub use config::{
-    Action, Automation, AutomationConfig, Condition, Trigger, check_all, parse, parse_configs,
-    uses_sun,
+    Action, Automation, AutomationConfig, Condition, RunMode, Trigger, check_all, parse,
+    parse_configs, uses_sun,
 };
 pub use editor::Editor;
 pub use engine::{Engine, Reloader, Reloads, Setup, reload_channel};

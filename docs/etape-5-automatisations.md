@@ -142,9 +142,10 @@ pas aux ordres, mais on voit les appels de service dans les logs.
 
 ## Pas encore pris en charge
 
-Déclencheurs d'événements, conditions « ou », actions conditionnelles (`choose`, `if`), modes
-`restart`/`queued`. (Le soleil est arrivé à l'étape 8, et l'édition depuis le tableau de bord,
-sans redémarrer, à l'étape 13 : voir [l'éditeur](editeur-automatisations.md).)
+Déclencheurs d'événements et modèles (templates). Le soleil est arrivé à l'étape 8, l'édition
+depuis le tableau de bord à l'étape 13 ([l'éditeur](editeur-automatisations.md)), et les conditions
+« ou », les actions `if` / `choose` et les modes `restart` / `queued` / `parallel` à l'étape 17
+([automatisations avancées](automatisations-avancees.md)).
 
 ```bash
 cargo test -p ha-automation

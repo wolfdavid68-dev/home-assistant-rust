@@ -1,19 +1,20 @@
 //! Le moteur : écoute le bus et l'horloge, et exécute les actions.
 
 use std::collections::VecDeque;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
 use ha_core::{Attributes, Background, CancellationToken, Core, EntityId, Event};
 use jiff::civil::DateTime;
 use tokio::sync::broadcast::error::RecvError;
-use tokio::sync::watch;
+use tokio::sync::{Mutex, watch};
 use tokio::task::JoinHandle;
 use tokio::time::{Instant, MissedTickBehavior};
 use tracing::{debug, info, warn};
 
-use crate::config::{Action, Automation};
-use crate::evaluator::Evaluator;
+use crate::config::{Action, Automation, Condition, RunMode};
+use crate::evaluator::{Checker, Evaluator, Fired};
 use crate::scripts::{Scene, Script};
 use ha_sun::Location;
 
@@ -58,7 +59,7 @@ impl Engine {
         if let Some(location) = setup.location {
             evaluator = evaluator.with_sun(location, jiff::tz::TimeZone::system());
         }
-        let library = Library::publish(setup.scripts, setup.scenes, &core);
+        let library = Library::publish(setup.scripts, setup.scenes, &core, evaluator.checker());
         let reloads = setup.reloads.map(|reloads| reloads.0);
         Self(Background::spawn("le moteur d'automatisations", |token| {
             run(evaluator, library, core, events, reloads, token)
@@ -131,12 +132,14 @@ struct Library {
     scripts: Vec<Script>,
     scenes: Vec<Scene>,
     running: Vec<Option<JoinHandle<()>>>,
+    /// Pour les conditions des scripts (`if`, `choose`, `condition`).
+    checker: Checker,
 }
 
 impl Library {
     /// Crée les entités `script.*` (« off ») et `scene.*` (« unknown »,
     /// comme Home Assistant tant qu'une scène n'a jamais été activée).
-    fn publish(scripts: Vec<Script>, scenes: Vec<Scene>, core: &Core) -> Self {
+    fn publish(scripts: Vec<Script>, scenes: Vec<Scene>, core: &Core, checker: Checker) -> Self {
         for script in &scripts {
             set_entity(core, script.entity_id(), "off", &script.alias);
         }
@@ -148,6 +151,7 @@ impl Library {
             scripts,
             scenes,
             running,
+            checker,
         }
     }
 
@@ -189,11 +193,16 @@ impl Library {
         let alias = script.alias.clone();
         let actions = script.actions.clone();
         let entity = script.entity_id();
-        let core = Arc::clone(core);
+        let context = Context {
+            alias: alias.clone().into(),
+            core: Arc::clone(core),
+            checker: self.checker.clone(),
+            trigger: None,
+        };
         *slot = Some(tokio::spawn(async move {
-            set_entity(&core, entity.clone(), "on", &alias);
-            run_actions(alias.clone(), actions, Arc::clone(&core)).await;
-            set_entity(&core, entity, "off", &alias);
+            set_entity(&context.core, entity.clone(), "on", &alias);
+            run_actions(&context, &actions).await;
+            set_entity(&context.core, entity, "off", &alias);
         }));
     }
 
@@ -228,11 +237,16 @@ impl Library {
             &jiff::Timestamp::now().to_string(),
             &scene.name,
         );
-        tokio::spawn(run_actions(
-            scene.name.clone(),
-            scene.actions.clone(),
-            Arc::clone(core),
-        ));
+        let context = Context {
+            alias: scene.name.clone().into(),
+            core: Arc::clone(core),
+            checker: self.checker.clone(),
+            trigger: None,
+        };
+        let actions = scene.actions.clone();
+        tokio::spawn(async move {
+            run_actions(&context, &actions).await;
+        });
     }
 
     fn abort_all(self) {
@@ -261,8 +275,10 @@ fn local_now() -> DateTime {
 struct Runner {
     evaluator: Evaluator,
     core: Arc<Core>,
-    /// Exécution en cours de chaque automatisation (mode « une à la fois »).
-    running: Vec<Option<JoinHandle<()>>>,
+    /// Exécutions en cours (ou en attente) de chaque automatisation.
+    running: Vec<Vec<JoinHandle<()>>>,
+    /// Pour le mode `queued` : une seule exécution à la fois, dans l'ordre.
+    queues: Vec<Arc<Mutex<()>>>,
     /// Dates des derniers déclenchements, pour la protection contre les boucles.
     recent_runs: Vec<VecDeque<Instant>>,
 }
@@ -284,7 +300,8 @@ async fn run(
     let mut runner = Runner {
         evaluator,
         core,
-        running: (0..count).map(|_| None).collect(),
+        running: (0..count).map(|_| Vec::new()).collect(),
+        queues: (0..count).map(|_| Arc::default()).collect(),
         recent_runs: vec![VecDeque::new(); count],
     };
     let mut ticker = tokio::time::interval(Duration::from_secs(1));
@@ -299,7 +316,7 @@ async fn run(
             received = events.recv() => match received {
                 Ok(event) => match event.as_ref() {
                     Event::StateChanged { entity_id, old_state, new_state } => {
-                        let fired = runner.evaluator.on_state_changed(
+                        let fired = runner.evaluator.fire_on_state_changed(
                             entity_id,
                             old_state.as_ref(),
                             new_state.as_ref(),
@@ -319,7 +336,7 @@ async fn run(
 
             _ = ticker.tick() => {
                 let now = local_now();
-                let fired = runner.evaluator.on_tick(previous, now, Instant::now(), &runner.core.states);
+                let fired = runner.evaluator.fire_on_tick(previous, now, Instant::now(), &runner.core.states);
                 previous = now;
                 runner.launch_all(fired);
             }
@@ -342,10 +359,17 @@ impl Runner {
         let count = automations.len();
         let previous = self.evaluator.replace(automations);
         let mut old_running = std::mem::take(&mut self.running);
+        let old_queues = std::mem::take(&mut self.queues);
         let mut old_runs = std::mem::take(&mut self.recent_runs);
         for old in &previous {
-            let kept = old.and_then(|old| old_running.get_mut(old)?.take());
+            let kept = old
+                .and_then(|old| old_running.get_mut(old).map(std::mem::take))
+                .unwrap_or_default();
             self.running.push(kept);
+            let queue = old
+                .and_then(|old| old_queues.get(old).cloned())
+                .unwrap_or_default();
+            self.queues.push(queue);
             let runs = old
                 .and_then(|old| old_runs.get_mut(old).map(std::mem::take))
                 .unwrap_or_default();
@@ -361,30 +385,53 @@ impl Runner {
         );
     }
 
-    fn launch_all(&mut self, fired: Vec<usize>) {
-        for index in fired {
-            self.launch(index);
+    fn launch_all(&mut self, fired: Vec<Fired>) {
+        for fired in fired {
+            self.launch(fired);
         }
     }
 
-    fn launch(&mut self, index: usize) {
+    fn launch(&mut self, fired: Fired) {
+        let index = fired.automation;
         let Some(automation) = self.evaluator.automations().get(index) else {
             return;
         };
         let alias = automation.alias.clone();
+        let trigger = automation.trigger_ids.get(fired.trigger).cloned();
 
-        if !self
-            .evaluator
-            .conditions_pass(index, &self.core.states, local_now())
-        {
+        if !self.evaluator.conditions_pass_for(
+            index,
+            &self.core.states,
+            local_now(),
+            trigger.as_deref(),
+        ) {
             debug!("« {alias} » : conditions non remplies");
             return;
         }
-        if let Some(Some(handle)) = self.running.get(index)
-            && !handle.is_finished()
-        {
-            warn!("« {alias} » est déjà en cours : nouveau déclenchement ignoré");
+        let Some(running) = self.running.get_mut(index) else {
             return;
+        };
+        running.retain(|handle| !handle.is_finished());
+        match automation.mode {
+            RunMode::Single if !running.is_empty() => {
+                warn!("« {alias} » est déjà en cours : nouveau déclenchement ignoré");
+                return;
+            }
+            RunMode::Restart if !running.is_empty() => {
+                info!("« {alias} » : on recommence depuis le début");
+                for handle in running.drain(..) {
+                    handle.abort();
+                }
+            }
+            RunMode::Queued | RunMode::Parallel if running.len() >= automation.max => {
+                warn!(
+                    "« {alias} » : déjà {} exécution(s) en cours ou en attente, \
+                     nouveau déclenchement ignoré",
+                    automation.max
+                );
+                return;
+            }
+            _ => {}
         }
         if let Some(runs) = self.recent_runs.get_mut(index) {
             let now = Instant::now();
@@ -405,35 +452,117 @@ impl Runner {
         }
 
         info!("automatisation « {alias} » déclenchée");
+        let context = Context {
+            alias: alias.into(),
+            core: Arc::clone(&self.core),
+            checker: self.evaluator.checker(),
+            trigger,
+        };
         let actions = automation.actions.clone();
-        let core = Arc::clone(&self.core);
-        let handle = tokio::spawn(run_actions(alias, actions, core));
-        if let Some(slot) = self.running.get_mut(index) {
-            *slot = Some(handle);
-        }
+        let queue = (automation.mode == RunMode::Queued)
+            .then(|| self.queues.get(index).cloned())
+            .flatten();
+        running.push(tokio::spawn(async move {
+            // Mode `queued` : on attend son tour. Le verrou de tokio est
+            // équitable : les exécutions passent dans l'ordre d'arrivée.
+            let _turn = match &queue {
+                Some(queue) => Some(queue.lock().await),
+                None => None,
+            };
+            run_actions(&context, &actions).await;
+        }));
     }
 }
 
+/// Ce dont une exécution a besoin.
+pub(crate) struct Context {
+    pub(crate) alias: Arc<str>,
+    pub(crate) core: Arc<Core>,
+    pub(crate) checker: Checker,
+    /// L'identifiant du déclencheur (pour la condition `trigger`).
+    pub(crate) trigger: Option<String>,
+}
+
+/// Faut-il continuer après une action ?
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Flow {
+    Continue,
+    /// Une action `condition` était fausse : on arrête tout.
+    Stop,
+}
+
 /// Exécute les actions l'une après l'autre.
-async fn run_actions(alias: String, actions: Vec<Action>, core: Arc<Core>) {
-    for action in actions {
-        match action {
-            Action::Delay(duration) => tokio::time::sleep(duration).await,
-            Action::Service {
-                domain,
-                service,
-                entity_ids,
-                data,
-            } => {
-                for entity_id in entity_ids {
-                    debug!("« {alias} » : {domain}.{service} sur {entity_id}");
-                    if let Err(error) =
-                        core.call_service(&domain, &service, entity_id, data.clone())
-                    {
-                        warn!("« {alias} » : action refusée : {error}");
+///
+/// Concept Rust : une fonction `async` qui s'appelle elle-même (pour `if` et
+/// `choose`) doit renvoyer son `Future` dans une `Box` (`Box::pin`) : sinon
+/// le compilateur ne pourrait pas calculer sa taille, qui serait infinie.
+pub(crate) fn run_actions<'a>(
+    context: &'a Context,
+    actions: &'a [Action],
+) -> Pin<Box<dyn Future<Output = Flow> + Send + 'a>> {
+    Box::pin(async move {
+        let alias = &context.alias;
+        let passes = |conditions: &[Condition]| {
+            context.checker.all(
+                conditions,
+                &context.core.states,
+                local_now(),
+                context.trigger.as_deref(),
+            )
+        };
+        for action in actions {
+            let flow = match action {
+                Action::Delay(duration) => {
+                    tokio::time::sleep(*duration).await;
+                    Flow::Continue
+                }
+                Action::Service {
+                    domain,
+                    service,
+                    entity_ids,
+                    data,
+                } => {
+                    for entity_id in entity_ids {
+                        debug!("« {alias} » : {domain}.{service} sur {entity_id}");
+                        if let Err(error) = context.core.call_service(
+                            domain,
+                            service,
+                            entity_id.clone(),
+                            data.clone(),
+                        ) {
+                            warn!("« {alias} » : action refusée : {error}");
+                        }
+                    }
+                    Flow::Continue
+                }
+                Action::Condition(condition) => {
+                    if passes(std::slice::from_ref(condition)) {
+                        Flow::Continue
+                    } else {
+                        debug!("« {alias} » : condition fausse, on s'arrête là");
+                        Flow::Stop
                     }
                 }
+                Action::If {
+                    conditions,
+                    then,
+                    otherwise,
+                } => {
+                    let branch = if passes(conditions) { then } else { otherwise };
+                    run_actions(context, branch).await
+                }
+                Action::Choose { options, default } => {
+                    let branch = options
+                        .iter()
+                        .find(|(conditions, _)| passes(conditions))
+                        .map_or(default.as_slice(), |(_, actions)| actions.as_slice());
+                    run_actions(context, branch).await
+                }
+            };
+            if flow == Flow::Stop {
+                return Flow::Stop;
             }
         }
-    }
+        Flow::Continue
+    })
 }

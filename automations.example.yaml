@@ -189,3 +189,55 @@
         entity_id: climate.salon
       data:
         preset_mode: eco
+
+# Automatisations plus riches (voir docs/automatisations-avancees.md) :
+# une seule automatisation pour l'arrivée et le départ, grâce aux
+# identifiants de déclencheurs et à « choose ».
+- id: entree
+  alias: Lumière de l'entrée
+  mode: restart                  # porte rouverte : on recommence le minuteur
+  triggers:
+    - trigger: state
+      entity_id: binary_sensor.porte_entree
+      to: "on"
+      id: ouverture
+    - trigger: state
+      entity_id: device_tracker.telephone_david
+      to: not_home
+      id: depart
+  actions:
+    - choose:
+        # Ouverture de la porte, quand il fait nuit : lumière 5 minutes.
+        - conditions:
+            - condition: trigger
+              id: ouverture
+            - condition: or
+              conditions:
+                - condition: sun
+                  after: sunset
+                - condition: sun
+                  before: sunrise
+          sequence:
+            - action: light.turn_on
+              target: {entity_id: light.entree}
+            - delay: 5min
+            - action: light.turn_off
+              target: {entity_id: light.entree}
+        # Départ : tout éteindre, et chauffage en « absent »… sauf s'il
+        # est arrêté. (Porte ouverte en journée : aucune option, rien.)
+        - conditions:
+            - condition: trigger
+              id: depart
+          sequence:
+            - action: light.turn_off
+              target: {entity_id: [light.entree, light.salon]}
+            - if:
+                - condition: not
+                  conditions:
+                    - condition: state
+                      entity_id: climate.salon
+                      state: "off"
+              then:
+                - action: climate.set_preset_mode
+                  target: {entity_id: climate.salon}
+                  data: {preset_mode: absent}
