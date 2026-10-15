@@ -40,6 +40,8 @@ pub enum Permission {
     /// Voir et commander **tous** les appareils (sinon : seulement ceux
     /// qu'un invité peut voir et commander).
     AllDevices,
+    /// Changer l'apparence commune du tableau de bord (le dessin de la maison).
+    EditDashboard,
 }
 
 impl Role {
@@ -115,6 +117,7 @@ mod tests {
             Permission::WriteStates,
             Permission::ReadAudit,
             Permission::AllDevices,
+            Permission::EditDashboard,
         ];
         let allowed = |role: Role| all.into_iter().filter(|p| role.can(*p)).collect::<Vec<_>>();
         assert_eq!(allowed(Role::Admin), all);

@@ -72,6 +72,10 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
 
 - Politique de sécurité du contenu (CSP) stricte : aucun script dans la page, aucune ressource extérieure.
 - Données venues du réseau insérées uniquement avec `textContent`, jamais `innerHTML` (vérifié par un test).
+- Dessin de la maison (style « plan ») : seules des images PNG, JPEG ou WebP, reconnues à leur contenu (jamais
+  de SVG), 3 Mio et 16 images au plus ; modifiable par l'administrateur seulement, journalisé ; un invité n'en
+  voit pas les calques ni les valeurs des appareils qui lui sont cachés. `img-src` accepte `blob:` : les images,
+  lues avec le jeton, sont affichées depuis la mémoire de la page.
 
 ## Secrets
 
