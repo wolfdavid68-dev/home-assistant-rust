@@ -8,6 +8,37 @@
 const TOKEN_KEY = "ha_token";
 const $ = (selector) => document.querySelector(selector);
 
+// ---------------------------------------------------------------- Apparence
+// Clair, sombre (ou comme l'appareil), et le style « plan d'architecte », de
+// jour ou de nuit (house.js). Un réglage de cet appareil seulement
+// (localStorage) : la télé du salon peut être en plan, le téléphone en sombre.
+// Appliqué tout de suite, avant le premier affichage de la page.
+const THEME_KEY = "ha-theme";
+const THEMES = ["auto", "light", "dark", "plan", "plan-nuit"];
+const darkQuery = matchMedia("(prefers-color-scheme: dark)");
+
+function themeWanted() {
+  try {
+    const value = localStorage.getItem(THEME_KEY);
+    return THEMES.includes(value) ? value : "auto";
+  } catch {
+    return "auto"; // stockage bloqué (navigation privée…)
+  }
+}
+
+function applyTheme(choice = themeWanted()) {
+  const root = document.documentElement;
+  root.dataset.theme = choice === "auto" ? (darkQuery.matches ? "dark" : "light") : choice;
+  // La barre du navigateur (téléphone) prend la couleur du fond.
+  const color = getComputedStyle(root).getPropertyValue("--bar").trim();
+  if (color) for (const meta of document.querySelectorAll('meta[name="theme-color"]')) meta.content = color;
+}
+
+const isPlan = () => document.documentElement.dataset.theme?.startsWith("plan") === true;
+
+applyTheme();
+darkQuery.addEventListener("change", () => applyTheme());
+
 // ---------------------------------------------------------------- Jeton
 // sessionStorage : le jeton disparaît à la fermeture de l'onglet.
 const token = {
@@ -389,6 +420,8 @@ function renderHome() {
 
   renderPlan();
   renderScenes();
+  // Le dessin de la maison, les repères et le cartouche (house.js).
+  if (typeof renderHouse === "function") renderHouse();
 }
 
 /** Ce qu'on sait d'une pièce : lumières, température, alertes. */
@@ -403,7 +436,11 @@ function roomInfo(area) {
   const open = states.filter((s) => domainOf(s) === "binary_sensor"
     && ["door", "window", "opening"].includes(s.attributes.device_class) && s.state === "on").length;
   const heating = states.some((s) => domainOf(s) === "climate" && s.attributes.hvac_action === "heating");
-  return { count: states.length, lights, temperature, alert, open, heating };
+  const humidity = states
+    .map((s) => (domainOf(s) === "climate" ? s.attributes.current_humidity
+      : s.attributes.device_class === "humidity" ? Number(s.state) : NaN))
+    .find((h) => finite(h));
+  return { count: states.length, lights, temperature, humidity, alert, open, heating };
 }
 
 function renderPlan() {
@@ -434,6 +471,8 @@ function renderPlan() {
         el("span", { text: detail }),
         Number.isFinite(info.temperature) ? el("span", { class: "room-temp", text: `${number.format(info.temperature)}°` }) : el("span")),
     );
+    // L'humidité : affichée par le style « plan » (« 25,1° | 49 % »).
+    if (finite(info.humidity)) room.querySelector(".room-temp")?.append(el("span", { class: "room-hum", text: ` | ${number.format(Math.round(info.humidity))} %` }));
     room.addEventListener("click", () => showRoom(area.name));
     return room;
   });
@@ -2029,6 +2068,9 @@ const AUDIT_LABELS = {
   automation_create: "automatisation créée",
   automation_update: "automatisation modifiée",
   automation_delete: "automatisation supprimée",
+  drawing_set: "dessin de la maison réglé",
+  drawing_image: "image du dessin envoyée",
+  drawing_image_delete: "image du dessin retirée",
 };
 const dateTime = new Intl.DateTimeFormat("fr", { dateStyle: "short", timeStyle: "medium" });
 
@@ -3654,6 +3696,7 @@ async function loadAccount() {
   $("#open-energy").hidden = !account.permissions.history;
   $("#dock-energy").hidden = !account.permissions.history;
   $("#journal").hidden = !account.permissions.audit;
+  $("#open-drawing").hidden = account.permissions.edit_dashboard !== true;
   $(".dock").style.gridTemplateColumns = `repeat(${$(".dock").querySelectorAll(":scope > :not([hidden])").length}, minmax(0, 1fr))`;
   renderAll();
 }

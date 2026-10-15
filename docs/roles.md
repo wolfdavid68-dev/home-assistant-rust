@@ -14,6 +14,7 @@ un ami de passage. Comme dans Home Assistant, chaque compte a maintenant un **r�
 | Historique et journal de bord | ✓ | ✓ | ✗ |
 | Voir les automatisations | ✓ | ✓ (lecture seule) | ✗ |
 | Modifier les automatisations | ✓ | ✗ | ✗ |
+| Changer le dessin de la maison ([style « plan »](plan-architecte.md)) | ✓ | ✗ (le voit) | ✗ (le voit, sans ce qui lui est caché) |
 | Écrire un état à la main (API), journal d'activité | ✓ | ✗ | ✗ |
 
 ## Gérer les comptes

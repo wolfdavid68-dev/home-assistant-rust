@@ -1,7 +1,7 @@
 /* Tableau de bord « Maison » — style « Clair ».
    Un ciel en haut, le plan de la maison, des tuiles qui s'éclairent.
-   Couleurs en jetons : thème clair, et sombre pour le soir (réglage du
-   système). Polices intégrées au serveur : rien n'est chargé d'Internet. */
+   Couleurs en jetons : thème clair, sombre pour le soir, et « plan
+   d'architecte » (en fin de fichier). Polices intégrées au serveur : rien n'est chargé d'Internet. */
 
 @font-face {
   font-family: "Geist";
@@ -74,53 +74,56 @@
   --vig-red: #d6311f;
   --vig-ink: #1d1700;
   --vig-red-ink: #ffffff;
+  /* La barre du navigateur, sur téléphone. */
+  --bar: #d7e0ee;
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0e1420;
-    --sky-1: #1b2742;
-    --sky-2: #131b2d;
-    --card: #172031;
-    --card-2: #202b40;
-    --line: #2a364c;
-    --text: #e8ecf3;
-    --text-2: #cbd3df;
-    --muted: #9ca8ba;
-    --accent: #93a9ff;
-    --accent-ink: #0e1420;
-    --accent-soft: #222f57;
-    --glow: #ffc93d;
-    --glow-ink: #ffe7a8;
-    --glow-soft: #3a2f12;
-    --glow-line: #5c4a1a;
-    --glow-bar: #ffc93d;
-    --heat: #ff8a4c;
-    --heat-ink: #ffb48a;
-    --heat-soft: #3d2216;
-    --ok: #55c993;
-    --ok-soft: #12301f;
-    --alert: #ff6b55;
-    --alert-ink: #ffc2b6;
-    --alert-soft: #3a1712;
-    --alert-stripe: #4a1c15;
-    --shadow: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 8px 24px rgb(0 0 0 / 0.25);
-    --shadow-float: 0 14px 34px rgb(0 0 0 / 0.45);
-    --series-1: #3987e5;
-    --series-2: #d95926;
-    --series-3: #199e70;
-    --series-4: #c98500;
-    --series-5: #d55181;
-    --series-6: #9085e9;
-    --vig-green: #46b864;
-    --vig-yellow: #ecd23a;
-    --vig-orange: #f29a2e;
-    --vig-red: #ff6b55;
-    --vig-ink: #171300;
-    --vig-red-ink: #1f0703;
-    color-scheme: dark;
-  }
+/* Sombre : choisi dans « Mon compte », ou suivi du système (« Automatique »,
+   app.js pose data-theme avant le premier affichage). */
+:root[data-theme="dark"] {
+  --bar: #0e1420;
+  --bg: #0e1420;
+  --sky-1: #1b2742;
+  --sky-2: #131b2d;
+  --card: #172031;
+  --card-2: #202b40;
+  --line: #2a364c;
+  --text: #e8ecf3;
+  --text-2: #cbd3df;
+  --muted: #9ca8ba;
+  --accent: #93a9ff;
+  --accent-ink: #0e1420;
+  --accent-soft: #222f57;
+  --glow: #ffc93d;
+  --glow-ink: #ffe7a8;
+  --glow-soft: #3a2f12;
+  --glow-line: #5c4a1a;
+  --glow-bar: #ffc93d;
+  --heat: #ff8a4c;
+  --heat-ink: #ffb48a;
+  --heat-soft: #3d2216;
+  --ok: #55c993;
+  --ok-soft: #12301f;
+  --alert: #ff6b55;
+  --alert-ink: #ffc2b6;
+  --alert-soft: #3a1712;
+  --alert-stripe: #4a1c15;
+  --shadow: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 8px 24px rgb(0 0 0 / 0.25);
+  --shadow-float: 0 14px 34px rgb(0 0 0 / 0.45);
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-6: #9085e9;
+  --vig-green: #46b864;
+  --vig-yellow: #ecd23a;
+  --vig-orange: #f29a2e;
+  --vig-red: #ff6b55;
+  --vig-ink: #171300;
+  --vig-red-ink: #1f0703;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -1511,4 +1514,391 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
   .canvas-minimap { display: none; }
   .canvas-errors { max-width: calc(100% - 24px); }
   .canvas-tool.primary { padding: 0 0.65rem; }
+}
+
+/* ======================================================================
+   Plan d'architecte (étape 36)
+   Le tableau de bord dessiné comme un plan : papier quadrillé, traits
+   d'encre fins, coins nets, le dessin de la maison au centre, des repères
+   en haut et un cartouche en bas. Deux encres : bleu sur papier (« plan »),
+   ou blanc sur bleu, comme un vrai tirage d'architecte (« plan-nuit »).
+   `[data-theme|="plan"]` vise les deux.
+   ====================================================================== */
+
+/* Ce qui n'existe que dans le style « plan ». */
+.house, .gauges, .title-block, .room-hum { display: none; }
+
+:root[data-theme="plan"] {
+  --bar: #f3f5f9;
+  --bg: #f3f5f9;
+  --sky-1: #f3f5f9;
+  --sky-2: #f3f5f9;
+  --card: #fdfdfe;
+  --card-2: #edf1f8;
+  --line: #c3cde0;
+  --ink: #24418f;
+  --ink-line: #9fb0d3;
+  --grid-minor: rgb(36 65 143 / 0.06);
+  --grid-major: rgb(36 65 143 / 0.12);
+  --text: #15244a;
+  --text-2: #2a3b64;
+  --muted: #54638a;
+  --accent: #24418f;
+  --accent-ink: #ffffff;
+  --accent-soft: #e3e9f7;
+  --glow: #f5d25c;
+  --glow-ink: #3f3108;
+  --glow-soft: #fbf3d2;
+  --glow-line: #e3c76d;
+  --glow-bar: #c99a12;
+  --heat-soft: #fde6da;
+  --shadow: none;
+  --shadow-float: 0 0 0 1.5px var(--ink), 0 22px 48px rgb(36 65 143 / 0.18);
+  --radius: 5px;
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;
+  color-scheme: light;
+}
+
+/* La version « tirage » : encre blanche sur papier bleu, pour le soir. */
+:root[data-theme="plan-nuit"] {
+  --bar: #0f3470;
+  --bg: #0f3470;
+  --sky-1: #0f3470;
+  --sky-2: #0f3470;
+  --card: #133d80;
+  --card-2: #1a498f;
+  --line: #3c64a6;
+  --ink: #e6efff;
+  --ink-line: #6f90c8;
+  --grid-minor: rgb(255 255 255 / 0.06);
+  --grid-major: rgb(255 255 255 / 0.13);
+  --text: #f3f7ff;
+  --text-2: #d4e0f8;
+  --muted: #a9bde3;
+  --accent: #ffffff;
+  --accent-ink: #0f3470;
+  --accent-soft: #24569e;
+  --glow: #ffd75e;
+  --glow-ink: #fff0bf;
+  --glow-soft: #2c4a6e;
+  --glow-line: #c9a94a;
+  --glow-bar: #ffd75e;
+  --heat: #ff9a62;
+  --heat-ink: #ffd2b8;
+  --heat-soft: #4b3a5a;
+  --ok: #7fe0b0;
+  --ok-soft: #1d5a6a;
+  --alert: #ff9580;
+  --alert-ink: #ffe0d8;
+  --alert-soft: #5a2f52;
+  --alert-stripe: #6b3756;
+  --shadow: none;
+  --shadow-float: 0 0 0 1.5px var(--ink), 0 22px 48px rgb(0 0 0 / 0.35);
+  --radius: 5px;
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;
+  color-scheme: dark;
+}
+
+/* Le papier : un quadrillage fin, et un plus marqué tous les 5 carreaux. */
+[data-theme|="plan"] body {
+  background-color: var(--bg);
+  background-image:
+    linear-gradient(var(--grid-major) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-major) 1px, transparent 1px),
+    linear-gradient(var(--grid-minor) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-minor) 1px, transparent 1px);
+  background-size: 120px 120px, 120px 120px, 24px 24px, 24px 24px;
+  background-attachment: fixed;
+}
+[data-theme|="plan"] :is(.hero, .login) { background: none; }
+
+/* L'en-tête : la date en caractères techniques, un double trait dessous. */
+[data-theme|="plan"] .hero { padding-bottom: 1.4rem; }
+[data-theme|="plan"] .hero::after {
+  content: "";
+  display: block;
+  max-width: 1240px;
+  margin: 1.1rem auto 0;
+  height: 4px;
+  border-block: 1px solid var(--ink-line);
+}
+[data-theme|="plan"] .today { font-family: var(--font-mono); font-size: 0.8rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+[data-theme|="plan"] .clock { font-family: var(--font-mono); font-weight: 500; color: var(--ink); text-transform: none; }
+[data-theme|="plan"] .greeting { font-weight: 500; letter-spacing: -0.02em; }
+[data-theme|="plan"] .layout { margin-top: 1.4rem; }
+
+/* Traits d'encre : bordures fines, aucun relief, coins presque nets. */
+[data-theme|="plan"] :is(.tile, .plan-card, .house, .scene, .back, .history-dialog, .login-card, .weather-pill, .round, .action-button, .presets) {
+  border: 1.25px solid var(--ink);
+  box-shadow: none;
+  border-radius: var(--radius);
+}
+[data-theme|="plan"] :is(.ghost, .period, .primary, input:not([type="range"]):not([type="checkbox"]), select, textarea, .badge, .heat-badge) { border-radius: 4px; }
+[data-theme|="plan"] .ghost { border-color: var(--ink-line); }
+[data-theme|="plan"] .ghost:hover { border-color: var(--ink); }
+[data-theme|="plan"] .history-dialog { box-shadow: var(--shadow-float); border-width: 0; }
+[data-theme|="plan"] .tile.alert { box-shadow: inset 0 0 0 2px var(--alert); }
+[data-theme|="plan"] .tile.binary.on { box-shadow: inset 0 0 0 1px var(--ok); }
+
+/* Des repères de coupe aux quatre coins des tuiles, comme sur un tirage. */
+[data-theme|="plan"] .tile::before {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--ink), var(--ink)) top left / 9px 1px no-repeat,
+    linear-gradient(var(--ink), var(--ink)) top left / 1px 9px no-repeat,
+    linear-gradient(var(--ink), var(--ink)) bottom right / 9px 1px no-repeat,
+    linear-gradient(var(--ink), var(--ink)) bottom right / 1px 9px no-repeat;
+  opacity: 0.55;
+}
+
+/* Les icônes dans un cartouche carré, au trait. */
+[data-theme|="plan"] .icon { background: transparent; border: 1px solid var(--ink-line); border-radius: 4px; color: var(--ink); }
+[data-theme|="plan"] svg { stroke-width: 1.6; }
+[data-theme|="plan"] .value { font-weight: 500; letter-spacing: -0.01em; }
+
+/* Une lumière allumée : hachures dorées plutôt qu'un aplat. */
+[data-theme|="plan"] .tile.light.on {
+  background: repeating-linear-gradient(135deg, var(--glow-soft) 0 7px, color-mix(in srgb, var(--glow) 28%, var(--card)) 7px 8px);
+  box-shadow: none;
+  border-color: var(--glow-line);
+}
+[data-theme|="plan"] .tile.light.on input[type="range"] { background: linear-gradient(90deg, var(--glow-bar) 0 var(--fill, 50%), transparent var(--fill, 50%) 100%); box-shadow: inset 0 0 0 1px var(--glow-line); }
+[data-theme|="plan"] .tile.light.on .icon { background: var(--glow); border-color: var(--glow-line); color: #3b2a05; }
+[data-theme|="plan"] :is(.tile.switch.on, .tile.lock.on, .tile.vacuum.on, .tile.binary.on) .icon { border-color: var(--ok); }
+[data-theme|="plan"] .tile.cover.on .icon { background: var(--accent-soft); }
+
+/* Interrupteurs et curseurs : plus fins. */
+[data-theme|="plan"] .knob { border-radius: 4px; background: var(--card-2); box-shadow: inset 0 0 0 1px var(--ink-line); }
+[data-theme|="plan"] .knob::after { border-radius: 2px; box-shadow: 0 0 0 1px var(--ink-line); }
+[data-theme|="plan"] .tile.on .knob { background: var(--accent); box-shadow: none; }
+[data-theme|="plan"] input[type="range"] { height: 22px; border-radius: 3px; box-shadow: inset 0 0 0 1px var(--ink-line); }
+[data-theme|="plan"] .round { background: transparent; border-color: var(--ink-line); }
+[data-theme|="plan"] .round:hover { border-color: var(--ink); }
+
+/* Les titres de section : en capitales techniques, suivis d'un trait. */
+[data-theme|="plan"] .sections section > h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  color: var(--ink);
+}
+[data-theme|="plan"] .sections section > h2::after { content: ""; flex: 1; height: 1px; background: var(--ink-line); }
+
+/* Le plan des pièces : la température et l'humidité, comme sur la maquette. */
+[data-theme|="plan"] .plan-head h2 { font-family: var(--font-mono); font-size: 0.8rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em; color: var(--ink); }
+[data-theme|="plan"] .room { border-radius: 4px; background: var(--card); box-shadow: inset 0 0 0 1px var(--ink-line); }
+[data-theme|="plan"] .room:hover { box-shadow: inset 0 0 0 1.25px var(--ink); }
+[data-theme|="plan"] .room.lit { background: repeating-linear-gradient(135deg, var(--glow-soft) 0 6px, color-mix(in srgb, var(--glow) 30%, var(--card)) 6px 7px); box-shadow: inset 0 0 0 1px var(--glow-line); }
+[data-theme|="plan"] .room-temp { font-family: var(--font-mono); font-weight: 500; font-size: 0.85rem; }
+[data-theme|="plan"] .plan { grid-template-columns: repeat(auto-fill, minmax(126px, 1fr)); }
+[data-theme|="plan"] .room-foot { flex-wrap: wrap; justify-content: flex-end; }
+[data-theme|="plan"] .room-foot > span:first-child:empty { display: none; }
+[data-theme|="plan"] .room-hum { display: inline; color: var(--muted); font-size: 0.78rem; white-space: nowrap; }
+[data-theme|="plan"] .room.big .room-temp { font-size: 1.05rem; }
+[data-theme|="plan"] .legend i { border-radius: 1px; }
+
+[data-theme|="plan"] .scene.on { background: var(--ink); color: var(--bg); }
+[data-theme|="plan"] .dock { border-radius: 6px; box-shadow: 0 0 0 1.25px var(--ink); backdrop-filter: none; background: var(--card); }
+
+/* ---------- Les repères du haut ---------- */
+
+[data-theme|="plan"] .gauges:not([hidden]) { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.9rem; }
+/* Sur téléphone : une seule ligne, qu'on fait défiler du doigt. */
+@media (max-width: 640px) {
+  [data-theme|="plan"] .gauges:not([hidden]) { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-inline: calc(-1 * var(--gutter)) calc(-1 * var(--gutter-r)); padding-inline: var(--gutter) var(--gutter-r); }
+  [data-theme|="plan"] .gauges::-webkit-scrollbar { display: none; }
+}
+.gauge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 34px;
+  padding: 0.25rem 0.8rem 0.25rem 0.55rem;
+  border: 1.25px solid var(--ink);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--muted);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+.gauge svg { width: 17px; height: 17px; color: var(--ink); }
+.gauge strong { font-family: var(--font-mono); font-weight: 500; color: var(--text); font-variant-numeric: tabular-nums; }
+
+/* ---------- Le dessin de la maison ---------- */
+
+[data-theme|="plan"] .house:not([hidden]) { display: grid; }
+.house {
+  position: relative;
+  margin: 0;
+  padding: 10px;
+  gap: 8px;
+  background: var(--card);
+}
+/* Deux repères de coupe, en haut à gauche et en bas à droite. */
+.house::before, .house::after {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+}
+.house::before { top: -7px; left: -7px; border-top: 1px solid var(--ink); border-left: 1px solid var(--ink); }
+.house::after { bottom: -7px; right: -7px; border-bottom: 1px solid var(--ink); border-right: 1px solid var(--ink); }
+
+.house-stage { position: relative; overflow: hidden; border-radius: 3px; user-select: none; container-type: inline-size; }
+.house-stage img { display: block; width: 100%; height: auto; }
+/* Les calques ont la taille du fond : posés exactement dessus. */
+.house-stage .house-layer {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+  transition: opacity 0.6s ease;
+}
+.house-stage .house-layer.off { opacity: 0; }
+/* Le dessin d'exemple en tirage de nuit : l'encre devient blanche. */
+[data-theme="plan-nuit"] .house-stage.default-drawing .house-base { filter: invert(1) hue-rotate(180deg) brightness(1.15); mix-blend-mode: screen; }
+.house-caption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.house-caption b { color: var(--ink); font-weight: 500; }
+.house-caption .ghost { text-transform: none; letter-spacing: 0; font-family: var(--font); }
+
+/* Une valeur posée sur le dessin : un point, un trait, une étiquette. */
+.house-label {
+  all: unset;
+  position: absolute;
+  width: 0;
+  height: 0;
+  cursor: pointer;
+}
+.house-label::before {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: 0 0 0 1.5px var(--ink);
+}
+.house-label::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  bottom: 3px;
+  width: 14px;
+  height: 1px;
+  background: var(--ink);
+  transform: rotate(-45deg);
+  transform-origin: left center;
+}
+.house-tag {
+  position: absolute;
+  left: 13px;
+  bottom: 12px;
+  display: grid;
+  padding: 3px 7px 4px;
+  border: 1.25px solid var(--ink);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--card) 92%, transparent);
+  color: var(--text);
+  white-space: nowrap;
+  line-height: 1.2;
+}
+.house-label-name { font-size: clamp(0.56rem, 1.5cqw, 0.68rem); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.house-tag strong { font-family: var(--font-mono); font-size: clamp(0.68rem, 1.9cqw, 0.85rem); font-weight: 500; font-variant-numeric: tabular-nums; }
+.house-label.left::after { left: auto; right: 3px; transform: rotate(45deg); transform-origin: right center; }
+.house-label.left .house-tag { left: auto; right: 13px; }
+.house-label.below::after { bottom: auto; top: 3px; transform: rotate(45deg); }
+.house-label.below .house-tag { bottom: auto; top: 12px; }
+.house-label.below.left::after { transform: rotate(-45deg); }
+.house-label:focus-visible .house-tag { outline: 3px solid var(--accent); outline-offset: 2px; }
+.house-label:hover .house-tag { background: var(--card); }
+.house-label.placing::before { animation: place 1s ease-in-out infinite; }
+@keyframes place { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 35%, transparent); } }
+
+/* ---------- Le cartouche ---------- */
+
+[data-theme|="plan"] .title-block:not([hidden]) { display: block; grid-column: 1 / -1; }
+.title-block dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  border: 1.5px solid var(--ink);
+  background: var(--card);
+}
+.title-block dl > div { padding: 0.5rem 0.75rem; box-shadow: inset -1px -1px 0 var(--ink-line); min-width: 0; }
+.title-block dl > div.wide { grid-column: span 2; }
+.title-block dt { font-family: var(--font-mono); font-size: 0.66rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.title-block dd { margin: 0.1rem 0 0; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.title-block .wide dd { font-size: 1.05rem; }
+@media (max-width: 520px) { .title-block dl > div.wide { grid-column: auto; } }
+
+/* ---------- Ordinateur et grande télé : le dessin prend de la place ---------- */
+
+@media (min-width: 1000px) {
+  [data-theme|="plan"] .layout { grid-template-columns: minmax(400px, 40%) minmax(0, 1fr); }
+  [data-theme|="plan"] .grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+}
+
+@media (min-width: 1400px) {
+  [data-theme|="plan"] .hero > *, [data-theme|="plan"] .hero::after { max-width: 1760px; }
+  [data-theme|="plan"] .layout { max-width: 1760px; grid-template-columns: minmax(520px, 42%) minmax(0, 1fr); }
+}
+
+/* ---------- Réglage du dessin ---------- */
+
+.theme-option { display: grid; gap: 0.4rem; justify-items: start; padding-top: 0.2rem; }
+.theme-option label { width: 100%; }
+.theme-option .account { font-size: 0.85rem; }
+.drawing-dialog { width: min(860px, calc(100vw - 2rem)); }
+.drawing-preview {
+  display: block;
+  max-width: 640px;
+  margin: 0.8rem auto;
+  border: 1px solid var(--line);
+  background: var(--card);
+}
+.drawing-preview.placing { cursor: crosshair; outline: 3px solid var(--accent); outline-offset: 2px; }
+.drawing-preview .house-label { cursor: inherit; }
+.drawing-form { display: grid; gap: 0.9rem; }
+.drawing-part { margin: 0; padding: 0.7rem 0.9rem 0.9rem; display: grid; gap: 0.6rem; border: 1px solid var(--line); border-radius: 14px; min-width: 0; }
+.drawing-part legend { padding: 0 0.35rem; font-weight: 600; }
+.drawing-part > .auto-meta { margin: 0; }
+.drawing-images { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.35rem; }
+.drawing-images li { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.drawing-images code { font-family: var(--font-mono); }
+.drawing-images .ghost { margin-left: auto; }
+.drawing-row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.drawing-row input[type="text"] { flex: 1 1 12rem; min-width: 0; }
+.drawing-row input[type="file"] { flex: 1 1 14rem; min-width: 0; font-size: 0.85rem; }
+.drawing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 0.6rem; }
+.drawing-grid input, .drawing-grid select { width: 100%; min-width: 0; }
+.drawing-items { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.6rem; }
+.drawing-item { display: grid; gap: 0.5rem; justify-items: stretch; padding: 0.7rem; border-radius: 12px; background: var(--card-2); }
+.drawing-item > button { justify-self: start; }
+.drawing-item-head { display: flex; align-items: center; gap: 0.6rem; }
+.drawing-item-head .ghost { margin-left: auto; }
+.badge.ok { color: var(--ok); background: var(--ok-soft); }
+
+@media (prefers-reduced-motion: reduce) {
+  .house-stage .house-layer { transition: none; }
+  .house-label.placing::before { animation: none; }
 }

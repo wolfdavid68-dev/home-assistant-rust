@@ -68,6 +68,9 @@ pouce. Les boutons que ton rôle (étape 23) ne permet pas sont cachés.
 Le thème suit **le réglage de ton téléphone ou de ton ordinateur** : si tu as activé le mode sombre
 automatique le soir, le tableau de bord passe en sombre en même temps. Rien à configurer.
 
+Depuis l'étape 36, on peut aussi le choisir dans **Mon compte → Apparence** (clair, sombre, ou le
+style [« plan d'architecte »](plan-architecte.md)), pour un appareil seulement.
+
 Techniquement, toutes les couleurs sont des **variables CSS** déclarées une seule fois :
 
 ```css

@@ -19,11 +19,14 @@
 //! | GET | `/api/automations/{id}/versions` | Versions précédentes |
 //! | GET | `/api/automations/{id}/traces` | Dernières exécutions (historique) |
 //! | PUT | `/api/automations/{id}/layout` | Place des blocs dans le schéma |
+//! | GET / PUT | `/api/home/drawing` | Dessin de la maison (style « plan ») : assemblage |
+//! | GET / PUT / DELETE | `/api/home/images/{name}` | Ses images (fond, calques) |
 //! | GET | `/api/websocket` | API WebSocket (authentification dans le 1er message) |
 //! | GET | `/` | Tableau de bord web (page publique ; les données demandent un jeton) |
 
 mod auth;
 mod automations;
+mod drawing;
 mod error;
 mod json;
 mod rest;
@@ -139,14 +142,26 @@ pub fn router(state: Arc<ApiState>) -> Router {
         .route("/api/energy", get(rest::energy))
         .route("/api/audit", get(rest::audit_log))
         .route("/api/areas", get(rest::areas))
+        .route("/api/home/drawing", get(drawing::get).put(drawing::put))
+        .route(
+            "/api/home/images/{name}",
+            get(drawing::get_image)
+                .put(drawing::put_image)
+                .delete(drawing::delete_image)
+                // Une image dépasse les 64 Kio des autres requêtes. (La
+                // limite la plus proche de la route l'emporte.)
+                .layer(DefaultBodyLimit::max(drawing::MAX_IMAGE_SIZE)),
+        )
         .route("/api/services/{domain}/{service}", post(rest::call_service))
         .route("/api/websocket", get(ws::handler))
         // Tableau de bord web.
         .route("/", get(web::index))
         .route("/app.js", get(web::app_js))
         .route("/canvas.js", get(web::canvas_js))
+        .route("/house.js", get(web::house_js))
         .route("/style.css", get(web::style_css))
         .route("/icon.svg", get(web::icon_svg))
+        .route("/house.svg", get(web::house_svg))
         .route("/fonts/geist.woff2", get(web::font_geist))
         .route("/fonts/geist-mono.woff2", get(web::font_geist_mono))
         .route("/fonts/bricolage-grotesque.woff2", get(web::font_bricolage))

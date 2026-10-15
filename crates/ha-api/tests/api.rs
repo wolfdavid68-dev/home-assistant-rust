@@ -103,6 +103,32 @@ impl TestApp {
         (status, json)
     }
 
+    /// Envoie des octets bruts (une image) et renvoie (statut, corps).
+    async fn send_bytes(
+        &self,
+        method: &str,
+        uri: &str,
+        token: &str,
+        body: Vec<u8>,
+    ) -> (StatusCode, Vec<u8>, Option<String>) {
+        let request = Request::builder()
+            .method(method)
+            .uri(uri)
+            .header(header::AUTHORIZATION, format!("Bearer {token}"))
+            .body(Body::from(body))
+            .unwrap();
+        let response = self.router().oneshot(request).await.unwrap();
+        let status = response.status();
+        let content_type = response
+            .headers()
+            .get(header::CONTENT_TYPE)
+            .map(|v| v.to_str().unwrap().to_owned());
+        let bytes = axum::body::to_bytes(response.into_body(), 8 << 20)
+            .await
+            .unwrap();
+        (status, bytes.to_vec(), content_type)
+    }
+
     /// Crée un compte avec ce rôle et renvoie son jeton.
     async fn login_as(&self, username: &str, role: ha_auth::Role) -> String {
         self.state
@@ -162,6 +188,11 @@ async fn every_route_requires_a_token() {
         ("GET", "/api/automations/matin/traces"),
         ("PUT", "/api/automations/matin/layout"),
         ("GET", "/api/energy"),
+        ("GET", "/api/home/drawing"),
+        ("PUT", "/api/home/drawing"),
+        ("GET", "/api/home/images/jour"),
+        ("PUT", "/api/home/images/jour"),
+        ("DELETE", "/api/home/images/jour"),
     ] {
         let (status, _) = app.request(method, uri, None, None).await;
         assert_eq!(status, StatusCode::UNAUTHORIZED, "{method} {uri}");
@@ -481,6 +512,8 @@ async fn dashboard_files_are_served_with_security_headers() {
         ("/", "text/html; charset=utf-8"),
         ("/app.js", "text/javascript; charset=utf-8"),
         ("/canvas.js", "text/javascript; charset=utf-8"),
+        ("/house.js", "text/javascript; charset=utf-8"),
+        ("/house.svg", "image/svg+xml"),
         ("/style.css", "text/css; charset=utf-8"),
         ("/icon.svg", "image/svg+xml"),
         ("/manifest.webmanifest", "application/manifest+json"),
@@ -562,6 +595,7 @@ fn dashboard_never_uses_inner_html() {
     for (name, script) in [
         ("app.js", include_str!("../web/app.js")),
         ("canvas.js", include_str!("../web/canvas.js")),
+        ("house.js", include_str!("../web/house.js")),
     ] {
         dashboard_script_is_safe(name, script);
     }
@@ -1596,4 +1630,143 @@ async fn the_energy_report_is_for_the_family() {
     let guest = app.login_as("visiteur", ha_auth::Role::Guest).await;
     let (status, _) = app.request("GET", "/api/energy", Some(&guest), None).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+/// Une image PNG (seuls les premiers octets comptent pour le serveur).
+fn png(content: &[u8]) -> Vec<u8> {
+    let mut bytes = b"\x89PNG\r\n\x1a\n".to_vec();
+    bytes.extend_from_slice(content);
+    bytes
+}
+
+#[tokio::test]
+async fn the_house_drawing_is_assembled_from_checked_images() {
+    let app = TestApp::new().await;
+    let token = app.login().await;
+
+    // Pas encore de dessin : un assemblage vide, que l'administrateur peut régler.
+    let (status, body) = app
+        .request("GET", "/api/home/drawing", Some(&token), None)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["config"], json!({"layers": [], "labels": []}));
+    assert_eq!(body["editable"], true);
+
+    // Des images : PNG, JPEG ou WebP, reconnus à leur contenu.
+    for name in ["jour", "garage_ouvert"] {
+        let (status, _, _) = app
+            .send_bytes(
+                "PUT",
+                &format!("/api/home/images/{name}"),
+                &token,
+                png(name.as_bytes()),
+            )
+            .await;
+        assert_eq!(status, StatusCode::NO_CONTENT, "{name}");
+    }
+    let (status, bytes, content_type) = app
+        .send_bytes("GET", "/api/home/images/jour", &token, Vec::new())
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(bytes, png(b"jour"));
+    assert_eq!(content_type.as_deref(), Some("image/png"));
+
+    // Un SVG (qui peut contenir du script), un HTML, un mauvais nom, une image trop grosse.
+    for (uri, body) in [
+        ("/api/home/images/piege", b"<svg onload=alert(1)>".to_vec()),
+        (
+            "/api/home/images/page",
+            b"<html><script>alert(1)</script>".to_vec(),
+        ),
+        ("/api/home/images/..%2Fha.key", png(b"x")),
+        ("/api/home/images/Majuscule", png(b"x")),
+        ("/api/home/images/enorme", png(&vec![0; 3 * 1024 * 1024])),
+    ] {
+        let (status, _, _) = app.send_bytes("PUT", uri, &token, body).await;
+        assert!(
+            status == StatusCode::BAD_REQUEST || status == StatusCode::PAYLOAD_TOO_LARGE,
+            "{uri} : {status}"
+        );
+    }
+
+    // L'assemblage : un fond, un calque, une valeur.
+    let drawing = json!({
+        "background": "jour",
+        "layers": [
+            {"image": "garage_ouvert", "entity_id": "cover.garage", "states": ["open", "opening"]},
+            {"image": "jour", "entity_id": "person.alice", "states": ["home"], "when": "night"},
+        ],
+        "labels": [
+            {"entity_id": "sensor.dehors", "x": 90.04, "y": 8, "name": "Dehors"},
+            {"entity_id": "person.alice", "x": 10, "y": 10},
+        ],
+    });
+    let (status, body) = app
+        .request("PUT", "/api/home/drawing", Some(&token), Some(drawing))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["config"]["labels"][0]["x"], 90.0);
+    assert_eq!(body["config"]["layers"][0]["when"], "always");
+    for bad in [
+        json!({"background": "absente"}),
+        json!({"layers": [{"image": "jour", "entity_id": "cover.garage", "states": []}]}),
+        json!({"labels": [{"entity_id": "sensor.a", "x": -1, "y": 0}]}),
+        json!({"script": "alert(1)"}),
+    ] {
+        let (status, body) = app
+            .request("PUT", "/api/home/drawing", Some(&token), Some(bad.clone()))
+            .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{bad} : {body}");
+    }
+
+    // Une image qui sert encore ne se retire pas.
+    let (status, _, _) = app
+        .send_bytes(
+            "DELETE",
+            "/api/home/images/garage_ouvert",
+            &token,
+            Vec::new(),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    // La famille voit le dessin, mais ne le change pas.
+    let family = app.login_as("alice", ha_auth::Role::Family).await;
+    let (status, body) = app
+        .request("GET", "/api/home/drawing", Some(&family), None)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["editable"], false);
+    assert_eq!(body["config"]["background"], "jour");
+    let (status, _) = app
+        .request("PUT", "/api/home/drawing", Some(&family), Some(json!({})))
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, _, _) = app
+        .send_bytes("PUT", "/api/home/images/autre", &family, png(b"x"))
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    // Un invité ne voit ni les calques ni les valeurs des appareils qui lui
+    // sont cachés (où est Alice).
+    let guest = app.login_as("invite", ha_auth::Role::Guest).await;
+    let (_, body) = app
+        .request("GET", "/api/home/drawing", Some(&guest), None)
+        .await;
+    let layers = body["config"]["layers"].as_array().unwrap();
+    assert_eq!(layers.len(), 1);
+    assert_eq!(layers[0]["entity_id"], "cover.garage");
+    assert_eq!(body["config"]["labels"].as_array().unwrap().len(), 1);
+    assert_eq!(body["config"]["labels"][0]["entity_id"], "sensor.dehors");
+
+    // Chaque changement est dans le journal d'audit.
+    let (_, body) = app.request("GET", "/api/audit", Some(&token), None).await;
+    let actions: Vec<&str> = body["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|entry| entry["action"].as_str())
+        .collect();
+    assert!(actions.contains(&"drawing_set"), "{actions:?}");
+    assert!(actions.contains(&"drawing_image"), "{actions:?}");
 }

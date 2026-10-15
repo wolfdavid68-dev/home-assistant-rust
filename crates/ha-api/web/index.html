@@ -14,6 +14,7 @@
        le JavaScript écrit directement dans la page. -->
   <script src="/app.js" defer></script>
   <script src="/canvas.js" defer></script>
+  <script src="/house.js" defer></script>
 </head>
 <body>
   <!-- Écran de connexion -->
@@ -62,13 +63,22 @@
       </div>
       <h1 id="greeting" class="greeting">Maison</h1>
       <p id="summary" class="summary"></p>
+      <!-- Les repères du style « plan » : dehors, dedans, puissance… -->
+      <div id="gauges" class="gauges" aria-label="Repères" hidden></div>
     </header>
     <div class="layout">
       <aside class="overview" aria-label="Vue d'ensemble">
+        <!-- Le dessin de la maison (style « plan », house.js) -->
+        <figure id="house" class="house" hidden>
+          <div id="house-stage" class="house-stage"></div>
+          <figcaption id="house-caption" class="house-caption"></figcaption>
+        </figure>
         <section id="plan" class="plan-card" aria-label="Plan de la maison" hidden></section>
         <nav id="scenes" class="scenes" aria-label="Scènes et scripts" hidden></nav>
       </aside>
       <main id="sections" class="sections" aria-live="polite"></main>
+      <!-- Le cartouche, comme au bas d'un plan d'architecte -->
+      <footer id="title-block" class="title-block" aria-label="Cartouche" hidden></footer>
     </div>
     <p id="empty" class="empty" hidden>
       Aucun appareil pour l'instant. Configure MQTT ou associe ton pont Hue
@@ -87,6 +97,20 @@
         <button id="account-close" class="ghost" type="button">Fermer</button>
       </div>
       <p id="account" class="account"></p>
+      <div class="theme-option">
+        <label>
+          Apparence
+          <select id="theme">
+            <option value="auto">Automatique (clair ou sombre, comme l'appareil)</option>
+            <option value="light">Clair</option>
+            <option value="dark">Sombre</option>
+            <option value="plan">Plan d'architecte</option>
+            <option value="plan-nuit">Plan d'architecte, de nuit (bleu)</option>
+          </select>
+        </label>
+        <p class="account">Sur cet appareil seulement : la télé peut être en plan, le téléphone en sombre.</p>
+        <button id="open-drawing" class="ghost" type="button" hidden>Dessin de la maison…</button>
+      </div>
       <div class="tablet-option">
         <label class="check"><input id="tablet-mode" type="checkbox"> Mode tablette murale</label>
         <p class="account">Sur cet appareil seulement : l'écran reste allumé, en plein écran, et revient à l'accueil après 2 minutes sans contact.</p>
@@ -246,6 +270,24 @@
           <button id="trace-back" class="ghost" type="button">Retour</button>
         </div>
       </section>
+    </dialog>
+    <!-- Le dessin de la maison : images, calques, valeurs (house.js) -->
+    <dialog id="drawing" class="history-dialog drawing-dialog" aria-labelledby="drawing-title">
+      <div class="history-top">
+        <h2 id="drawing-title">Dessin de la maison</h2>
+        <button id="drawing-close" class="ghost" type="button">Fermer</button>
+      </div>
+      <p class="journal-hint">Un fond (de jour, et de nuit si tu veux), des calques transparents de la
+        même taille qui apparaissent selon l'état d'un appareil, et des valeurs posées sur le dessin.
+        Pour tout le monde, sur tous les écrans.</p>
+      <div id="drawing-preview" class="house-stage drawing-preview"></div>
+      <p id="drawing-place-hint" class="notice" hidden>Touche le dessin là où poser la valeur.</p>
+      <div id="drawing-form" class="drawing-form"></div>
+      <p id="drawing-status" class="auto-status" role="status" aria-live="polite"></p>
+      <div class="auto-actions">
+        <button id="drawing-save" class="primary small" type="button">Enregistrer</button>
+        <button id="drawing-cancel" class="ghost" type="button">Annuler</button>
+      </div>
     </dialog>
     <!-- Confirmation d'identité avant une modification -->
     <dialog id="confirm" class="history-dialog confirm-dialog" aria-labelledby="confirm-title">
