@@ -46,6 +46,7 @@ utilisation :
   ha-server inputs check          vérifie le fichier des entrées
   ha-server derived check         vérifie le fichier des assistants calculés
   ha-server energy check          vérifie le fichier du bilan énergétique
+  ha-server vigilance test        vérifie la clé de la vigilance Météo-France
   ha-server audit [nombre]        affiche le journal d'audit
   ha-server audit verify          vérifie que le journal n'a pas été modifié
   ha-server backup now            sauvegarde la base (même serveur en marche)
@@ -1080,6 +1081,44 @@ pub fn check_energy(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
     }
     if let Some(subscription) = config.subscription {
         println!("  abonnement : {subscription} € par mois");
+    }
+    Ok(())
+}
+
+/// `ha-server vigilance test` : interroge Météo-France une fois et affiche
+/// la vigilance du département.
+pub async fn test_vigilance(
+    config: &ha_weather::vigilance::VigilanceConfig,
+) -> Result<(), Box<dyn Error>> {
+    let department = config.department().as_str();
+    let map = ha_weather::vigilance::fetch_once(config).await?;
+    let zone = jiff::tz::TimeZone::system();
+    let local = |time: jiff::Timestamp| time.to_zoned(zone.clone()).strftime("%d/%m à %H:%M");
+    println!("Clé acceptée. Carte publiée le {}.", local(map.updated));
+    let now = jiff::Timestamp::now();
+    let Some(today) = map.at(now) else {
+        println!("La carte ne couvre pas l'heure actuelle (elle sera bientôt republiée).");
+        return Ok(());
+    };
+    let mut periods = vec![("Aujourd'hui", today)];
+    if let Some(tomorrow) = map.after(today) {
+        periods.push(("Demain", tomorrow));
+    }
+    for (label, period) in periods {
+        println!(
+            "{label} ({department}) : vigilance {}",
+            period.level.name().to_lowercase()
+        );
+        for hazard in &period.hazards {
+            if hazard.level > ha_weather::carte::Level::Green {
+                let coast = if hazard.coast { " (littoral)" } else { "" };
+                println!(
+                    "  - {}{coast} : {}",
+                    hazard.phenomenon.name(),
+                    hazard.level.name().to_lowercase()
+                );
+            }
+        }
     }
     Ok(())
 }

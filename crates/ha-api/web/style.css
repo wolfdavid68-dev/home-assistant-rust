@@ -66,6 +66,14 @@
   --series-4: #eda100;
   --series-5: #e87ba4;
   --series-6: #6250d6;
+  /* Vigilance Météo-France : les couleurs officielles, assez sombres ou
+     claires pour que le texte posé dessus reste lisible. */
+  --vig-green: #3fae5a;
+  --vig-yellow: #f5d90a;
+  --vig-orange: #f29111;
+  --vig-red: #d6311f;
+  --vig-ink: #1d1700;
+  --vig-red-ink: #ffffff;
   color-scheme: light;
 }
 
@@ -105,6 +113,12 @@
     --series-4: #c98500;
     --series-5: #d55181;
     --series-6: #9085e9;
+    --vig-green: #46b864;
+    --vig-yellow: #ecd23a;
+    --vig-orange: #f29a2e;
+    --vig-red: #ff6b55;
+    --vig-ink: #171300;
+    --vig-red-ink: #1f0703;
     color-scheme: dark;
   }
 }
@@ -1027,3 +1041,39 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 @media (max-width: 520px) {
   .energy-totals { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ---------------------------------------------------------------- Vigilance */
+.vigilance-badge {
+  display: inline-block;
+  padding: 0.2rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--vig-ink);
+  background: var(--card-2);
+}
+.vigilance-badge.level-green { background: var(--vig-green); }
+.vigilance-badge.level-yellow { background: var(--vig-yellow); }
+.vigilance-badge.level-orange { background: var(--vig-orange); }
+.vigilance-badge.level-red { background: var(--vig-red); color: var(--vig-red-ink); }
+.weather-pill .vigilance-badge { font-size: 0.78rem; padding: 0.1rem 0.55rem; }
+/* Un anneau de la couleur, qui suit les coins arrondis. */
+.tile.vigilance.level-orange { box-shadow: 0 0 0 2px var(--vig-orange), var(--shadow); }
+.tile.vigilance.level-red { box-shadow: 0 0 0 2px var(--vig-red), var(--shadow); }
+.tile.vigilance p { margin: 0.5rem 0 0; }
+.vigilance-list { list-style: none; margin: 0.6rem 0 0; padding: 0; display: grid; gap: 0.35rem; }
+.vigilance-list li { padding-left: 0.9rem; position: relative; color: var(--text-2); }
+.vigilance-list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.45em;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.vigilance-list li.level-yellow::before { background: var(--vig-yellow); outline: 1px solid color-mix(in srgb, var(--vig-ink) 25%, transparent); }
+.vigilance-list li.level-orange::before { background: var(--vig-orange); }
+.vigilance-list li.level-red::before { background: var(--vig-red); }
+.vigilance-tomorrow { margin: 0.6rem 0 0; padding-top: 0.5rem; border-top: 1px solid var(--line); color: var(--text-2); }

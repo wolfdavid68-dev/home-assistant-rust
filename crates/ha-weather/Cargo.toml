@@ -1,6 +1,6 @@
 [package]
 name = "ha-weather"
-description = "Météo locale avec Open-Meteo (sans compte ni clé), entités weather et sensor"
+description = "Météo locale avec Open-Meteo, vigilance Météo-France, entités weather et sensor"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,8 +8,10 @@ publish.workspace = true
 
 [dependencies]
 ha-core = { path = "../ha-core" }
+ha-notices = { path = "../ha-notices" }
 ha-sun = { path = "../ha-sun" }
 ha-tls = { path = "../ha-tls" }
+jiff.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -17,6 +19,7 @@ thiserror.workspace = true
 tokio = { workspace = true, features = ["sync", "rt", "macros", "time"] }
 tracing.workspace = true
 url.workspace = true
+zeroize.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["sync", "rt", "macros", "time", "net", "io-util"] }
