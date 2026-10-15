@@ -467,6 +467,7 @@ function renderPlan() {
     if (info.count >= 4) classes.push("big");
     if (info.alert) classes.push("alert");
     else if (info.lights > 0) classes.push("lit");
+    else if (info.heating) classes.push("heat");
     const room = el(
       "button",
       { type: "button", class: classes.join(" "), "aria-label": [area.name, detail, Number.isFinite(info.temperature) ? `${number.format(info.temperature)} degrés` : ""].filter(Boolean).join(", ") },
@@ -1835,6 +1836,10 @@ Object.assign(ICONS, {
   desk: ["M3 8h18", "M5 8v12", "M19 8v12", "M13 8v6h6", "M15 11h2"],
   washer: ["M5 3h14v18H5z", "M5 7h14", "M12 10a4 4 0 1 0 0 8 4 4 0 1 0 0-8z"],
   tree: ["M12 22v-5", "M12 3l6 8h-3l4 6H5l4-6H6z"],
+  // Les boutons des volets (mise en page « tableau »).
+  arrowUp: ["M12 19V5", "M6 11l6-6 6 6"],
+  arrowDown: ["M12 5v14", "M18 13l-6 6-6-6"],
+  square: ["M8 8h8v8H8z"],
 });
 const BINARY_ICONS = { motion: ICONS.motion, connectivity: ICONS.globe };
 

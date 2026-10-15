@@ -233,8 +233,8 @@ function houseCaption() {
 
 // ---------------------------------------------------------------- Repères
 
-function gauge(icon, label, value) {
-  return el("span", { class: "gauge" }, svgIcon(icon), el("span", { text: label }), el("strong", { text: value }));
+function gauge(icon, label, value, kind) {
+  return el("span", { class: `gauge g-${kind}`, title: label }, svgIcon(icon), el("span", { text: label }), el("strong", { text: value }));
 }
 
 function renderGauges() {
@@ -244,21 +244,21 @@ function renderGauges() {
   const outside = entities.get("sensor.meteo_temperature");
   const outsideTemp = finite(weather?.attributes.temperature) ? weather.attributes.temperature
     : outside && Number.isFinite(Number(outside.state)) ? Number(outside.state) : NaN;
-  if (Number.isFinite(outsideTemp)) items.push(gauge(ICONS.temperature, "Dehors", `${number.format(outsideTemp)} °C`));
+  if (Number.isFinite(outsideTemp)) items.push(gauge(ICONS.temperature, "Dehors", `${number.format(outsideTemp)} °C`, "outside"));
   const temps = areas.map(roomInfo).map((info) => info.temperature).filter((t) => Number.isFinite(t));
   if (temps.length > 0) {
-    items.push(gauge(ICONS.home, "Dedans", `${number.format(temps.reduce((a, b) => a + b, 0) / temps.length)} °C`));
+    items.push(gauge(ICONS.home, "Dedans", `${number.format(temps.reduce((a, b) => a + b, 0) / temps.length)} °C`, "inside"));
   }
   const power = entities.get("sensor.linky_puissance");
   if (power && Number.isFinite(Number(power.state))) {
-    items.push(gauge(ICONS.flame, "Puissance", `${number.format(Number(power.state))} ${power.attributes.unit_of_measurement ?? "VA"}`));
+    items.push(gauge(ICONS.flame, "Puissance", `${number.format(Number(power.state))} ${power.attributes.unit_of_measurement ?? "VA"}`, "power"));
   }
   const lights = [...entities.values()].filter((s) => domainOf(s) === "light" && s.state === "on").length;
-  items.push(gauge(ICONS.bulb, "Lumières", lights === 0 ? "éteintes" : `${lights} allumée${lights > 1 ? "s" : ""}`));
+  items.push(gauge(ICONS.bulb, "Lumières", lights === 0 ? "éteintes" : `${lights} allumée${lights > 1 ? "s" : ""}`, "lights"));
   const zone = entities.get("zone.home");
   if (Array.isArray(zone?.attributes.persons)) {
     const count = zone.attributes.persons.length;
-    items.push(gauge(ICONS.person, "Présents", String(count)));
+    items.push(gauge(ICONS.person, "Présents", String(count), "people"));
   }
   box.hidden = items.length === 0;
   box.replaceChildren(...items);
@@ -318,7 +318,7 @@ function actionChip(state) {
   const status = domain === "cover" ? coverText(state) : statusText(state);
   const active = ["on", "open", "opening", "unlocked"].includes(state.state);
   const command = actionCommand(state);
-  const chip = el("button", { type: "button", class: `house-action${active ? " on" : ""}` },
+  const chip = el("button", { type: "button", class: `house-action d-${garage ? "garage" : domain}${active ? " on" : ""}` },
     el("span", { class: "house-action-icon" }, svgIcon(icon)),
     el("span", { class: "house-action-text" }, el("b", { text: nameOf(state) }), el("span", { text: status })));
   chip.setAttribute("aria-label", `${nameOf(state)} : ${status}`);
@@ -354,7 +354,7 @@ function coverTitle(state) {
 }
 
 function coverRow(state) {
-  const buttons = [["open_cover", ICONS.up, "Ouvrir"], ["stop_cover", ICONS.stop, "Arrêter"], ["close_cover", ICONS.down, "Fermer"]]
+  const buttons = [["open_cover", ICONS.arrowUp, "Ouvrir"], ["stop_cover", ICONS.square, "Arrêter"], ["close_cover", ICONS.arrowDown, "Fermer"]]
     .map(([service, icon, label]) => {
       const button = el("button", { type: "button", class: "round", "aria-label": `${label} ${coverTitle(state)}` }, svgIcon(icon));
       button.addEventListener("click", () => {

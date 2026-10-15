@@ -18,15 +18,27 @@ Reprendre la mise en page des tableaux de bord isométriques de Home Assistant (
 - **puis les volets**, sur toute la largeur, trois ou quatre par ligne, avec ▲ ■ ▼, et tous les
   autres appareils comme avant.
 
-Les icônes sont rondes et s'allument en couleur : orange pour une lumière allumée ou une porte
-ouverte, rouge pour une alerte.
+Les icônes sont rondes et s'allument en couleur quand l'appareil est actif.
 
 ## Choisir l'apparence
 
-**Mon compte → Apparence → Maquette** : un fond presque noir, avec une lueur magenta en haut à
-droite, violette en haut et bleu-vert en bas ; des panneaux plus sombres que le fond, des icônes
-rondes qui s'allument en orange, comme sur les tableaux de domo-blog. C'est fait pour une maquette 3D sur fond sombre : l'article de domo-blog
-demande à l'IA un fond `#1C1C1C`.
+**Mon compte → Apparence → Maquette** : le style des tableaux de domo-blog, qui est celui de Home
+Assistant (Material) posé sur un fond dégradé.
+
+- Une **barre noire** en haut, avec l'onglet « Maison » souligné, et un **rail noir** à gauche, dont
+  l'élément actif est teinté de bleu.
+- Un fond **bleu-vert** en haut à gauche, **violet** en bas, **cramoisi** à droite.
+- Des **tuiles en voile noir** translucide, sans bordure : le nom en gras, l'état en gris dessous.
+- Des **icônes grises au repos**, qui prennent leur couleur dans un rond teinté quand l'appareil
+  est actif : ambre pour une lumière, orange pour le chauffage, rouge pour une alerte ou une porte
+  de garage ouverte.
+- Des pastilles en haut du dessin avec une **icône de couleur** chacune.
+- Des volets avec une icône violette (bleu-vert quand ils sont ouverts) et des **boutons carrés**
+  ↑ ■ ↓.
+- Les personnes avec leur initiale et un **badge vert** quand elles sont à la maison.
+
+C'est fait pour une maquette 3D sur fond sombre : l'article de domo-blog demande à l'IA un fond
+`#1C1C1C`.
 
 Les deux styles « plan d'architecte » prennent aussi cette mise en page. Clair et sombre gardent
 la mise en page habituelle.
