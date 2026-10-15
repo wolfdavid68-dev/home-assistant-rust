@@ -13,7 +13,7 @@ use tokio::task::JoinHandle;
 use tokio::time::{Instant, MissedTickBehavior};
 use tracing::{debug, info, warn};
 
-use crate::config::{Action, Automation, Condition, RunMode};
+use crate::config::{Action, Automation, Condition, MAX_REPEAT, RepeatUntil, RunMode, Trigger};
 use crate::evaluator::{Checker, Evaluator, Fired};
 use crate::scripts::{Scene, Script};
 use ha_sun::Location;
@@ -517,6 +517,64 @@ pub(crate) enum Flow {
     Stop,
 }
 
+/// Attend qu'un des déclencheurs se produise. Renvoie `false` si l'attente
+/// a dépassé `timeout`.
+///
+/// On réutilise l'évaluateur des automatisations, avec une automatisation
+/// « fantôme » qui n'a que ces déclencheurs : `for:`, `numeric_state`,
+/// `time`… marchent exactement comme dans les déclencheurs habituels.
+async fn wait_for_trigger(
+    context: &Context,
+    triggers: &[Trigger],
+    timeout: Option<Duration>,
+) -> bool {
+    let mut events = context.core.bus.subscribe();
+    let mut evaluator = Evaluator::new(vec![Automation {
+        id: "attente".into(),
+        alias: context.alias.to_string(),
+        triggers: triggers.to_vec(),
+        trigger_ids: Vec::new(),
+        conditions: Vec::new(),
+        actions: Vec::new(),
+        mode: RunMode::Single,
+        max: 1,
+    }]);
+    let deadline = timeout.map(|timeout| Instant::now() + timeout);
+    let mut ticker = tokio::time::interval(Duration::from_secs(1));
+    ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    let mut previous = local_now();
+    loop {
+        let fired = tokio::select! {
+            () = async {
+                match deadline {
+                    Some(deadline) => tokio::time::sleep_until(deadline).await,
+                    None => std::future::pending().await,
+                }
+            } => return false,
+            received = events.recv() => match received {
+                Ok(event) => match event.as_ref() {
+                    Event::StateChanged { entity_id, old_state, new_state } => evaluator
+                        .fire_on_state_changed(entity_id, old_state.as_ref(), new_state.as_ref(), Instant::now()),
+                    Event::Fired { event_type, data } => evaluator.fire_on_event(event_type, data),
+                    Event::CallService { .. } => Vec::new(),
+                },
+                Err(RecvError::Lagged(_)) => Vec::new(),
+                // Le noyau s'arrête : l'attente ne finira jamais.
+                Err(RecvError::Closed) => return false,
+            },
+            _ = ticker.tick() => {
+                let now = local_now();
+                let fired = evaluator.fire_on_tick(previous, now, Instant::now(), &context.core.states);
+                previous = now;
+                fired
+            }
+        };
+        if !fired.is_empty() {
+            return true;
+        }
+    }
+}
+
 /// Exécute les actions l'une après l'autre.
 ///
 /// Concept Rust : une fonction `async` qui s'appelle elle-même (pour `if` et
@@ -584,6 +642,46 @@ pub(crate) fn run_actions<'a>(
                         .find(|(conditions, _)| passes(conditions))
                         .map_or(default.as_slice(), |(_, actions)| actions.as_slice());
                     run_actions(context, branch).await
+                }
+                Action::Repeat { until, actions } => {
+                    let mut flow = Flow::Continue;
+                    for round in 1..=MAX_REPEAT {
+                        let go_on = match until {
+                            RepeatUntil::Count(count) => round <= *count,
+                            RepeatUntil::While(conditions) => passes(conditions),
+                            RepeatUntil::Until(_) => true,
+                        };
+                        if !go_on {
+                            break;
+                        }
+                        flow = run_actions(context, actions).await;
+                        if flow == Flow::Stop {
+                            break;
+                        }
+                        if let RepeatUntil::Until(conditions) = until
+                            && passes(conditions)
+                        {
+                            break;
+                        }
+                        if round == MAX_REPEAT {
+                            warn!("« {alias} » : répétition arrêtée après {MAX_REPEAT} tours");
+                        }
+                        // Laisse les autres tâches avancer entre deux tours.
+                        tokio::task::yield_now().await;
+                    }
+                    flow
+                }
+                Action::WaitForTrigger {
+                    triggers,
+                    timeout,
+                    continue_on_timeout,
+                } => {
+                    if wait_for_trigger(context, triggers, *timeout).await || *continue_on_timeout {
+                        Flow::Continue
+                    } else {
+                        debug!("« {alias} » : attente dépassée, on s'arrête là");
+                        Flow::Stop
+                    }
                 }
             };
             if flow == Flow::Stop {

@@ -1195,7 +1195,11 @@ const TRIGGER_KINDS = {
   time: ["À une heure précise", () => ({ trigger: "time", at: "07:30" })],
   sun: ["Lever ou coucher du soleil", () => ({ trigger: "sun", event: "sunset" })],
   event: ["Un événement (minuteur fini…)", () => ({ trigger: "event", event_type: "timer.finished", event_data: {} })],
+  time_pattern: ["Régulièrement (toutes les N minutes)", () => ({ trigger: "time_pattern", minutes: "/15" })],
 };
+// Dans une attente, le soleil n'est pas possible (le serveur le refuse).
+const WAIT_TRIGGER_KINDS = Object.fromEntries(Object.entries(TRIGGER_KINDS).filter(([kind]) => kind !== "sun"));
+const REPEAT_MODES = [["count", "Un nombre de fois"], ["while", "Tant que… (vérifié avant)"], ["until", "Jusqu'à ce que… (vérifié après)"]];
 const CONDITION_KINDS = {
   state: ["Un appareil est dans un état", () => ({ condition: "state", entity_id: "", state: "on" })],
   numeric_state: ["Une valeur est au-dessus / au-dessous", () => ({ condition: "numeric_state", entity_id: "", above: 20 })],
@@ -1212,6 +1216,8 @@ const ACTION_KINDS = {
   if: ["Si… alors… sinon", () => ({ if: [], then: [] })],
   condition: ["Continuer seulement si…", () => ({ condition: "state", entity_id: "", state: "on" })],
   choose: ["Selon le cas (choose)", () => ({ choose: [] })],
+  repeat: ["Répéter", () => ({ repeat: { count: 3, sequence: [] } })],
+  wait_for_trigger: ["Attendre un événement", () => ({ wait_for_trigger: [{ trigger: "state", entity_id: "" }], timeout: "5min" })],
 };
 const SERVICES = {
   light: [["turn_on", "Allumer"], ["turn_off", "Éteindre"], ["toggle", "Inverser"]],
@@ -1335,6 +1341,10 @@ function describeTrigger(t) {
       return `${offsetText(t.offset)}${sunLabel(t.event)}`;
     case "event":
       return `événement ${t.event_type}${t.event_data?.entity_id ? ` de ${entityNames(t.event_data.entity_id)}` : ""}`;
+    case "time_pattern": {
+      const step = typeof t.minutes === "string" && /^\/\d+$/.test(t.minutes) && t.hours === undefined ? t.minutes.slice(1) : null;
+      return step ? `toutes les ${step} minutes` : `motif horaire ${t.hours ?? "*"} h ${t.minutes ?? "0"} min`;
+    }
     default:
       return String(t.trigger);
   }
@@ -1380,6 +1390,18 @@ function describeAction(a) {
     }
     case "choose":
       return `selon le cas (${(a.choose ?? []).length} option(s))`;
+    case "repeat": {
+      const r = a.repeat ?? {};
+      const how = r.count !== undefined ? `${r.count} fois`
+        : r.while ? `tant que ${(r.while ?? []).map(describeCondition).join(" et ")}`
+        : `jusqu'à ce que ${(r.until ?? []).map(describeCondition).join(" et ")}`;
+      return `répéter ${how} : ${actions(r.sequence)}`;
+    }
+    case "wait_for_trigger": {
+      const what = (Array.isArray(a.wait_for_trigger) ? a.wait_for_trigger : []).map(describeTrigger).join(" ou ");
+      const limit = a.timeout ? ` (au plus ${a.timeout}${a.continue_on_timeout === false ? ", sinon on s'arrête" : ""})` : "";
+      return `attendre : ${what}${limit}`;
+    }
   }
   const [domain, service] = String(a.action).split(".");
   const label = (lookup(SERVICES, domain) ?? []).find(([key]) => key === service)?.[1];
@@ -1558,7 +1580,7 @@ function itemsBlock(title, hint, config, key, kinds, tag, fields) {
       scheduleCheck();
     });
     const head = el("div", { class: "auto-item-head" }, el("strong", { text: label }));
-    if (["actions", "then", "else"].includes(key) && index > 0) {
+    if (["actions", "then", "else", "sequence"].includes(key) && index > 0) {
       const up = el("button", { type: "button", class: "ghost small", text: "↑", "aria-label": "Monter" });
       up.addEventListener("click", () => {
         [items[index - 1], items[index]] = [items[index], items[index - 1]];
@@ -1604,7 +1626,7 @@ function itemsBlock(title, hint, config, key, kinds, tag, fields) {
 
 /** La sorte d'une action, d'après sa clé. */
 function actionKind(action) {
-  for (const key of ["delay", "if", "choose", "condition"]) {
+  for (const key of ["delay", "if", "choose", "repeat", "wait_for_trigger", "condition"]) {
     if (action[key] !== undefined) return key;
   }
   return "service";
@@ -1629,6 +1651,12 @@ function triggerKindFields(t) {
       return [timeField("Heure", t, "at")];
     case "sun":
       return [selectField("Événement", t, "event", SUN_EVENTS), offsetField(t, "offset")];
+    case "time_pattern":
+      return [
+        textField("Heures (facultatif)", t, "hours", { placeholder: "* , /2 ou 7" }),
+        textField("Minutes", t, "minutes", { placeholder: "/15 ou 30" }),
+        textField("Seconde (facultatif)", t, "seconds", { placeholder: "0" }),
+      ];
     case "event": {
       t.event_data ??= {};
       const entity = entityField(t.event_data, "entity_id");
@@ -1692,6 +1720,30 @@ function actionFields(a, refresh) {
       ];
     case "choose":
       return [el("p", { class: "journal-hint", text: `Bloc « selon le cas » (${(a.choose ?? []).length} option(s)) : il se modifie dans l'onglet YAML.` })];
+    case "repeat": {
+      a.repeat ??= { count: 3, sequence: [] };
+      const r = a.repeat;
+      r.sequence ??= [];
+      const mode = REPEAT_MODES.find(([key]) => r[key] !== undefined)?.[0] ?? "count";
+      // Changer de sorte de répétition : on garde les actions, on remplace le reste.
+      const choice = { mode };
+      const kind = selectField("Combien de fois", choice, "mode", REPEAT_MODES, false, () => {
+        for (const [key] of REPEAT_MODES) delete r[key];
+        r[choice.mode] = choice.mode === "count" ? 3 : [];
+        refresh();
+      });
+      const how = mode === "count"
+        ? numberField(`Nombre de fois (1 à 100)`, r, "count")
+        : nested(itemsBlock(mode === "while" ? "Tant que…" : "Jusqu'à ce que…", "Toutes doivent être vraies.", r, mode, CONDITION_KINDS, "condition", conditionFields));
+      return [kind, how, nested(itemsBlock("Actions à répéter", "Dans l'ordre, à chaque tour.", r, "sequence", ACTION_KINDS, null, actionFields))];
+    }
+    case "wait_for_trigger":
+      a.wait_for_trigger ??= [];
+      return [
+        nested(itemsBlock("Attendre que…", "L'un d'eux suffit.", a, "wait_for_trigger", WAIT_TRIGGER_KINDS, "trigger", triggerKindFields)),
+        durationField("Au plus (facultatif)", a, "timeout", true),
+        selectField("Si l'attente est dépassée", a, "continue_on_timeout", [[true, "continuer quand même"], [false, "s'arrêter là"]], true),
+      ];
   }
   a.target ??= { entity_id: "" };
   const entity = entityField(a.target, "entity_id", () => {

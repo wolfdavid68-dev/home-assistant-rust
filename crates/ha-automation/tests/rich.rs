@@ -127,7 +127,7 @@ fn mistakes_in_rich_automations_are_explained() {
     let base = "- id: a\n  triggers: [{trigger: time, at: '12:00'}]\n";
     let cases = [
         // Action inconnue : le message dit quoi écrire.
-        ("  actions: [{repeat: 3}]", "action inconnue"),
+        ("  actions: [{sauter: 3}]", "action inconnue"),
         // Faute de frappe dans un `if`.
         (
             "  actions: [{if: [{condition: state, entity_id: a.b, state: x}], than: []}]",

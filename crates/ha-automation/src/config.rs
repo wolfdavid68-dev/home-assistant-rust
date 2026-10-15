@@ -207,6 +207,18 @@ enum TriggerConfig {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         id: Option<String>,
     },
+    /// Selon un motif horaire : `minutes: "/15"` (toutes les 15 minutes),
+    /// `hours: 7` (chaque jour à 7 h 00)…
+    TimePattern {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        hours: Option<Text>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        minutes: Option<Text>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        seconds: Option<Text>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        id: Option<String>,
+    },
     /// Un événement nommé : `timer.finished`, par exemple.
     Event {
         event_type: String,
@@ -272,6 +284,38 @@ pub(crate) enum ActionConfig {
     Choose(ChooseActionConfig),
     /// « Continuer seulement si… » : arrête l'automatisation si c'est faux.
     Condition(ConditionConfig),
+    Repeat(RepeatActionConfig),
+    WaitForTrigger(WaitActionConfig),
+}
+
+/// `repeat:` avec `count`, `while` ou `until`, et `sequence`.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct RepeatActionConfig {
+    repeat: RepeatConfig,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct RepeatConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    count: Option<u32>,
+    #[serde(default, rename = "while", skip_serializing_if = "Option::is_none")]
+    while_: Option<Vec<ConditionConfig>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    until: Option<Vec<ConditionConfig>>,
+    sequence: Vec<ActionConfig>,
+}
+
+/// `wait_for_trigger:` (déclencheurs), `timeout:` et `continue_on_timeout:`.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct WaitActionConfig {
+    wait_for_trigger: Vec<TriggerConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    timeout: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    continue_on_timeout: Option<bool>,
 }
 
 impl<'de> Deserialize<'de> for ActionConfig {
@@ -287,11 +331,16 @@ impl<'de> Deserialize<'de> for ActionConfig {
             serde_json::from_value(value).map(Self::If)
         } else if has("choose") {
             serde_json::from_value(value).map(Self::Choose)
+        } else if has("repeat") {
+            serde_json::from_value(value).map(Self::Repeat)
+        } else if has("wait_for_trigger") {
+            serde_json::from_value(value).map(Self::WaitForTrigger)
         } else if has("condition") {
             serde_json::from_value(value).map(Self::Condition)
         } else {
             return Err(D::Error::custom(
-                "action inconnue : il faut « action », « delay », « if », « choose » ou « condition »",
+                "action inconnue : il faut « action », « delay », « if », « choose », « repeat », \
+                 « wait_for_trigger » ou « condition »",
             ));
         };
         result.map_err(D::Error::custom)
@@ -397,6 +446,34 @@ pub enum Trigger {
         event_type: String,
         event_data: Attributes,
     },
+    /// Chaque fois que l'heure correspond au motif, à la seconde `second`.
+    TimePattern {
+        hours: Pattern,
+        minutes: Pattern,
+        second: i8,
+    },
+}
+
+/// Un morceau de motif horaire.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Pattern {
+    /// `*` : toutes les valeurs.
+    Any,
+    /// `/15` : 0, 15, 30, 45.
+    Every(i8),
+    /// `7` : exactement 7.
+    At(i8),
+}
+
+impl Pattern {
+    #[must_use]
+    pub fn matches(self, value: i8) -> bool {
+        match self {
+            Self::Any => true,
+            Self::Every(step) => value % step == 0,
+            Self::At(at) => value == at,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -449,7 +526,34 @@ pub enum Action {
     },
     /// Arrête l'exécution si la condition est fausse.
     Condition(Condition),
+    /// Répète des actions.
+    Repeat {
+        until: RepeatUntil,
+        actions: Vec<Action>,
+    },
+    /// Attend qu'un des déclencheurs se produise (au plus `timeout`). Après
+    /// l'attente dépassée : on continue, ou on s'arrête là.
+    WaitForTrigger {
+        triggers: Vec<Trigger>,
+        timeout: Option<Duration>,
+        continue_on_timeout: bool,
+    },
 }
+
+/// Combien de fois répéter.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RepeatUntil {
+    /// Un nombre de fois.
+    Count(u32),
+    /// Tant que les conditions sont vraies (vérifiées avant chaque tour).
+    While(Vec<Condition>),
+    /// Jusqu'à ce que les conditions soient vraies (vérifiées après chaque tour).
+    Until(Vec<Condition>),
+}
+
+/// Tours d'une répétition, au plus (aussi pour `while` et `until`, qui
+/// pourraient sinon tourner sans fin).
+pub const MAX_REPEAT: u32 = 100;
 
 /// Lit et vérifie le contenu d'un fichier `automations.yaml`. Les
 /// automatisations désactivées sont vérifiées, mais pas renvoyées.
@@ -663,6 +767,7 @@ fn check_trigger(config: TriggerConfig) -> Result<(Trigger, Option<String>), Str
         | TriggerConfig::NumericState { id, .. }
         | TriggerConfig::Time { id, .. }
         | TriggerConfig::Sun { id, .. }
+        | TriggerConfig::TimePattern { id, .. }
         | TriggerConfig::Event { id, .. } => id.clone(),
     };
     let trigger = match config {
@@ -706,6 +811,12 @@ fn check_trigger(config: TriggerConfig) -> Result<(Trigger, Option<String>), Str
                 .transpose()?
                 .unwrap_or_default(),
         },
+        TriggerConfig::TimePattern {
+            hours,
+            minutes,
+            seconds,
+            ..
+        } => check_time_pattern(hours, minutes, seconds)?,
         TriggerConfig::Event {
             event_type,
             event_data,
@@ -726,6 +837,67 @@ fn check_trigger(config: TriggerConfig) -> Result<(Trigger, Option<String>), Str
         }
     };
     Ok((trigger, id))
+}
+
+/// Un motif horaire, comme dans Home Assistant : les morceaux non indiqués
+/// **plus petits** que le plus petit indiqué valent 0, les **plus grands**
+/// valent `*`. `minutes: "/15"` : toutes les heures, aux minutes 0, 15, 30
+/// et 45, à la seconde 0.
+fn check_time_pattern(
+    hours: Option<Text>,
+    minutes: Option<Text>,
+    seconds: Option<Text>,
+) -> Result<Trigger, String> {
+    let given = [hours.is_some(), minutes.is_some(), seconds.is_some()];
+    let Some(smallest) = given.iter().rposition(|&g| g) else {
+        return Err("time_pattern : indique hours, minutes ou seconds".into());
+    };
+    let part = |value: Option<Text>, position: usize, max: i8, name: &str| match value {
+        Some(text) => parse_pattern(&text.0, max).ok_or_else(|| {
+            format!(
+                "time_pattern : {name} {:?} invalide (exemples : 7, \"/15\", \"*\")",
+                text.0
+            )
+        }),
+        None if position > smallest => Ok(Pattern::At(0)),
+        None => Ok(Pattern::Any),
+    };
+    let hours = part(hours, 0, 23, "hours")?;
+    let minutes = part(minutes, 1, 59, "minutes")?;
+    // Au plus une fois par minute : la protection contre les boucles arrête
+    // une automatisation lancée plus de 10 fois par minute.
+    let Pattern::At(second) = part(seconds, 2, 59, "seconds")? else {
+        return Err(
+            "time_pattern : seconds doit être une valeur fixe (0 à 59) : \
+                    une automatisation se lance au plus une fois par minute"
+                .into(),
+        );
+    };
+    Ok(Trigger::TimePattern {
+        hours,
+        minutes,
+        second,
+    })
+}
+
+fn parse_pattern(text: &str, max: i8) -> Option<Pattern> {
+    let text = text.trim();
+    if text == "*" {
+        return Some(Pattern::Any);
+    }
+    let (every, number) = match text.strip_prefix('/') {
+        Some(rest) => (true, rest),
+        None => (false, text),
+    };
+    if number.is_empty() || number.len() > 2 || !number.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let value: i8 = number.parse().ok()?;
+    match every {
+        true if (1..=max).contains(&value) => Some(Pattern::Every(value)),
+        false if (0..=max).contains(&value) => Some(Pattern::At(value)),
+        _ => None,
+    }
 }
 
 fn parse_sun_event(value: &str) -> Result<SunEvent, String> {
@@ -788,6 +960,12 @@ impl Trigger {
             }
             .to_owned(),
             Self::Event { event_type, .. } => format!("événement {event_type}"),
+            Self::TimePattern { hours, minutes, .. } => match (hours, minutes) {
+                (Pattern::Any, Pattern::Every(step)) => format!("toutes les {step} minutes"),
+                (Pattern::Every(step), Pattern::At(0)) => format!("toutes les {step} heures"),
+                (Pattern::Any, Pattern::At(0)) => "toutes les heures".to_owned(),
+                _ => "motif horaire".to_owned(),
+            },
         }
     }
 }
@@ -847,7 +1025,14 @@ impl Action {
                     conditions.iter().any(Condition::uses_sun) || actions.iter().any(Self::uses_sun)
                 }) || default.iter().any(Self::uses_sun)
             }
-            Self::Service { .. } | Self::Delay(_) => false,
+            Self::Repeat { until, actions } => {
+                let conditions = match until {
+                    RepeatUntil::Count(_) => &[][..],
+                    RepeatUntil::While(list) | RepeatUntil::Until(list) => list,
+                };
+                conditions.iter().any(Condition::uses_sun) || actions.iter().any(Self::uses_sun)
+            }
+            Self::Service { .. } | Self::Delay(_) | Self::WaitForTrigger { .. } => false,
         }
     }
 
@@ -855,6 +1040,25 @@ impl Action {
         match self {
             Self::Service { entity_ids, .. } => ids.extend(entity_ids),
             Self::Delay(_) => {}
+            Self::WaitForTrigger { triggers, .. } => {
+                for trigger in triggers {
+                    if let Trigger::State { entity_ids, .. }
+                    | Trigger::NumericState { entity_ids, .. } = trigger
+                    {
+                        ids.extend(entity_ids);
+                    }
+                }
+            }
+            Self::Repeat { until, actions } => {
+                if let RepeatUntil::While(list) | RepeatUntil::Until(list) = until {
+                    for condition in list {
+                        condition.collect_entities(ids);
+                    }
+                }
+                for action in actions {
+                    action.collect_entities(ids);
+                }
+            }
             Self::Condition(condition) => condition.collect_entities(ids),
             Self::If {
                 conditions,
@@ -1060,6 +1264,47 @@ fn check_action_in(
             Ok(Action::Choose {
                 options,
                 default: actions(config.default.unwrap_or_default(), budget)?,
+            })
+        }
+        ActionConfig::Repeat(RepeatActionConfig { repeat }) => {
+            if repeat.sequence.is_empty() {
+                return Err("repeat : il faut au moins une action dans sequence".into());
+            }
+            let until = match (repeat.count, repeat.while_, repeat.until) {
+                (Some(count), None, None) if (1..=MAX_REPEAT).contains(&count) => {
+                    RepeatUntil::Count(count)
+                }
+                (Some(_), None, None) => {
+                    return Err(format!("repeat : count entre 1 et {MAX_REPEAT}"));
+                }
+                (None, Some(list), None) => RepeatUntil::While(conditions(list, budget)?),
+                (None, None, Some(list)) => RepeatUntil::Until(conditions(list, budget)?),
+                _ => return Err("repeat : il faut count, while ou until (un seul)".into()),
+            };
+            Ok(Action::Repeat {
+                until,
+                actions: actions(repeat.sequence, budget)?,
+            })
+        }
+        ActionConfig::WaitForTrigger(wait) => {
+            if wait.wait_for_trigger.is_empty() || wait.wait_for_trigger.len() > MAX_ITEMS {
+                return Err(format!("wait_for_trigger : 1 à {MAX_ITEMS} déclencheurs"));
+            }
+            let mut triggers = Vec::with_capacity(wait.wait_for_trigger.len());
+            for config in wait.wait_for_trigger {
+                budget.take(depth + 1)?;
+                let (trigger, _) = check_trigger(config)?;
+                if matches!(trigger, Trigger::Sun { .. }) {
+                    return Err("wait_for_trigger : le soleil n'est pas possible ici \
+                         (utilise une condition sun)"
+                        .into());
+                }
+                triggers.push(trigger);
+            }
+            Ok(Action::WaitForTrigger {
+                triggers,
+                timeout: wait.timeout.as_deref().map(parse_duration).transpose()?,
+                continue_on_timeout: wait.continue_on_timeout.unwrap_or(true),
             })
         }
         ActionConfig::Delay(delay) => Ok(Action::Delay(parse_duration(&delay.delay)?)),
