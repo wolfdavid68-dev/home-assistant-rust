@@ -112,6 +112,7 @@ const live = {
           break;
         case "event":
           if (message.event.event_type === "state_changed") onStateChanged(message.event.data);
+          refreshLogbookSoon();
           break;
       }
     });
@@ -876,7 +877,11 @@ function openHistory(entityId) {
 }
 
 $("#history-close").addEventListener("click", () => $("#history").close());
-for (const button of document.querySelectorAll(".period")) {
+$("#history-logbook").addEventListener("click", () => {
+  $("#history").close();
+  openLogbook(historyView.entityId);
+});
+for (const button of document.querySelectorAll("#history .period")) {
   button.addEventListener("click", () => {
     historyView.hours = Number(button.dataset.hours);
     loadHistory().catch(() => {});
@@ -1078,6 +1083,93 @@ async function loadJournal() {
 $("#journal").addEventListener("toggle", (event) => {
   if (event.currentTarget.open) loadJournal().catch(() => {});
 });
+
+// ---------------------------------------------------------------- Journal de bord
+// Ce qui s'est passé, en phrases, et pourquoi (GET /api/logbook).
+const logbookView = { hours: 24, entityId: "", timer: null };
+const dayFormat = new Intl.DateTimeFormat("fr", { weekday: "long", day: "numeric", month: "long" });
+
+function openLogbook(entityId = "") {
+  logbookView.entityId = entityId;
+  const select = $("#logbook-entity");
+  const known = [...entities.values()].sort((a, b) => nameOf(a).localeCompare(nameOf(b), "fr"));
+  select.replaceChildren(
+    el("option", { value: "", text: "Tous les appareils" }),
+    ...known.map((state) => el("option", { value: state.entity_id, text: nameOf(state) })),
+  );
+  // Un appareil supprimé depuis : on le garde dans la liste.
+  if (entityId && !entities.has(entityId)) select.append(el("option", { value: entityId, text: entityId }));
+  select.value = entityId;
+  $("#logbook").showModal();
+  loadLogbook();
+}
+
+/** Le jour, en toutes lettres : « aujourd'hui », « hier », « lundi 12 octobre ». */
+function dayLabel(date) {
+  const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((startOfDay(new Date()) - startOfDay(date)) / 86400000);
+  return days === 0 ? "Aujourd'hui" : days === 1 ? "Hier" : dayFormat.format(date);
+}
+
+async function loadLogbook() {
+  for (const button of document.querySelectorAll("[data-logbook-hours]")) {
+    button.setAttribute("aria-pressed", String(Number(button.dataset.logbookHours) === logbookView.hours));
+  }
+  const list = $("#logbook-list");
+  const query = new URLSearchParams({ hours: String(logbookView.hours) });
+  if (logbookView.entityId) query.set("entity_id", logbookView.entityId);
+  // Une session expirée est gérée par `api` (retour à la connexion).
+  const { status, data } = await api("GET", `/api/logbook?${query}`).catch(() => ({ status: 0 }));
+  if (status !== 200) {
+    list.replaceChildren(el("p", { class: "error", text: "Journal de bord indisponible." }));
+    return;
+  }
+  const entries = Array.isArray(data.entries) ? data.entries : [];
+  if (entries.length === 0) {
+    list.replaceChildren(el("p", { class: "journal-hint", text: "Rien de noté sur cette période." }));
+    return;
+  }
+  const groups = [];
+  for (const entry of entries) {
+    const at = new Date(entry.at);
+    const day = dayLabel(at);
+    if (groups.at(-1)?.day !== day) groups.push({ day, items: [] });
+    const domain = typeof entry.entity_id === "string" ? entry.entity_id.split(".")[0] : "";
+    const item = el(
+      "li",
+      { class: domain === "" ? "logbook-system" : "" },
+      el("time", { datetime: entry.at, text: shortTime.format(at) }),
+      el("span", {}, el("strong", { text: entry.name }), " ", entry.message),
+    );
+    if (typeof entry.cause === "string") item.append(el("small", { text: entry.cause }));
+    groups.at(-1).items.push(item);
+  }
+  list.replaceChildren(
+    ...groups.map(({ day, items }) => el("section", {}, el("h3", { text: day }), el("ol", { class: "journal-list" }, ...items))),
+  );
+}
+
+// Pendant que le journal est ouvert, il se met à jour (une fois par seconde au plus).
+function refreshLogbookSoon() {
+  if (!$("#logbook").open || logbookView.timer) return;
+  logbookView.timer = setTimeout(() => {
+    logbookView.timer = null;
+    if ($("#logbook").open) loadLogbook();
+  }, 1000);
+}
+
+$("#open-logbook").addEventListener("click", () => openLogbook());
+$("#logbook-close").addEventListener("click", () => $("#logbook").close());
+$("#logbook-entity").addEventListener("change", (event) => {
+  logbookView.entityId = event.currentTarget.value;
+  loadLogbook();
+});
+for (const button of document.querySelectorAll("[data-logbook-hours]")) {
+  button.addEventListener("click", () => {
+    logbookView.hours = Number(button.dataset.logbookHours);
+    loadLogbook();
+  });
+}
 
 // ---------------------------------------------------------------- Automatisations
 // L'éditeur travaille directement sur la configuration JSON renvoyée par le

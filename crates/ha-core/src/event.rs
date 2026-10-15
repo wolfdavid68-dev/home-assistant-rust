@@ -6,6 +6,7 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 
 use crate::entity_id::EntityId;
+use crate::origin::Origin;
 use crate::state::{Attributes, State};
 
 /// Nombre d'événements gardés en mémoire pour un abonné qui prend du retard.
@@ -39,6 +40,8 @@ pub enum Event {
         entity_id: EntityId,
         /// Paramètres facultatifs, par exemple `{"brightness": 128}`.
         data: Attributes,
+        /// Qui le demande (pour le journal de bord).
+        origin: Origin,
     },
 
     /// Un événement « libre », nommé : `timer.finished` quand un minuteur

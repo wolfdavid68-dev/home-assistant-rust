@@ -270,6 +270,7 @@ async fn run(
             service,
             entity_id,
             data,
+            ..
         } = event.as_ref()
         else {
             continue;

@@ -271,10 +271,12 @@ fn call_service_is_published_on_the_bus() {
         service,
         entity_id,
         data,
+        origin,
     } = event.as_ref()
     else {
         panic!("CallService attendu, reçu {event:?}");
     };
+    assert_eq!(*origin, ha_core::Origin::System);
     assert_eq!(
         (domain.as_str(), service.as_str(), entity_id.as_str()),
         ("switch", "turn_on", "switch.prise")

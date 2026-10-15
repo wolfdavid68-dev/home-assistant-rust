@@ -367,10 +367,13 @@ async fn set_state(
     let (calls, promised) = hue::service_calls(entity_id, command);
     let source = client.ip().to_string();
     for (domain, service, data) in calls {
-        if let Err(error) = bridge
-            .core
-            .call_service(domain, service, entity_id.clone(), data)
-        {
+        if let Err(error) = bridge.core.call_service_from(
+            ha_core::Origin::Voice,
+            domain,
+            service,
+            entity_id.clone(),
+            data,
+        ) {
             tracing::warn!("Alexa : ordre refusé : {error}");
             return hue_json(&hue::error_response(901, &address, "internal error"));
         }

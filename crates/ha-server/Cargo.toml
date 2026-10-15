@@ -19,6 +19,7 @@ ha-mqtt = { path = "../ha-mqtt" }
 ha-notify = { path = "../ha-notify" }
 ha-person = { path = "../ha-person" }
 ha-input = { path = "../ha-input" }
+ha-logbook = { path = "../ha-logbook" }
 ha-somfy = { path = "../ha-somfy" }
 ha-thermostat = { path = "../ha-thermostat" }
 ha-tls = { path = "../ha-tls" }

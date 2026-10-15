@@ -48,6 +48,7 @@
       </div>
       <div class="topbar-right">
         <span id="connection" class="status" aria-live="polite">Connexion…</span>
+        <button id="open-logbook" class="ghost" type="button">Journal de bord</button>
         <button id="open-automations" class="ghost" type="button">Automatisations</button>
         <button id="logout" class="ghost" type="button">Déconnexion</button>
       </div>
@@ -69,6 +70,22 @@
       <div id="history-chart" class="history-chart"></div>
       <p id="history-summary" class="history-summary"></p>
       <ol id="history-changes" class="history-changes"></ol>
+      <button id="history-logbook" class="ghost" type="button">Voir dans le journal de bord</button>
+    </dialog>
+    <dialog id="logbook" class="history-dialog" aria-labelledby="logbook-title">
+      <div class="history-top">
+        <h2 id="logbook-title">Journal de bord</h2>
+        <button id="logbook-close" class="ghost" type="button">Fermer</button>
+      </div>
+      <p class="journal-hint">Ce qui s'est passé dans la maison, et pourquoi.</p>
+      <div class="logbook-filters">
+        <div class="periods" role="group" aria-label="Période">
+          <button type="button" class="period" data-logbook-hours="24">24 heures</button>
+          <button type="button" class="period" data-logbook-hours="168">7 jours</button>
+        </div>
+        <select id="logbook-entity" aria-label="Appareil"></select>
+      </div>
+      <div id="logbook-list" class="logbook-list" aria-live="polite"></div>
     </dialog>
     <!-- Éditeur d'automatisations -->
     <dialog id="automations" class="history-dialog automations-dialog" aria-labelledby="automations-title">

@@ -90,7 +90,7 @@ async fn run(config: MqttConfig, core: Arc<Core>, token: CancellationToken) {
 
             received = events.recv() => match received {
                 Ok(event) => {
-                    if let Event::CallService { domain, service, entity_id, data } = event.as_ref() {
+                    if let Event::CallService { domain, service, entity_id, data, .. } = event.as_ref() {
                         for action in bridge.handle_service(domain, service, entity_id, data, &core.states) {
                             apply(&client, &action);
                         }

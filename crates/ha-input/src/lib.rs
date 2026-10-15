@@ -123,7 +123,7 @@ async fn run(
             }
             received = events.recv() => match received {
                 Ok(event) => {
-                    if let Event::CallService { domain, service, entity_id, data } = event.as_ref()
+                    if let Event::CallService { domain, service, entity_id, data, .. } = event.as_ref()
                         && domain == entity_id.domain()
                         && let Some(entry) = entries.get_mut(entity_id)
                     {

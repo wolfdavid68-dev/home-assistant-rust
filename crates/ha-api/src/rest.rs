@@ -87,6 +87,17 @@ pub(crate) struct SeriesQuery {
     hours: Option<u32>,
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct LogbookQuery {
+    hours: Option<u32>,
+    entity_id: Option<String>,
+    limit: Option<u32>,
+}
+
+/// Lignes du journal de bord renvoyées par défaut.
+const DEFAULT_LOGBOOK_LIMIT: u32 = 500;
+
 /// Période par défaut d'un graphique, et période maximale (31 jours).
 const DEFAULT_SERIES_HOURS: u32 = 24;
 const MAX_SERIES_HOURS: u32 = 31 * 24;
@@ -301,6 +312,47 @@ pub(crate) async fn history(
     ))
 }
 
+/// `GET /api/logbook?hours=24&entity_id=light.salon` : le journal de bord,
+/// du plus récent au plus ancien.
+pub(crate) async fn logbook(
+    State(state): State<Arc<ApiState>>,
+    _auth: Authenticated,
+    Query(query): Query<LogbookQuery>,
+) -> Result<Json<Value>, ApiError> {
+    let hours = query.hours.unwrap_or(DEFAULT_SERIES_HOURS);
+    if !(1..=MAX_SERIES_HOURS).contains(&hours) {
+        return Err(ApiError::BadRequest(format!(
+            "« hours » doit être entre 1 et {MAX_SERIES_HOURS}"
+        )));
+    }
+    let entity_id = query
+        .entity_id
+        .as_deref()
+        .map(parse_entity_id)
+        .transpose()?;
+    let until = SystemTime::now();
+    let since = until
+        .checked_sub(Duration::from_secs(u64::from(hours) * 3600))
+        .unwrap_or(SystemTime::UNIX_EPOCH);
+    let limit = query.limit.unwrap_or(DEFAULT_LOGBOOK_LIMIT);
+    let entries: Vec<Value> = state
+        .store
+        .logbook(since, until, entity_id.as_ref(), limit)
+        .await?
+        .into_iter()
+        .map(|entry| {
+            json!({
+                "at": format_timestamp(entry.at),
+                "entity_id": entry.entity_id,
+                "name": entry.name,
+                "message": entry.message,
+                "cause": entry.cause,
+            })
+        })
+        .collect();
+    Ok(Json(json!({ "entries": entries })))
+}
+
 /// `GET /api/history/{entity_id}/series?hours=24` : l'historique d'une
 /// période, résumé pour un graphique (courbe et changements de valeur).
 pub(crate) async fn history_series(
@@ -361,7 +413,13 @@ pub(crate) async fn call_service(
     };
     state
         .core
-        .call_service(&domain, &service, entity_id.clone(), data)
+        .call_service_from(
+            ha_core::Origin::User(auth.user.username.clone()),
+            &domain,
+            &service,
+            entity_id.clone(),
+            data,
+        )
         .map_err(|error| ApiError::BadRequest(error.to_string()))?;
     tracing::info!(
         "{domain}.{service} sur {entity_id} demandé par {}",

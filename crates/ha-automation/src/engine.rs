@@ -5,7 +5,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ha_core::{Attributes, Background, CancellationToken, Core, EntityId, Event};
+use ha_core::{Attributes, Background, CancellationToken, Core, EntityId, Event, Origin};
 use jiff::civil::DateTime;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::{Mutex, watch};
@@ -22,6 +22,9 @@ use ha_sun::Location;
 /// de `MAX_RUNS` fois en `RUN_WINDOW` est mise en pause jusqu'à ce que ça se calme.
 /// (Exemple de boucle : A allume la lampe quand elle s'éteint, B l'éteint
 /// quand elle s'allume…)
+/// L'événement publié à chaque lancement d'une automatisation (comme dans
+/// Home Assistant), avec son nom et la raison : `{"name": …, "trigger": …}`.
+pub const AUTOMATION_TRIGGERED: &str = "automation_triggered";
 const MAX_RUNS: usize = 10;
 const RUN_WINDOW: Duration = Duration::from_mins(1);
 
@@ -198,6 +201,7 @@ impl Library {
             core: Arc::clone(core),
             checker: self.checker.clone(),
             trigger: None,
+            origin: Origin::Script(alias.clone()),
         };
         *slot = Some(tokio::spawn(async move {
             set_entity(&context.core, entity.clone(), "on", &alias);
@@ -242,6 +246,7 @@ impl Library {
             core: Arc::clone(core),
             checker: self.checker.clone(),
             trigger: None,
+            origin: Origin::Scene(scene.name.clone()),
         };
         let actions = scene.actions.clone();
         tokio::spawn(async move {
@@ -456,7 +461,22 @@ impl Runner {
         }
 
         info!("automatisation « {alias} » déclenchée");
+        // Pour le journal de bord : quelle automatisation, et pourquoi.
+        let because = automation
+            .triggers
+            .get(fired.trigger)
+            .map(|t| t.describe(&self.core.states));
+        let mut data = Attributes::new();
+        data.insert("id".into(), automation.id.clone().into());
+        data.insert("name".into(), alias.clone().into());
+        if let Some(because) = because {
+            data.insert("trigger".into(), because.into());
+        }
+        if let Err(error) = self.core.fire(AUTOMATION_TRIGGERED, data) {
+            warn!("« {alias} » : événement refusé ({error})");
+        }
         let context = Context {
+            origin: Origin::Automation(alias.clone()),
             alias: alias.into(),
             core: Arc::clone(&self.core),
             checker: self.evaluator.checker(),
@@ -485,6 +505,8 @@ pub(crate) struct Context {
     pub(crate) checker: Checker,
     /// L'identifiant du déclencheur (pour la condition `trigger`).
     pub(crate) trigger: Option<String>,
+    /// Qui envoie les commandes (pour le journal de bord).
+    pub(crate) origin: Origin,
 }
 
 /// Faut-il continuer après une action ?
@@ -528,7 +550,8 @@ pub(crate) fn run_actions<'a>(
                 } => {
                     for entity_id in entity_ids {
                         debug!("« {alias} » : {domain}.{service} sur {entity_id}");
-                        if let Err(error) = context.core.call_service(
+                        if let Err(error) = context.core.call_service_from(
+                            context.origin.clone(),
                             domain,
                             service,
                             entity_id.clone(),

@@ -124,7 +124,7 @@ input:not([type="range"]) {
 /* Téléphone : les boutons passent sous le titre. */
 @media (max-width: 560px) {
   .topbar { flex-wrap: wrap; row-gap: 0.6rem; }
-  .topbar-right { width: 100%; }
+  .topbar-right { width: 100%; flex-wrap: wrap; gap: 0.5rem; }
   .topbar-right .status { margin-right: auto; }
 }
 
@@ -535,3 +535,20 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 /* Entrées : liste de choix et compte à rebours. */
 .tile-select { width: 100%; max-width: 100%; }
 .value.countdown { font-variant-numeric: tabular-nums; }
+/* Journal de bord */
+.logbook-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; margin-bottom: 0.75rem; }
+.logbook-filters .periods { margin: 0; }
+.logbook-filters select { flex: 1 1 12rem; max-width: 100%; min-width: 0; }
+.logbook-list { max-height: 60vh; overflow-y: auto; }
+.logbook-list h3 { font-size: 0.85rem; color: var(--muted); margin: 1rem 0 0.4rem; }
+.logbook-list h3::first-letter { text-transform: uppercase; }
+.logbook-list section:first-child h3 { margin-top: 0; }
+.logbook-list li { flex-wrap: nowrap; }
+.logbook-list li > span { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.logbook-list li small { flex: 0 1 auto; text-align: right; }
+.logbook-list li.logbook-system strong { color: var(--accent); }
+@media (max-width: 560px) {
+  .logbook-list li { display: grid; grid-template-columns: auto minmax(0, 1fr); }
+  .logbook-list li small { grid-column: 2; margin-left: 0; text-align: left; }
+}
+#history-logbook { margin-top: 0.75rem; }
