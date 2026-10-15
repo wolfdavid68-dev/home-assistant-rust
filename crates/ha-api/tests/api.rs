@@ -1649,7 +1649,10 @@ async fn the_house_drawing_is_assembled_from_checked_images() {
         .request("GET", "/api/home/drawing", Some(&token), None)
         .await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(body["config"], json!({"layers": [], "labels": []}));
+    assert_eq!(
+        body["config"],
+        json!({"layers": [], "labels": [], "actions": []})
+    );
     assert_eq!(body["editable"], true);
 
     // Des images : PNG, JPEG ou WebP, reconnus à leur contenu.
@@ -1700,6 +1703,7 @@ async fn the_house_drawing_is_assembled_from_checked_images() {
             {"entity_id": "sensor.dehors", "x": 90.04, "y": 8, "name": "Dehors"},
             {"entity_id": "person.alice", "x": 10, "y": 10},
         ],
+        "actions": ["light.porche", "person.alice"],
     });
     let (status, body) = app
         .request("PUT", "/api/home/drawing", Some(&token), Some(drawing))
@@ -1758,6 +1762,7 @@ async fn the_house_drawing_is_assembled_from_checked_images() {
     assert_eq!(layers[0]["entity_id"], "cover.garage");
     assert_eq!(body["config"]["labels"].as_array().unwrap().len(), 1);
     assert_eq!(body["config"]["labels"][0]["entity_id"], "sensor.dehors");
+    assert_eq!(body["config"]["actions"], json!(["light.porche"]));
 
     // Chaque changement est dans le journal d'audit.
     let (_, body) = app.request("GET", "/api/audit", Some(&token), None).await;

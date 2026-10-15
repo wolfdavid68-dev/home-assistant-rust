@@ -44,6 +44,7 @@ Un noyau domotique en Rust, inspiré de Home Assistant.
 - [Étape 34 : les modèles et les déclencheurs plus fins, expliqués](docs/modeles.md)
 - [Étape 35 : le schéma des automatisations façon n8n, expliqué](docs/schema.md)
 - [Étape 36 : le style « plan d'architecte » (et le dessin de ta maison), expliqué](docs/plan-architecte.md)
+- [Étape 37 : la mise en page « tableau » et le thème « Maquette », expliqués](docs/maquette.md)
 - [Étape 5 : les automatisations, expliqué](docs/etape-5-automatisations.md)
 - [Modernisation du code, expliquée](docs/modernisation.md)
 - [Étape 6 : l'interface web, expliquée](docs/etape-6-interface-web.md)

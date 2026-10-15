@@ -9,12 +9,14 @@ const TOKEN_KEY = "ha_token";
 const $ = (selector) => document.querySelector(selector);
 
 // ---------------------------------------------------------------- Apparence
-// Clair, sombre (ou comme l'appareil), et le style « plan d'architecte », de
-// jour ou de nuit (house.js). Un réglage de cet appareil seulement
+// Clair, sombre (ou comme l'appareil), le style « plan d'architecte », de
+// jour ou de nuit, et « maquette » (fond sombre dégradé, house.js). Les trois
+// derniers prennent la mise en page « tableau » : les pièces à gauche, le
+// dessin de la maison au centre, les volets en dessous. Un réglage de cet appareil seulement
 // (localStorage) : la télé du salon peut être en plan, le téléphone en sombre.
 // Appliqué tout de suite, avant le premier affichage de la page.
 const THEME_KEY = "ha-theme";
-const THEMES = ["auto", "light", "dark", "plan", "plan-nuit"];
+const THEMES = ["auto", "light", "dark", "plan", "plan-nuit", "maquette"];
 const darkQuery = matchMedia("(prefers-color-scheme: dark)");
 
 function themeWanted() {
@@ -29,12 +31,14 @@ function themeWanted() {
 function applyTheme(choice = themeWanted()) {
   const root = document.documentElement;
   root.dataset.theme = choice === "auto" ? (darkQuery.matches ? "dark" : "light") : choice;
+  root.dataset.layout = ["plan", "plan-nuit", "maquette"].includes(choice) ? "board" : "classic";
   // La barre du navigateur (téléphone) prend la couleur du fond.
   const color = getComputedStyle(root).getPropertyValue("--bar").trim();
   if (color) for (const meta of document.querySelectorAll('meta[name="theme-color"]')) meta.content = color;
 }
 
 const isPlan = () => document.documentElement.dataset.theme?.startsWith("plan") === true;
+const isBoard = () => document.documentElement.dataset.layout === "board";
 
 applyTheme();
 darkQuery.addEventListener("change", () => applyTheme());
@@ -463,6 +467,7 @@ function renderPlan() {
     if (info.count >= 4) classes.push("big");
     if (info.alert) classes.push("alert");
     else if (info.lights > 0) classes.push("lit");
+    else if (info.heating) classes.push("heat");
     const room = el(
       "button",
       { type: "button", class: classes.join(" "), "aria-label": [area.name, detail, Number.isFinite(info.temperature) ? `${number.format(info.temperature)} degrés` : ""].filter(Boolean).join(", ") },
@@ -473,6 +478,16 @@ function renderPlan() {
     );
     // L'humidité : affichée par le style « plan » (« 25,1° | 49 % »).
     if (finite(info.humidity)) room.querySelector(".room-temp")?.append(el("span", { class: "room-hum", text: ` | ${number.format(Math.round(info.humidity))} %` }));
+    // La mise en page « tableau » : une ligne, avec l'icône de la pièce.
+    const measures = [
+      Number.isFinite(info.temperature) ? `${number.format(info.temperature)} °C` : "",
+      finite(info.humidity) ? `${number.format(info.humidity)} %` : "",
+    ].filter(Boolean).join(" | ");
+    room.append(el("span", { class: "room-line" },
+      el("span", { class: "room-icon" }, svgIcon(roomIcon(area.name))),
+      el("span", { class: "room-text" },
+        el("span", { class: "room-line-name", text: area.name }),
+        el("span", { class: "room-line-info", text: [measures, detail].filter(Boolean).join(" · ") || "—" }))));
     room.addEventListener("click", () => showRoom(area.name));
     return room;
   });
@@ -488,6 +503,18 @@ function renderPlan() {
     el("div", { class: "plan" }, ...rooms),
     legend,
   );
+}
+
+/** L'icône d'une pièce, d'après son nom. */
+function roomIcon(name) {
+  const plain = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const rules = [
+    [/chambre|dortoir/, ICONS.bed], [/salon|sejour|living|tv/, ICONS.sofa], [/cuisine/, ICONS.pot],
+    [/bain|douche|sdb/, ICONS.bath], [/escalier/, ICONS.stairs], [/wc|toilette/, ICONS.toilet],
+    [/garage|parking|abri/, ICONS.car], [/bureau|lab/, ICONS.desk], [/buanderie|lingerie|cellier/, ICONS.washer],
+    [/jardin|terrasse|piscine|exterieur|cour/, ICONS.tree], [/entree|couloir|hall|palier/, ICONS.door],
+  ];
+  return rules.find(([pattern]) => pattern.test(plain))?.[1] ?? ICONS.home;
 }
 
 function renderScenes() {
@@ -1797,6 +1824,23 @@ const ICONS = {
   wind_speed: ["M17.7 7.7A2.5 2.5 0 1 1 19.5 12H2", "M9.6 4.6A2 2 0 1 1 11 8H2", "M12.6 19.4A2 2 0 1 0 14 16H2"],
   precipitation: ["M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2", "M16 14v6", "M8 14v6", "M12 16v6"],
 };
+// Les pièces (mise en page « tableau »).
+Object.assign(ICONS, {
+  bed: ["M2 18V6", "M2 13h20v5", "M22 13v-1a3 3 0 0 0-3-3h-8v4", "M6.5 9a1.5 1.5 0 1 0 0 3 1.5 1.5 0 1 0 0-3z"],
+  sofa: ["M4 11V8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3", "M2 13a2 2 0 0 1 4 0v2h12v-2a2 2 0 0 1 4 0v5H2z", "M5 18v2", "M19 18v2"],
+  pot: ["M4 10h16v6a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z", "M2 10h20", "M9 7c0-1 1-1.5 1-3", "M14 7c0-1 1-1.5 1-3"],
+  bath: ["M3 12h18v3a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z", "M6 12V5a2 2 0 0 1 4 0", "M7 19l-1 2", "M17 19l1 2"],
+  stairs: ["M3 20h5v-5h5v-5h5V5h3"],
+  toilet: ["M7 3h6v7H7z", "M5 10h14a7 7 0 0 1-14 0z", "M9 16.5L8 21h8l-1-4.5"],
+  car: ["M5 15l1.6-5h10.8l1.6 5", "M3 15h18v4H3z", "M6 19v2", "M18 19v2", "M7 17h.01", "M17 17h.01"],
+  desk: ["M3 8h18", "M5 8v12", "M19 8v12", "M13 8v6h6", "M15 11h2"],
+  washer: ["M5 3h14v18H5z", "M5 7h14", "M12 10a4 4 0 1 0 0 8 4 4 0 1 0 0-8z"],
+  tree: ["M12 22v-5", "M12 3l6 8h-3l4 6H5l4-6H6z"],
+  // Les boutons des volets (mise en page « tableau »).
+  arrowUp: ["M12 19V5", "M6 11l6-6 6 6"],
+  arrowDown: ["M12 5v14", "M18 13l-6 6-6-6"],
+  square: ["M8 8h8v8H8z"],
+});
 const BINARY_ICONS = { motion: ICONS.motion, connectivity: ICONS.globe };
 
 // ---------------------------------------------------------------- Historique

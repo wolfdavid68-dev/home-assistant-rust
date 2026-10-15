@@ -82,6 +82,7 @@ Les fonctions de Home Assistant les plus utiles au quotidien, une par une, dans 
 - [x] **34. Modèles et déclencheurs plus fins** : des valeurs dans les messages (`{{ states('sensor.x') }}`, `trigger.to_state`…), déclencheurs et conditions sur un attribut, listes (`to: [Orange, Rouge]`), `not_from` / `not_to` ([guide](docs/modeles.md))
 - [x] **35. Schéma façon n8n** : les automatisations en blocs reliés sur un canevas libre (glisser, tirer des fils, zoomer, pincer sur téléphone) ; les exécutions passées affichées sur les blocs ([guide](docs/schema.md))
 - [x] **36. Style « plan d'architecte »** : en option, le tableau de bord en plan (papier quadrillé, encre bleue, ou blanche sur bleu la nuit) ; le dessin de ta maison au centre, avec un fond de nuit, des calques selon l'état des appareils (garage ouvert, porche allumé) et des valeurs posées dessus ; repères, cartouche, humidité des pièces ([guide](docs/plan-architecte.md))
+- [x] **37. Mise en page « tableau » et thème « Maquette »** : comme les tableaux isométriques de Home Assistant, les pièces en petites tuiles à gauche, la maquette au centre avec repères et boutons rapides (porche, garage…), les volets en lignes ; fond sombre dégradé ([guide](docs/maquette.md))
 
 En parallèle, dès que tu me donnes les informations : commande du chauffage Somfy (résultat de
 `somfy devices`), puis de l'alarme (avec confirmation et journal).

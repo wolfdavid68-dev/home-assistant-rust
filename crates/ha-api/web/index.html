@@ -47,6 +47,8 @@
   <div id="dashboard-view" class="app" hidden>
     <header class="hero">
       <div class="hero-top">
+        <!-- Mise en page « tableau » : l'onglet de la page, comme dans Home Assistant. -->
+        <span class="board-tab" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg><b>Maison</b></span>
         <p class="today"><span id="today"></span><span id="clock" class="clock"></span></p>
         <span id="connection" class="status" aria-live="polite">Connexion…</span>
         <span id="weather-pill" class="weather-pill" hidden></span>
@@ -63,19 +65,23 @@
       </div>
       <h1 id="greeting" class="greeting">Maison</h1>
       <p id="summary" class="summary"></p>
-      <!-- Les repères du style « plan » : dehors, dedans, puissance… -->
-      <div id="gauges" class="gauges" aria-label="Repères" hidden></div>
     </header>
     <div class="layout">
       <aside class="overview" aria-label="Vue d'ensemble">
-        <!-- Le dessin de la maison (style « plan », house.js) -->
-        <figure id="house" class="house" hidden>
-          <div id="house-stage" class="house-stage"></div>
-          <figcaption id="house-caption" class="house-caption"></figcaption>
-        </figure>
+        <!-- Mise en page « tableau » : qui est là (house.js) -->
+        <div id="board-people" class="board-people" aria-label="Personnes" hidden></div>
         <section id="plan" class="plan-card" aria-label="Plan de la maison" hidden></section>
         <nav id="scenes" class="scenes" aria-label="Scènes et scripts" hidden></nav>
       </aside>
+      <!-- Mise en page « tableau » (styles plan et maquette, house.js) : le
+           dessin de la maison, ses repères et ses boutons, puis les volets. -->
+      <figure id="house" class="house" hidden>
+        <div id="gauges" class="gauges" aria-label="Repères" hidden></div>
+        <div class="house-frame"><div id="house-stage" class="house-stage"></div></div>
+        <div id="house-actions" class="house-actions" aria-label="Boutons rapides" hidden></div>
+        <figcaption id="house-caption" class="house-caption"></figcaption>
+      </figure>
+      <section id="board-covers" class="board-covers" aria-label="Volets" hidden></section>
       <main id="sections" class="sections" aria-live="polite"></main>
       <!-- Le cartouche, comme au bas d'un plan d'architecte -->
       <footer id="title-block" class="title-block" aria-label="Cartouche" hidden></footer>
@@ -106,6 +112,7 @@
             <option value="dark">Sombre</option>
             <option value="plan">Plan d'architecte</option>
             <option value="plan-nuit">Plan d'architecte, de nuit (bleu)</option>
+            <option value="maquette">Maquette (fond sombre, comme une maquette 3D)</option>
           </select>
         </label>
         <p class="account">Sur cet appareil seulement : la télé peut être en plan, le téléphone en sombre.</p>

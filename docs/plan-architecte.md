@@ -9,7 +9,9 @@ téléphone. Le papier est quadrillé, les traits d'encre fins et les icônes au
 maison est dessinée en perspective, avec ses valeurs posées dessus. En haut, des repères (dehors,
 dedans, puissance, lumières, présents) ; en bas, un cartouche comme sur un vrai plan.
 
-C'est une **option** : le tableau de bord habituel ne change pas.
+C'est une **option** : le tableau de bord habituel ne change pas. Depuis l'[étape 37](maquette.md),
+les styles plan prennent la mise en page « tableau » (les pièces à gauche, le dessin au centre), et
+un thème sombre « Maquette » s'ajoute.
 
 ## Choisir l'apparence
 
