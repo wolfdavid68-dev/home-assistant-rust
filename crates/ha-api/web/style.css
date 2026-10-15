@@ -489,3 +489,29 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .auto-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.9rem; }
 #auto-version-list li { align-items: center; }
 #auto-version-list button { margin-left: auto; }
+
+/* ---------- Météo ---------- */
+
+/* Sur un écran assez large, la tuile météo prend deux colonnes. */
+@media (min-width: 520px) {
+  .tile.wide { grid-column: span 2; }
+}
+.tile.weather .value { line-height: 1; }
+.forecast {
+  list-style: none;
+  margin: 0.2rem 0 0;
+  padding: 0.6rem 0 0;
+  border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.25rem;
+  text-align: center;
+  font-size: 0.85rem;
+}
+.forecast li { display: grid; justify-items: center; gap: 0.15rem; }
+.forecast svg { width: 22px; height: 22px; color: var(--muted); }
+.forecast .day { color: var(--muted); text-transform: capitalize; }
+.forecast .max { font-weight: 650; }
+.forecast .min { color: var(--muted); }
+.forecast .rain { color: #3b82f6; min-height: 1em; font-size: 0.75rem; }
+.attribution { color: var(--muted); font-size: 0.7rem; }

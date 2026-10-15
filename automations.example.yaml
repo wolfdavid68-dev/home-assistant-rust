@@ -128,3 +128,35 @@
       data:
         title: Internet coupé
         message: La connexion Internet de la maison est coupée depuis 5 minutes.
+
+# Météo (il faut HA_METEO=on, voir docs/meteo.md) : fermer les volets du
+# salon quand il fait plus de 30 °C dehors, en journée.
+- id: volets_chaleur
+  alias: Volets fermés quand il fait chaud
+  triggers:
+    - trigger: numeric_state
+      entity_id: sensor.meteo_temperature
+      above: 30
+  conditions:
+    - condition: sun
+      after: sunrise
+      before: sunset
+  actions:
+    - action: cover.close_cover
+      target:
+        entity_id: cover.volet_salon
+
+# Prévenir quand l'orage arrive.
+- id: alerte_orage
+  alias: Orage
+  triggers:
+    - trigger: state
+      entity_id: weather.maison
+      to: lightning-rainy
+  actions:
+    - action: notify.send_message
+      target:
+        entity_id: notify.telephone
+      data:
+        title: Orage
+        message: Un orage arrive sur la maison. Pense à rentrer le linge !

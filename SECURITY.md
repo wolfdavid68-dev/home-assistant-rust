@@ -43,6 +43,9 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
   dans `alexa.yaml` sont exposés, jamais serrure, alarme, portail ni porte de garage ; seules les adresses
   autorisées (les Echo, ou à défaut le réseau local) sont servies ; serveur séparé de l'API ; chaque ordre est
   journalisé ; port 80 jamais redirigé depuis la box.
+- Météo (Open-Meteo) : désactivée par défaut ; HTTPS obligatoire hors réseau local ; la position envoyée est
+  arrondie à 0,1° (environ 10 km) et n'apparaît jamais dans les logs, même dans un message d'erreur ; réponses
+  limitées à 256 Kio et valeurs vérifiées.
 - Freebox : même principe, en **lecture seule** ; le jeton ne circule jamais (session par défi HMAC).
 - Box Somfy TaHoma : même principe. Le compte Somfy ne sert qu'une fois, à créer le jeton local ; le mot de
   passe n'est jamais enregistré. Portails et portes de garage ne sont pas pilotables sans réflexion dédiée.
