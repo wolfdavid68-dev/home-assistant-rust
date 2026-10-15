@@ -78,6 +78,7 @@ Les fonctions de Home Assistant les plus utiles au quotidien, une par une, dans 
 - [x] **30. Assistants du quotidien** : compteur, texte, date et heure (réveil réglable comme déclencheur) ; groupes, plages horaires, moyenne / min / max, seuil avec hystérésis, consommation par période ([guide](docs/assistants.md))
 - [x] **31. Historique des exécutions et notifications** : pour chaque automatisation, ses 10 dernières exécutions pas à pas (« pourquoi la lumière ne s'est pas allumée ? ») ; notifications sur le tableau de bord ; alertes de réparation (appareil injoignable, entité inconnue, boucle) ([guide](docs/historique-executions.md))
 - [x] **32. Compteur Linky et bilan énergétique** : lecture de la TIC (modes historique et standard, module USB ou réseau), index heures creuses / pleines / Tempo, puissance, production ; consommation par jour, mois et année avec le coût ([guide](docs/energie.md))
+- [x] **33. Vigilance Météo-France** : le niveau du département (vert à rouge) aujourd'hui et demain, chaque phénomène et ses heures, littoral compris ; dans les automatisations (« prévenir en vigilance orange ») et sur l'accueil ([guide](docs/vigilance.md))
 
 En parallèle, dès que tu me donnes les informations : commande du chauffage Somfy (résultat de
 `somfy devices`), puis de l'alarme (avec confirmation et journal).

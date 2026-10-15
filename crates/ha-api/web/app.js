@@ -187,7 +187,7 @@ const SECTIONS = [
   { title: "Agenda et listes", domains: ["calendar", "todo"] },
   { title: "Entrées", domains: ["input_boolean", "input_number", "input_select", "input_button", "timer", "counter", "input_text", "input_datetime", "schedule"] },
   // Les capteurs de la météo (sensor.meteo_…) vont avec la météo.
-  { title: "Météo, présence et soleil", domains: ["weather", "zone", "person", "device_tracker", "sun", "notify"], extra: (s) => s.entity_id.startsWith("sensor.meteo_") },
+  { title: "Météo, présence et soleil", domains: ["weather", "zone", "person", "device_tracker", "sun", "notify"], extra: (s) => s.entity_id.startsWith("sensor.meteo_") || s.entity_id === VIGILANCE_TODAY },
   { title: "Chauffage", domains: ["climate"] },
   { title: "Lumières", domains: ["light"] },
   { title: "Volets", domains: ["cover"] },
@@ -225,7 +225,7 @@ function renderAll() {
   renderHome();
   const container = $("#sections");
   // Par nom, sauf la météo, la maison et les personnes, en tête de leur section.
-  const first = (state) => lookup({ weather: 0, zone: 1, person: 2 }, domainOf(state)) ?? 3;
+  const first = (state) => (state.entity_id === VIGILANCE_TODAY ? 0.5 : lookup({ weather: 0, zone: 1, person: 2 }, domainOf(state)) ?? 3);
   const sorted = [...entities.values()].sort(
     (a, b) => first(a) - first(b) || nameOf(a).localeCompare(nameOf(b), "fr"),
   );
@@ -260,7 +260,9 @@ function renderAll() {
   // … puis, par type, les appareils qui ne sont dans aucune pièce. Les scènes
   // et les scripts sont déjà en haut, en boutons.
   // Les notifications ont leur cloche, en haut.
-  const loose = sorted.filter((s) => !used.has(s.entity_id) && !["scene", "script", "persistent_notification"].includes(domainOf(s)));
+  // Demain est dans la tuile de la vigilance du jour.
+  const loose = sorted.filter((s) => !used.has(s.entity_id) && s.entity_id !== VIGILANCE_TOMORROW
+    && !["scene", "script", "persistent_notification"].includes(domainOf(s)));
   const groups = SECTIONS.map(({ title, domains, extra }) => {
     const items = loose.filter((s) => !used.has(s.entity_id) && (domains.includes(domainOf(s)) || extra?.(s)));
     items.forEach((s) => used.add(s.entity_id));
@@ -311,6 +313,7 @@ function alertText(state) {
   if (domain === "vacuum" && state.state === "error") return "en erreur";
   if (domain === "siren" && state.state === "on") return "sonne";
   if (domain === "alarm_control_panel" && state.state === "triggered") return "intrusion";
+  if (state.entity_id === VIGILANCE_TODAY && vigilanceRank(state.state) >= 2) return vigilanceSummary(state);
   return null;
 }
 
@@ -376,6 +379,12 @@ function renderHome() {
     const label = lookup(WEATHER_LABELS, weather.state)?.[0] ?? "";
     const temp = finite(weather.attributes.temperature) ? `${number.format(weather.attributes.temperature)}°` : "";
     pill.replaceChildren(svgIcon(weatherIcon(weather.state)), el("strong", { text: temp }), label);
+  }
+  // La vigilance, dès le jaune : dans la pastille (même sans la météo).
+  const vigilance = entities.get(VIGILANCE_TODAY);
+  if (vigilance && vigilanceRank(vigilance.state) >= 1) {
+    pill.hidden = false;
+    pill.append(vigilanceBadge(vigilance.state));
   }
 
   renderPlan();
@@ -502,6 +511,7 @@ function makeReadOnly(tile) {
 }
 
 function renderTileContent(state) {
+  if (state.entity_id === VIGILANCE_TODAY) return vigilanceTile(state);
   switch (domainOf(state)) {
     case "light": return lightTile(state);
     case "cover": return coverTile(state);
@@ -1164,6 +1174,107 @@ function weatherTile(state) {
     // Licence CC BY 4.0 d'Open-Meteo : la source doit être citée.
     el("small", { class: "attribution", text: typeof a.attribution === "string" ? a.attribution : "" }),
   );
+}
+
+// La vigilance Météo-France : le niveau du jour (sensor.vigilance_meteo),
+// les phénomènes et leurs heures, et demain (sensor.vigilance_meteo_demain).
+const VIGILANCE_TODAY = "sensor.vigilance_meteo";
+const VIGILANCE_TOMORROW = "sensor.vigilance_meteo_demain";
+// Le niveau, sa classe CSS et l'adjectif (« vigilance orange »).
+const VIGILANCE_LEVELS = { Vert: ["green", "verte"], Jaune: ["yellow", "jaune"], Orange: ["orange", "orange"], Rouge: ["red", "rouge"] };
+const vigilanceRank = (level) => ["Vert", "Jaune", "Orange", "Rouge"].indexOf(level);
+
+function vigilanceBadge(level) {
+  const [color, adjective] = lookup(VIGILANCE_LEVELS, level) ?? ["unknown", ""];
+  // La couleur ne suffit pas : le niveau est toujours écrit.
+  return el("span", { class: `vigilance-badge level-${color}`, text: `Vigilance ${adjective}` });
+}
+
+function vigilancePhenomena(state) {
+  const list = Array.isArray(state.attributes.phenomenes) ? state.attributes.phenomenes : [];
+  return list.filter((p) => typeof p?.phenomene === "string" && vigilanceRank(p.niveau) >= 0);
+}
+
+/** « orange : orages, vent violent » : pour le résumé de l'accueil. */
+function vigilanceSummary(state) {
+  const [, adjective] = lookup(VIGILANCE_LEVELS, state.state) ?? ["", state.state];
+  const names = vigilancePhenomena(state)
+    .filter((p) => p.niveau === state.state)
+    .map((p) => p.phenomene.toLowerCase());
+  return names.length > 0 ? `${adjective} (${joinNames(names)})` : adjective;
+}
+
+const hourText = (date) => (date.getMinutes() === 0 ? `${date.getHours()} h` : `${date.getHours()} h ${String(date.getMinutes()).padStart(2, "0")}`);
+
+/** « de 14 h à 23 h », « à partir de 16 h », « toute la journée ». */
+function vigilanceRangeText(range, periodStart, periodEnd) {
+  const begin = new Date(range.debut);
+  const end = new Date(range.fin);
+  if (Number.isNaN(begin.getTime()) || Number.isNaN(end.getTime())) return "";
+  const fromStart = periodStart !== null && begin <= periodStart;
+  const toEnd = periodEnd !== null && end >= periodEnd;
+  if (fromStart && toEnd) return "toute la journée";
+  if (fromStart) return `jusqu'à ${hourText(end)}`;
+  if (toEnd) return `à partir de ${hourText(begin)}`;
+  return `de ${hourText(begin)} à ${hourText(end)}`;
+}
+
+function vigilanceDetails(state) {
+  const a = state.attributes;
+  const start = typeof a.debut === "string" ? new Date(a.debut) : null;
+  const end = typeof a.fin === "string" ? new Date(a.fin) : null;
+  return vigilancePhenomena(state).map((p) => {
+    const ranges = (Array.isArray(p.plages) ? p.plages : []).filter((range) => vigilanceRank(range.niveau) > 0);
+    // Les heures, couleur par couleur, la plus grave d'abord :
+    // « orange de 16 h à 23 h · jaune de 9 h à 16 h et à partir de 23 h ».
+    const levels = [...new Set([p.niveau, ...ranges.map((range) => range.niveau)])]
+      .sort((x, y) => vigilanceRank(y) - vigilanceRank(x));
+    const text = levels.map((level) => {
+      const hours = ranges
+        .filter((range) => range.niveau === level)
+        .map((range) => vigilanceRangeText(range, start, end))
+        .filter(Boolean);
+      const adjective = lookup(VIGILANCE_LEVELS, level)[1];
+      return hours.length > 0 ? `${adjective} ${joinNames(hours)}` : adjective;
+    }).join(" · ");
+    const where = p.littoral === true ? " (littoral)" : "";
+    return el(
+      "li",
+      { class: `level-${lookup(VIGILANCE_LEVELS, p.niveau)[0]}` },
+      el("strong", { text: `${p.phenomene}${where}` }),
+      ` : ${text}`,
+    );
+  });
+}
+
+function vigilanceTile(state) {
+  const a = state.attributes;
+  const known = vigilanceRank(state.state) >= 0;
+  const department = typeof a.departement === "string" ? `Département ${a.departement}` : "Météo-France";
+  const items = known ? vigilanceDetails(state) : [];
+  const parts = [
+    tileHead(state, ICONS.shield, department),
+    el("div", { class: "value small-value" }, known ? vigilanceBadge(state.state) : statusText(state)),
+  ];
+  if (known && items.length === 0) parts.push(el("p", { class: "sub", text: "Aucun phénomène dangereux prévu aujourd'hui." }));
+  if (items.length > 0) parts.push(el("ul", { class: "vigilance-list", "aria-label": "Aujourd'hui" }, ...items));
+  if (known && typeof a.niveau_actuel === "string" && a.niveau_actuel !== state.state) {
+    parts.push(el("p", { class: "sub", text: `En ce moment : ${lookup(VIGILANCE_LEVELS, a.niveau_actuel)?.[1] ?? a.niveau_actuel}` }));
+  }
+  const tomorrow = entities.get(VIGILANCE_TOMORROW);
+  if (tomorrow && known) {
+    let text;
+    if (vigilanceRank(tomorrow.state) >= 0) {
+      const names = vigilancePhenomena(tomorrow).map((p) => p.phenomene.toLowerCase());
+      text = `Demain : ${lookup(VIGILANCE_LEVELS, tomorrow.state)[1]}${names.length > 0 ? ` (${joinNames(names)})` : ""}`;
+    } else {
+      text = "Demain : publiée vers 6 h";
+    }
+    parts.push(el("p", { class: "vigilance-tomorrow", text }));
+  }
+  parts.push(el("small", { class: "attribution", text: typeof a.attribution === "string" ? a.attribution : "" }));
+  const level = known ? lookup(VIGILANCE_LEVELS, state.state)[0] : "unknown";
+  return el("div", { id: tileId(state.entity_id), class: `${tileClass(state, "vigilance")} wide level-${level}` }, ...parts);
 }
 
 // Le thermostat : consigne (− / +), marche / arrêt, préréglages.

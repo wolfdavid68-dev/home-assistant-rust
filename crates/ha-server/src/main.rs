@@ -32,6 +32,7 @@
 //! ha-server inputs check          vérifie le fichier des entrées
 //! ha-server derived check         vérifie le fichier des assistants calculés
 //! ha-server energy check          vérifie le fichier du bilan énergétique
+//! ha-server vigilance test        vérifie la clé de la vigilance Météo-France
 //! ha-server audit [nombre]        affiche le journal d'audit
 //! ha-server audit verify          vérifie que le journal n'a pas été modifié
 //! ha-server backup now          sauvegarde la base (même serveur en marche)
@@ -68,6 +69,9 @@
 //!   sauvegardes automatiques chaque nuit ;
 //! - `HA_METEO` : `on` pour la météo locale avec Open-Meteo (il faut la
 //!   position de la maison) ; `HA_METEO_URL` pour un serveur auto-hébergé ;
+//! - `HA_VIGILANCE_DEPARTEMENT` (par exemple `67`) et `HA_VIGILANCE_KEY_FILE`
+//!   (fichier contenant la clé de l'API Météo-France, ou `HA_VIGILANCE_KEY`) :
+//!   vigilance météo (orages, canicule…) ;
 //! - `HA_SCRIPTS_PATH` et `HA_SCENES_PATH` : scripts et scènes (par défaut
 //!   `scripts.yaml` et `scenes.yaml`) ;
 //! - `HA_NTFY_URL`, `HA_NTFY_TOPIC`, `HA_NTFY_TOKEN_FILE` : notifications sur
@@ -144,6 +148,15 @@ async fn main() -> ExitCode {
         ["inputs", "check"] => cli::check_inputs(&inputs_path()),
         ["derived", "check"] => cli::check_derived(&derived_path()),
         ["energy", "check"] => cli::check_energy(&energy_path()),
+        ["vigilance", "test"] => match vigilance_config() {
+            Ok(Some(config)) => cli::test_vigilance(&config).await,
+            Ok(None) => Err(
+                "indique HA_VIGILANCE_DEPARTEMENT (par exemple 67) et la clé \
+                             (HA_VIGILANCE_KEY_FILE) : voir docs/vigilance.md"
+                    .into(),
+            ),
+            Err(error) => Err(error.into()),
+        },
         ["audit", rest @ ..] => cli::audit_command(rest).await,
         ["backup", rest @ ..] => backup::command(rest).await,
         ["healthcheck"] => match parse_bind() {
@@ -231,6 +244,7 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     let alexa_settings = alexa_settings()?;
     let backup_settings = backup::settings()?;
     let weather_config = weather_config(location)?;
+    let vigilance_config = vigilance_config()?;
     let person_configs = ha_person::load(&persons_path())
         .map_err(|error| format!("{} : {error}", persons_path().display()))?;
     let input_config = ha_input::load(&inputs_path())
@@ -390,6 +404,13 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         Some(config) => Some(ha_weather::Weather::start(config, Arc::clone(&core))?),
         None => None,
     };
+    let vigilance = match vigilance_config {
+        Some(config) => Some(ha_weather::vigilance::Vigilance::start(
+            config,
+            Arc::clone(&core),
+        )?),
+        None => None,
+    };
     let notifier = match ntfy {
         Some(config) => {
             for warning in config.warnings() {
@@ -508,6 +529,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     if let Some(weather) = weather {
         weather.stop().await;
     }
+    if let Some(vigilance) = vigilance {
+        vigilance.stop().await;
+    }
     if let Some(freebox) = freebox {
         freebox.stop().await;
     }
@@ -589,6 +613,32 @@ fn weather_config(location: Option<Location>) -> Result<Option<ha_weather::Confi
         }
         Ok(other) => Err(format!("HA_METEO : « {other} » invalide (on ou off)")),
     }
+}
+
+/// La vigilance Météo-France : `HA_VIGILANCE_DEPARTEMENT` et la clé
+/// (`HA_VIGILANCE_KEY_FILE`, conseillé, ou `HA_VIGILANCE_KEY`).
+fn vigilance_config() -> Result<Option<ha_weather::vigilance::VigilanceConfig>, String> {
+    let Ok(department) = std::env::var("HA_VIGILANCE_DEPARTEMENT") else {
+        return Ok(None);
+    };
+    // Comme pour MQTT et ntfy, un fichier est préférable à une variable
+    // d'environnement pour un secret.
+    let key = match std::env::var("HA_VIGILANCE_KEY_FILE") {
+        Ok(path) => Zeroizing::new(
+            std::fs::read_to_string(&path)
+                .map_err(|error| format!("lecture de HA_VIGILANCE_KEY_FILE ({path}) : {error}"))?,
+        ),
+        Err(_) => std::env::var("HA_VIGILANCE_KEY")
+            .map(Zeroizing::new)
+            .map_err(|_| {
+                "HA_VIGILANCE_DEPARTEMENT : il faut aussi la clé de l'API Météo-France \
+             (HA_VIGILANCE_KEY_FILE), voir docs/vigilance.md"
+            })?,
+    };
+    let url = std::env::var("HA_VIGILANCE_URL").ok();
+    ha_weather::vigilance::VigilanceConfig::new(&department, &key, url.as_deref())
+        .map(Some)
+        .map_err(|error| error.to_string())
 }
 
 pub(crate) fn persons_path() -> std::path::PathBuf {

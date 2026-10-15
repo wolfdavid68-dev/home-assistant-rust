@@ -1190,8 +1190,10 @@ name = "ha-weather"
 version = "0.1.0"
 dependencies = [
  "ha-core",
+ "ha-notices",
  "ha-sun",
  "ha-tls",
+ "jiff",
  "reqwest",
  "serde",
  "serde_json",
@@ -1199,6 +1201,7 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+ "zeroize",
 ]
 
 [[package]]

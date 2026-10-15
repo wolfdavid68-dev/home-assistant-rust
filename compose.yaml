@@ -44,6 +44,10 @@ services:
       # adresses de tes Echo :
       # HA_ALEXA_IP: 192.168.1.20
       # HA_ALEXA_ALLOWED: 192.168.1.40,192.168.1.41
+      # Vigilance Météo-France (voir docs/vigilance.md) : ton département, et la
+      # clé de l'API dans secrets/meteofrance.txt (avec « secrets » plus bas) :
+      # HA_VIGILANCE_DEPARTEMENT: "67"
+      # HA_VIGILANCE_KEY_FILE: /run/secrets/meteofrance
       # Broker MQTT (étape 4), facultatif :
       # HA_MQTT_HOST: 192.168.1.20
       # HA_MQTT_USER: ha-server
@@ -63,6 +67,7 @@ services:
       - ./config:/config:ro
     # secrets:
     #   - mqtt_password
+    #   - meteofrance
     # Alexa : la découverte (multicast) exige le réseau de la machine. La
     # ligne « ports » ci-dessus ne sert alors plus : mets HA_BIND sur
     # l'adresse voulue (voir docs/alexa.md).
@@ -114,3 +119,5 @@ volumes:
 # secrets:
 #   mqtt_password:
 #     file: ./secrets/mqtt_password
+#   meteofrance:
+#     file: ./secrets/meteofrance.txt

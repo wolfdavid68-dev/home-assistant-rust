@@ -53,6 +53,10 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
 - Météo (Open-Meteo) : désactivée par défaut ; HTTPS obligatoire hors réseau local ; la position envoyée est
   arrondie à 0,1° (environ 10 km) et n'apparaît jamais dans les logs, même dans un message d'erreur ; réponses
   limitées à 256 Kio et valeurs vérifiées.
+- Vigilance (Météo-France) : désactivée par défaut ; HTTPS obligatoire hors réseau local, aucune redirection
+  suivie ; clé lue dans un fichier, envoyée seulement dans l'en-tête `apikey`, absente des logs, des erreurs et
+  de `Debug` ; la carte demandée est nationale (le département n'est pas envoyé) ; réponses limitées à 4 Mio,
+  valeurs vérifiées, département absent ou carte périmée jamais pris pour du vert.
 - Freebox : même principe, en **lecture seule** ; le jeton ne circule jamais (session par défi HMAC).
 - Box Somfy TaHoma : même principe. Le compte Somfy ne sert qu'une fois, à créer le jeton local ; le mot de
   passe n'est jamais enregistré. Portails et portes de garage ne sont pas pilotables sans réflexion dédiée.

@@ -12,7 +12,9 @@
 //! 10 km) avant d'être envoyée : assez pour la météo, trop flou pour te
 //! situer. Elle n'est jamais écrite dans les logs, même dans un message d'erreur.
 
+pub mod carte;
 pub mod openmeteo;
+pub mod vigilance;
 
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -61,6 +63,8 @@ const SENSORS: [(&str, &str, &str, &str); 4] = [
 pub enum WeatherError {
     #[error("adresse du service météo invalide : {0}")]
     Url(String),
+    #[error("vigilance : {0}")]
+    Vigilance(String),
 }
 
 /// Réglages.
@@ -78,27 +82,7 @@ impl Config {
     /// `url` : `None` pour Open-Meteo ; sinon un serveur Open-Meteo
     /// auto-hébergé (HTTP accepté seulement sur le réseau local).
     pub fn new(location: Location, url: Option<&str>) -> Result<Self, WeatherError> {
-        let url = url::Url::parse(url.unwrap_or(DEFAULT_URL).trim())
-            .map_err(|error| WeatherError::Url(error.to_string()))?;
-        match url.scheme() {
-            "https" => {}
-            "http" if is_local(&url) => {}
-            "http" => {
-                return Err(WeatherError::Url(
-                    "HTTP non chiffré seulement vers le réseau local ; utilise https://".into(),
-                ));
-            }
-            other => return Err(WeatherError::Url(format!("protocole {other:?} refusé"))),
-        }
-        if !url.username().is_empty()
-            || url.password().is_some()
-            || url.query().is_some()
-            || url.fragment().is_some()
-        {
-            return Err(WeatherError::Url(
-                "pas d'identifiants, de « ? » ni de « # » dans l'adresse".into(),
-            ));
-        }
+        let url = check_url(url.unwrap_or(DEFAULT_URL))?;
         Ok(Self {
             url,
             latitude: round(location.latitude()),
@@ -119,6 +103,32 @@ impl Config {
     pub fn server(&self) -> String {
         self.url.host_str().unwrap_or("?").to_owned()
     }
+}
+
+/// Vérifie l'adresse d'un service : HTTPS, ou HTTP sur le réseau local ;
+/// sans identifiants, `?` ni `#`.
+pub(crate) fn check_url(raw: &str) -> Result<url::Url, WeatherError> {
+    let url = url::Url::parse(raw.trim()).map_err(|error| WeatherError::Url(error.to_string()))?;
+    match url.scheme() {
+        "https" => {}
+        "http" if is_local(&url) => {}
+        "http" => {
+            return Err(WeatherError::Url(
+                "HTTP non chiffré seulement vers le réseau local ; utilise https://".into(),
+            ));
+        }
+        other => return Err(WeatherError::Url(format!("protocole {other:?} refusé"))),
+    }
+    if !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return Err(WeatherError::Url(
+            "pas d'identifiants, de « ? » ni de « # » dans l'adresse".into(),
+        ));
+    }
+    Ok(url)
 }
 
 /// Arrondi à 0,1° (environ 10 km).
@@ -286,7 +296,7 @@ fn mark_unavailable(core: &Core) {
     }
 }
 
-fn set(core: &Core, entity: &str, state: &str, attributes: Attributes) {
+pub(crate) fn set(core: &Core, entity: &str, state: &str, attributes: Attributes) {
     let Ok(entity_id) = entity.parse::<EntityId>() else {
         return;
     };
@@ -302,7 +312,7 @@ fn set(core: &Core, entity: &str, state: &str, attributes: Attributes) {
     }
 }
 
-fn object(value: Value) -> Attributes {
+pub(crate) fn object(value: Value) -> Attributes {
     match value {
         Value::Object(map) => map,
         _ => Attributes::new(),
