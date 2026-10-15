@@ -1,0 +1,23 @@
+[package]
+name = "ha-energy"
+description = "Bilan énergétique : consommation et production par jour, mois et année, avec leur coût"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ha-core = { path = "../ha-core" }
+ha-storage = { path = "../ha-storage" }
+jiff.workspace = true
+serde.workspace = true
+serde-saphyr.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+sqlx.workspace = true
+tokio = { workspace = true, features = ["sync", "rt", "macros", "time"] }
+
+[lints]
+workspace = true

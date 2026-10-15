@@ -31,6 +31,7 @@
 //! ha-server persons check         vérifie le fichier des personnes
 //! ha-server inputs check          vérifie le fichier des entrées
 //! ha-server derived check         vérifie le fichier des assistants calculés
+//! ha-server energy check          vérifie le fichier du bilan énergétique
 //! ha-server audit [nombre]        affiche le journal d'audit
 //! ha-server audit verify          vérifie que le journal n'a pas été modifié
 //! ha-server backup now          sauvegarde la base (même serveur en marche)
@@ -57,6 +58,11 @@
 //! - `HA_INPUTS_PATH` : fichier des entrées (par défaut `inputs.yaml`) ;
 //! - `HA_DERIVED_PATH` : fichier des assistants calculés (groupes, plages
 //!   horaires, moyennes, seuils, consommation ; par défaut `derived.yaml`) ;
+//! - `HA_TELEINFO` : compteur Linky, `/dev/ttyUSB0` (module USB) ou
+//!   `tcp://192.168.1.50:3333` (module réseau) ; `HA_TELEINFO_MODE` :
+//!   `auto` (par défaut), `historique` ou `standard` ;
+//! - `HA_ENERGY_PATH` : compteurs et prix du bilan énergétique (par défaut
+//!   `energy.yaml`) ;
 //! - `HA_THERMOSTATS_PATH` : fichier des thermostats (par défaut `thermostats.yaml`) ;
 //! - `HA_BACKUP_DIR`, `HA_BACKUP_TIME` (03:30), `HA_BACKUP_KEEP` (7) :
 //!   sauvegardes automatiques chaque nuit ;
@@ -137,6 +143,7 @@ async fn main() -> ExitCode {
         ["persons", "check"] => cli::check_persons(&persons_path()),
         ["inputs", "check"] => cli::check_inputs(&inputs_path()),
         ["derived", "check"] => cli::check_derived(&derived_path()),
+        ["energy", "check"] => cli::check_energy(&energy_path()),
         ["audit", rest @ ..] => cli::audit_command(rest).await,
         ["backup", rest @ ..] => backup::command(rest).await,
         ["healthcheck"] => match parse_bind() {
@@ -230,6 +237,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         .map_err(|error| format!("{} : {error}", inputs_path().display()))?;
     let derived_config = ha_derived::load(&derived_path())
         .map_err(|error| format!("{} : {error}", derived_path().display()))?;
+    let energy_config = ha_energy::load(&energy_path())
+        .map_err(|error| format!("{} : {error}", energy_path().display()))?;
+    let teleinfo_config = teleinfo_config()?;
     let thermostat_configs = ha_thermostat::load(&thermostats_path())
         .map_err(|error| format!("{} : {error}", thermostats_path().display()))?;
     if location.is_none() && ha_automation::uses_sun(&automations) {
@@ -319,6 +329,7 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
             editable,
             traces: traces.clone(),
         }),
+        energy_config,
     );
     let api = tokio::spawn(ha_api::serve(listener, Arc::clone(&api_state)));
 
@@ -343,6 +354,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
 
     // Vrais appareils (MQTT) ou, à défaut, appareils simulés.
     let mqtt = mqtt_config.map(|config| Mqtt::start(config, Arc::clone(&core)));
+    // Le compteur Linky, s'il est branché.
+    let teleinfo =
+        teleinfo_config.map(|config| ha_teleinfo::Teleinfo::start(config, Arc::clone(&core)));
     let engine = Engine::start_with(
         ha_automation::Setup {
             automations,
@@ -431,7 +445,11 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         }
         None => None,
     };
-    let mut simulation = if mqtt.is_none() && hue.is_none() && somfy.is_none() && freebox.is_none()
+    let mut simulation = if mqtt.is_none()
+        && hue.is_none()
+        && somfy.is_none()
+        && freebox.is_none()
+        && teleinfo.is_none()
     {
         info!("aucun appareil configuré (MQTT, Hue, Somfy, Freebox) : appareils simulés");
         Some(tokio::spawn(simulate_devices(Arc::clone(&core))))
@@ -478,6 +496,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     notices.stop().await;
     logbook.stop().await;
     statistics.stop().await;
+    if let Some(teleinfo) = teleinfo {
+        teleinfo.stop().await;
+    }
     if let Some(notifier) = notifier {
         notifier.stop().await;
     }
@@ -574,6 +595,23 @@ pub(crate) fn persons_path() -> std::path::PathBuf {
     std::env::var("HA_PERSONS_PATH")
         .unwrap_or_else(|_| "persons.yaml".to_owned())
         .into()
+}
+
+pub(crate) fn energy_path() -> std::path::PathBuf {
+    std::env::var("HA_ENERGY_PATH")
+        .unwrap_or_else(|_| "energy.yaml".to_owned())
+        .into()
+}
+
+/// Le compteur Linky (`HA_TELEINFO`), s'il est branché.
+fn teleinfo_config() -> Result<Option<ha_teleinfo::Config>, String> {
+    let Ok(source) = std::env::var("HA_TELEINFO") else {
+        return Ok(None);
+    };
+    let mode = std::env::var("HA_TELEINFO_MODE").ok();
+    ha_teleinfo::Config::parse(&source, mode.as_deref())
+        .map(Some)
+        .map_err(|error| format!("HA_TELEINFO : {error}"))
 }
 
 pub(crate) fn derived_path() -> std::path::PathBuf {

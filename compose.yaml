@@ -48,6 +48,10 @@ services:
       # HA_MQTT_HOST: 192.168.1.20
       # HA_MQTT_USER: ha-server
       # HA_MQTT_PASSWORD_FILE: /run/secrets/mqtt_password
+      # Compteur Linky (voir docs/energie.md) : module USB (avec « devices »
+      # et « group_add » plus bas), ou module réseau :
+      # HA_TELEINFO: /dev/ttyUSB0
+      # HA_TELEINFO: tcp://192.168.1.50:3333
     volumes:
       - ha-data:/data
       # La clé qui chiffre les jetons Hue et Somfy, à part de la base.
@@ -63,6 +67,13 @@ services:
     # ligne « ports » ci-dessus ne sert alors plus : mets HA_BIND sur
     # l'adresse voulue (voir docs/alexa.md).
     # network_mode: host
+    # Compteur Linky sur un module USB : le conteneur ne voit que ce port, et
+    # le groupe du port lui donne le droit de le lire. Ce groupe est un
+    # numéro : celui que donne « ls -ln /dev/ttyUSB0 » (souvent 20, dialout).
+    # devices:
+    #   - /dev/ttyUSB0:/dev/ttyUSB0
+    # group_add:
+    #   - "20"
 
     # Durcissement : le programme n'a besoin d'aucun privilège.
     user: "65532:65532"

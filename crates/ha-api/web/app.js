@@ -329,6 +329,7 @@ function renderHome() {
   $("#today").textContent = fullDate.format(now);
   $("#clock").textContent = hourMinute.format(now);
   renderNotices();
+  if ($("#energy").open) renderEnergyNow();
 
   // La salutation, et ce qui demande de l'attention.
   const hour = now.getHours();
@@ -2205,6 +2206,208 @@ $("#open-notices").addEventListener("click", () => {
 });
 $("#notices-close").addEventListener("click", () => $("#notices").close());
 
+// ---------------------------------------------------------------- Énergie
+// Le bilan vient de GET /api/energy (statistiques long terme, par jour et
+// par mois). La puissance et la période tarifaire viennent du Linky, en direct.
+
+const energyView = { range: "30", report: null };
+const kwhFormat = new Intl.NumberFormat("fr", { maximumFractionDigits: 1 });
+const axisFormat = new Intl.NumberFormat("fr", { maximumFractionDigits: 0 });
+const euros = new Intl.NumberFormat("fr", { style: "currency", currency: "EUR" });
+const monthName = new Intl.DateTimeFormat("fr", { month: "short" });
+/** Couleurs des compteurs : 6 au plus (au-delà, on recommence). */
+const SERIES = 6;
+
+async function openEnergy() {
+  $("#energy").showModal();
+  await loadEnergy();
+}
+
+async function loadEnergy() {
+  for (const button of document.querySelectorAll("#energy .period")) {
+    button.setAttribute("aria-pressed", String(button.dataset.range === energyView.range));
+  }
+  const days = energyView.range === "year" ? 1 : Number(energyView.range);
+  const { status, data } = await api("GET", `/api/energy?days=${days}`);
+  if (status !== 200) {
+    $("#energy-chart").replaceChildren(el("p", { class: "auto-empty", text: "Bilan indisponible." }));
+    return;
+  }
+  energyView.report = data;
+  renderEnergy();
+}
+
+for (const button of document.querySelectorAll("#energy .period")) {
+  button.addEventListener("click", () => {
+    energyView.range = button.dataset.range;
+    loadEnergy();
+  });
+}
+$("#open-energy").addEventListener("click", () => openEnergy());
+$("#energy-close").addEventListener("click", () => $("#energy").close());
+
+/** La puissance et la période tarifaire du moment (si le Linky est branché). */
+function renderEnergyNow() {
+  const power = entities.get("sensor.linky_puissance");
+  const period = entities.get("sensor.linky_periode");
+  const box = $("#energy-now");
+  const parts = [];
+  if (power && Number.isFinite(Number(power.state))) {
+    parts.push(el("span", { class: "energy-power" }, el("strong", { text: kwhFormat.format(Number(power.state)) }), " VA en ce moment"));
+  }
+  if (period && period.state !== "unavailable") parts.push(el("span", { class: "badge", text: period.state }));
+  box.hidden = parts.length === 0;
+  box.replaceChildren(...parts);
+}
+
+/** Les périodes affichées : chaque jour (ou mois), même sans donnée. */
+function energyPeriods(report) {
+  const byDate = new Map();
+  for (const row of energyView.range === "year" ? report.months : report.days) byDate.set(row.date, row.kwh);
+  const periods = [];
+  const today = new Date();
+  if (energyView.range === "year") {
+    for (let month = 0; month <= today.getMonth(); month++) {
+      const date = `${today.getFullYear()}-${String(month + 1).padStart(2, "0")}`;
+      periods.push({ date, label: monthName.format(new Date(today.getFullYear(), month, 1)), kwh: byDate.get(date) ?? [] });
+    }
+  } else {
+    for (let back = Number(energyView.range) - 1; back >= 0; back--) {
+      const day = new Date(today.getFullYear(), today.getMonth(), today.getDate() - back);
+      const date = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+      periods.push({ date, label: shortDay.format(day), kwh: byDate.get(date) ?? [] });
+    }
+  }
+  return periods;
+}
+
+const known = (value) => value !== null && value !== undefined;
+
+function totalTile(title, total) {
+  const tile = el("div", { class: "energy-total" }, el("span", { class: "label", text: title }),
+    el("strong", { text: `${kwhFormat.format(total.consumed_kwh)} kWh` }));
+  if (known(total.cost)) tile.append(el("small", { text: `≈ ${euros.format(total.cost)}` }));
+  if (total.produced_kwh > 0) {
+    const revenue = known(total.revenue) ? ` · ${euros.format(total.revenue)}` : "";
+    tile.append(el("small", { text: `${kwhFormat.format(total.produced_kwh)} kWh produits${revenue}` }));
+  }
+  return tile;
+}
+
+function renderEnergy() {
+  const report = energyView.report;
+  renderEnergyNow();
+  const sources = report.sources ?? [];
+  const empty = sources.length === 0;
+  for (const id of ["#energy-totals", "#energy-legend", "#energy-details"]) $(id).hidden = empty;
+  if (empty) {
+    $("#energy-chart").replaceChildren(
+      el("p", { class: "auto-empty", text: "Aucun compteur d'énergie pour l'instant. Branche le Linky (HA_TELEINFO), ou indique tes compteurs et leurs prix dans energy.yaml." }),
+    );
+    $("#energy-note").textContent = "";
+    return;
+  }
+  $("#energy-totals").replaceChildren(
+    totalTile("Aujourd'hui", report.today),
+    totalTile("Ce mois-ci", report.month),
+    totalTile("Cette année", report.year),
+  );
+
+  const periods = energyPeriods(report);
+  // Le graphique prend la largeur de l'écran : le texte reste lisible sur téléphone.
+  const C = { ...CHART, left: 64, width: Math.max(320, Math.min(640, Math.round($("#energy-chart").clientWidth) || 640)) };
+  const value = (period, index) => period.kwh[index] ?? 0;
+  const consumption = sources.map((s, i) => [s, i]).filter(([s]) => s.kind === "consumption");
+  const production = sources.map((s, i) => [s, i]).filter(([s]) => s.kind === "production");
+  const sum = (period, list) => list.reduce((total, [, i]) => total + value(period, i), 0);
+  const high = Math.max(1e-9, ...periods.map((p) => sum(p, consumption)));
+  const low = Math.max(0, ...periods.map((p) => sum(p, production)));
+  const top = high * 1.1;
+  const bottom = low * 1.1;
+  const plot = C.height - C.top - C.bottom;
+  const y = (v) => C.top + ((top - v) / (top + bottom)) * plot;
+  const step = (C.width - C.left - C.right) / periods.length;
+  const width = Math.max(2, step * 0.7);
+  const x = (index) => C.left + index * step + (step - width) / 2;
+  const chart = svg("svg", { viewBox: `0 0 ${C.width} ${C.height}`, role: "img", "aria-label": "Consommation par période, en kWh" });
+
+  for (const v of [high, high / 2, ...(low > 0 ? [-low] : [])]) {
+    chart.append(svg("line", { x1: C.left, x2: C.width - C.right, y1: y(v), y2: y(v), class: "grid" }));
+    const label = svg("text", { x: C.left - 6, y: y(v) + 4, class: "axis", "text-anchor": "end" });
+    label.textContent = `${axisFormat.format(Math.abs(v))} kWh`;
+    chart.append(label);
+  }
+  chart.append(svg("line", { x1: C.left, x2: C.width - C.right, y1: y(0), y2: y(0), class: "baseline" }));
+  const labelAt = new Set([0, Math.floor((periods.length - 1) / 2), periods.length - 1]);
+  periods.forEach((period, index) => {
+    if (labelAt.has(index)) {
+      const anchor = index === 0 ? "start" : index === periods.length - 1 ? "end" : "middle";
+      const at = anchor === "start" ? x(index) : anchor === "end" ? x(index) + width : x(index) + width / 2;
+      const label = svg("text", { x: at, y: C.height - 8, class: "axis", "text-anchor": anchor });
+      label.textContent = period.label;
+      chart.append(label);
+    }
+    // Les compteurs empilés, avec 2 px d'écart entre eux ; la production vers le bas.
+    for (const [list, direction] of [[consumption, 1], [production, -1]]) {
+      let base = 0;
+      for (const [source, i] of list) {
+        const v = value(period, i);
+        if (v <= 0) continue;
+        const from = y(direction * base);
+        const to = y(direction * (base + v));
+        const gap = base > 0 ? 2 : 0;
+        const rect = svg("rect", {
+          x: x(index),
+          width,
+          y: direction > 0 ? Math.min(from, to) : Math.min(from, to) + gap,
+          height: Math.max(1, Math.abs(to - from) - gap),
+          rx: Math.min(3, width / 2),
+          class: `energy-bar series-${(i % SERIES) + 1}`,
+        });
+        const title = svg("title");
+        title.textContent = `${period.label} · ${source.name} : ${kwhFormat.format(v)} kWh`;
+        rect.append(title);
+        chart.append(rect);
+        base += v;
+      }
+    }
+    // Une zone de survol plus grande que la barre, avec le total.
+    const hit = svg("rect", { x: C.left + index * step, y: C.top, width: step, height: plot, class: "hit" });
+    const title = svg("title");
+    const parts = [`${kwhFormat.format(sum(period, consumption))} kWh consommés`];
+    if (production.length) parts.push(`${kwhFormat.format(sum(period, production))} kWh produits`);
+    title.textContent = `${period.label} : ${parts.join(", ")}`;
+    hit.append(title);
+    chart.append(hit);
+  });
+  $("#energy-chart").replaceChildren(chart);
+
+  // Légende : chaque compteur, son total sur la période et son coût.
+  $("#energy-legend").replaceChildren(
+    ...sources.map((source, i) => {
+      const total = periods.reduce((t, p) => t + value(p, i), 0);
+      const cost = known(source.price) ? ` · ${euros.format(total * source.price)}` : "";
+      return el("li", {},
+        el("span", { class: `swatch series-${(i % SERIES) + 1}`, "aria-hidden": "true" }),
+        el("span", { text: source.name }),
+        el("small", { text: `${kwhFormat.format(total)} kWh${source.kind === "production" ? " produits" : ""}${cost}` }),
+      );
+    }),
+  );
+
+  // Le tableau des chiffres (pour lire sans le graphique).
+  const head = el("tr", {}, el("th", { text: energyView.range === "year" ? "Mois" : "Jour" }), ...sources.map((s) => el("th", { text: s.name })));
+  const rows = [...periods].reverse().map((period) =>
+    el("tr", {}, el("th", { text: period.label }), ...sources.map((_, i) => el("td", { text: known(period.kwh[i]) ? kwhFormat.format(period.kwh[i]) : "–" }))),
+  );
+  $("#energy-table").replaceChildren(el("thead", {}, head), el("tbody", {}, ...rows));
+
+  const notes = ["Les chiffres sont calculés à la fin de chaque heure : l'heure en cours n'est pas encore comptée."];
+  if (known(report.subscription)) notes.push(`Abonnement : ${euros.format(report.subscription)} par mois, en plus.`);
+  if (!report.configured) notes.push("Pour ajouter les prix, voir energy.yaml.");
+  $("#energy-note").textContent = notes.join(" ");
+}
+
 $("#open-automations").addEventListener("click", () => {
   $("#automations").showModal();
   showAutoList();
@@ -3261,6 +3464,8 @@ async function loadAccount() {
   $("#dock-logbook").hidden = !account.permissions.history;
   $("#open-automations").hidden = !account.permissions.automations;
   $("#dock-automations").hidden = !account.permissions.automations;
+  $("#open-energy").hidden = !account.permissions.history;
+  $("#dock-energy").hidden = !account.permissions.history;
   $("#journal").hidden = !account.permissions.audit;
   $(".dock").style.gridTemplateColumns = `repeat(${$(".dock").querySelectorAll(":scope > :not([hidden])").length}, minmax(0, 1fr))`;
   renderAll();
@@ -3283,6 +3488,7 @@ $("#dock-home").addEventListener("click", (event) => {
 });
 $("#dock-logbook").addEventListener("click", () => openLogbook());
 $("#dock-automations").addEventListener("click", () => $("#open-automations").click());
+$("#dock-energy").addEventListener("click", () => openEnergy());
 for (const opener of ["#dock-account", "#open-account"]) {
   $(opener).addEventListener("click", () => $("#account-dialog").showModal());
 }
