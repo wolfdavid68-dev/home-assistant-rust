@@ -41,6 +41,7 @@ utilisation :
   ha-server areas check           vérifie le fichier des pièces
   ha-server alexa check           vérifie le fichier des appareils pour Alexa
   ha-server thermostats check     vérifie le fichier des thermostats
+  ha-server persons check         vérifie le fichier des personnes
   ha-server audit [nombre]        affiche le journal d'audit
   ha-server audit verify          vérifie que le journal n'a pas été modifié
   ha-server backup now            sauvegarde la base (même serveur en marche)
@@ -962,6 +963,30 @@ pub fn check_thermostats(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
         println!(
             "  - climate.{} « {} » : {} d'après {}{window}, {}–{} °C",
             t.id, t.name, t.heater, t.sensor, t.min_temp, t.max_temp
+        );
+    }
+    Ok(())
+}
+
+/// `ha-server persons check` : vérifie `persons.yaml`.
+pub fn check_persons(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
+    if !path.exists() {
+        println!("{} n'existe pas : aucune personne.", path.display());
+        return Ok(());
+    }
+    let persons = ha_person::load(path).map_err(|error| format!("{} : {error}", path.display()))?;
+    println!("{} : {} personne(s)", path.display(), persons.len());
+    for person in &persons {
+        let trackers: Vec<&str> = person
+            .trackers
+            .iter()
+            .map(ha_core::EntityId::as_str)
+            .collect();
+        println!(
+            "  - person.{} « {} » : {}",
+            person.id,
+            person.name,
+            trackers.join(", ")
         );
     }
     Ok(())

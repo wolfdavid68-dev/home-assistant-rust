@@ -241,3 +241,30 @@
                 - action: climate.set_preset_mode
                   target: {entity_id: climate.salon}
                   data: {preset_mode: absent}
+
+# Personnes et zone Maison (il faut persons.yaml, voir docs/personnes.md) :
+# zone.home vaut le nombre de personnes à la maison.
+- id: dernier_parti
+  alias: Le dernier est parti
+  triggers:
+    - trigger: state
+      entity_id: zone.home
+      to: "0"
+      for: 5min                  # pas pour un aller-retour à la boîte aux lettres
+  actions:
+    - action: light.turn_off
+      target: {entity_id: [light.salon, light.entree]}
+    - action: climate.set_preset_mode
+      target: {entity_id: climate.salon}
+      data: {preset_mode: absent}
+
+- id: premier_arrive
+  alias: Le premier est arrivé
+  triggers:
+    - trigger: state
+      entity_id: zone.home
+      from: "0"
+  actions:
+    - action: climate.set_preset_mode
+      target: {entity_id: climate.salon}
+      data: {preset_mode: confort}
