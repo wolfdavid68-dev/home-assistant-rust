@@ -173,7 +173,7 @@ function markPending(entityId) {
 const SECTIONS = [
   { title: "Scènes et scripts", domains: ["scene", "script"] },
   // Les capteurs de la météo (sensor.meteo_…) vont avec la météo.
-  { title: "Météo, présence et soleil", domains: ["weather", "device_tracker", "sun", "notify"], extra: (s) => s.entity_id.startsWith("sensor.meteo_") },
+  { title: "Météo, présence et soleil", domains: ["weather", "zone", "person", "device_tracker", "sun", "notify"], extra: (s) => s.entity_id.startsWith("sensor.meteo_") },
   { title: "Chauffage", domains: ["climate"] },
   { title: "Lumières", domains: ["light"] },
   { title: "Volets", domains: ["cover"] },
@@ -202,8 +202,8 @@ async function loadAreas() {
 
 function renderAll() {
   const container = $("#sections");
-  // Par nom, sauf la météo, toujours en tête de sa section.
-  const first = (state) => (domainOf(state) === "weather" ? 0 : 1);
+  // Par nom, sauf la météo, la maison et les personnes, en tête de leur section.
+  const first = (state) => lookup({ weather: 0, zone: 1, person: 2 }, domainOf(state)) ?? 3;
   const sorted = [...entities.values()].sort(
     (a, b) => first(a) - first(b) || nameOf(a).localeCompare(nameOf(b), "fr"),
   );
@@ -244,7 +244,9 @@ function renderTileContent(state) {
   switch (domainOf(state)) {
     case "light": return lightTile(state);
     case "cover": return coverTile(state);
-    case "device_tracker": return presenceTile(state);
+    case "device_tracker":
+    case "person": return presenceTile(state);
+    case "zone": return zoneTile(state);
     case "sun": return sunTile(state);
     case "weather": return weatherTile(state);
     case "climate": return climateTile(state);
@@ -358,6 +360,21 @@ function presenceTile(state) {
     "div",
     { id: tileId(state.entity_id), class: tileClass(state, "binary") + (home ? " on" : "") },
     tileHead(state, ICONS.person, text),
+  );
+}
+
+// La maison : combien de personnes sont là, et qui.
+function zoneTile(state) {
+  const count = Number(state.state);
+  const names = Array.isArray(state.attributes.persons)
+    ? state.attributes.persons.filter((name) => typeof name === "string") : [];
+  const text = !Number.isFinite(count) ? statusText(state)
+    : count === 0 ? "Personne à la maison"
+    : `${names.join(", ") || count} ${count > 1 ? "sont" : "est"} à la maison`;
+  return el(
+    "div",
+    { id: tileId(state.entity_id), class: `tile binary${count > 0 ? " on" : ""}` },
+    tileHead(state, ICONS.home, text),
   );
 }
 
@@ -680,6 +697,7 @@ const ICONS = {
   data_rate: ["M4 17l5-5 4 4 7-8", "M15 8h5v5"],
   cloud: ["M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z"],
   archive: ["M3 4h18v4H3z", "M5 8v12h14V8", "M10 12h4"],
+  home: ["M3 11l9-8 9 8", "M5 10v10h14V10", "M10 20v-6h4v6"],
   flame: ["M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"],
   partly: ["M12 2v2", "M4.9 4.9l1.4 1.4", "M20 12h2", "M19.1 4.9l-1.4 1.4", "M15.9 13A4 4 0 0 0 8.1 9.2", "M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6z"],
   rain: ["M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2", "M16 14v6", "M8 14v6", "M12 16v6"],
@@ -852,7 +870,7 @@ function historyLabel(value, unit) {
   if (value === null) return "supprimé";
   const state = entities.get(historyView.entityId);
   const domain = historyView.entityId.split(".")[0];
-  if (domain === "device_tracker") return value === "home" ? "À la maison" : value === "not_home" ? "Absent" : value;
+  if (domain === "device_tracker" || domain === "person") return value === "home" ? "À la maison" : value === "not_home" ? "Absent" : value;
   if (domain === "sun") return value === "above_horizon" ? "Levé" : value === "below_horizon" ? "Couché" : value;
   if (domain === "cover") return lookup(COVER_LABELS, value) ?? value;
   if (domain === "binary_sensor") {

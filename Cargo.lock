@@ -957,6 +957,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "ha-person"
+version = "0.1.0"
+dependencies = [
+ "ha-automation",
+ "ha-core",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "ha-server"
 version = "0.1.0"
 dependencies = [
@@ -970,6 +984,7 @@ dependencies = [
  "ha-hue",
  "ha-mqtt",
  "ha-notify",
+ "ha-person",
  "ha-somfy",
  "ha-storage",
  "ha-sun",

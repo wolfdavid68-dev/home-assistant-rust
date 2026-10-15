@@ -1,0 +1,17 @@
+# Personnes (voir docs/personnes.md).
+# Copie ce fichier en persons.yaml (avec Docker : config/persons.yaml).
+#
+# Une personne regroupe ses appareils : elle est « à la maison » dès que
+# l'un d'eux l'est. Les appareils sont ceux que suit la Freebox
+# (ha-server freebox track), ou des capteurs (binary_sensor : « on » = présent).
+
+- id: david
+  name: David
+  trackers:
+    - device_tracker.telephone_david
+    - device_tracker.pc_david
+
+- id: alice
+  name: Alice
+  trackers:
+    - device_tracker.telephone_alice

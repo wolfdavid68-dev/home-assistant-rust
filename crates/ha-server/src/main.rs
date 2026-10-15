@@ -26,6 +26,7 @@
 //! ha-server areas check           vérifie le fichier des pièces
 //! ha-server alexa check           vérifie le fichier des appareils pour Alexa
 //! ha-server thermostats check     vérifie le fichier des thermostats
+//! ha-server persons check         vérifie le fichier des personnes
 //! ha-server audit [nombre]        affiche le journal d'audit
 //! ha-server audit verify          vérifie que le journal n'a pas été modifié
 //! ha-server backup now          sauvegarde la base (même serveur en marche)
@@ -48,6 +49,7 @@
 //! - `HA_MQTT_DISCOVERY_PREFIX` : préfixe de découverte (par défaut `homeassistant`) ;
 //! - `HA_LATITUDE` et `HA_LONGITUDE` : position de la maison, pour le soleil
 //!   (deux décimales suffisent, par exemple 48.85 et 2.35) ;
+//! - `HA_PERSONS_PATH` : fichier des personnes (par défaut `persons.yaml`) ;
 //! - `HA_THERMOSTATS_PATH` : fichier des thermostats (par défaut `thermostats.yaml`) ;
 //! - `HA_BACKUP_DIR`, `HA_BACKUP_TIME` (03:30), `HA_BACKUP_KEEP` (7) :
 //!   sauvegardes automatiques chaque nuit ;
@@ -125,6 +127,7 @@ async fn main() -> ExitCode {
         ["areas", "check"] => cli::check_areas(&areas_path()),
         ["alexa", "check"] => cli::check_alexa(&alexa_path()),
         ["thermostats", "check"] => cli::check_thermostats(&thermostats_path()),
+        ["persons", "check"] => cli::check_persons(&persons_path()),
         ["audit", rest @ ..] => cli::audit_command(rest).await,
         ["backup", rest @ ..] => backup::command(rest).await,
         ["healthcheck"] => match parse_bind() {
@@ -212,6 +215,8 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     let alexa_settings = alexa_settings()?;
     let backup_settings = backup::settings()?;
     let weather_config = weather_config(location)?;
+    let person_configs = ha_person::load(&persons_path())
+        .map_err(|error| format!("{} : {error}", persons_path().display()))?;
     let thermostat_configs = ha_thermostat::load(&thermostats_path())
         .map_err(|error| format!("{} : {error}", thermostats_path().display()))?;
     if location.is_none() && ha_automation::uses_sun(&automations) {
@@ -299,6 +304,8 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     let sun = location.map(|location| SunTracker::start(location, Arc::clone(&core)));
     // Après la restauration des états : chaque thermostat reprend sa
     // consigne et son mode d'avant l'arrêt.
+    let persons = (!person_configs.is_empty())
+        .then(|| ha_person::Persons::start(person_configs, Arc::clone(&core)));
     let thermostats = (!thermostat_configs.is_empty())
         .then(|| ha_thermostat::Thermostats::start(thermostat_configs, Arc::clone(&core)));
     let backups = if let Some(settings) = backup_settings {
@@ -403,6 +410,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     if let Some(thermostats) = thermostats {
         thermostats.stop().await;
     }
+    if let Some(persons) = persons {
+        persons.stop().await;
+    }
     engine.stop().await;
     if let Some(notifier) = notifier {
         notifier.stop().await;
@@ -494,6 +504,12 @@ fn weather_config(location: Option<Location>) -> Result<Option<ha_weather::Confi
         }
         Ok(other) => Err(format!("HA_METEO : « {other} » invalide (on ou off)")),
     }
+}
+
+pub(crate) fn persons_path() -> std::path::PathBuf {
+    std::env::var("HA_PERSONS_PATH")
+        .unwrap_or_else(|_| "persons.yaml".to_owned())
+        .into()
 }
 
 pub(crate) fn thermostats_path() -> std::path::PathBuf {

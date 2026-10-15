@@ -51,6 +51,7 @@ ENV HA_DB_PATH=/data/ha.db \
     HA_SCENES_PATH=/config/scenes.yaml \
     HA_ALEXA_PATH=/config/alexa.yaml \
     HA_THERMOSTATS_PATH=/config/thermostats.yaml \
+    HA_PERSONS_PATH=/config/persons.yaml \
     HA_BACKUP_DIR=/sauvegardes \
     HA_BIND=0.0.0.0:8123 \
     TZ=Europe/Paris
