@@ -18,7 +18,7 @@
 //! en image est refusé. Les images repartent avec `nosniff` et la politique
 //! de sécurité de toutes les réponses.
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -52,6 +52,27 @@ const MAX_TEXT_CHARS: usize = 60;
 const MAX_PAGES: usize = 8;
 const MAX_PAGE_ID_CHARS: usize = 30;
 const MAX_PAGE_NAME_CHARS: usize = 30;
+/// Les temps qu'il peut faire (les conditions de la météo), en plus du
+/// soleil, qui est le fond de jour (`background`) ou de nuit (`night`).
+const WEATHERS: [&str; 10] = [
+    "eclaircies",
+    "nuageux",
+    "brouillard",
+    "vent",
+    "pluie",
+    "averses",
+    "orage",
+    "grele",
+    "neige",
+    "pluie-neige",
+];
+
+/// Une ambiance : le moment, puis le temps (`jour-pluie`, `nuit-pluie-neige`).
+fn is_ambiance(key: &str) -> bool {
+    key.split_once('-').is_some_and(|(moment, weather)| {
+        (moment == "jour" || moment == "nuit") && WEATHERS.contains(&weather)
+    })
+}
 
 /// Les onglets du tableau de bord (Maison, Garage, Piscine…), chacun avec
 /// son dessin. Le premier est celui qui s'ouvre.
@@ -97,6 +118,14 @@ struct Page {
     layers: Vec<Layer>,
     #[serde(default)]
     labels: Vec<Label>,
+    /// Les fonds d'ambiance : `"jour-pluie": "maison_pluie"`… Il en manque ?
+    /// Le plus proche s'affiche (nuit-pluie → nuit → jour-pluie → jour).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    ambiances: BTreeMap<String, String>,
+    /// Une ambiance imposée (pour essayer) au lieu de suivre la météo et le
+    /// soleil : `jour`, `nuit`, ou une des ambiances.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    forced: Option<String>,
     /// Les boutons rapides sous le dessin (porche, parking, garage…).
     #[serde(default)]
     actions: Vec<String>,
@@ -272,7 +301,28 @@ fn check_page(config: &Page, images: &HashSet<String>) -> Result<(), ApiError> {
         .background
         .iter()
         .chain(&config.night)
+        .chain(config.ambiances.values())
         .try_for_each(known)?;
+    if !config.ambiances.is_empty() && config.background.is_none() {
+        return Err(ApiError::BadRequest(
+            "les fonds d'ambiance demandent aussi un fond de jour".into(),
+        ));
+    }
+    if let Some(key) = config.ambiances.keys().find(|key| !is_ambiance(key)) {
+        return Err(ApiError::BadRequest(format!(
+            "ambiance « {key} » inconnue : jour- ou nuit- puis {}",
+            WEATHERS.join(", ")
+        )));
+    }
+    if let Some(forced) = &config.forced
+        && forced != "jour"
+        && forced != "nuit"
+        && !is_ambiance(forced)
+    {
+        return Err(ApiError::BadRequest(format!(
+            "ambiance imposée « {forced} » inconnue"
+        )));
+    }
     if config.layers.len() > MAX_LAYERS {
         return Err(ApiError::BadRequest(format!(
             "{MAX_LAYERS} calques au plus"
@@ -530,6 +580,7 @@ pub(crate) async fn delete_image(
         page.background.as_ref() == Some(&name)
             || page.night.as_ref() == Some(&name)
             || page.layers.iter().any(|layer| layer.image == name)
+            || page.ambiances.values().any(|image| *image == name)
     });
     if used {
         return Err(ApiError::BadRequest(format!(
@@ -597,6 +648,10 @@ mod tests {
                 "labels":[{"entity_id":"sensor.dehors","x":90,"y":8.25,"name":"Dehors"}]}"#,
         );
         assert!(check_page(&good, &images).is_ok());
+        let rainy = config(
+            r#"{"background":"jour","ambiances":{"jour-pluie":"garage","nuit-pluie-neige":"jour","jour-orage":"jour"},"forced":"nuit-pluie-neige"}"#,
+        );
+        assert!(check_page(&rainy, &images).is_ok());
         let tidied = tidy(Drawing { pages: vec![good] });
         assert!((tidied.pages[0].labels[0].y - 8.3).abs() < 1e-9);
 
@@ -609,6 +664,11 @@ mod tests {
             r#"{"labels":[{"entity_id":"sensor.a","x":1,"y":1,"name":"a\nb"}]}"#,
             r#"{"actions":["light.porche","light.porche"]}"#,
             r#"{"actions":["pas un appareil"]}"#,
+            r#"{"background":"jour","ambiances":{"jour-tempete":"garage"}}"#,
+            r#"{"background":"jour","ambiances":{"midi-pluie":"garage"}}"#,
+            r#"{"ambiances":{"jour-pluie":"garage"}}"#,
+            r#"{"background":"jour","ambiances":{"jour-pluie":"absente"}}"#,
+            r#"{"forced":"tempete"}"#,
         ] {
             assert!(check_page(&config(bad), &images).is_err(), "{bad}");
         }
