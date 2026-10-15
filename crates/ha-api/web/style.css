@@ -532,3 +532,6 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .auto-block.nested { grid-column: 1 / -1; background: var(--card); }
 .auto-block.nested .auto-item { background: var(--bg); }
 .value.small-value { font-size: 1.3rem; }
+/* Entrées : liste de choix et compte à rebours. */
+.tile-select { width: 100%; max-width: 100%; }
+.value.countdown { font-variant-numeric: tabular-nums; }

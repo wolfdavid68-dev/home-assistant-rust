@@ -265,6 +265,11 @@ fn event_message(id: u64, event: &Event) -> Value {
                 },
             },
         }),
+        Event::Fired { event_type, data } => json!({
+            "id": id,
+            "type": "event",
+            "event": {"event_type": event_type, "data": data},
+        }),
     }
 }
 

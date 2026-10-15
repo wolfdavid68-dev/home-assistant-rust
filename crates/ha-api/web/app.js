@@ -172,6 +172,7 @@ function markPending(entityId) {
 // ---------------------------------------------------------------- Affichage
 const SECTIONS = [
   { title: "Scènes et scripts", domains: ["scene", "script"] },
+  { title: "Entrées", domains: ["input_boolean", "input_number", "input_select", "input_button", "timer"] },
   // Les capteurs de la météo (sensor.meteo_…) vont avec la météo.
   { title: "Météo, présence et soleil", domains: ["weather", "zone", "person", "device_tracker", "sun", "notify"], extra: (s) => s.entity_id.startsWith("sensor.meteo_") },
   { title: "Chauffage", domains: ["climate"] },
@@ -253,6 +254,11 @@ function renderTileContent(state) {
     case "scene":
     case "script": return actionTile(state);
     case "notify": return notifyTile(state);
+    case "input_boolean": return inputBooleanTile(state);
+    case "input_number": return inputNumberTile(state);
+    case "input_select": return inputSelectTile(state);
+    case "input_button": return inputButtonTile(state);
+    case "timer": return timerTile(state);
     case "switch": return switchTile(state);
     case "binary_sensor": return binaryTile(state);
     case "sensor": return state.attributes.device_class === "alarm" ? alarmTile(state) : sensorTile(state);
@@ -480,6 +486,125 @@ function weatherTile(state) {
 }
 
 // Le thermostat : consigne (− / +), marche / arrêt, préréglages.
+// ---------------------------------------------------------------- Entrées
+// Interrupteurs, nombres, listes, boutons et minuteurs virtuels (inputs.yaml).
+function inputCommand(state, service, data = {}) {
+  markPending(state.entity_id);
+  callService(domainOf(state), service, { entity_id: state.entity_id, ...data });
+}
+
+function inputBooleanTile(state) {
+  const on = state.state === "on";
+  const toggle = el(
+    "button",
+    { class: "tile-toggle", type: "button", "aria-pressed": String(on) },
+    tileHead(state, ICONS.toggle, on ? "Activé" : state.state === "off" ? "Désactivé" : statusText(state)),
+  );
+  toggle.addEventListener("click", () => inputCommand(state, "toggle"));
+  return el("div", { id: tileId(state.entity_id), class: tileClass(state, "switch") }, toggle);
+}
+
+function inputNumberTile(state) {
+  const a = state.attributes;
+  const value = Number(state.state);
+  const min = finite(a.min) ? a.min : 0;
+  const max = finite(a.max) ? a.max : 100;
+  const step = finite(a.step) && a.step > 0 ? a.step : 1;
+  const unit = typeof a.unit_of_measurement === "string" ? a.unit_of_measurement : "";
+  const shown = el("div", { class: "value", text: Number.isFinite(value) ? number.format(value) : "—" });
+  if (unit) shown.append(el("small", { text: unit }));
+  const children = [tileHead(state, ICONS.sliders, `entre ${number.format(min)} et ${number.format(max)}`)];
+  if (a.mode === "box") {
+    const adjust = (service, text, label) => {
+      const button = el("button", { type: "button", class: "round", "aria-label": `${label} ${nameOf(state)}`, text });
+      button.addEventListener("click", () => inputCommand(state, service));
+      return button;
+    };
+    children.push(el("div", { class: "setpoint" }, adjust("decrement", "−", "Diminuer"), shown, adjust("increment", "+", "Augmenter")));
+  } else {
+    const slider = el("input", {
+      type: "range", min: String(min), max: String(max), step: String(step),
+      value: String(Number.isFinite(value) ? value : min), "aria-label": `Valeur de ${nameOf(state)}`,
+    });
+    // Pendant le glissement, la valeur s'affiche ; elle est envoyée au lâcher.
+    slider.addEventListener("input", () => {
+      shown.firstChild.textContent = number.format(Number(slider.value));
+    });
+    slider.addEventListener("change", () => inputCommand(state, "set_value", { value: Number(slider.value) }));
+    children.push(shown, slider);
+  }
+  return el("div", { id: tileId(state.entity_id), class: tileClass(state, "sensor") }, ...children);
+}
+
+function inputSelectTile(state) {
+  const options = (Array.isArray(state.attributes.options) ? state.attributes.options : [])
+    .filter((option) => typeof option === "string");
+  const select = el("select", { class: "tile-select", "aria-label": `Choix pour ${nameOf(state)}` });
+  for (const option of options) select.append(el("option", { value: option, text: option }));
+  select.value = state.state;
+  select.addEventListener("change", () => inputCommand(state, "select_option", { option: select.value }));
+  return el(
+    "div",
+    { id: tileId(state.entity_id), class: "tile sensor" },
+    tileHead(state, ICONS.list, options.includes(state.state) ? state.state : statusText(state)),
+    select,
+  );
+}
+
+function inputButtonTile(state) {
+  const subtitle = Number.isNaN(Date.parse(state.state)) ? "Jamais appuyé" : `Appuyé il y a ${ago(state.state)}`;
+  const button = el("button", { type: "button", class: "action-button", text: "Appuyer" });
+  button.addEventListener("click", () => inputCommand(state, "press"));
+  return el("div", { id: tileId(state.entity_id), class: "tile action" }, tileHead(state, ICONS.button, subtitle), button);
+}
+
+const TIMER_LABELS = { idle: "Arrêté", active: "En marche", paused: "En pause" };
+
+/** `1:05:09`, comme les attributs du serveur. */
+function hms(seconds) {
+  const s = Math.max(0, Math.ceil(seconds));
+  return `${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+}
+
+function timerRemaining(finishesAt) {
+  return hms((Date.parse(finishesAt) - Date.now()) / 1000);
+}
+
+function timerTile(state) {
+  const a = state.attributes;
+  const active = state.state === "active" && typeof a.finishes_at === "string" && !Number.isNaN(Date.parse(a.finishes_at));
+  const remaining = el("div", {
+    class: "value countdown",
+    text: active ? timerRemaining(a.finishes_at) : typeof a.remaining === "string" ? a.remaining : "—",
+  });
+  // Le compte à rebours avance tout seul (voir `tickCountdowns`).
+  if (active) remaining.dataset.finishesAt = a.finishes_at;
+  const button = (service, text) => {
+    const b = el("button", { type: "button", class: "period", text });
+    b.addEventListener("click", () => inputCommand(state, service));
+    return b;
+  };
+  const buttons = state.state === "active" ? [button("pause", "Pause"), button("cancel", "Annuler")]
+    : state.state === "paused" ? [button("start", "Reprendre"), button("cancel", "Annuler")]
+    : [button("start", "Démarrer")];
+  const subtitle = [lookup(TIMER_LABELS, state.state) ?? statusText(state), typeof a.duration === "string" ? `durée ${a.duration}` : ""]
+    .filter(Boolean).join(" · ");
+  return el(
+    "div",
+    { id: tileId(state.entity_id), class: `tile sensor${state.state === "active" ? " on" : ""}` },
+    tileHead(state, ICONS.timer, subtitle),
+    remaining,
+    el("div", { class: "presets", role: "group", "aria-label": `Commandes de ${nameOf(state)}` }, ...buttons),
+  );
+}
+
+function tickCountdowns() {
+  for (const node of document.querySelectorAll("[data-finishes-at]")) {
+    node.textContent = timerRemaining(node.dataset.finishesAt);
+  }
+}
+setInterval(tickCountdowns, 1000);
+
 const PRESET_LABELS = { confort: "Confort", eco: "Éco", absent: "Absent", hors_gel: "Hors-gel", nuit: "Nuit" };
 
 function climateTile(state) {
@@ -698,6 +823,11 @@ const ICONS = {
   cloud: ["M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z"],
   archive: ["M3 4h18v4H3z", "M5 8v12h14V8", "M10 12h4"],
   home: ["M3 11l9-8 9 8", "M5 10v10h14V10", "M10 20v-6h4v6"],
+  toggle: ["M7 6h10a6 6 0 0 1 0 12H7A6 6 0 0 1 7 6z", "M16 9a3 3 0 1 0 0 6 3 3 0 1 0 0-6z"],
+  sliders: ["M4 6h16", "M4 12h16", "M4 18h16", "M9 4v4", "M15 10v4", "M7 16v4"],
+  list: ["M9 6h11", "M9 12h11", "M9 18h11", "M4 6h.01", "M4 12h.01", "M4 18h.01"],
+  button: ["M12 3a9 9 0 1 0 0 18 9 9 0 1 0 0-18z", "M12 8a4 4 0 1 0 0 8 4 4 0 1 0 0-8z"],
+  timer: ["M10 2h4", "M12 14l3-3", "M12 6a8 8 0 1 0 0 16 8 8 0 1 0 0-16z"],
   flame: ["M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"],
   partly: ["M12 2v2", "M4.9 4.9l1.4 1.4", "M20 12h2", "M19.1 4.9l-1.4 1.4", "M15.9 13A4 4 0 0 0 8.1 9.2", "M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6z"],
   rain: ["M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2", "M16 14v6", "M8 14v6", "M12 16v6"],
@@ -972,6 +1102,7 @@ const TRIGGER_KINDS = {
   numeric_state: ["Une valeur passe un seuil", () => ({ trigger: "numeric_state", entity_id: "", below: 18 })],
   time: ["À une heure précise", () => ({ trigger: "time", at: "07:30" })],
   sun: ["Lever ou coucher du soleil", () => ({ trigger: "sun", event: "sunset" })],
+  event: ["Un événement (minuteur fini…)", () => ({ trigger: "event", event_type: "timer.finished", event_data: {} })],
 };
 const CONDITION_KINDS = {
   state: ["Un appareil est dans un état", () => ({ condition: "state", entity_id: "", state: "on" })],
@@ -998,6 +1129,11 @@ const SERVICES = {
   scene: [["turn_on", "Activer"]],
   notify: [["send_message", "Envoyer une notification"]],
   climate: [["set_preset_mode", "Choisir un préréglage"], ["set_temperature", "Régler la consigne"], ["turn_on", "Allumer"], ["turn_off", "Éteindre"]],
+  input_boolean: [["turn_on", "Activer"], ["turn_off", "Désactiver"], ["toggle", "Inverser"]],
+  input_number: [["set_value", "Régler la valeur"], ["increment", "Augmenter d'un pas"], ["decrement", "Diminuer d'un pas"]],
+  input_select: [["select_option", "Choisir"], ["select_next", "Choix suivant"], ["select_previous", "Choix précédent"], ["select_first", "Premier choix"]],
+  input_button: [["press", "Appuyer"]],
+  timer: [["start", "Démarrer"], ["pause", "Mettre en pause"], ["cancel", "Annuler"], ["finish", "Terminer"]],
 };
 const SUN_EVENTS = [["sunrise", "lever du soleil"], ["sunset", "coucher du soleil"], ["dawn", "aube"], ["dusk", "crépuscule"]];
 const WEEKDAYS = [["mon", "lun"], ["tue", "mar"], ["wed", "mer"], ["thu", "jeu"], ["fri", "ven"], ["sat", "sam"], ["sun", "dim"]];
@@ -1105,6 +1241,8 @@ function describeTrigger(t) {
       return `à ${asList(t.at).join(", ")}`;
     case "sun":
       return `${offsetText(t.offset)}${sunLabel(t.event)}`;
+    case "event":
+      return `événement ${t.event_type}${t.event_data?.entity_id ? ` de ${entityNames(t.event_data.entity_id)}` : ""}`;
     default:
       return String(t.trigger);
   }
@@ -1399,6 +1537,15 @@ function triggerKindFields(t) {
       return [timeField("Heure", t, "at")];
     case "sun":
       return [selectField("Événement", t, "event", SUN_EVENTS), offsetField(t, "offset")];
+    case "event": {
+      t.event_data ??= {};
+      const entity = entityField(t.event_data, "entity_id");
+      // Vide : n'importe quel appareil (et non « l'appareil sans nom »).
+      entity.querySelector("input").addEventListener("input", () => {
+        if (t.event_data.entity_id === "") delete t.event_data.entity_id;
+      });
+      return [textField("Événement", t, "event_type", { placeholder: "timer.finished" }), entity];
+    }
     default:
       return [];
   }
@@ -1484,6 +1631,15 @@ function actionFields(a, refresh) {
   } else if (a.action === "climate.set_preset_mode") {
     fields.push(textField("Préréglage", a.data, "preset_mode", { placeholder: "eco" }));
     delete extra.preset_mode;
+  } else if (a.action === "input_number.set_value") {
+    fields.push(numberField("Valeur", a.data, "value"));
+    delete extra.value;
+  } else if (a.action === "input_select.select_option") {
+    fields.push(textField("Choix", a.data, "option"));
+    delete extra.option;
+  } else if (a.action === "timer.start") {
+    fields.push(durationField("Durée (facultatif, sinon celle du fichier)", a.data, "duration", true));
+    delete extra.duration;
   } else if (a.action === "notify.send_message") {
     fields.push(textField("Titre (facultatif)", a.data, "title"), textField("Message", a.data, "message"));
     fields.push(selectField("Priorité", a.data, "priority", [[1, "1 (discrète)"], [2, "2"], [3, "3 (normale)"], [4, "4"], [5, "5 (urgente)"]], true));

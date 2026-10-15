@@ -327,6 +327,10 @@ async fn run(
                     Event::CallService { domain, service, entity_id, .. } => {
                         library.on_call(domain, service, entity_id, &runner.core);
                     }
+                    Event::Fired { event_type, data } => {
+                        let fired = runner.evaluator.fire_on_event(event_type, data);
+                        runner.launch_all(fired);
+                    }
                 },
                 Err(RecvError::Lagged(missed)) => warn!("automatisations : {missed} événements manqués"),
                 Err(RecvError::Closed) => break,

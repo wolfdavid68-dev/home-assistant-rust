@@ -1,0 +1,48 @@
+# Entrées : interrupteurs, nombres, listes, boutons et minuteurs virtuels
+# (voir docs/entrees.md). Copie ce fichier en inputs.yaml (avec Docker :
+# config/inputs.yaml), puis vérifie-le : ha-server inputs check
+#
+# Elles apparaissent dans le tableau de bord (section « Entrées ») et les
+# automatisations peuvent les lire et les commander.
+
+# Un interrupteur virtuel : « on » ou « off ».
+input_boolean:
+  mode_vacances:
+    name: Mode vacances
+  invites:
+    name: Invités à la maison
+
+# Un nombre réglable avec un curseur (mode: slider) ou des boutons + et −
+# (mode: box). La valeur reste toujours entre min et max, sur un pas de step.
+input_number:
+  consigne_chambre:
+    name: Consigne chambre
+    min: 15
+    max: 23
+    step: 0.5
+    unit_of_measurement: "°C"
+  minutes_arrosage:
+    name: Durée d'arrosage
+    min: 5
+    max: 60
+    step: 5
+    unit_of_measurement: min
+    mode: box
+
+# Un choix dans une liste.
+input_select:
+  mode_maison:
+    name: Mode de la maison
+    options: [Normal, Nuit, Absent]
+
+# Un bouton : son état est la date du dernier appui.
+input_button:
+  bonne_nuit:
+    name: Bonne nuit
+
+# Un minuteur : idle (arrêté), active (en marche) ou paused (en pause).
+# Quand il arrive à zéro, il publie l'événement « timer.finished ».
+timer:
+  lessive:
+    name: Lessive
+    duration: "01:30:00"

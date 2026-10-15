@@ -40,6 +40,16 @@ pub enum Event {
         /// Paramètres facultatifs, par exemple `{"brightness": 128}`.
         data: Attributes,
     },
+
+    /// Un événement « libre », nommé : `timer.finished` quand un minuteur
+    /// arrive à zéro, par exemple. Les automatisations peuvent s'y abonner
+    /// (déclencheur `event`), comme dans Home Assistant.
+    Fired {
+        /// Le nom : `timer.finished`, `input_button.pressed`…
+        event_type: String,
+        /// Les détails, par exemple `{"entity_id": "timer.lessive"}`.
+        data: Attributes,
+    },
 }
 
 /// Le bus d'événements.

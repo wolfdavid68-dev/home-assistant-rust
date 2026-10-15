@@ -18,6 +18,7 @@ scenes.yaml
 alexa.yaml
 thermostats.yaml
 persons.yaml
+inputs.yaml
 
 # Sauvegardes de la base (contiennent les jetons Hue et Somfy)
 sauvegardes/

@@ -295,7 +295,7 @@ async fn run(
                             thermostat.evaluate(&core, true);
                         }
                     }
-                    Event::CallService { .. } => {}
+                    Event::CallService { .. } | Event::Fired { .. } => {}
                 },
                 Err(RecvError::Lagged(missed)) => {
                     warn!("thermostats : {missed} événements manqués, on revérifie tout");

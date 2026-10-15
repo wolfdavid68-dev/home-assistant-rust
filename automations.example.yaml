@@ -268,3 +268,40 @@
     - action: climate.set_preset_mode
       target: {entity_id: climate.salon}
       data: {preset_mode: confort}
+
+# Entrées (il faut inputs.yaml, voir docs/entrees.md).
+- id: vacances
+  alias: Départ en vacances
+  triggers:
+    - trigger: state
+      entity_id: input_boolean.mode_vacances
+      to: "on"
+  actions:
+    - action: climate.set_preset_mode
+      target: {entity_id: climate.salon}
+      data: {preset_mode: hors_gel}
+
+- id: bonne_nuit
+  alias: Bonne nuit
+  triggers:
+    - trigger: state
+      entity_id: input_button.bonne_nuit
+  actions:
+    - action: light.turn_off
+      target: {entity_id: [light.salon, light.entree]}
+    - action: input_select.select_option
+      target: {entity_id: input_select.mode_maison}
+      data: {option: Nuit}
+
+- id: lessive_finie
+  alias: La lessive est finie
+  triggers:
+    - trigger: event
+      event_type: timer.finished
+      event_data: {entity_id: timer.lessive}
+  actions:
+    - action: notify.send_message
+      target: {entity_id: notify.telephone}
+      data:
+        title: Lessive
+        message: La machine est finie, pense à étendre le linge.

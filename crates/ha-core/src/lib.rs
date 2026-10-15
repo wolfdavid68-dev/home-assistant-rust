@@ -32,6 +32,18 @@ pub fn is_valid_name(name: &str) -> bool {
             .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
 }
 
+/// Un nom d'événement, comme `timer.finished` : 1 à 64 caractères parmi
+/// `a-z`, `0-9`, `_` et `.`, sans point au début ni à la fin.
+#[must_use]
+pub fn is_valid_event_type(name: &str) -> bool {
+    (1..=64).contains(&name.len())
+        && !name.starts_with('.')
+        && !name.ends_with('.')
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'.')
+}
+
 /// Version du noyau, reprise de `Cargo.toml`.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -78,10 +90,49 @@ impl Core {
         });
         Ok(())
     }
+
+    /// Publie un événement nommé (voir [`Event::Fired`]).
+    pub fn fire(&self, event_type: &str, data: Attributes) -> Result<(), CoreError> {
+        if !is_valid_event_type(event_type) {
+            return Err(CoreError::InvalidEventType(event_type.to_owned()));
+        }
+        self.bus.publish(Event::Fired {
+            event_type: event_type.to_owned(),
+            data,
+        });
+        Ok(())
+    }
 }
 
 impl Default for Core {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn named_events_are_checked_and_published() {
+        let core = Core::new();
+        let mut events = core.bus.subscribe();
+        for good in ["timer.finished", "mon_evenement", "a.b.c"] {
+            assert!(core.fire(good, Attributes::new()).is_ok(), "{good}");
+        }
+        for bad in ["", "Timer.finished", ".x", "x.", "a b", &"a".repeat(65)] {
+            assert!(core.fire(bad, Attributes::new()).is_err(), "{bad}");
+        }
+        let Ok(event) = events.try_recv() else {
+            panic!("un événement est attendu");
+        };
+        assert_eq!(
+            *event,
+            Event::Fired {
+                event_type: "timer.finished".into(),
+                data: Attributes::new()
+            }
+        );
     }
 }
