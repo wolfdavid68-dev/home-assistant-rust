@@ -1,7 +1,8 @@
 //! Ce que chaque compte peut voir et commander (voir `ha_auth::Role`).
 //!
 //! Un **invité** ne voit pas la présence de la famille (personnes,
-//! téléphones, zone Maison), ni l'alarme, ni les notifications. Il ne
+//! téléphones, zone Maison), ni l'alarme, ni les serrures et sirènes, ni les
+//! notifications. Il ne
 //! commande que des appareils sans risque : lumières, prises, ventilateurs,
 //! scènes, et les volets (jamais un portail, une porte de garage ou une
 //! porte).
@@ -12,8 +13,16 @@ use serde_json::{Value, json};
 
 use crate::error::ApiError;
 
-/// Domaines cachés aux invités : la présence de la famille et les messages.
-const HIDDEN_FROM_GUESTS: [&str; 4] = ["person", "device_tracker", "zone", "notify"];
+/// Domaines cachés aux invités : la présence de la famille, les messages, et
+/// ce qui dit si la maison est fermée (serrures, sirènes).
+const HIDDEN_FROM_GUESTS: [&str; 6] = [
+    "person",
+    "device_tracker",
+    "zone",
+    "notify",
+    "lock",
+    "siren",
+];
 /// Domaines qu'un invité peut commander.
 const GUEST_CONTROLS: [&str; 5] = ["light", "switch", "fan", "scene", "cover"];
 /// Volets qu'un invité ne commande jamais (comme Alexa).
@@ -64,6 +73,14 @@ pub(crate) fn can_control(user: &User, entity_id: &EntityId, state: Option<&Stat
     // Un volet sans classe connue est accepté ; un portail ou un garage, jamais.
     !(domain == "cover"
         && device_class(state).is_some_and(|c| FORBIDDEN_COVER_CLASSES.contains(&c)))
+}
+
+/// Les commandes qui ouvrent la maison : même un administrateur doit
+/// redonner son mot de passe (valable 15 minutes), comme pour modifier une
+/// automatisation. Un téléphone oublié déverrouillé ne suffit pas.
+#[must_use]
+pub(crate) fn needs_confirmation(domain: &str, service: &str) -> bool {
+    matches!((domain, service), ("lock", "unlock" | "open"))
 }
 
 /// Les droits du compte, pour que le tableau de bord cache ce qui ne sert à

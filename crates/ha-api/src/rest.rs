@@ -508,6 +508,11 @@ pub(crate) async fn call_service(
             auth.user.role.label()
         )));
     }
+    if roles::needs_confirmation(&domain, &service)
+        && crate::automations::confirmation_left(&state, &auth.token).is_none()
+    {
+        return Err(ApiError::ConfirmationRequired);
+    }
     state
         .core
         .call_service_from(

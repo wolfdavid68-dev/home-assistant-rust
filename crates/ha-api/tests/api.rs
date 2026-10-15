@@ -1094,11 +1094,8 @@ async fn a_guest_sees_and_controls_only_safe_devices() {
         .map(|s| s["entity_id"].as_str().unwrap())
         .collect();
     ids.sort_unstable();
-    assert_eq!(
-        ids,
-        ["cover.garage", "cover.salon", "light.salon", "lock.entree"]
-    );
-    for hidden in ["person.david", "sensor.alarme"] {
+    assert_eq!(ids, ["cover.garage", "cover.salon", "light.salon"]);
+    for hidden in ["person.david", "sensor.alarme", "lock.entree"] {
         let (status, _) = app
             .request("GET", &format!("/api/states/{hidden}"), Some(&guest), None)
             .await;
@@ -1279,4 +1276,76 @@ async fn statistics_are_checked_and_protected() {
         )
         .await;
     assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn unlocking_a_door_asks_for_the_password_again() {
+    let app = TestApp::new().await;
+    furnish(&app);
+    let token = app.login().await;
+    let mut events = app.state.core.bus.subscribe();
+    let unlock = json!({"entity_id": "lock.entree"});
+
+    // Verrouiller : tout de suite. Déverrouiller : il faut confirmer.
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/services/lock/lock",
+            Some(&token),
+            Some(unlock.clone()),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(events.try_recv().is_ok());
+    for service in ["unlock", "open"] {
+        let (status, body) = app
+            .request(
+                "POST",
+                &format!("/api/services/lock/{service}"),
+                Some(&token),
+                Some(unlock.clone()),
+            )
+            .await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{service}");
+        assert_eq!(body["confirm"], true, "{service}");
+    }
+    // Rien n'est parti vers la serrure.
+    assert!(events.try_recv().is_err());
+
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/auth/confirm",
+            Some(&token),
+            Some(json!({"password": PASSWORD})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/services/lock/unlock",
+            Some(&token),
+            Some(unlock.clone()),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let event = events.try_recv().unwrap();
+    assert!(matches!(
+        event.as_ref(),
+        ha_core::Event::CallService { domain, service, .. } if domain == "lock" && service == "unlock"
+    ));
+
+    // Un invité n'y a jamais droit, même avec son mot de passe.
+    let guest = app.login_as("visiteur", ha_auth::Role::Guest).await;
+    let (status, body) = app
+        .request(
+            "POST",
+            "/api/services/lock/lock",
+            Some(&guest),
+            Some(unlock),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_ne!(body["confirm"], true);
 }

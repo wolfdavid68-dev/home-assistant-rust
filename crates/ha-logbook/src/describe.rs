@@ -47,13 +47,43 @@ fn phrase(old: &State, new: &State) -> Option<String> {
         "weather" | "timer" => None,
         "sensor" if attributes.contains_key("unit_of_measurement") => None,
         "sensor" if text(attributes, "device_class") == Some("timestamp") => None,
-        "light" | "switch" | "fan" => on_off("s'est allumé", "s'est éteint"),
+        "light" | "switch" | "fan" | "humidifier" => on_off("s'est allumé", "s'est éteint"),
+        "siren" => on_off("sonne !", "s'est arrêté"),
+        "lock" => Some(
+            match value {
+                "locked" => "s'est verrouillé",
+                "unlocked" => "s'est déverrouillé",
+                "locking" => "se verrouille",
+                "unlocking" => "se déverrouille",
+                "jammed" => "est bloqué !",
+                "open" => "s'est ouvert",
+                "opening" => "s'ouvre",
+                _ => return Some(format!("passe à « {value} »")),
+            }
+            .into(),
+        ),
+        "vacuum" => Some(
+            match value {
+                "cleaning" => "fait le ménage",
+                "docked" => "est rentré à sa base",
+                "paused" => "s'est mis en pause",
+                "idle" => "s'est arrêté",
+                "returning" => "rentre à sa base",
+                "error" => "est en erreur !",
+                _ => return Some(format!("passe à « {value} »")),
+            }
+            .into(),
+        ),
+        "water_heater" => Some(match value {
+            "off" => "s'est arrêté".into(),
+            mode => format!("passe en mode {}", water_heater_mode(mode)),
+        }),
         "input_boolean" => on_off("a été activé", "a été désactivé"),
         "binary_sensor" => {
             let (on, off) = binary_words(text(attributes, "device_class"));
             on_off(on, off)
         }
-        "cover" => Some(
+        "cover" | "valve" => Some(
             match value {
                 "open" => "s'est ouvert",
                 "closed" => "s'est fermé",
@@ -213,6 +243,19 @@ fn binary_words(device_class: Option<&str>) -> (&'static str, &'static str) {
     }
 }
 
+/// Le mode d'un chauffe-eau, en français (« pompe à chaleur »).
+fn water_heater_mode(mode: &str) -> String {
+    match mode {
+        "eco" => "éco".into(),
+        "electric" => "électrique".into(),
+        "gas" => "gaz".into(),
+        "heat_pump" => "pompe à chaleur".into(),
+        "high_demand" => "forte demande".into(),
+        "performance" => "performance".into(),
+        other => format!("« {other} »"),
+    }
+}
+
 /// La phrase pour un événement d'un minuteur (`timer.finished`…).
 #[must_use]
 pub fn describe_timer_event(event_type: &str) -> Option<&'static str> {
@@ -362,6 +405,69 @@ mod tests {
         let light = state("light.salon", "on", json!({}));
         assert_eq!(describe_change(None, Some(&light)), None);
         assert_eq!(describe_change(Some(&light), None), None);
+    }
+
+    #[test]
+    fn new_device_types_have_sentences() {
+        let none = json!({});
+        for (entity, from, to, attributes, expected) in [
+            (
+                "lock.entree",
+                "locked",
+                "unlocked",
+                json!({"friendly_name": "Porte d'entrée"}),
+                "s'est déverrouillée",
+            ),
+            (
+                "lock.garage",
+                "unlocked",
+                "jammed",
+                json!({"friendly_name": "Verrou du garage"}),
+                "est bloqué !",
+            ),
+            (
+                "valve.arrosage",
+                "closed",
+                "open",
+                json!({"friendly_name": "Vanne d'arrosage"}),
+                "s'est ouverte",
+            ),
+            (
+                "vacuum.robot",
+                "cleaning",
+                "docked",
+                none.clone(),
+                "est rentré à sa base",
+            ),
+            (
+                "water_heater.ballon",
+                "eco",
+                "heat_pump",
+                none.clone(),
+                "passe en mode pompe à chaleur",
+            ),
+            (
+                "siren.alarme",
+                "off",
+                "on",
+                json!({"friendly_name": "Sirène"}),
+                "sonne !",
+            ),
+            (
+                "siren.alarme",
+                "on",
+                "off",
+                json!({"friendly_name": "Sirène"}),
+                "s'est arrêtée",
+            ),
+            ("humidifier.salon", "off", "on", none, "s'est allumé"),
+        ] {
+            assert_eq!(
+                change(entity, from, to, attributes).as_deref(),
+                Some(expected),
+                "{entity} {from} → {to}"
+            );
+        }
     }
 
     #[test]

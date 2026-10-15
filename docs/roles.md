@@ -8,7 +8,8 @@ un ami de passage. Comme dans Home Assistant, chaque compte a maintenant un **r�
 
 | | Administrateur | Famille | Invité |
 |---|:---:|:---:|:---:|
-| Voir les appareils | tous | tous | sauf la présence (personnes, téléphones, zone Maison), l'alarme et les notifications |
+| Voir les appareils | tous | tous | sauf la présence (personnes, téléphones, zone Maison), l'alarme, les serrures, les sirènes et les notifications |
+| Déverrouiller une porte | avec mot de passe | avec mot de passe | ✗ |
 | Commander les appareils | tous | tous | lumières, prises, ventilateurs, scènes, volets (**jamais** un portail, une porte de garage, une porte ou une serrure) |
 | Historique et journal de bord | ✓ | ✓ | ✗ |
 | Voir les automatisations | ✓ | ✓ (lecture seule) | ✗ |
