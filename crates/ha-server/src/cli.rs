@@ -42,6 +42,7 @@ utilisation :
   ha-server alexa check           vérifie le fichier des appareils pour Alexa
   ha-server thermostats check     vérifie le fichier des thermostats
   ha-server persons check         vérifie le fichier des personnes
+  ha-server inputs check          vérifie le fichier des entrées
   ha-server audit [nombre]        affiche le journal d'audit
   ha-server audit verify          vérifie que le journal n'a pas été modifié
   ha-server backup now            sauvegarde la base (même serveur en marche)
@@ -988,6 +989,19 @@ pub fn check_persons(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
             person.name,
             trackers.join(", ")
         );
+    }
+    Ok(())
+}
+
+pub fn check_inputs(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
+    if !path.exists() {
+        println!("{} n'existe pas : aucune entrée.", path.display());
+        return Ok(());
+    }
+    let config = ha_input::load(path).map_err(|error| format!("{} : {error}", path.display()))?;
+    println!("{} : {} entrée(s)", path.display(), config.helpers.len());
+    for helper in &config.helpers {
+        println!("  - {} « {} »", helper.entity_id, helper.name);
     }
     Ok(())
 }

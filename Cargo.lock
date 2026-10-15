@@ -928,6 +928,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "ha-input"
+version = "0.1.0"
+dependencies = [
+ "ha-automation",
+ "ha-core",
+ "jiff",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "ha-mqtt"
 version = "0.1.0"
 dependencies = [
@@ -982,6 +997,7 @@ dependencies = [
  "ha-core",
  "ha-freebox",
  "ha-hue",
+ "ha-input",
  "ha-mqtt",
  "ha-notify",
  "ha-person",

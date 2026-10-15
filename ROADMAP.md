@@ -65,6 +65,7 @@ Les fonctions de Home Assistant les plus utiles au quotidien, une par une, dans 
 - [x] **17. Automatisations plus riches** : conditions « ou » / « non », identifiants de déclencheurs, actions `if` / `choose` / `condition`, modes `restart` / `queued` / `parallel` ([guide](docs/automatisations-avancees.md))
 - [x] **18. Sauvegardes automatiques** : chaque nuit, sans arrêter le serveur, vérifiées, 7 gardées, restauration en une commande ([guide](docs/sauvegardes.md))
 - [x] **19. Personnes et zone Maison** : une personne regroupe ses appareils ; `zone.home` compte qui est là (« quand le dernier part ») ([guide](docs/personnes.md))
+- [x] **20. Entrées** : interrupteurs, curseurs, listes, boutons et minuteurs virtuels (« mode vacances », « lessive finie »), déclencheur `event` ([guide](docs/entrees.md))
 
 En parallèle, dès que tu me donnes les informations : commande du chauffage Somfy (résultat de
 `somfy devices`), puis de l'alarme (avec confirmation et journal).

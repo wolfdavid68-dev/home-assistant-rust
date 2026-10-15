@@ -124,6 +124,50 @@ fn time_trigger_including_midnight() {
     );
 }
 
+#[test]
+fn event_trigger_with_data() {
+    let yaml = r"
+- id: lessive
+  triggers:
+    - trigger: event
+      event_type: timer.finished
+      event_data: {entity_id: timer.lessive}
+      id: lessive
+  actions: [{delay: 1s}]
+- id: tout_minuteur
+  triggers: [{trigger: event, event_type: timer.finished}]
+  actions: [{delay: 1s}]
+";
+    let evaluator = Evaluator::new(parse(yaml).unwrap());
+    let data = |entity: &str| {
+        let mut data = Attributes::new();
+        data.insert("entity_id".into(), entity.into());
+        data.insert("autre".into(), 1.into());
+        data
+    };
+    let fired = |event: &str, data: &Attributes| {
+        evaluator
+            .fire_on_event(event, data)
+            .iter()
+            .map(|f| f.automation)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(fired("timer.finished", &data("timer.lessive")), [0, 1]);
+    assert_eq!(fired("timer.finished", &data("timer.four")), [1]);
+    assert_eq!(
+        fired("timer.cancelled", &data("timer.lessive")),
+        Vec::<usize>::new()
+    );
+
+    for bad in [
+        "[{id: a, triggers: [{trigger: event}], actions: [{delay: 1s}]}]",
+        "[{id: a, triggers: [{trigger: event, event_type: Timer}], actions: [{delay: 1s}]}]",
+        "[{id: a, triggers: [{trigger: event, event_type: .x}], actions: [{delay: 1s}]}]",
+    ] {
+        assert!(parse(bad).is_err(), "{bad}");
+    }
+}
+
 #[tokio::test(start_paused = true)]
 async fn state_trigger_with_for_waits_and_cancels() {
     let yaml = r#"

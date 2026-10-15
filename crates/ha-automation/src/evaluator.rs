@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 use std::time::SystemTime;
 
-use ha_core::{EntityId, State, StateMachine};
+use ha_core::{Attributes, EntityId, State, StateMachine};
 use ha_sun::{Location, SunEvent};
 use jiff::SignedDuration;
 use jiff::civil::{Date, DateTime, Time};
@@ -225,6 +225,30 @@ impl Evaluator {
                         }
                     }
                     _ => {}
+                }
+            }
+        }
+        to_fired(fired)
+    }
+
+    /// Un événement nommé (`timer.finished`…) : renvoie les automatisations
+    /// déclenchées. Les détails de l'événement doivent contenir toutes les
+    /// valeurs de `event_data` (et peuvent en contenir d'autres).
+    #[must_use]
+    pub fn fire_on_event(&self, event_type: &str, data: &Attributes) -> Vec<Fired> {
+        let mut fired = BTreeMap::new();
+        for (a, automation) in self.automations.iter().enumerate() {
+            for (t, trigger) in automation.triggers.iter().enumerate() {
+                if let Trigger::Event {
+                    event_type: wanted,
+                    event_data,
+                } = trigger
+                    && wanted == event_type
+                    && event_data
+                        .iter()
+                        .all(|(key, value)| data.get(key) == Some(value))
+                {
+                    fired.entry(a).or_insert(t);
                 }
             }
         }

@@ -207,6 +207,14 @@ enum TriggerConfig {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         id: Option<String>,
     },
+    /// Un événement nommé : `timer.finished`, par exemple.
+    Event {
+        event_type: String,
+        #[serde(default, skip_serializing_if = "Attributes::is_empty")]
+        event_data: Attributes,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        id: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -382,6 +390,12 @@ pub enum Trigger {
     Sun {
         event: SunEvent,
         offset: SignedDuration,
+    },
+    /// Un événement nommé (`timer.finished`…), dont les détails contiennent
+    /// au moins `event_data` (`{entity_id: timer.lessive}`).
+    Event {
+        event_type: String,
+        event_data: Attributes,
     },
 }
 
@@ -648,7 +662,8 @@ fn check_trigger(config: TriggerConfig) -> Result<(Trigger, Option<String>), Str
         TriggerConfig::State { id, .. }
         | TriggerConfig::NumericState { id, .. }
         | TriggerConfig::Time { id, .. }
-        | TriggerConfig::Sun { id, .. } => id.clone(),
+        | TriggerConfig::Sun { id, .. }
+        | TriggerConfig::Event { id, .. } => id.clone(),
     };
     let trigger = match config {
         TriggerConfig::State {
@@ -691,6 +706,24 @@ fn check_trigger(config: TriggerConfig) -> Result<(Trigger, Option<String>), Str
                 .transpose()?
                 .unwrap_or_default(),
         },
+        TriggerConfig::Event {
+            event_type,
+            event_data,
+            ..
+        } => {
+            if !ha_core::is_valid_event_type(&event_type) {
+                return Err(format!(
+                    "event_type {event_type:?} : 1 à 64 caractères parmi a-z, 0-9, « _ » et « . »"
+                ));
+            }
+            if event_data.len() > MAX_ITEMS {
+                return Err(format!("event_data : {MAX_ITEMS} valeurs au plus"));
+            }
+            Trigger::Event {
+                event_type,
+                event_data,
+            }
+        }
     };
     Ok((trigger, id))
 }
