@@ -941,10 +941,17 @@ const CONDITION_KINDS = {
   numeric_state: ["Une valeur est au-dessus / au-dessous", () => ({ condition: "numeric_state", entity_id: "", above: 20 })],
   time: ["Plage horaire, jours", () => ({ condition: "time", after: "18:00", before: "23:00" })],
   sun: ["Il fait jour / nuit", () => ({ condition: "sun", after: "sunset", before: "sunrise" })],
+  or: ["Au moins une de ces conditions (ou)", () => ({ condition: "or", conditions: [] })],
+  and: ["Toutes ces conditions (et)", () => ({ condition: "and", conditions: [] })],
+  not: ["Aucune de ces conditions (non)", () => ({ condition: "not", conditions: [] })],
+  trigger: ["Selon le déclencheur", () => ({ condition: "trigger", id: "" })],
 };
 const ACTION_KINDS = {
   service: ["Commander un appareil", () => ({ action: "light.turn_on", target: { entity_id: "" } })],
   delay: ["Attendre", () => ({ delay: "5min" })],
+  if: ["Si… alors… sinon", () => ({ if: [], then: [] })],
+  condition: ["Continuer seulement si…", () => ({ condition: "state", entity_id: "", state: "on" })],
+  choose: ["Selon le cas (choose)", () => ({ choose: [] })],
 };
 const SERVICES = {
   light: [["turn_on", "Allumer"], ["turn_off", "Éteindre"], ["toggle", "Inverser"]],
@@ -1067,7 +1074,16 @@ function describeTrigger(t) {
 }
 
 function describeCondition(c) {
+  const list = (items) => (Array.isArray(items) ? items : []).map(describeCondition);
   switch (c.condition) {
+    case "or":
+      return `(${list(c.conditions).join(" ou ")})`;
+    case "and":
+      return `(${list(c.conditions).join(" et ")})`;
+    case "not":
+      return `pas (${list(c.conditions).join(" ou ")})`;
+    case "trigger":
+      return `déclenchée par « ${asList(c.id).join(" » ou « ")} »`;
     case "state":
       return `${entityNames(c.entity_id)} est « ${asList(c.state).join(" » ou « ")} »`;
     case "numeric_state":
@@ -1084,7 +1100,20 @@ function describeCondition(c) {
 }
 
 function describeAction(a) {
-  if (a.delay !== undefined) return `attendre ${a.delay}`;
+  const actions = (items) => (Array.isArray(items) ? items : []).map(describeAction).join(", puis ");
+  switch (actionKind(a)) {
+    case "delay":
+      return `attendre ${a.delay}`;
+    case "condition":
+      return `seulement si ${describeCondition(a)}`;
+    case "if": {
+      const conditions = (Array.isArray(a.if) ? a.if : []).map(describeCondition).join(" et ");
+      const otherwise = Array.isArray(a.else) && a.else.length ? ` sinon ${actions(a.else)}` : "";
+      return `si ${conditions} alors ${actions(a.then)}${otherwise}`;
+    }
+    case "choose":
+      return `selon le cas (${(a.choose ?? []).length} option(s))`;
+  }
   const [domain, service] = String(a.action).split(".");
   const label = (lookup(SERVICES, domain) ?? []).find(([key]) => key === service)?.[1];
   return `${(label ?? a.action).toLowerCase()} ${entityNames(a.target?.entity_id)}`;
@@ -1220,9 +1249,25 @@ function renderAutoForm() {
     scheduleCheck();
   });
 
+  const mode = el("select");
+  for (const [value, text] of [
+    ["single", "ignorer le nouveau déclenchement (par défaut)"],
+    ["restart", "recommencer depuis le début"],
+    ["queued", "attendre la fin, puis recommencer"],
+    ["parallel", "en lancer une autre en même temps"],
+  ]) mode.append(el("option", { value, text }));
+  mode.value = c.mode ?? "single";
+  mode.addEventListener("change", () => {
+    if (mode.value === "single") delete c.mode;
+    else c.mode = mode.value;
+    if (mode.value !== "queued" && mode.value !== "parallel") delete c.max;
+    scheduleCheck();
+  });
+
   form.replaceChildren(
     el("div", { class: "auto-row" }, alias, id),
     el("label", { class: "check" }, enabled, "Activée"),
+    el("label", {}, el("span", { class: "label", text: "Si elle se redéclenche pendant qu'elle tourne encore" }), mode),
     itemsBlock("Quand…", "Déclencheurs : l'un d'eux suffit.", c, "triggers", TRIGGER_KINDS, "trigger", triggerFields),
     itemsBlock("Si… (facultatif)", "Conditions : toutes doivent être vraies.", c, "conditions", CONDITION_KINDS, "condition", conditionFields),
     itemsBlock("Alors…", "Actions, dans l'ordre.", c, "actions", ACTION_KINDS, null, actionFields),
@@ -1235,17 +1280,18 @@ function itemsBlock(title, hint, config, key, kinds, tag, fields) {
   const items = config[key] ?? [];
   const block = el("fieldset", { class: "auto-block" }, el("legend", { text: title }), el("p", { class: "journal-hint", text: hint }));
   items.forEach((item, index) => {
-    const kind = tag ? item[tag] : item.delay !== undefined ? "delay" : "service";
+    const kind = tag ? item[tag] : actionKind(item);
     const label = lookup(kinds, kind)?.[0] ?? kind;
     const remove = el("button", { type: "button", class: "ghost small", text: "Retirer", "aria-label": `Retirer : ${label}` });
     remove.addEventListener("click", () => {
       items.splice(index, 1);
-      if (items.length === 0 && key === "conditions") delete config.conditions;
+      // Liste facultative vidée : on retire la clé (comme dans le YAML).
+      if (items.length === 0 && (key === "conditions" || key === "else")) delete config[key];
       renderAutoForm();
       scheduleCheck();
     });
     const head = el("div", { class: "auto-item-head" }, el("strong", { text: label }));
-    if (key === "actions" && index > 0) {
+    if (["actions", "then", "else"].includes(key) && index > 0) {
       const up = el("button", { type: "button", class: "ghost small", text: "↑", "aria-label": "Monter" });
       up.addEventListener("click", () => {
         [items[index - 1], items[index]] = [items[index], items[index - 1]];
@@ -1274,7 +1320,10 @@ function itemsBlock(title, hint, config, key, kinds, tag, fields) {
     block.append(el("div", { class: "auto-item" }, head, box));
   });
   const add = el("select", { "aria-label": `Ajouter (${title})` }, el("option", { value: "", text: "+ Ajouter…" }));
-  for (const [value, [text]] of Object.entries(kinds)) add.append(el("option", { value, text }));
+  for (const [value, [text]] of Object.entries(kinds)) {
+    // « Selon le cas » se crée dans l'onglet YAML (le formulaire l'affiche seulement).
+    if (value !== "choose") add.append(el("option", { value, text }));
+  }
   add.addEventListener("change", () => {
     const make = lookup(kinds, add.value)?.[1];
     if (!make) return;
@@ -1286,7 +1335,19 @@ function itemsBlock(title, hint, config, key, kinds, tag, fields) {
   return block;
 }
 
+/** La sorte d'une action, d'après sa clé. */
+function actionKind(action) {
+  for (const key of ["delay", "if", "choose", "condition"]) {
+    if (action[key] !== undefined) return key;
+  }
+  return "service";
+}
+
 function triggerFields(t) {
+  return [...triggerKindFields(t), textField("Identifiant (facultatif)", t, "id", { placeholder: "arrivee" })];
+}
+
+function triggerKindFields(t) {
   switch (t.trigger) {
     case "state":
       return [
@@ -1306,8 +1367,21 @@ function triggerFields(t) {
   }
 }
 
+/** Un bloc imbriqué (dans « ou », « si »…) occupe toute la largeur. */
+function nested(block) {
+  block.classList.add("nested");
+  return block;
+}
+
 function conditionFields(c) {
   switch (c.condition) {
+    case "or":
+    case "and":
+    case "not":
+      c.conditions ??= [];
+      return [nested(itemsBlock("Conditions", lookup(CONDITION_KINDS, c.condition)?.[0] ?? "", c, "conditions", CONDITION_KINDS, "condition", conditionFields))];
+    case "trigger":
+      return [textField("Identifiant du déclencheur", c, "id", { placeholder: "arrivee", list: true })];
     case "state":
       return [entityField(c, "entity_id"), textField("État", c, "state", { placeholder: "ex. : on", list: true })];
     case "numeric_state":
@@ -1327,7 +1401,22 @@ function conditionFields(c) {
 }
 
 function actionFields(a, refresh) {
-  if (a.delay !== undefined) return [durationField("Durée", a, "delay", false)];
+  switch (actionKind(a)) {
+    case "delay":
+      return [durationField("Durée", a, "delay", false)];
+    case "condition":
+      return conditionFields(a);
+    case "if":
+      a.if ??= [];
+      a.then ??= [];
+      return [
+        nested(itemsBlock("Si…", "Toutes doivent être vraies.", a, "if", CONDITION_KINDS, "condition", conditionFields)),
+        nested(itemsBlock("Alors…", "Si c'est vrai.", a, "then", ACTION_KINDS, null, actionFields)),
+        nested(itemsBlock("Sinon… (facultatif)", "Si c'est faux.", a, "else", ACTION_KINDS, null, actionFields)),
+      ];
+    case "choose":
+      return [el("p", { class: "journal-hint", text: `Bloc « selon le cas » (${(a.choose ?? []).length} option(s)) : il se modifie dans l'onglet YAML.` })];
+  }
   a.target ??= { entity_id: "" };
   const entity = entityField(a.target, "entity_id", () => {
     // L'appareil change de type : on propose sa première commande.

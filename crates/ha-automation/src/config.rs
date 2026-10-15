@@ -116,11 +116,47 @@ pub struct AutomationConfig {
     alias: Option<String>,
     #[serde(default = "enabled_by_default", skip_serializing_if = "is_true")]
     enabled: bool,
+    /// Que faire si elle se redéclenche pendant qu'elle tourne encore.
+    #[serde(default, skip_serializing_if = "RunMode::is_single")]
+    mode: RunMode,
+    /// Nombre maximal d'exécutions en attente ou simultanées (`queued`, `parallel`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    max: Option<u8>,
     triggers: Vec<TriggerConfig>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     conditions: Vec<ConditionConfig>,
     actions: Vec<ActionConfig>,
 }
+
+/// Que faire si une automatisation se redéclenche pendant qu'elle tourne
+/// encore (par exemple pendant un `delay`). Comme dans Home Assistant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RunMode {
+    /// Ignorer le nouveau déclenchement (par défaut).
+    #[default]
+    Single,
+    /// Arrêter l'exécution en cours et recommencer depuis le début.
+    Restart,
+    /// Attendre la fin de l'exécution en cours, puis recommencer.
+    Queued,
+    /// Lancer une nouvelle exécution en même temps.
+    Parallel,
+}
+
+impl RunMode {
+    #[expect(
+        clippy::trivially_copy_pass_by_ref,
+        reason = "serde passe toujours une référence"
+    )]
+    fn is_single(&self) -> bool {
+        *self == Self::Single
+    }
+}
+
+/// Exécutions en attente ou simultanées, par défaut et au plus.
+const DEFAULT_MAX_RUNS: u8 = 10;
+const MAX_MAX_RUNS: u8 = 20;
 
 fn enabled_by_default() -> bool {
     true
@@ -147,6 +183,8 @@ enum TriggerConfig {
         to: Option<Text>,
         #[serde(default, rename = "for", skip_serializing_if = "Option::is_none")]
         for_: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        id: Option<String>,
     },
     NumericState {
         entity_id: OneOrMany,
@@ -154,20 +192,26 @@ enum TriggerConfig {
         above: Option<f64>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         below: Option<f64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        id: Option<String>,
     },
     Time {
         at: OneOrMany,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        id: Option<String>,
     },
     Sun {
         event: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         offset: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        id: Option<String>,
     },
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(tag = "condition", rename_all = "snake_case", deny_unknown_fields)]
-enum ConditionConfig {
+pub(crate) enum ConditionConfig {
     State {
         entity_id: OneOrMany,
         state: OneOrMany,
@@ -197,13 +241,81 @@ enum ConditionConfig {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         before_offset: Option<String>,
     },
+    /// Toutes les conditions de la liste.
+    And { conditions: Vec<ConditionConfig> },
+    /// Au moins une des conditions.
+    Or { conditions: Vec<ConditionConfig> },
+    /// Aucune des conditions.
+    Not { conditions: Vec<ConditionConfig> },
+    /// L'automatisation a été lancée par ce déclencheur (son `id`).
+    Trigger { id: OneOrMany },
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+/// Une action. Concept Rust : la lecture est écrite à la main (voir
+/// `Deserialize` plus bas) pour choisir la forme d'après la **clé** présente
+/// (`action`, `delay`, `if`…) et donner un message d'erreur précis. L'écriture,
+/// elle, est automatique (`untagged` : chaque forme s'écrit telle quelle).
+#[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(untagged)]
 pub(crate) enum ActionConfig {
     Service(ServiceActionConfig),
     Delay(DelayActionConfig),
+    If(IfActionConfig),
+    Choose(ChooseActionConfig),
+    /// « Continuer seulement si… » : arrête l'automatisation si c'est faux.
+    Condition(ConditionConfig),
+}
+
+impl<'de> Deserialize<'de> for ActionConfig {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        use serde::de::Error;
+        let value = Value::deserialize(deserializer)?;
+        let has = |key: &str| value.get(key).is_some();
+        let result = if has("action") || has("service") {
+            serde_json::from_value(value).map(Self::Service)
+        } else if has("delay") {
+            serde_json::from_value(value).map(Self::Delay)
+        } else if has("if") {
+            serde_json::from_value(value).map(Self::If)
+        } else if has("choose") {
+            serde_json::from_value(value).map(Self::Choose)
+        } else if has("condition") {
+            serde_json::from_value(value).map(Self::Condition)
+        } else {
+            return Err(D::Error::custom(
+                "action inconnue : il faut « action », « delay », « if », « choose » ou « condition »",
+            ));
+        };
+        result.map_err(D::Error::custom)
+    }
+}
+
+/// `if:` (conditions) `then:` (actions) `else:` (actions, facultatif).
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct IfActionConfig {
+    #[serde(rename = "if")]
+    if_: Vec<ConditionConfig>,
+    then: Vec<ActionConfig>,
+    #[serde(default, rename = "else", skip_serializing_if = "Option::is_none")]
+    else_: Option<Vec<ActionConfig>>,
+}
+
+/// `choose:` une liste d'options (la première dont les conditions sont
+/// vraies est exécutée), et `default:` si aucune ne l'est.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ChooseActionConfig {
+    choose: Vec<ChooseOptionConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    default: Option<Vec<ActionConfig>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ChooseOptionConfig {
+    conditions: Vec<ConditionConfig>,
+    sequence: Vec<ActionConfig>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -238,8 +350,14 @@ pub struct Automation {
     pub id: String,
     pub alias: String,
     pub triggers: Vec<Trigger>,
+    /// L'identifiant de chaque déclencheur (son `id`, ou sa position :
+    /// `"0"`, `"1"`… comme dans Home Assistant).
+    pub trigger_ids: Vec<String>,
     pub conditions: Vec<Condition>,
     pub actions: Vec<Action>,
+    pub mode: RunMode,
+    /// Exécutions en attente ou simultanées au plus (`queued`, `parallel`).
+    pub max: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -288,6 +406,11 @@ pub enum Condition {
         after: Option<(SunEvent, SignedDuration)>,
         before: Option<(SunEvent, SignedDuration)>,
     },
+    And(Vec<Condition>),
+    Or(Vec<Condition>),
+    Not(Vec<Condition>),
+    /// Lancée par l'un de ces déclencheurs.
+    Trigger(Vec<String>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -299,6 +422,19 @@ pub enum Action {
         data: Attributes,
     },
     Delay(Duration),
+    /// Si les conditions sont vraies, `then`, sinon `otherwise`.
+    If {
+        conditions: Vec<Condition>,
+        then: Vec<Action>,
+        otherwise: Vec<Action>,
+    },
+    /// La première option dont les conditions sont vraies, sinon `default`.
+    Choose {
+        options: Vec<(Vec<Condition>, Vec<Action>)>,
+        default: Vec<Action>,
+    },
+    /// Arrête l'exécution si la condition est fausse.
+    Condition(Condition),
 }
 
 /// Lit et vérifie le contenu d'un fichier `automations.yaml`. Les
@@ -430,37 +566,97 @@ fn check(config: AutomationConfig) -> Result<Automation, String> {
         }
     }
 
-    let triggers = config
-        .triggers
-        .into_iter()
-        .map(check_trigger)
-        .collect::<Result<_, _>>()?;
+    let max = match (config.mode, config.max) {
+        (RunMode::Queued | RunMode::Parallel, Some(max)) if (1..=MAX_MAX_RUNS).contains(&max) => {
+            max
+        }
+        (RunMode::Queued | RunMode::Parallel, Some(_)) => {
+            return Err(format!("max : entre 1 et {MAX_MAX_RUNS}"));
+        }
+        (RunMode::Queued | RunMode::Parallel, None) => DEFAULT_MAX_RUNS,
+        (_, Some(_)) => return Err("max ne sert qu'avec mode: queued ou parallel".into()),
+        (_, None) => 1,
+    };
+
+    let mut triggers = Vec::with_capacity(config.triggers.len());
+    let mut trigger_ids = Vec::with_capacity(config.triggers.len());
+    for (index, trigger) in config.triggers.into_iter().enumerate() {
+        let (trigger, id) = check_trigger(trigger)?;
+        trigger_ids.push(match id {
+            Some(id) => check_label(&id, "id de déclencheur")?,
+            None => index.to_string(),
+        });
+        triggers.push(trigger);
+    }
+    let mut budget = Budget::default();
     let conditions = config
         .conditions
         .into_iter()
-        .map(check_condition)
+        .map(|c| check_condition(c, 0, &mut budget))
         .collect::<Result<_, _>>()?;
     let actions = config
         .actions
         .into_iter()
-        .map(check_action)
+        .map(|a| check_action_in(a, 0, &mut budget))
         .collect::<Result<_, _>>()?;
     Ok(Automation {
         id: config.id,
         alias,
         triggers,
+        trigger_ids,
         conditions,
         actions,
+        mode: config.mode,
+        max: usize::from(max),
     })
 }
 
-fn check_trigger(config: TriggerConfig) -> Result<Trigger, String> {
-    Ok(match config {
+/// Profondeur maximale des blocs imbriqués (`if` dans `choose` dans…), et
+/// nombre maximal d'actions et de conditions dans une automatisation : un
+/// fichier ne peut pas construire une automatisation démesurée.
+const MAX_DEPTH: usize = 5;
+const MAX_NODES: usize = 200;
+
+#[derive(Default)]
+struct Budget {
+    nodes: usize,
+}
+
+impl Budget {
+    fn take(&mut self, depth: usize) -> Result<(), String> {
+        if depth > MAX_DEPTH {
+            return Err(format!("blocs imbriqués : {MAX_DEPTH} niveaux au plus"));
+        }
+        self.nodes += 1;
+        if self.nodes > MAX_NODES {
+            return Err(format!("{MAX_NODES} actions et conditions au plus"));
+        }
+        Ok(())
+    }
+}
+
+/// Un identifiant libre (id de déclencheur) : court et sans caractère de contrôle.
+fn check_label(value: &str, what: &str) -> Result<String, String> {
+    if value.is_empty() || value.chars().count() > 64 || value.chars().any(char::is_control) {
+        return Err(format!("{what} {value:?} : 1 à 64 caractères"));
+    }
+    Ok(value.to_owned())
+}
+
+fn check_trigger(config: TriggerConfig) -> Result<(Trigger, Option<String>), String> {
+    let id = match &config {
+        TriggerConfig::State { id, .. }
+        | TriggerConfig::NumericState { id, .. }
+        | TriggerConfig::Time { id, .. }
+        | TriggerConfig::Sun { id, .. } => id.clone(),
+    };
+    let trigger = match config {
         TriggerConfig::State {
             entity_id,
             from,
             to,
             for_,
+            ..
         } => Trigger::State {
             entity_ids: entity_ids(entity_id)?,
             from: from.map(|text| text.0),
@@ -471,6 +667,7 @@ fn check_trigger(config: TriggerConfig) -> Result<Trigger, String> {
             entity_id,
             above,
             below,
+            ..
         } => {
             check_range(above, below)?;
             Trigger::NumericState {
@@ -479,14 +676,14 @@ fn check_trigger(config: TriggerConfig) -> Result<Trigger, String> {
                 below,
             }
         }
-        TriggerConfig::Time { at } => Trigger::Time {
+        TriggerConfig::Time { at, .. } => Trigger::Time {
             at: at
                 .into_vec()
                 .iter()
                 .map(|t| parse_time(t))
                 .collect::<Result<_, _>>()?,
         },
-        TriggerConfig::Sun { event, offset } => Trigger::Sun {
+        TriggerConfig::Sun { event, offset, .. } => Trigger::Sun {
             event: parse_sun_event(&event)?,
             offset: offset
                 .as_deref()
@@ -494,7 +691,8 @@ fn check_trigger(config: TriggerConfig) -> Result<Trigger, String> {
                 .transpose()?
                 .unwrap_or_default(),
         },
-    })
+    };
+    Ok((trigger, id))
 }
 
 fn parse_sun_event(value: &str) -> Result<SunEvent, String> {
@@ -523,11 +721,88 @@ pub fn uses_sun(automations: &[Automation]) -> bool {
             .triggers
             .iter()
             .any(|t| matches!(t, Trigger::Sun { .. }))
-            || automation
-                .conditions
-                .iter()
-                .any(|c| matches!(c, Condition::Sun { .. }))
+            || automation.conditions.iter().any(Condition::uses_sun)
+            || automation.actions.iter().any(Action::uses_sun)
     })
+}
+
+impl Condition {
+    fn uses_sun(&self) -> bool {
+        match self {
+            Self::Sun { .. } => true,
+            Self::And(list) | Self::Or(list) | Self::Not(list) => list.iter().any(Self::uses_sun),
+            _ => false,
+        }
+    }
+
+    fn collect_entities<'a>(&'a self, ids: &mut Vec<&'a EntityId>) {
+        match self {
+            Self::State { entity_ids, .. } | Self::NumericState { entity_ids, .. } => {
+                ids.extend(entity_ids);
+            }
+            Self::And(list) | Self::Or(list) | Self::Not(list) => {
+                for condition in list {
+                    condition.collect_entities(ids);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+impl Action {
+    fn uses_sun(&self) -> bool {
+        match self {
+            Self::Condition(condition) => condition.uses_sun(),
+            Self::If {
+                conditions,
+                then,
+                otherwise,
+            } => {
+                conditions.iter().any(Condition::uses_sun)
+                    || then.iter().chain(otherwise).any(Self::uses_sun)
+            }
+            Self::Choose { options, default } => {
+                options.iter().any(|(conditions, actions)| {
+                    conditions.iter().any(Condition::uses_sun) || actions.iter().any(Self::uses_sun)
+                }) || default.iter().any(Self::uses_sun)
+            }
+            Self::Service { .. } | Self::Delay(_) => false,
+        }
+    }
+
+    fn collect_entities<'a>(&'a self, ids: &mut Vec<&'a EntityId>) {
+        match self {
+            Self::Service { entity_ids, .. } => ids.extend(entity_ids),
+            Self::Delay(_) => {}
+            Self::Condition(condition) => condition.collect_entities(ids),
+            Self::If {
+                conditions,
+                then,
+                otherwise,
+            } => {
+                for condition in conditions {
+                    condition.collect_entities(ids);
+                }
+                for action in then.iter().chain(otherwise) {
+                    action.collect_entities(ids);
+                }
+            }
+            Self::Choose { options, default } => {
+                for (conditions, actions) in options {
+                    for condition in conditions {
+                        condition.collect_entities(ids);
+                    }
+                    for action in actions {
+                        action.collect_entities(ids);
+                    }
+                }
+                for action in default {
+                    action.collect_entities(ids);
+                }
+            }
+        }
+    }
 }
 
 impl Automation {
@@ -543,16 +818,10 @@ impl Automation {
             }
         }
         for condition in &self.conditions {
-            if let Condition::State { entity_ids, .. }
-            | Condition::NumericState { entity_ids, .. } = condition
-            {
-                ids.extend(entity_ids);
-            }
+            condition.collect_entities(&mut ids);
         }
         for action in &self.actions {
-            if let Action::Service { entity_ids, .. } = action {
-                ids.extend(entity_ids);
-            }
+            action.collect_entities(&mut ids);
         }
         ids.sort_unstable();
         ids.dedup();
@@ -560,8 +829,30 @@ impl Automation {
     }
 }
 
-fn check_condition(config: ConditionConfig) -> Result<Condition, String> {
+fn check_condition(
+    config: ConditionConfig,
+    depth: usize,
+    budget: &mut Budget,
+) -> Result<Condition, String> {
+    budget.take(depth)?;
+    let mut nested = |list: Vec<ConditionConfig>, name: &str| -> Result<Vec<Condition>, String> {
+        if list.is_empty() {
+            return Err(format!("condition {name} : il faut au moins une condition"));
+        }
+        list.into_iter()
+            .map(|c| check_condition(c, depth + 1, budget))
+            .collect()
+    };
     Ok(match config {
+        ConditionConfig::And { conditions } => Condition::And(nested(conditions, "and")?),
+        ConditionConfig::Or { conditions } => Condition::Or(nested(conditions, "or")?),
+        ConditionConfig::Not { conditions } => Condition::Not(nested(conditions, "not")?),
+        ConditionConfig::Trigger { id } => Condition::Trigger(
+            id.into_vec()
+                .iter()
+                .map(|id| check_label(id, "id de déclencheur"))
+                .collect::<Result<_, _>>()?,
+        ),
         ConditionConfig::State { entity_id, state } => Condition::State {
             entity_ids: entity_ids(entity_id)?,
             states: state.into_vec(),
@@ -631,8 +922,66 @@ fn check_condition(config: ConditionConfig) -> Result<Condition, String> {
     })
 }
 
+/// Vérifie une action (utilisée aussi par les scripts).
 pub(crate) fn check_action(config: ActionConfig) -> Result<Action, String> {
+    check_action_in(config, 0, &mut Budget::default())
+}
+
+fn check_action_in(
+    config: ActionConfig,
+    depth: usize,
+    budget: &mut Budget,
+) -> Result<Action, String> {
+    budget.take(depth)?;
+    let actions = |list: Vec<ActionConfig>, budget: &mut Budget| -> Result<Vec<Action>, String> {
+        list.into_iter()
+            .map(|a| check_action_in(a, depth + 1, budget))
+            .collect()
+    };
+    let conditions =
+        |list: Vec<ConditionConfig>, budget: &mut Budget| -> Result<Vec<Condition>, String> {
+            if list.is_empty() {
+                return Err("il faut au moins une condition".into());
+            }
+            list.into_iter()
+                .map(|c| check_condition(c, depth + 1, budget))
+                .collect()
+        };
     match config {
+        ActionConfig::Condition(condition) => Ok(Action::Condition(check_condition(
+            condition,
+            depth + 1,
+            budget,
+        )?)),
+        ActionConfig::If(config) => {
+            if config.then.is_empty() {
+                return Err("if : il faut au moins une action dans then".into());
+            }
+            Ok(Action::If {
+                conditions: conditions(config.if_, budget)?,
+                then: actions(config.then, budget)?,
+                otherwise: actions(config.else_.unwrap_or_default(), budget)?,
+            })
+        }
+        ActionConfig::Choose(config) => {
+            if config.choose.is_empty() {
+                return Err("choose : il faut au moins une option".into());
+            }
+            let mut options = Vec::with_capacity(config.choose.len());
+            for option in config.choose {
+                if option.sequence.is_empty() {
+                    return Err("choose : chaque option doit avoir une sequence".into());
+                }
+                options.push((
+                    conditions(option.conditions, budget)?,
+                    actions(option.sequence, budget)?,
+                ));
+            }
+            Ok(Action::Choose {
+                options,
+                default: actions(config.default.unwrap_or_default(), budget)?,
+            })
+        }
         ActionConfig::Delay(delay) => Ok(Action::Delay(parse_duration(&delay.delay)?)),
         ActionConfig::Service(service) => {
             let Some((domain, name)) = service.action.split_once('.') else {

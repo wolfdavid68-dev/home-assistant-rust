@@ -2,7 +2,7 @@
 //! sont remplies. Aucune attente, aucun réseau : l'heure est passée en
 //! paramètre, ce qui permet de tester « il est 18 h 59, puis 19 h 00 ».
 
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 use std::time::SystemTime;
 
 use ha_core::{EntityId, State, StateMachine};
@@ -33,6 +33,50 @@ pub struct Evaluator {
     automations: Vec<Automation>,
     pending: Vec<Pending>,
     sun: Option<Sun>,
+}
+
+/// Une automatisation déclenchée, et par lequel de ses déclencheurs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Fired {
+    pub automation: usize,
+    pub trigger: usize,
+}
+
+/// Ce qu'il faut pour vérifier une condition, à tout moment (aussi au milieu
+/// des actions : `if`, `choose`, `condition`). Concept Rust : `Clone` permet
+/// d'en donner une copie à chaque exécution, qui tourne dans sa propre tâche.
+#[derive(Debug, Clone, Default)]
+pub struct Checker {
+    sun: Option<Sun>,
+}
+
+impl Checker {
+    /// La condition est-elle vraie ? `trigger` : l'identifiant du
+    /// déclencheur qui a lancé l'exécution (pour la condition `trigger`).
+    #[must_use]
+    pub fn passes(
+        &self,
+        condition: &Condition,
+        states: &StateMachine,
+        now: DateTime,
+        trigger: Option<&str>,
+    ) -> bool {
+        condition_passes(condition, states, now, self.sun.as_ref(), trigger)
+    }
+
+    /// Toutes les conditions de la liste sont-elles vraies ?
+    #[must_use]
+    pub fn all(
+        &self,
+        conditions: &[Condition],
+        states: &StateMachine,
+        now: DateTime,
+        trigger: Option<&str>,
+    ) -> bool {
+        conditions
+            .iter()
+            .all(|c| self.passes(c, states, now, trigger))
+    }
 }
 
 /// De quoi calculer les heures du soleil, en heure locale.
@@ -102,6 +146,14 @@ impl Evaluator {
         previous
     }
 
+    /// De quoi vérifier les conditions pendant les actions.
+    #[must_use]
+    pub fn checker(&self) -> Checker {
+        Checker {
+            sun: self.sun.clone(),
+        }
+    }
+
     /// Un changement d'état : renvoie les automatisations déclenchées
     /// (leur position dans la liste).
     pub fn on_state_changed(
@@ -111,7 +163,20 @@ impl Evaluator {
         new: Option<&State>,
         now: Instant,
     ) -> Vec<usize> {
-        let mut fired = BTreeSet::new();
+        automations(self.fire_on_state_changed(entity_id, old, new, now))
+    }
+
+    /// Comme [`Evaluator::on_state_changed`], avec le déclencheur de chacune.
+    pub fn fire_on_state_changed(
+        &mut self,
+        entity_id: &EntityId,
+        old: Option<&State>,
+        new: Option<&State>,
+        now: Instant,
+    ) -> Vec<Fired> {
+        // Concept Rust : `entry(a).or_insert(t)` garde le **premier**
+        // déclencheur qui a fonctionné pour chaque automatisation.
+        let mut fired = BTreeMap::new();
         for (a, automation) in self.automations.iter().enumerate() {
             for (t, trigger) in automation.triggers.iter().enumerate() {
                 match trigger {
@@ -131,7 +196,7 @@ impl Evaluator {
                         }
                         match for_ {
                             None => {
-                                fired.insert(a);
+                                fired.entry(a).or_insert(t);
                             }
                             Some(duration) => self.pending.push(Pending {
                                 automation: a,
@@ -156,14 +221,14 @@ impl Evaluator {
                         // On déclenche en **entrant** dans l'intervalle, pas à
                         // chaque nouvelle mesure tant qu'on y reste.
                         if inside(new) && !inside(old) {
-                            fired.insert(a);
+                            fired.entry(a).or_insert(t);
                         }
                     }
                     _ => {}
                 }
             }
         }
-        fired.into_iter().collect()
+        to_fired(fired)
     }
 
     /// Appelé régulièrement (chaque seconde) : déclencheurs `time` passés
@@ -175,9 +240,20 @@ impl Evaluator {
         instant: Instant,
         states: &StateMachine,
     ) -> Vec<usize> {
-        let mut fired = BTreeSet::new();
+        automations(self.fire_on_tick(previous, now, instant, states))
+    }
+
+    /// Comme [`Evaluator::on_tick`], avec le déclencheur de chacune.
+    pub fn fire_on_tick(
+        &mut self,
+        previous: DateTime,
+        now: DateTime,
+        instant: Instant,
+        states: &StateMachine,
+    ) -> Vec<Fired> {
+        let mut fired = BTreeMap::new();
         for (a, automation) in self.automations.iter().enumerate() {
-            for trigger in &automation.triggers {
+            for (t, trigger) in automation.triggers.iter().enumerate() {
                 let crossed_now = match trigger {
                     Trigger::Time { at } => at.iter().any(|time| crossed(previous, now, *time)),
                     Trigger::Sun { event, offset } => self.sun.as_ref().is_some_and(|sun| {
@@ -189,7 +265,7 @@ impl Evaluator {
                     _ => false,
                 };
                 if crossed_now {
-                    fired.insert(a);
+                    fired.entry(a).or_insert(t);
                 }
             }
         }
@@ -203,22 +279,47 @@ impl Evaluator {
                 state.state() == pending.value && state.last_changed() == pending.since
             });
             if still_true {
-                fired.insert(pending.automation);
+                fired.entry(pending.automation).or_insert(pending.trigger);
             }
         }
-        fired.into_iter().collect()
+        to_fired(fired)
     }
 
     /// Toutes les conditions de l'automatisation sont-elles remplies ?
     pub fn conditions_pass(&self, automation: usize, states: &StateMachine, now: DateTime) -> bool {
+        self.conditions_pass_for(automation, states, now, None)
+    }
+
+    /// Comme [`Evaluator::conditions_pass`], en sachant quel déclencheur
+    /// (son identifiant) a lancé l'automatisation.
+    pub fn conditions_pass_for(
+        &self,
+        automation: usize,
+        states: &StateMachine,
+        now: DateTime,
+        trigger: Option<&str>,
+    ) -> bool {
         let Some(automation) = self.automations.get(automation) else {
             return false;
         };
         automation
             .conditions
             .iter()
-            .all(|condition| condition_passes(condition, states, now, self.sun.as_ref()))
+            .all(|condition| condition_passes(condition, states, now, self.sun.as_ref(), trigger))
     }
+}
+
+fn to_fired(map: BTreeMap<usize, usize>) -> Vec<Fired> {
+    map.into_iter()
+        .map(|(automation, trigger)| Fired {
+            automation,
+            trigger,
+        })
+        .collect()
+}
+
+fn automations(fired: Vec<Fired>) -> Vec<usize> {
+    fired.into_iter().map(|f| f.automation).collect()
 }
 
 fn state_matches(from: Option<&str>, to: Option<&str>, old: Option<&State>, new: &State) -> bool {
@@ -248,8 +349,15 @@ fn condition_passes(
     states: &StateMachine,
     now: DateTime,
     sun: Option<&Sun>,
+    trigger: Option<&str>,
 ) -> bool {
+    let check = |c: &Condition| condition_passes(c, states, now, sun, trigger);
     match condition {
+        Condition::And(list) => list.iter().all(check),
+        Condition::Or(list) => list.iter().any(check),
+        // Comme dans Home Assistant : vrai si **aucune** n'est vraie.
+        Condition::Not(list) => !list.iter().any(check),
+        Condition::Trigger(ids) => trigger.is_some_and(|t| ids.iter().any(|id| id == t)),
         Condition::State {
             entity_ids,
             states: expected,

@@ -527,3 +527,7 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .tile.climate.heating .icon { background: var(--accent); color: #fff; }
 .tile.climate.stopped .setpoint .value { color: var(--muted); }
 .climate-info { font-size: 0.8rem; }
+
+/* Blocs imbriqués de l'éditeur (« ou », « si… alors… sinon ») */
+.auto-block.nested { grid-column: 1 / -1; background: var(--card); }
+.auto-block.nested .auto-item { background: var(--bg); }

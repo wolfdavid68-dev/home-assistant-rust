@@ -318,7 +318,7 @@ mod tests {
                     entity_ids[0],
                     serde_json::Value::Object(data.clone())
                 ),
-                Action::Delay(_) => "delay".into(),
+                _ => "autre".into(),
             })
             .collect();
         assert_eq!(
