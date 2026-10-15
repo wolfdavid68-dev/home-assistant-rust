@@ -344,10 +344,19 @@ function renderActions() {
 
 // ---------------------------------------------------------------- Volets en lignes
 
+/** Le nom d'un volet dans sa ligne : celui de sa pièce (« Salon »), ou
+ *  « Salon · Baie » s'il y en a plusieurs dans la pièce. */
+function coverTitle(state) {
+  const area = areas.find((a) => a.entities.some((e) => e.entity_id === state.entity_id));
+  if (!area) return nameOf(state);
+  const covers = area.entities.filter((e) => e.entity_id.startsWith("cover."));
+  return covers.length > 1 ? `${area.name} · ${nameOf(state)}` : area.name;
+}
+
 function coverRow(state) {
   const buttons = [["open_cover", ICONS.up, "Ouvrir"], ["stop_cover", ICONS.stop, "Arrêter"], ["close_cover", ICONS.down, "Fermer"]]
     .map(([service, icon, label]) => {
-      const button = el("button", { type: "button", class: "round", "aria-label": `${label} ${nameOf(state)}` }, svgIcon(icon));
+      const button = el("button", { type: "button", class: "round", "aria-label": `${label} ${coverTitle(state)}` }, svgIcon(icon));
       button.addEventListener("click", () => {
         row.classList.add("pending");
         setTimeout(() => row.classList.remove("pending"), 5000);
@@ -357,7 +366,7 @@ function coverRow(state) {
     });
   const row = el("div", { class: `cover-row${state.state === "open" ? " on" : ""}` },
     el("span", { class: "house-action-icon" }, svgIcon(ICONS.blinds)),
-    el("span", { class: "house-action-text" }, el("b", { text: nameOf(state) }), el("span", { text: coverText(state) })),
+    el("span", { class: "house-action-text" }, el("b", { text: coverTitle(state) }), el("span", { text: coverText(state) })),
     canControl(state) ? el("span", { class: "cover-row-buttons" }, ...buttons) : "");
   return row;
 }
@@ -374,6 +383,26 @@ function renderCovers() {
   box.replaceChildren(el("h2", { text: "Volets" }), el("div", { class: "cover-rows" }, ...covers.map(coverRow)));
 }
 
+// ---------------------------------------------------------------- Personnes
+// En tête de la colonne des pièces : chacun, avec l'initiale de son nom et où
+// il est (« Maison », « Absent », ou le nom de la zone).
+
+function renderPeople() {
+  const box = $("#board-people");
+  const people = [...entities.values()]
+    .filter((s) => domainOf(s) === "person")
+    .sort((a, b) => nameOf(a).localeCompare(nameOf(b), "fr"));
+  box.hidden = people.length === 0;
+  box.replaceChildren(...people.map((state) => {
+    const home = state.state === "home";
+    const where = home ? "Maison" : state.state === "not_home" ? "Absent" : lookup(STATUS_LABELS, state.state) ?? state.state;
+    const name = nameOf(state);
+    return el("div", { class: `person-chip${home ? " home" : ""}` },
+      el("span", { class: "person-avatar", text: name.charAt(0).toUpperCase(), "aria-hidden": "true" }),
+      el("span", { class: "house-action-text" }, el("b", { text: name }), el("span", { text: where })));
+  }));
+}
+
 /** Appelé par app.js à chaque changement (au plus une fois par image). */
 function renderHouse() {
   const board = isBoard();
@@ -381,6 +410,7 @@ function renderHouse() {
   $("#title-block").hidden = !isPlan();
   if (!board) {
     $("#board-covers").hidden = true;
+    $("#board-people").hidden = true;
     return;
   }
   if (house.loading === null && token.get()) loadHouse();
@@ -388,6 +418,7 @@ function renderHouse() {
   renderGauges();
   renderActions();
   renderCovers();
+  renderPeople();
   if (isPlan()) renderTitleBlock();
 }
 

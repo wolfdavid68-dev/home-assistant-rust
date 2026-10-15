@@ -7,12 +7,19 @@
 Reprendre la mise en page des tableaux de bord isométriques de Home Assistant (merci à
 [domo-blog](https://www.domo-blog.fr/tableau-de-bord-home-assistant-3d-isometrique/)) :
 
-- **à gauche**, les pièces en petites tuiles : l'icône, le nom, « 23,6 °C | 61,4 % » ;
+- **un rail d'icônes** à gauche (accueil, journal, automatisations, énergie, compte), comme dans
+  Home Assistant, et un en-tête d'une seule ligne : la date, l'heure, et « tout est calme, sauf… » ;
+- **à gauche**, qui est là (« Alice · Maison »), puis les pièces en petites tuiles : l'icône, le
+  nom, « 23,6 °C | 61,4 % » ;
 - **au centre**, la maquette de la maison, avec ses calques et ses valeurs
   ([étape 36](plan-architecte.md)) ;
 - **au-dessus**, les repères : dehors, dedans, puissance, lumières, présents ;
 - **en dessous**, des **boutons rapides** : le porche, le parking, les portes de garage…
-- **puis les volets en lignes**, avec ▲ ■ ▼, et tous les autres appareils comme avant.
+- **puis les volets**, sur toute la largeur, trois ou quatre par ligne, avec ▲ ■ ▼, et tous les
+  autres appareils comme avant.
+
+Les icônes sont rondes et s'allument en couleur : dorée pour une lumière allumée ou une porte
+ouverte, rouge pour une alerte.
 
 ## Choisir l'apparence
 
@@ -41,8 +48,9 @@ une porte de garage.
 
 ## Les volets en lignes
 
-Tous les volets apparaissent sous le dessin, une ligne chacun, avec la position et ▲ ■ ▼. Les
-portes de garage, les portails et les volets déjà en boutons rapides n'y sont pas.
+Tous les volets apparaissent sous le dessin, une ligne chacun, avec la position et ▲ ■ ▼. Chaque
+ligne porte le nom de sa pièce (« Salon »), ou « Salon · Baie » s'il y a plusieurs volets dans la
+pièce. Les portes de garage, les portails et les volets déjà en boutons rapides n'y sont pas.
 
 ## Sur téléphone
 
@@ -54,7 +62,8 @@ volets. Les repères défilent sur une seule ligne.
 ## Sur une télé
 
 Le dessin tient dans la hauteur de l'écran, quelles que soient ses proportions. Ses boutons
-restent donc visibles sans faire défiler. La salutation est plus petite pour lui laisser la place.
+restent donc visibles sans faire défiler. L'en-tête tient sur une ligne, et la barre du bas du
+téléphone devient un rail d'icônes à gauche, pour lui laisser la place.
 
 ## Sécurité
 

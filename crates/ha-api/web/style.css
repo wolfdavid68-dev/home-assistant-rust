@@ -1526,7 +1526,7 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
    ====================================================================== */
 
 /* Ce qui n'existe que dans les styles « plan » et la mise en page « tableau ». */
-.house, .gauges, .title-block, .room-hum, .room-line, .board-covers, .house-actions { display: none; }
+.house, .gauges, .title-block, .room-hum, .room-line, .board-covers, .house-actions, .board-people { display: none; }
 
 :root[data-theme="plan"] {
   --bar: #f3f5f9;
@@ -1863,10 +1863,47 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
    ====================================================================== */
 
 [data-layout="board"] .house { order: -1; }
-/* Un accueil plus court : la place va au dessin. */
-[data-layout="board"] .greeting { font-size: clamp(1.5rem, 1.1rem + 1.2vw, 2.1rem); margin-top: 0.7rem; }
+/* Un en-tête d'une ligne, comme une barre : la place va au tableau. */
+[data-layout="board"] .hero { padding-top: max(0.8rem, env(safe-area-inset-top, 0px)); padding-bottom: 0.4rem; }
+[data-layout="board"] .greeting { font-family: var(--font); font-size: 1.05rem; font-weight: 600; letter-spacing: 0; margin-top: 0.35rem; }
+[data-layout="board"] .greeting a { text-decoration-thickness: 1.5px; text-underline-offset: 3px; }
+[data-layout="board"] .summary { display: none; }
+[data-layout="board"] .layout { gap: 12px; margin-top: 0.6rem; }
+[data-layout="board"] .overview { gap: 12px; }
+
+/* Qui est là : comme les pièces, deux par ligne. */
+[data-layout="board"] .board-people:not([hidden]) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.person-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  min-height: 58px;
+  padding: 8px 10px;
+  border-radius: calc(var(--radius) * 0.7);
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+.person-avatar {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  background: var(--card-2);
+  color: var(--text-2);
+}
+.person-chip.home .person-avatar { background: var(--accent); color: var(--accent-ink); box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--ok); }
+[data-theme|="plan"] .person-chip { border: 1px solid var(--ink-line); box-shadow: none; border-radius: 4px; }
 [data-layout="board"] .board-covers:not([hidden]) { display: grid; gap: 0.75rem; min-width: 0; }
-[data-layout="board"] .house-actions:not([hidden]) { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: 8px; }
+[data-layout="board"] .house-actions:not([hidden]) { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 8px; }
+/* Sous le dessin, seulement « Régler » (pour l'administrateur), discret. */
+[data-layout="board"] .house-caption { justify-content: flex-end; }
+[data-layout="board"] .house-caption > span { display: none; }
+[data-layout="board"] .house-caption:empty, [data-layout="board"] .house-caption:not(:has(button)) { display: none; }
 
 /* Les pièces : une ligne, l'icône, le nom, « 25,1 °C | 49 % ». */
 [data-layout="board"] .plan-card { background: none; box-shadow: none; border: 0; padding: 0; }
@@ -1938,17 +1975,43 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .board-covers > h2 { margin: 0; }
 
 @media (min-width: 1000px) {
-  [data-layout="board"] .hero > * { max-width: 1760px; }
+  /* L'en-tête suit exactement la grille du dessous. */
+  [data-layout="board"] .hero { max-width: 1760px; margin-inline: auto; }
+  [data-layout="board"] .hero > * { max-width: none; }
   [data-layout="board"] .layout {
     max-width: 1760px;
     grid-template-columns: minmax(300px, 30%) minmax(0, 1fr);
-    grid-template-areas: "overview house" "overview covers" "sections sections" "title title";
+    grid-template-areas: "overview house" "covers covers" "sections sections" "title title";
   }
+  /* Les volets sur toute la largeur, trois ou quatre par ligne. */
+  [data-layout="board"] .cover-rows { grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); }
+  /* La barre de navigation devient un rail d'icônes à gauche, comme dans
+     Home Assistant ; les boutons du haut ne servent plus. */
+  [data-layout="board"] .dock {
+    display: grid;
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: 68px;
+    height: auto;
+    border-radius: 0;
+    grid-template-columns: none !important;
+    grid-auto-rows: 64px;
+    align-content: start;
+    padding-top: 14px;
+    box-shadow: inset -1px 0 0 var(--line);
+  }
+  [data-layout="board"] .dock span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  [data-layout="board"] .dock :is(a, button) { place-content: center; border-radius: 12px; margin: 0 10px; }
+  [data-layout="board"] .dock :is(a, button):hover { background: var(--card-2); color: var(--text); }
+  [data-layout="board"] .dock .active { background: var(--accent-soft); }
+  [data-layout="board"] :is(.hero, .layout) { padding-left: calc(68px + var(--gutter)); }
+  [data-layout="board"] .actions .ghost { display: none; }
+  [data-theme|="plan"][data-layout="board"] .dock { box-shadow: inset -1.25px 0 0 var(--ink); }
   [data-layout="board"] .overview { grid-area: overview; position: static; }
   [data-layout="board"] .house { grid-area: house; }
   /* Le dessin tient dans la hauteur de l'écran : les boutons et les volets
      restent visibles sans défiler, sur une télé comme sur un ordinateur. */
-  [data-layout="board"] #house-stage { width: min(100%, calc((100dvh - 330px) * var(--ratio, 1.35))); justify-self: center; }
+  [data-layout="board"] #house-stage { width: min(100%, calc((100dvh - 290px) * var(--ratio, 1.35))); justify-self: center; }
   [data-layout="board"] .board-covers { grid-area: covers; }
   [data-layout="board"] .sections { grid-area: sections; }
   [data-layout="board"] .title-block { grid-area: title; }
@@ -2023,6 +2086,15 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 [data-theme="maquette"] .house-tag { border-color: rgb(255 255 255 / 0.5); background: rgb(26 16 48 / 0.82); }
 [data-theme="maquette"] .tile.light.on { background: linear-gradient(140deg, rgb(255 176 64 / 0.24), rgb(255 176 64 / 0.08)); }
 [data-theme="maquette"] .scene.on { background: var(--accent); color: var(--accent-ink); }
+/* Des icônes rondes, qui s'allument en couleur (comme sur les maquettes). */
+[data-theme="maquette"] :is(.room-icon, .house-action-icon, .icon) { border-radius: 50%; }
+[data-theme="maquette"] .room.lit .room-icon,
+[data-theme="maquette"] .house-action.on .house-action-icon { background: radial-gradient(circle at 35% 30%, #ffd57a, #f59f1a); color: #3b2405; box-shadow: 0 0 14px rgb(255 176 64 / 0.45); }
+[data-theme="maquette"] .cover-row.on .house-action-icon { background: rgb(120 200 255 / 0.18); color: #8fd3ff; }
+[data-theme="maquette"] .room.alert .room-icon { background: radial-gradient(circle at 35% 30%, #ff8f9a, #e2445a); box-shadow: 0 0 14px rgb(255 107 122 / 0.4); }
+[data-theme="maquette"] .gauge { min-height: 30px; font-size: 0.78rem; }
+[data-theme="maquette"] .cover-row-buttons .round { background: rgb(255 255 255 / 0.07); border-radius: 10px; }
+[data-theme="maquette"] .dock { background: rgb(20 12 38 / 0.94); }
 
 /* ---------- Réglage du dessin ---------- */
 
