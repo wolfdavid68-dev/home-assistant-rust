@@ -51,6 +51,7 @@
         <nav class="actions" aria-label="Menu">
           <button id="open-logbook" class="ghost" type="button">Journal de bord</button>
           <button id="open-automations" class="ghost" type="button">Automatisations</button>
+          <button id="open-energy" class="ghost" type="button">Énergie</button>
           <button id="open-notices" class="bell" type="button" aria-haspopup="dialog" aria-label="Notifications" hidden>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
             <span id="notice-count" class="bell-count"></span>
@@ -76,6 +77,7 @@
       <a href="#" id="dock-home" class="active"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg><span>Maison</span></a>
       <button id="dock-logbook" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg><span>Journal</span></button>
       <button id="dock-automations" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v3"/><path d="M12 18v3"/><path d="M3 12h3"/><path d="M18 12h3"/><path d="M8 12a4 4 0 1 0 8 0 4 4 0 1 0-8 0"/></svg><span>Automatismes</span></button>
+      <button id="dock-energy" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg><span>Énergie</span></button>
       <button id="dock-account" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a4 4 0 1 0 0 8 4 4 0 1 0 0-8z"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span>Compte</span></button>
     </nav>
     <dialog id="account-dialog" class="history-dialog account-dialog" aria-labelledby="account-title">
@@ -120,6 +122,27 @@
         <select id="logbook-entity" aria-label="Appareil"></select>
       </div>
       <div id="logbook-list" class="logbook-list" aria-live="polite"></div>
+    </dialog>
+    <!-- Bilan énergétique -->
+    <dialog id="energy" class="history-dialog energy-dialog" aria-labelledby="energy-title">
+      <div class="history-top">
+        <h2 id="energy-title">Énergie</h2>
+        <button id="energy-close" class="ghost" type="button">Fermer</button>
+      </div>
+      <div id="energy-now" class="energy-now" hidden></div>
+      <div id="energy-totals" class="energy-totals"></div>
+      <div class="periods" role="group" aria-label="Période">
+        <button type="button" class="period" data-range="7">7 jours</button>
+        <button type="button" class="period" data-range="30">30 jours</button>
+        <button type="button" class="period" data-range="year">Cette année</button>
+      </div>
+      <div id="energy-chart" class="history-chart energy-chart"></div>
+      <ul id="energy-legend" class="energy-legend"></ul>
+      <details id="energy-details" class="energy-details">
+        <summary>Voir les chiffres</summary>
+        <div class="energy-table-wrap"><table id="energy-table" class="energy-table"></table></div>
+      </details>
+      <p id="energy-note" class="auto-meta"></p>
     </dialog>
     <!-- Notifications et alertes de réparation -->
     <dialog id="notices" class="history-dialog notices-dialog" aria-labelledby="notices-title">

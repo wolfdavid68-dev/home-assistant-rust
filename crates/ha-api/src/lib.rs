@@ -11,6 +11,7 @@
 //! | GET | `/api/history/{entity_id}` | Historique d'une entité |
 //! | GET | `/api/logbook` | Journal de bord (`?hours=24&entity_id=…`) |
 //! | GET | `/api/statistics/{entity_id}` | Statistiques long terme (`?period=day&days=365`) |
+//! | GET | `/api/energy` | Bilan énergétique : jours, mois, année, coûts (`?days=30`) |
 //! | POST | `/api/services/{domain}/{service}` | Appel de service (`switch/turn_on`…) |
 //! | GET | `/api/automations` | Automatisations (fichier et éditeur) |
 //! | POST | `/api/automations/check` | Vérifie une automatisation sans l'enregistrer |
@@ -64,6 +65,8 @@ pub struct ApiState {
     pub areas: Vec<ha_areas::Area>,
     /// L'éditeur d'automatisations (absent : les routes répondent 404).
     pub automations: Option<AutomationEditor>,
+    /// Les compteurs du bilan énergétique (fichier `energy.yaml`).
+    pub energy: ha_energy::EnergyConfig,
     /// Confirmations d'identité en cours : empreinte du jeton → fin de validité.
     confirmations: Mutex<HashMap<[u8; 32], Instant>>,
     shutdown: CancellationToken,
@@ -76,6 +79,7 @@ impl ApiState {
         auth: Arc<Auth>,
         areas: Vec<ha_areas::Area>,
         automations: Option<AutomationEditor>,
+        energy: ha_energy::EnergyConfig,
     ) -> Arc<Self> {
         let shutdown = CancellationToken::new();
         Arc::new(Self {
@@ -84,6 +88,7 @@ impl ApiState {
             auth,
             areas,
             automations,
+            energy,
             confirmations: Mutex::default(),
             shutdown,
         })
@@ -126,6 +131,7 @@ pub fn router(state: Arc<ApiState>) -> Router {
         .route("/api/history/{entity_id}/series", get(rest::history_series))
         .route("/api/statistics/{entity_id}", get(rest::statistics))
         .route("/api/logbook", get(rest::logbook))
+        .route("/api/energy", get(rest::energy))
         .route("/api/audit", get(rest::audit_log))
         .route("/api/areas", get(rest::areas))
         .route("/api/services/{domain}/{service}", post(rest::call_service))

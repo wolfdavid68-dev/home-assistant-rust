@@ -383,6 +383,37 @@ pub(crate) async fn logbook(
 
 /// `GET /api/statistics/{entity_id}?period=day&days=30` : les statistiques
 /// long terme (moyenne, min, max, consommation), par heure, jour ou mois.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct EnergyQuery {
+    #[serde(default)]
+    days: Option<u32>,
+}
+
+/// `GET /api/energy?days=30` : le bilan énergétique (consommation et
+/// production par jour et par mois, totaux, coûts).
+pub(crate) async fn energy(
+    State(state): State<Arc<ApiState>>,
+    auth: Authenticated,
+    Query(query): Query<EnergyQuery>,
+) -> Result<Json<Value>, ApiError> {
+    roles::require(&auth.user, Permission::ReadHistory)?;
+    let days = query.days.unwrap_or(30);
+    if !(1..=ha_energy::MAX_DAYS).contains(&days) {
+        return Err(ApiError::BadRequest(format!(
+            "« days » doit être entre 1 et {}",
+            ha_energy::MAX_DAYS
+        )));
+    }
+    let now = jiff::Zoned::now();
+    let report = ha_energy::report(&state.store, &state.core.states, &state.energy, days, &now)
+        .await
+        .map_err(|error| ApiError::Internal(error.to_string()))?;
+    serde_json::to_value(report)
+        .map(Json)
+        .map_err(|error| ApiError::Internal(error.to_string()))
+}
+
 pub(crate) async fn statistics(
     State(state): State<Arc<ApiState>>,
     auth: Authenticated,

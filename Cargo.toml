@@ -50,6 +50,9 @@ tokio = { version = "1.53.3", default-features = false }
 # Alexa en local : socket UDP partagée pour la découverte SSDP (port 1900).
 socket2 = "0.6.5"
 tracing = "0.1.44"
+# Compteur Linky sur un module USB : réglage de la liaison série (termios),
+# avec une interface sûre. Unix seulement.
+nix = { version = "0.31.3", default-features = false, features = ["term", "fs"] }
 # Arrêt propre des tâches de fond (`CancellationToken`).
 tokio-util = { version = "0.7.20", default-features = false }
 # Uniquement pour les tests (sauf futures-util, aussi utilisé par ha-hue).

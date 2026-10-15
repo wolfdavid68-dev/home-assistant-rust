@@ -45,6 +45,7 @@ utilisation :
   ha-server persons check         vérifie le fichier des personnes
   ha-server inputs check          vérifie le fichier des entrées
   ha-server derived check         vérifie le fichier des assistants calculés
+  ha-server energy check          vérifie le fichier du bilan énergétique
   ha-server audit [nombre]        affiche le journal d'audit
   ha-server audit verify          vérifie que le journal n'a pas été modifié
   ha-server backup now            sauvegarde la base (même serveur en marche)
@@ -1052,6 +1053,33 @@ pub fn check_derived(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
     );
     for item in &derived {
         println!("  - {} « {} »", item.entity_id, item.name);
+    }
+    Ok(())
+}
+
+/// `ha-server energy check` : vérifie le fichier du bilan énergétique.
+pub fn check_energy(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
+    if !path.exists() {
+        println!(
+            "{} n'existe pas : les index du compteur Linky seront comptés automatiquement.",
+            path.display()
+        );
+        return Ok(());
+    }
+    let config = ha_energy::load(path).map_err(|error| format!("{} : {error}", path.display()))?;
+    println!("{} : {} compteur(s)", path.display(), config.sources.len());
+    for source in &config.sources {
+        let kind = match source.kind {
+            ha_energy::Kind::Consumption => "consommation",
+            ha_energy::Kind::Production => "production",
+        };
+        let price = source
+            .price
+            .map_or_else(String::new, |price| format!(", {price} €/kWh"));
+        println!("  - {} ({kind}{price})", source.entity_id);
+    }
+    if let Some(subscription) = config.subscription {
+        println!("  abonnement : {subscription} € par mois");
     }
     Ok(())
 }

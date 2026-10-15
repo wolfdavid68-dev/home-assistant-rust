@@ -20,7 +20,9 @@ ha-notify = { path = "../ha-notify" }
 ha-person = { path = "../ha-person" }
 ha-agenda = { path = "../ha-agenda" }
 ha-derived = { path = "../ha-derived" }
+ha-energy = { path = "../ha-energy" }
 ha-notices = { path = "../ha-notices" }
+ha-teleinfo = { path = "../ha-teleinfo" }
 ha-input = { path = "../ha-input" }
 ha-logbook = { path = "../ha-logbook" }
 ha-somfy = { path = "../ha-somfy" }

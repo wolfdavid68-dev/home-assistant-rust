@@ -58,7 +58,14 @@ impl TestApp {
             editable,
             traces: ha_automation::Traces::new(),
         };
-        let state = ApiState::new(core, store, Arc::new(auth), areas, Some(automations));
+        let state = ApiState::new(
+            core,
+            store,
+            Arc::new(auth),
+            areas,
+            Some(automations),
+            ha_energy::EnergyConfig::default(),
+        );
         Self {
             state,
             recorder: Some(recorder),
@@ -153,6 +160,7 @@ async fn every_route_requires_a_token() {
         ("DELETE", "/api/automations/soir"),
         ("GET", "/api/automations/soir/versions"),
         ("GET", "/api/automations/matin/traces"),
+        ("GET", "/api/energy"),
     ] {
         let (status, _) = app.request(method, uri, None, None).await;
         assert_eq!(status, StatusCode::UNAUTHORIZED, "{method} {uri}");
@@ -1470,5 +1478,46 @@ async fn the_run_history_is_readable_by_the_family_only() {
     let (status, _) = app
         .request("GET", "/api/automations/matin/traces", Some(&guest), None)
         .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn the_energy_report_is_for_the_family() {
+    let app = TestApp::new().await;
+    let mut attributes = serde_json::Map::new();
+    attributes.insert("friendly_name".into(), json!("Linky heures creuses"));
+    attributes.insert("state_class".into(), json!("total_increasing"));
+    app.state
+        .core
+        .states
+        .set(
+            "sensor.linky_heures_creuses".parse().unwrap(),
+            "12.5",
+            attributes,
+        )
+        .unwrap();
+
+    let token = app.login().await;
+    let (status, body) = app
+        .request("GET", "/api/energy?days=7", Some(&token), None)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["configured"], false);
+    assert_eq!(body["sources"][0]["name"], "Linky heures creuses");
+    assert_eq!(body["sources"][0]["kind"], "consumption");
+    assert_eq!(body["today"]["consumed_kwh"], 0.0);
+    assert_eq!(body["days"], json!([]));
+
+    let (status, _) = app
+        .request("GET", "/api/energy?days=0", Some(&token), None)
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let (status, _) = app
+        .request("GET", "/api/energy?jours=3", Some(&token), None)
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    let guest = app.login_as("visiteur", ha_auth::Role::Guest).await;
+    let (status, _) = app.request("GET", "/api/energy", Some(&guest), None).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
 }

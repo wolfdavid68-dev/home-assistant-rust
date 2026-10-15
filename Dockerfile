@@ -54,6 +54,7 @@ ENV HA_DB_PATH=/data/ha.db \
     HA_PERSONS_PATH=/config/persons.yaml \
     HA_INPUTS_PATH=/config/inputs.yaml \
     HA_DERIVED_PATH=/config/derived.yaml \
+    HA_ENERGY_PATH=/config/energy.yaml \
     HA_BACKUP_DIR=/sauvegardes \
     HA_BIND=0.0.0.0:8123 \
     TZ=Europe/Paris

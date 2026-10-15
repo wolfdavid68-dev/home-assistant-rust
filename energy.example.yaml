@@ -1,0 +1,24 @@
+# Le bilan énergétique (étape 32) : quels compteurs compter, et à quel prix.
+# Copie ce fichier en `energy.yaml` (ou indique son chemin dans HA_ENERGY_PATH).
+#
+# Sans ce fichier, les index du compteur Linky (heures creuses, heures
+# pleines, Tempo…) sont comptés automatiquement, sans les prix.
+#
+# Vérifier le fichier : ha-server energy check
+
+# Ce que la maison consomme : des compteurs en kWh qui ne font que monter
+# (index du Linky, prise qui mesure sa consommation, compteur MQTT…).
+consumption:
+  - entity: sensor.linky_heures_creuses
+    price: 0.1696        # € par kWh (facultatif) : voir ta facture
+  - entity: sensor.linky_heures_pleines
+    price: 0.2146
+
+# Ce que la maison produit et revend (panneaux solaires), facultatif.
+# production:
+#   - entity: sensor.linky_production
+#     price: 0.1276      # prix de revente (facultatif)
+
+# L'abonnement, en € par mois (facultatif) : affiché à part, il ne change
+# pas avec la consommation.
+subscription: 15.47
