@@ -36,6 +36,7 @@ Un noyau domotique en Rust, inspiré de Home Assistant.
 - [Étape 25 : la nouvelle mise en forme (thèmes clair et sombre), expliquée](docs/mise-en-forme.md)
 - [Étape 27 : serrures, sirènes, vannes, aspirateurs, humidificateurs, chauffe-eau, expliqué](docs/appareils-mqtt.md)
 - [Étape 28 : l'agenda et les listes de la maison, expliqué](docs/agenda.md)
+- [Étape 29 : volets, ventilateurs, thermostats, boutons, télécommandes et alarmes MQTT, expliqué](docs/appareils-mqtt.md#étape-29--volets-ventilateurs-thermostats-boutons-réglages-télécommandes-et-alarmes)
 - [Étape 5 : les automatisations, expliqué](docs/etape-5-automatisations.md)
 - [Modernisation du code, expliquée](docs/modernisation.md)
 - [Étape 6 : l'interface web, expliquée](docs/etape-6-interface-web.md)

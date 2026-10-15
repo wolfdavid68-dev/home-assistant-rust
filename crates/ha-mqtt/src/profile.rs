@@ -1,5 +1,5 @@
 //! Ce qu'un type d'appareil sait faire au-delà de « marche / arrêt » :
-//! verrou, vanne, aspirateur, humidificateur, chauffe-eau.
+//! verrou, vanne, aspirateur, volet, ventilateur, thermostat, alarme…
 //!
 //! Un [`Profile`] décrit, pour une entité :
 //!
@@ -17,14 +17,52 @@ use serde_json::{Value, json};
 
 use crate::template::Template;
 
+/// Ce qu'on attend sur un sujet d'attribut.
+#[derive(Debug, Clone, PartialEq)]
+pub enum AttrKind {
+    /// Un nombre : autre chose est ignoré.
+    Number,
+    /// Un texte court, sans caractère de contrôle.
+    Text,
+    /// Oui / non : `on` donne `true`, `off` donne `false` (l'oscillation d'un ventilateur).
+    Flag { on: String, off: String },
+    /// Un nombre de l'appareil, ramené de `[min, max]` à un pourcentage
+    /// (position d'un volet de 0 à 255, vitesse d'un ventilateur de 1 à 6…).
+    Percent { min: f64, max: f64 },
+}
+
 /// Un sujet qui donne un attribut de l'entité (`humidity`, `battery_level`…).
 #[derive(Debug, Clone, PartialEq)]
 pub struct AttributeTopic {
     pub name: &'static str,
     pub topic: String,
     pub template: Template,
-    /// Un nombre est attendu : autre chose est ignoré.
-    pub numeric: bool,
+    pub kind: AttrKind,
+}
+
+/// L'état d'une entité qui n'est ni « on / off », ni une valeur de liste.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FreeState {
+    /// Seulement les états de la liste [`Profile::states`].
+    #[default]
+    Listed,
+    /// Un nombre (entité `number`).
+    Number,
+    /// Un texte de `max` caractères au plus (entité `text`).
+    Text { max: usize },
+}
+
+/// Sans sujet d'état, ce qu'on suppose après une commande (mode « optimiste »).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Optimistic {
+    /// Rien : on attend que l'appareil le dise.
+    Keep,
+    /// Cet état (`locked` après `lock`).
+    State(&'static str),
+    /// La valeur envoyée (le choix d'une liste, le nombre réglé).
+    Sent,
+    /// L'heure de la commande (un bouton : la date du dernier appui).
+    Now,
 }
 
 /// Ce qu'on publie pour un service.
@@ -33,10 +71,26 @@ pub enum Payload {
     /// Toujours le même texte (`LOCK`, `start`…).
     Fixed(String),
     /// Un nombre lu dans les paramètres du service, entre deux bornes.
+    /// Avec `scale`, il est ramené à l'échelle de l'appareil (un pourcentage
+    /// 0–100 devient 0–255, par exemple) et arrondi.
     Number {
         field: &'static str,
         min: f64,
         max: f64,
+        scale: Option<(f64, f64)>,
+    },
+    /// Oui / non lu dans les paramètres : `on` ou `off` est envoyé.
+    Flag {
+        field: &'static str,
+        on: String,
+        off: String,
+    },
+    /// Un texte lu dans les paramètres, de `min` à `max` caractères, sans
+    /// caractère de contrôle.
+    Text {
+        field: &'static str,
+        min: usize,
+        max: usize,
     },
     /// Un choix lu dans les paramètres, parmi une liste annoncée.
     Choice {
@@ -51,8 +105,8 @@ pub struct ServiceCommand {
     pub service: &'static str,
     pub topic: String,
     pub payload: Payload,
-    /// Sans sujet d'état, l'état qu'on suppose atteint (mode « optimiste »).
-    pub optimistic: Option<&'static str>,
+    /// Sans sujet d'état, ce qu'on suppose atteint.
+    pub optimistic: Optimistic,
 }
 
 /// Erreur d'un appel de service : le message n'est pas publié.
@@ -68,6 +122,12 @@ pub enum CommandError {
     },
     #[error("« {0} » n'est pas un choix proposé par l'appareil")]
     UnknownChoice(String),
+    #[error("« {field} » : de {min} à {max} caractères, sans caractère de contrôle")]
+    Text {
+        field: &'static str,
+        min: usize,
+        max: usize,
+    },
 }
 
 /// Ce que sait faire un appareil (vide pour un simple capteur ou interrupteur).
@@ -79,6 +139,10 @@ pub struct Profile {
     pub services: Vec<ServiceCommand>,
     /// Attributs fixes (bornes, modes…), annoncés une fois pour toutes.
     pub fixed: Vec<(&'static str, Value)>,
+    /// L'état quand il n'est pas dans [`Profile::states`].
+    pub free: FreeState,
+    /// Les sortes d'événements annoncées (entité `event` : `single`, `double`…).
+    pub event_types: Vec<String>,
 }
 
 impl Profile {
@@ -109,7 +173,12 @@ impl ServiceCommand {
     pub fn render(&self, data: &Attributes) -> Result<String, CommandError> {
         match &self.payload {
             Payload::Fixed(text) => Ok(text.clone()),
-            Payload::Number { field, min, max } => {
+            Payload::Number {
+                field,
+                min,
+                max,
+                scale,
+            } => {
                 let value = data
                     .get(*field)
                     .and_then(Value::as_f64)
@@ -122,7 +191,37 @@ impl ServiceCommand {
                         max: format_number(*max),
                     });
                 }
-                Ok(format_number(value))
+                Ok(match scale {
+                    Some((low, high)) => {
+                        let ratio = if max > min {
+                            (value - min) / (max - min)
+                        } else {
+                            0.0
+                        };
+                        format_number((low + ratio * (high - low)).round())
+                    }
+                    None => format_number(value),
+                })
+            }
+            Payload::Flag { field, on, off } => match data.get(*field).and_then(Value::as_bool) {
+                Some(true) => Ok(on.clone()),
+                Some(false) => Ok(off.clone()),
+                None => Err(CommandError::Invalid(field)),
+            },
+            Payload::Text { field, min, max } => {
+                let text = data
+                    .get(*field)
+                    .and_then(Value::as_str)
+                    .ok_or(CommandError::Invalid(field))?;
+                let count = text.chars().count();
+                if count < *min || count > *max || text.chars().any(char::is_control) {
+                    return Err(CommandError::Text {
+                        field,
+                        min: *min,
+                        max: *max,
+                    });
+                }
+                Ok(text.to_owned())
             }
             Payload::Choice { field, options } => {
                 let value = data
@@ -157,12 +256,33 @@ pub fn format_number(value: f64) -> String {
 #[must_use]
 pub fn attribute_value(topic: &AttributeTopic, payload: &str) -> Option<Value> {
     let text = topic.template.render(payload)?;
-    if topic.numeric {
-        let number = text.trim().parse::<f64>().ok().filter(|n| n.is_finite())?;
-        Some(json!(number))
-    } else {
+    let number = || text.trim().parse::<f64>().ok().filter(|n| n.is_finite());
+    match &topic.kind {
+        AttrKind::Number => number().map(|n| json!(n)),
         // Même règle que les autres textes : court et sans caractères de contrôle.
-        (text.chars().count() <= 64 && !text.chars().any(char::is_control)).then(|| json!(text))
+        AttrKind::Text => {
+            (text.chars().count() <= 64 && !text.chars().any(char::is_control)).then(|| json!(text))
+        }
+        AttrKind::Flag { on, off } => {
+            let text = text.trim();
+            if text == on {
+                Some(json!(true))
+            } else if text == off {
+                Some(json!(false))
+            } else {
+                None
+            }
+        }
+        AttrKind::Percent { min, max } => {
+            let value = number()?;
+            if max <= min {
+                return None;
+            }
+            let percent = ((value - min) / (max - min) * 100.0)
+                .clamp(0.0, 100.0)
+                .round();
+            Some(json!(percent))
+        }
     }
 }
 
@@ -186,8 +306,9 @@ mod tests {
                 field: "humidity",
                 min: 30.0,
                 max: 80.0,
+                scale: None,
             },
-            optimistic: None,
+            optimistic: Optimistic::Keep,
         };
         assert_eq!(
             command.render(&data(json!({"humidity": 45}))).unwrap(),
@@ -222,7 +343,7 @@ mod tests {
                 field: "operation_mode",
                 options: vec!["eco".into(), "off".into()],
             },
-            optimistic: None,
+            optimistic: Optimistic::Keep,
         };
         assert_eq!(
             command
@@ -242,7 +363,7 @@ mod tests {
             name: "battery_level",
             topic: "v".into(),
             template: Template::parse("{{ value_json.battery_level }}").unwrap(),
-            numeric: true,
+            kind: AttrKind::Number,
         };
         assert_eq!(
             attribute_value(&numeric, r#"{"battery_level": 61}"#),
@@ -253,12 +374,86 @@ mod tests {
             None
         );
         let text = AttributeTopic {
-            numeric: false,
+            kind: AttrKind::Text,
             ..numeric
         };
         assert_eq!(
             attribute_value(&text, r#"{"battery_level": "ligne\nnouvelle"}"#),
             None
         );
+    }
+
+    #[test]
+    fn scaled_positions_flags_and_texts() {
+        let position = ServiceCommand {
+            service: "set_cover_position",
+            topic: "v/pos".into(),
+            payload: Payload::Number {
+                field: "position",
+                min: 0.0,
+                max: 100.0,
+                scale: Some((0.0, 255.0)),
+            },
+            optimistic: Optimistic::Keep,
+        };
+        assert_eq!(
+            position.render(&data(json!({"position": 50}))).unwrap(),
+            "128"
+        );
+        let read = AttributeTopic {
+            name: "current_position",
+            topic: "v".into(),
+            template: Template::Raw,
+            kind: AttrKind::Percent {
+                min: 0.0,
+                max: 255.0,
+            },
+        };
+        assert_eq!(attribute_value(&read, "255"), Some(json!(100.0)));
+        assert_eq!(attribute_value(&read, "300"), Some(json!(100.0)), "borné");
+
+        let oscillate = ServiceCommand {
+            service: "oscillate",
+            topic: "f/osc".into(),
+            payload: Payload::Flag {
+                field: "oscillating",
+                on: "oscillate_on".into(),
+                off: "oscillate_off".into(),
+            },
+            optimistic: Optimistic::Keep,
+        };
+        assert_eq!(
+            oscillate
+                .render(&data(json!({"oscillating": false})))
+                .unwrap(),
+            "oscillate_off"
+        );
+        assert!(
+            oscillate
+                .render(&data(json!({"oscillating": "oui"})))
+                .is_err()
+        );
+
+        let text = ServiceCommand {
+            service: "set_value",
+            topic: "t/set".into(),
+            payload: Payload::Text {
+                field: "value",
+                min: 1,
+                max: 10,
+            },
+            optimistic: Optimistic::Sent,
+        };
+        assert_eq!(
+            text.render(&data(json!({"value": "Bonjour"}))).unwrap(),
+            "Bonjour"
+        );
+        for bad in [
+            json!({"value": ""}),
+            json!({"value": "beaucoup trop long"}),
+            json!({"value": "a\u{1b}b"}),
+        ] {
+            assert!(text.render(&data(bad.clone())).is_err(), "{bad}");
+        }
     }
 }

@@ -973,6 +973,7 @@ name = "ha-mqtt"
 version = "0.1.0"
 dependencies = [
  "ha-core",
+ "jiff",
  "rumqttc",
  "serde_json",
  "thiserror",

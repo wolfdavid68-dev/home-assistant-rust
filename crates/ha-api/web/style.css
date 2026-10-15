@@ -469,10 +469,10 @@ input[type="range"] {
   height: 28px;
   margin: 0;
   border-radius: 14px;
-  background: linear-gradient(90deg, var(--glow) 0 var(--fill, 50%), var(--card-2) var(--fill, 50%) 100%);
+  /* Bleu par défaut (volet, vitesse, réglage) ; doré pour une lumière allumée. */
+  background: linear-gradient(90deg, var(--accent) 0 var(--fill, 50%), var(--card-2) var(--fill, 50%) 100%);
   cursor: pointer;
 }
-.tile.cover input[type="range"] { background: linear-gradient(90deg, var(--accent) 0 var(--fill, 50%), var(--card-2) var(--fill, 50%) 100%); }
 .tile.light.on input[type="range"] { background: linear-gradient(90deg, var(--glow-bar) 0 var(--fill, 50%), color-mix(in srgb, var(--glow-line) 70%, var(--card)) var(--fill, 50%) 100%); }
 input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 6px; height: 20px; border-radius: 3px; background: var(--card); box-shadow: 0 0 0 1px rgb(0 0 0 / 0.15); }
 input[type="range"]::-moz-range-thumb { width: 6px; height: 20px; border: 0; border-radius: 3px; background: var(--card); box-shadow: 0 0 0 1px rgb(0 0 0 / 0.15); }

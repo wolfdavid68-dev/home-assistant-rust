@@ -13,7 +13,7 @@ use serde_json::{Value, json};
 use tracing::{debug, info, warn};
 
 use crate::discovery::{self, Component, Discovery, EntityConfig};
-use crate::profile::attribute_value;
+use crate::profile::{FreeState, Optimistic, attribute_value};
 
 /// Nombre maximal d'entités découvertes : un appareil défaillant (ou
 /// malveillant) ne peut pas en créer à l'infini.
@@ -26,7 +26,16 @@ const MAX_STATE_PAYLOAD: usize = 64 * 1024;
 pub enum Action {
     Subscribe(String),
     Unsubscribe(String),
-    Publish { topic: String, payload: String },
+    Publish {
+        topic: String,
+        payload: String,
+    },
+    /// Publier un événement sur le bus du noyau (une télécommande a été
+    /// appuyée : `event_received`).
+    Fire {
+        event_type: String,
+        data: Attributes,
+    },
 }
 
 #[derive(Debug)]
@@ -99,8 +108,7 @@ impl Bridge {
                 }
             };
         }
-        self.update_states(topic, payload, states);
-        Vec::new()
+        self.update_states(topic, payload, states)
     }
 
     /// Traite un appel de service. Renvoie le message à publier, s'il y en a un.
@@ -143,7 +151,17 @@ impl Bridge {
                     return Vec::new();
                 }
             };
-            if let (None, Some(state)) = (&config.state_topic, command.optimistic) {
+            // Sans sujet d'état, on suppose que l'appareil a obéi. Un bouton,
+            // lui, n'a jamais d'état : c'est la date du dernier appui.
+            let supposed = match command.optimistic {
+                Optimistic::Keep => None,
+                Optimistic::State(state) => Some(state.to_owned()),
+                Optimistic::Sent => Some(payload.clone()),
+                Optimistic::Now => Some(jiff::Timestamp::now().to_string()),
+            };
+            if let Some(state) = supposed
+                && (config.state_topic.is_none() || command.optimistic == Optimistic::Now)
+            {
                 let attributes = current_attributes(config, entity_id, states);
                 let _ = states.set(entity_id.clone(), state, attributes);
             }
@@ -315,21 +333,31 @@ impl Bridge {
 
     /// Un message d'état : met à jour toutes les entités qui écoutent ce sujet
     /// (Zigbee2MQTT envoie température, humidité et batterie dans le même message).
-    fn update_states(&self, topic: &str, payload: &[u8], states: &StateMachine) {
+    fn update_states(&self, topic: &str, payload: &[u8], states: &StateMachine) -> Vec<Action> {
         if payload.len() > MAX_STATE_PAYLOAD {
             warn!(
                 "message trop gros sur {topic} ({} octets), ignoré",
                 payload.len()
             );
-            return;
+            return Vec::new();
         }
         let Ok(payload) = std::str::from_utf8(payload) else {
             warn!("message non UTF-8 sur {topic}, ignoré");
-            return;
+            return Vec::new();
         };
+        let mut actions = Vec::new();
         for tracked in self.entities.values() {
             let config = &tracked.config;
             let id = &tracked.entity_id;
+            // Une télécommande : chaque appui est un événement.
+            if config.component == Component::Event {
+                if config.state_topic.as_deref() == Some(topic)
+                    && let Some(action) = event_received(config, id, payload, states)
+                {
+                    actions.push(action);
+                }
+                continue;
+            }
             // L'état principal…
             if config.state_topic.as_deref() == Some(topic)
                 && let Some((value, mut attributes)) = interpret(config, payload)
@@ -350,7 +378,15 @@ impl Bridge {
                     continue;
                 };
                 let current = states.get(id);
-                let state = current.as_ref().map_or("unknown", |s| s.state()).to_owned();
+                let mut state = current.as_ref().map_or("unknown", |s| s.state()).to_owned();
+                // Un volet sans sujet d'état : fermé à 0 %, ouvert sinon.
+                if config.component == Component::Cover
+                    && config.state_topic.is_none()
+                    && attribute.name == "current_position"
+                    && let Some(position) = value.as_f64()
+                {
+                    if position <= 0.0 { "closed" } else { "open" }.clone_into(&mut state);
+                }
                 let mut attributes = current_attributes(config, id, states);
                 attributes.insert(attribute.name.into(), value);
                 if let Err(error) = states.set(id.clone(), state, attributes) {
@@ -358,6 +394,7 @@ impl Bridge {
                 }
             }
         }
+        actions
     }
 }
 
@@ -391,12 +428,64 @@ fn interpret(config: &EntityConfig, payload: &str) -> Option<(String, Attributes
         };
         return Some((if on { "on" } else { "off" }.to_owned(), attributes));
     }
-    // Verrou, vanne, aspirateur, chauffe-eau : seulement les états annoncés.
-    let Some(state) = config.profile.state_for(&value) else {
-        debug!("valeur inattendue {value:?} pour {}", config.object_id);
-        return None;
+    // Verrou, vanne, aspirateur, chauffe-eau… : seulement les états annoncés.
+    if let Some(state) = config.profile.state_for(&value) {
+        return Some((state.to_owned(), attributes));
+    }
+    let free = match config.profile.free {
+        FreeState::Listed => None,
+        // Un nombre : écrit simplement (« 21.5 »), fini.
+        FreeState::Number => value
+            .trim()
+            .parse::<f64>()
+            .ok()
+            .filter(|n| n.is_finite())
+            .map(crate::profile::format_number),
+        // Un texte : pas trop long, sans caractère de contrôle.
+        FreeState::Text { max } => (value.chars().count() <= max
+            && !value.chars().any(char::is_control))
+        .then_some(value.clone()),
     };
-    Some((state.to_owned(), attributes))
+    if free.is_none() {
+        debug!("valeur inattendue {value:?} pour {}", config.object_id);
+    }
+    free.map(|state| (state, attributes))
+}
+
+/// Un message d'une entité `event` (`{"event_type": "double"}`) : l'état
+/// devient l'heure de l'appui (comme dans Home Assistant), l'attribut
+/// `event_type` dit lequel, et l'événement `event_received` est publié sur
+/// le bus pour les automatisations. Une sorte non annoncée est ignorée.
+fn event_received(
+    config: &EntityConfig,
+    id: &EntityId,
+    payload: &str,
+    states: &StateMachine,
+) -> Option<Action> {
+    let rendered = config.value_template.render(payload)?;
+    let message: Value = serde_json::from_str(&rendered).ok()?;
+    let event_type = message.get("event_type")?.as_str()?;
+    if !config
+        .profile
+        .event_types
+        .iter()
+        .any(|known| known == event_type)
+    {
+        debug!("sorte d'événement inattendue {event_type:?} pour {id}");
+        return None;
+    }
+    let mut attributes = base_attributes(config);
+    attributes.insert("event_type".into(), json!(event_type));
+    if let Err(error) = states.set(id.clone(), jiff::Timestamp::now().to_string(), attributes) {
+        warn!("état refusé pour {id} : {error}");
+    }
+    let mut data = Attributes::new();
+    data.insert("entity_id".into(), json!(id.as_str()));
+    data.insert("event_type".into(), json!(event_type));
+    Some(Action::Fire {
+        event_type: "event_received".into(),
+        data,
+    })
 }
 
 /// Les sujets qu'écoute une entité (état et attributs), sans doublon.
