@@ -185,7 +185,7 @@ function markPending(entityId) {
 // ---------------------------------------------------------------- Affichage
 const SECTIONS = [
   { title: "Agenda et listes", domains: ["calendar", "todo"] },
-  { title: "Entrées", domains: ["input_boolean", "input_number", "input_select", "input_button", "timer"] },
+  { title: "Entrées", domains: ["input_boolean", "input_number", "input_select", "input_button", "timer", "counter", "input_text", "input_datetime", "schedule"] },
   // Les capteurs de la météo (sensor.meteo_…) vont avec la météo.
   { title: "Météo, présence et soleil", domains: ["weather", "zone", "person", "device_tracker", "sun", "notify"], extra: (s) => s.entity_id.startsWith("sensor.meteo_") },
   { title: "Chauffage", domains: ["climate"] },
@@ -482,7 +482,13 @@ function canControl(state) {
   const domain = domainOf(state);
   if (!Array.isArray(controls.domains) || !controls.domains.includes(domain)) return false;
   const forbidden = Array.isArray(controls.forbidden_cover_classes) ? controls.forbidden_cover_classes : [];
-  return !(domain === "cover" && forbidden.includes(state.attributes.device_class));
+  if (domain === "cover" && forbidden.includes(state.attributes.device_class)) return false;
+  // Un groupe : chacun de ses membres aussi (comme le vérifie le serveur).
+  const members = Array.isArray(state.attributes.entity_id) ? state.attributes.entity_id : [];
+  return members.every((id) => {
+    const member = entities.get(id);
+    return member !== undefined && member !== state && canControl(member);
+  });
 }
 
 /** Une tuile en lecture seule : l'état reste lisible, les commandes
@@ -519,6 +525,10 @@ function renderTileContent(state) {
     case "water_heater": return waterHeaterTile(state);
     case "todo": return todoTile(state);
     case "fan": return fanTile(state);
+    case "counter": return counterTile(state);
+    case "input_text": return textTile(state);
+    case "input_datetime": return dateTimeTile(state);
+    case "schedule": return scheduleTile(state);
     case "button": return inputButtonTile(state);
     case "number": return inputNumberTile(state);
     case "select": return inputSelectTile(state);
@@ -682,6 +692,62 @@ function vacuumTile(state) {
         : commandButton(state, "start", "Lancer le ménage", { icon: ICONS.play }),
       commandButton(state, "stop", "Arrêter", { icon: ICONS.stop }),
       commandButton(state, "return_to_base", "Renvoyer à sa base", { icon: ICONS.home })),
+  );
+}
+
+// ----- Compteur, date et heure, plage horaire (étape 30)
+
+function counterTile(state) {
+  const a = state.attributes;
+  const value = Number(state.state);
+  const shown = el("div", { class: "setpoint" });
+  const adjust = (service, text, label) => {
+    const button = el("button", { type: "button", class: "round", "aria-label": `${label} ${nameOf(state)}`, text });
+    button.addEventListener("click", () => inputCommand(state, service));
+    return button;
+  };
+  shown.append(adjust("decrement", "−", "Diminuer"), el("span", { class: "setpoint-value", text: Number.isFinite(value) ? number.format(value) : "–" }), adjust("increment", "+", "Augmenter"));
+  const reset = el("button", { type: "button", class: "ghost small", text: "Remettre à zéro" });
+  reset.addEventListener("click", () => inputCommand(state, "reset"));
+  const bounds = [Number.isFinite(a.minimum) && `min ${a.minimum}`, Number.isFinite(a.maximum) && `max ${a.maximum}`].filter(Boolean).join(" · ");
+  return el("div", { id: tileId(state.entity_id), class: "tile sensor" }, tileHead(state, ICONS.sliders, bounds || "Compteur"), shown, reset);
+}
+
+function dateTimeTile(state) {
+  const a = state.attributes;
+  const hasDate = a.has_date === true;
+  const hasTime = a.has_time === true;
+  const known = state.state !== "unknown";
+  const [datePart, timePart] = hasDate && hasTime ? state.state.split(" ") : hasDate ? [state.state, ""] : ["", state.state];
+  const inputs = [];
+  const date = el("input", { type: "date", "aria-label": `Date de ${nameOf(state)}` });
+  const time = el("input", { type: "time", "aria-label": `Heure de ${nameOf(state)}` });
+  if (hasDate) { if (known) date.value = datePart; inputs.push(date); }
+  if (hasTime) { if (known) time.value = (timePart ?? "").slice(0, 5); inputs.push(time); }
+  const send = () => {
+    const data = {};
+    if (hasDate && date.value) data.date = date.value;
+    if (hasTime && time.value) data.time = time.value;
+    if (Object.keys(data).length > 0) inputCommand(state, "set_datetime", data);
+  };
+  for (const input of inputs) input.addEventListener("change", send);
+  const shown = !known ? "Pas encore réglé"
+    : hasDate && hasTime ? `${shortDate.format(new Date(`${datePart}T12:00:00`))} à ${timePart.slice(0, 5)}`
+    : hasDate ? shortDate.format(new Date(`${datePart}T12:00:00`))
+    : state.state.slice(0, 5);
+  return el("div", { id: tileId(state.entity_id), class: "tile sensor" }, tileHead(state, ICONS.timer, shown), el("div", { class: "add-when" }, ...inputs));
+}
+
+function scheduleTile(state) {
+  const on = state.state === "on";
+  const next = typeof state.attributes.next_event === "string" ? new Date(state.attributes.next_event) : null;
+  const when = next && !Number.isNaN(next.getTime())
+    ? ` · ${on ? "jusqu'à" : "reprend"} ${agendaDay(next) === "Aujourd'hui" ? "" : `${agendaDay(next).toLowerCase()} `}${hourMinute.format(next)}`
+    : "";
+  return el(
+    "div",
+    { id: tileId(state.entity_id), class: tileClass(state, "binary") },
+    tileHead(state, ICONS.calendar, `${on ? "En cours" : "En pause"}${when}`),
   );
 }
 
@@ -2041,6 +2107,9 @@ const SERVICES = {
   humidifier: [["turn_on", "Allumer"], ["turn_off", "Éteindre"], ["set_humidity", "Régler l'humidité voulue"]],
   water_heater: [["set_operation_mode", "Choisir un mode"], ["set_temperature", "Régler la température"]],
   todo: [["add_item", "Ajouter à la liste"], ["remove_completed_items", "Retirer ce qui est fait"]],
+  counter: [["increment", "Augmenter"], ["decrement", "Diminuer"], ["reset", "Remettre à zéro"], ["set_value", "Régler la valeur"]],
+  input_text: [["set_value", "Écrire"]],
+  input_datetime: [["set_datetime", "Régler"]],
   fan: [["turn_on", "Allumer"], ["turn_off", "Éteindre"], ["toggle", "Inverser"], ["set_percentage", "Régler la vitesse"], ["set_preset_mode", "Choisir un mode"]],
   button: [["press", "Appuyer"]],
   number: [["set_value", "Régler la valeur"]],
@@ -2152,7 +2221,7 @@ function describeTrigger(t) {
     case "numeric_state":
       return `${entityNames(t.entity_id)} ${[t.above !== undefined && `dépasse ${t.above}`, t.below !== undefined && `descend sous ${t.below}`].filter(Boolean).join(" et ")}`;
     case "time":
-      return `à ${asList(t.at).join(", ")}`;
+      return `à ${asList(t.at).map((at) => (String(at).includes(".") ? `l'heure de ${entityNames(at)}` : at)).join(", ")}`;
     case "sun":
       return `${offsetText(t.offset)}${sunLabel(t.event)}`;
     case "calendar":
@@ -2601,6 +2670,16 @@ function actionFields(a, refresh) {
   } else if (a.action === "fan.set_preset_mode") {
     fields.push(textField("Mode", a.data, "preset_mode"));
     delete extra.preset_mode;
+  } else if (a.action === "counter.set_value") {
+    fields.push(numberField("Valeur", a.data, "value"));
+    delete extra.value;
+  } else if (a.action === "input_text.set_value") {
+    fields.push(textField("Texte", a.data, "value"));
+    delete extra.value;
+  } else if (a.action === "input_datetime.set_datetime") {
+    fields.push(textField("Heure (facultatif)", a.data, "time", { placeholder: "07:30" }), textField("Date (facultatif)", a.data, "date", { placeholder: "2026-10-20" }));
+    delete extra.time;
+    delete extra.date;
   } else if (a.action === "number.set_value") {
     fields.push(numberField("Valeur", a.data, "value"));
     delete extra.value;

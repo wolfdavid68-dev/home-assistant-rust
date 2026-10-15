@@ -92,6 +92,33 @@ pub(crate) fn needs_confirmation(domain: &str, service: &str) -> bool {
     )
 }
 
+/// Comme [`can_control`], et pour un **groupe** (`light.lumieres_du_bas`),
+/// chacun de ses membres aussi : un invité ne doit pas pouvoir ouvrir la
+/// porte du garage en passant par un groupe de volets qui la contient.
+pub(crate) fn can_control_with_members(
+    user: &User,
+    entity_id: &EntityId,
+    states: &ha_core::StateMachine,
+) -> bool {
+    let state = states.get(entity_id);
+    if !can_control(user, entity_id, state.as_ref()) {
+        return false;
+    }
+    let Some(members) = state
+        .as_ref()
+        .and_then(|s| s.attributes().get("entity_id"))
+        .and_then(Value::as_array)
+    else {
+        return true;
+    };
+    members.iter().all(|member| {
+        member
+            .as_str()
+            .and_then(|id| id.parse::<EntityId>().ok())
+            .is_some_and(|id| can_control(user, &id, states.get(&id).as_ref()))
+    })
+}
+
 /// Les droits du compte, pour que le tableau de bord cache ce qui ne sert à
 /// rien (le serveur vérifie de toute façon chaque demande).
 pub(crate) fn permissions_json(user: &User) -> Value {

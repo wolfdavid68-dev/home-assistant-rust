@@ -30,6 +30,7 @@
 //! ha-server thermostats check     vérifie le fichier des thermostats
 //! ha-server persons check         vérifie le fichier des personnes
 //! ha-server inputs check          vérifie le fichier des entrées
+//! ha-server derived check         vérifie le fichier des assistants calculés
 //! ha-server audit [nombre]        affiche le journal d'audit
 //! ha-server audit verify          vérifie que le journal n'a pas été modifié
 //! ha-server backup now          sauvegarde la base (même serveur en marche)
@@ -54,6 +55,8 @@
 //!   (deux décimales suffisent, par exemple 48.85 et 2.35) ;
 //! - `HA_PERSONS_PATH` : fichier des personnes (par défaut `persons.yaml`) ;
 //! - `HA_INPUTS_PATH` : fichier des entrées (par défaut `inputs.yaml`) ;
+//! - `HA_DERIVED_PATH` : fichier des assistants calculés (groupes, plages
+//!   horaires, moyennes, seuils, consommation ; par défaut `derived.yaml`) ;
 //! - `HA_THERMOSTATS_PATH` : fichier des thermostats (par défaut `thermostats.yaml`) ;
 //! - `HA_BACKUP_DIR`, `HA_BACKUP_TIME` (03:30), `HA_BACKUP_KEEP` (7) :
 //!   sauvegardes automatiques chaque nuit ;
@@ -133,6 +136,7 @@ async fn main() -> ExitCode {
         ["thermostats", "check"] => cli::check_thermostats(&thermostats_path()),
         ["persons", "check"] => cli::check_persons(&persons_path()),
         ["inputs", "check"] => cli::check_inputs(&inputs_path()),
+        ["derived", "check"] => cli::check_derived(&derived_path()),
         ["audit", rest @ ..] => cli::audit_command(rest).await,
         ["backup", rest @ ..] => backup::command(rest).await,
         ["healthcheck"] => match parse_bind() {
@@ -224,6 +228,8 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         .map_err(|error| format!("{} : {error}", persons_path().display()))?;
     let input_config = ha_input::load(&inputs_path())
         .map_err(|error| format!("{} : {error}", inputs_path().display()))?;
+    let derived_config = ha_derived::load(&derived_path())
+        .map_err(|error| format!("{} : {error}", derived_path().display()))?;
     let thermostat_configs = ha_thermostat::load(&thermostats_path())
         .map_err(|error| format!("{} : {error}", thermostats_path().display()))?;
     if location.is_none() && ha_automation::uses_sun(&automations) {
@@ -320,6 +326,10 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     // Les listes (courses, tâches) et l'agenda : publiés avant les
     // automatisations, pour que leur création ne déclenche rien.
     let agenda = ha_agenda::Agenda::start(store.clone(), Arc::clone(&core)).await;
+    // Les assistants calculés (groupes, moyennes…), avant les automatisations
+    // aussi : leur création ne déclenche rien.
+    let assistants = (!derived_config.is_empty())
+        .then(|| ha_derived::Assistants::start(derived_config, Arc::clone(&core)));
 
     // Vrais appareils (MQTT) ou, à défaut, appareils simulés.
     let mqtt = mqtt_config.map(|config| Mqtt::start(config, Arc::clone(&core)));
@@ -450,6 +460,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         inputs.stop().await;
     }
     agenda.stop().await;
+    if let Some(assistants) = assistants {
+        assistants.stop().await;
+    }
     engine.stop().await;
     logbook.stop().await;
     statistics.stop().await;
@@ -548,6 +561,12 @@ fn weather_config(location: Option<Location>) -> Result<Option<ha_weather::Confi
 pub(crate) fn persons_path() -> std::path::PathBuf {
     std::env::var("HA_PERSONS_PATH")
         .unwrap_or_else(|_| "persons.yaml".to_owned())
+        .into()
+}
+
+pub(crate) fn derived_path() -> std::path::PathBuf {
+    std::env::var("HA_DERIVED_PATH")
+        .unwrap_or_else(|_| "derived.yaml".to_owned())
         .into()
 }
 

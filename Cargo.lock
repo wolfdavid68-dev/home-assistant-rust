@@ -898,6 +898,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "ha-derived"
+version = "0.1.0"
+dependencies = [
+ "ha-core",
+ "jiff",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "ha-freebox"
 version = "0.1.0"
 dependencies = [
@@ -1023,6 +1037,7 @@ dependencies = [
  "ha-auth",
  "ha-automation",
  "ha-core",
+ "ha-derived",
  "ha-freebox",
  "ha-hue",
  "ha-input",
