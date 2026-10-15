@@ -47,6 +47,13 @@ const MAX_NAME_CHARS: usize = 40;
 const MAX_LAYERS: usize = 16;
 const MAX_LABELS: usize = 30;
 const MAX_ACTIONS: usize = 12;
+const MAX_CHARTS: usize = 6;
+/// Les couleurs d'une courbe (celles du thème : Material dans « Maquette »).
+const CHART_COLORS: [&str; 8] = [
+    "ambre", "orange", "rouge", "vert", "cyan", "bleu", "violet", "rose",
+];
+/// Les durées d'une courbe, en heures : 6 h, 24 h, 7 jours.
+const CHART_HOURS: [u32; 3] = [6, 24, 168];
 const MAX_STATES: usize = 10;
 const MAX_TEXT_CHARS: usize = 60;
 const MAX_PAGES: usize = 8;
@@ -129,6 +136,20 @@ struct Page {
     /// Les boutons rapides sous le dessin (porche, parking, garage…).
     #[serde(default)]
     actions: Vec<String>,
+    /// Les courbes de la colonne de gauche (la puissance du NAS sur 24 h…).
+    #[serde(default)]
+    charts: Vec<Chart>,
+}
+
+/// Une courbe : un capteur, sur une durée, dans une couleur.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct Chart {
+    entity_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
+    color: String,
+    hours: u32,
 }
 
 impl Page {
@@ -355,6 +376,29 @@ fn check_page(config: &Page, images: &HashSet<String>) -> Result<(), ApiError> {
             )));
         }
     }
+    if config.charts.len() > MAX_CHARTS {
+        return Err(ApiError::BadRequest(format!(
+            "{MAX_CHARTS} courbes au plus"
+        )));
+    }
+    for (index, chart) in config.charts.iter().enumerate() {
+        let n = index + 1;
+        check_entity(&chart.entity_id)?;
+        if !CHART_COLORS.contains(&chart.color.as_str()) {
+            return Err(ApiError::BadRequest(format!(
+                "courbe {n} : couleur parmi {}",
+                CHART_COLORS.join(", ")
+            )));
+        }
+        if !CHART_HOURS.contains(&chart.hours) {
+            return Err(ApiError::BadRequest(format!(
+                "courbe {n} : 6, 24 ou 168 heures"
+            )));
+        }
+        if let Some(name) = &chart.name {
+            check_text(&format!("courbe {n}, nom"), name)?;
+        }
+    }
     if config.labels.len() > MAX_LABELS {
         return Err(ApiError::BadRequest(format!(
             "{MAX_LABELS} valeurs au plus"
@@ -418,6 +462,7 @@ fn visible_to(state: &ApiState, user: &User, mut drawing: Drawing) -> Drawing {
         page.layers.retain(|layer| can_see(&layer.entity_id));
         page.labels.retain(|label| can_see(&label.entity_id));
         page.actions.retain(|entity_id| can_see(entity_id));
+        page.charts.retain(|chart| can_see(&chart.entity_id));
     }
     drawing
 }
@@ -652,6 +697,11 @@ mod tests {
             r#"{"background":"jour","ambiances":{"jour-pluie":"garage","nuit-pluie-neige":"jour","jour-orage":"jour"},"forced":"nuit-pluie-neige"}"#,
         );
         assert!(check_page(&rainy, &images).is_ok());
+        let charts = config(
+            r#"{"charts":[{"entity_id":"sensor.nas","name":"NAS","color":"violet","hours":24},
+                {"entity_id":"sensor.nvr","color":"ambre","hours":6}]}"#,
+        );
+        assert!(check_page(&charts, &images).is_ok());
         let tidied = tidy(Drawing { pages: vec![good] });
         assert!((tidied.pages[0].labels[0].y - 8.3).abs() < 1e-9);
 
@@ -669,6 +719,9 @@ mod tests {
             r#"{"ambiances":{"jour-pluie":"garage"}}"#,
             r#"{"background":"jour","ambiances":{"jour-pluie":"absente"}}"#,
             r#"{"forced":"tempete"}"#,
+            r#"{"charts":[{"entity_id":"sensor.nas","color":"fuchsia","hours":24}]}"#,
+            r#"{"charts":[{"entity_id":"sensor.nas","color":"vert","hours":12}]}"#,
+            r#"{"charts":[{"entity_id":"pas un capteur","color":"vert","hours":24}]}"#,
         ] {
             assert!(check_page(&config(bad), &images).is_err(), "{bad}");
         }

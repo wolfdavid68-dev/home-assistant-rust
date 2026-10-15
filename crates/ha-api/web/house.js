@@ -50,12 +50,16 @@ const CONDITION_WEATHER = {
 // ---------------------------------------------------------------- Chargement
 
 function emptyDrawing() {
-  return { layers: [], labels: [], actions: [] };
+  return { layers: [], labels: [], actions: [], charts: [] };
 }
 
 function homePage() {
   return { id: "maison", name: "Maison", areas: [], ...emptyDrawing() };
 }
+
+// Les courbes : les couleurs (celles du thème) et les durées.
+const CHART_COLORS = [["ambre", "Ambre"], ["orange", "Orange"], ["rouge", "Rouge"], ["vert", "Vert"], ["cyan", "Cyan"], ["bleu", "Bleu"], ["violet", "Violet"], ["rose", "Rose"]];
+const CHART_HOURS = [[6, "6 heures"], [24, "24 heures"], [168, "7 jours"]];
 
 /** Les onglets reçus (ou, avant les onglets, un seul dessin). */
 function cleanPages(config) {
@@ -89,6 +93,17 @@ function cleanDrawing(config) {
   }
   for (const id of Array.isArray(config?.actions) ? config.actions : []) {
     if (text(id)) out.actions.push(id);
+  }
+  out.charts = [];
+  for (const chart of Array.isArray(config?.charts) ? config.charts : []) {
+    if (!text(chart.entity_id)) continue;
+    const entry = {
+      entity_id: chart.entity_id,
+      color: CHART_COLORS.some(([key]) => key === chart.color) ? chart.color : "bleu",
+      hours: [6, 24, 168].includes(chart.hours) ? chart.hours : 24,
+    };
+    if (text(chart.name)) entry.name = chart.name;
+    out.charts.push(entry);
   }
   return out;
 }
@@ -504,6 +519,93 @@ function renderCovers() {
   box.replaceChildren(el("h2", { text: "Volets" }), el("div", { class: "cover-rows" }, ...covers.map(coverRow)));
 }
 
+// ---------------------------------------------------------------- Courbes
+// Dans la colonne de gauche : la puissance du NAS sur 24 h, la température
+// de la cave sur 7 jours… L'historique est relu toutes les 5 minutes ; la
+// valeur du moment, elle, suit l'état en direct.
+const SERIES_TTL = 5 * 60_000;
+const series = new Map(); // « entité|heures » → { at, points, loading }
+
+function seriesFor(chart) {
+  const key = `${chart.entity_id}|${chart.hours}`;
+  const cached = series.get(key);
+  if (account.permissions.history !== false && (!cached || (!cached.loading && Date.now() - cached.at > SERIES_TTL))) {
+    const entry = { at: Date.now(), points: cached?.points ?? null, loading: true };
+    series.set(key, entry);
+    api("GET", `/api/history/${encodeURIComponent(chart.entity_id)}/series?hours=${chart.hours}`)
+      .then(({ status, data }) => {
+        entry.loading = false;
+        if (status !== 200 || !Array.isArray(data.numeric)) return;
+        entry.points = data.numeric
+          .map((p) => [Date.parse(p.at), Number(p.mean)])
+          .filter(([t, v]) => Number.isFinite(t) && Number.isFinite(v));
+        if (isBoard()) renderCharts();
+      })
+      .catch(() => { entry.loading = false; });
+  }
+  return series.get(key)?.points ?? null;
+}
+
+/** Une courbe en SVG : une ligne, et un dégradé dessous. */
+function sparkline(chart, points) {
+  const W = 300;
+  const H = 64;
+  const box = svg("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none", class: "chart-line", "aria-hidden": "true" });
+  const state = entities.get(chart.entity_id);
+  const now = Date.now();
+  const all = [...points];
+  if (state && Number.isFinite(Number(state.state))) all.push([now, Number(state.state)]);
+  if (all.length < 2) return box;
+  const since = now - chart.hours * 3_600_000;
+  const values = all.map(([, v]) => v);
+  let min = Math.min(...values);
+  let max = Math.max(...values);
+  if (max - min < 1e-9) { min -= 1; max += 1; }
+  const x = (t) => ((Math.max(t, since) - since) / (now - since)) * W;
+  const y = (v) => H - 4 - ((v - min) / (max - min)) * (H - 10);
+  const line = all.map(([t, v], i) => `${i === 0 ? "M" : "L"}${x(t).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const id = `chart-fill-${chart.entity_id.replace(/[^a-z0-9]/gi, "-")}-${chart.hours}`;
+  const gradient = svg("linearGradient", { id, x1: 0, y1: 0, x2: 0, y2: 1 });
+  gradient.append(svg("stop", { offset: "0%", "stop-color": "currentColor", "stop-opacity": "0.35" }), svg("stop", { offset: "100%", "stop-color": "currentColor", "stop-opacity": "0" }));
+  const defs = svg("defs");
+  defs.append(gradient);
+  box.append(
+    defs,
+    svg("path", { d: `${line} L${x(all.at(-1)[0]).toFixed(1)},${H} L${x(all[0][0]).toFixed(1)},${H} Z`, fill: `url(#${id})`, stroke: "none" }),
+    svg("path", { d: line, fill: "none", stroke: "currentColor", "stroke-width": "1.8", "vector-effect": "non-scaling-stroke", "stroke-linejoin": "round" }),
+  );
+  return box;
+}
+
+function renderCharts() {
+  const box = $("#board-charts");
+  const charts = house.config?.charts ?? [];
+  box.hidden = charts.length === 0;
+  box.replaceChildren(...charts.map((chart) => {
+    const state = entities.get(chart.entity_id);
+    const name = chart.name ?? (state ? nameOf(state) : chart.entity_id);
+    const points = seriesFor(chart);
+    const period = CHART_HOURS.find(([hours]) => hours === chart.hours)?.[1] ?? "";
+    const card = el("figure", { class: `chart-card chart-${chart.color}` },
+      el("figcaption", {},
+        el("span", { class: "house-action-icon chart-icon" }, svgIcon(ICONS.chart)),
+        el("span", { class: "house-action-text" }, el("b", { text: name }), el("span", { text: labelValue(state) })),
+        el("span", { class: "chart-period", text: period })),
+      points === null && account.permissions.history === false
+        ? el("p", { class: "auto-meta", text: "Historique réservé" })
+        : sparkline(chart, points ?? []));
+    if (account.permissions.history !== false && state) {
+      card.tabIndex = 0;
+      card.setAttribute("role", "button");
+      card.setAttribute("aria-label", `${name} : ${labelValue(state)}, ${period}. Ouvrir l'historique.`);
+      const open = () => openHistory(chart.entity_id);
+      card.addEventListener("click", open);
+      card.addEventListener("keydown", (event) => { if (event.key === "Enter") open(); });
+    }
+    return card;
+  }));
+}
+
 // ---------------------------------------------------------------- Personnes
 // En tête de la colonne des pièces : chacun, avec l'initiale de son nom et où
 // il est (« Maison », « Absent », ou le nom de la zone).
@@ -532,6 +634,7 @@ function renderHouse() {
   if (!board) {
     $("#board-covers").hidden = true;
     $("#board-people").hidden = true;
+    $("#board-charts").hidden = true;
     return;
   }
   if (house.loading === null && token.get()) loadHouse();
@@ -541,6 +644,7 @@ function renderHouse() {
   renderActions();
   renderCovers();
   renderPeople();
+  renderCharts();
   if (isPlan()) renderTitleBlock();
 }
 
@@ -823,7 +927,39 @@ function renderDrawingEditor() {
     addAction,
   );
 
-  $("#drawing-form").replaceChildren(pagesPart(), images, backgrounds, layers, labels, actions);
+  // Les courbes de la colonne de gauche.
+  const chartRows = draft.charts.map((chart, index) => {
+    const entity = el("input", { type: "text", list: "entity-list", value: chart.entity_id, placeholder: "sensor.puissance_nas", autocapitalize: "none", spellcheck: "false" });
+    entity.addEventListener("change", () => { chart.entity_id = entity.value.trim(); });
+    const name = el("input", { type: "text", value: chart.name ?? "", placeholder: "(le nom de l'appareil)", maxlength: "60" });
+    name.addEventListener("change", () => { if (name.value.trim()) chart.name = name.value.trim(); else delete chart.name; });
+    const color = el("select", {}, ...CHART_COLORS.map(([value, text]) => el("option", { value, text })));
+    color.value = chart.color;
+    color.addEventListener("change", () => { chart.color = color.value; });
+    const hours = el("select", {}, ...CHART_HOURS.map(([value, text]) => el("option", { value: String(value), text })));
+    hours.value = String(chart.hours);
+    hours.addEventListener("change", () => { chart.hours = Number(hours.value); });
+    const remove = el("button", { type: "button", class: "ghost small danger", text: "Retirer" });
+    remove.addEventListener("click", () => { draft.charts.splice(index, 1); refresh(); });
+    return el("li", { class: "drawing-item" },
+      el("div", { class: "drawing-item-head" }, el("b", { text: `Courbe ${index + 1}` }), remove),
+      el("div", { class: "drawing-grid" }, field("Capteur", entity), field("Nom affiché", name), field("Couleur", color), field("Durée", hours)));
+  });
+  const addChart = el("button", { type: "button", class: "ghost small", text: "+ Ajouter une courbe" });
+  addChart.disabled = draft.charts.length >= 6;
+  addChart.addEventListener("click", () => {
+    draft.charts.push({ entity_id: "", color: CHART_COLORS[draft.charts.length % CHART_COLORS.length][0], hours: 24 });
+    refresh();
+    $("#drawing-form fieldset:last-of-type .drawing-item:last-child input")?.focus();
+  });
+  const charts = drawingFieldset(
+    "Courbes",
+    "Dans la colonne de gauche de l'onglet : la puissance d'un appareil, une température… sur 6 heures, 24 heures ou 7 jours (6 au plus). Toucher une courbe ouvre son historique.",
+    el("ol", { class: "drawing-items" }, ...chartRows),
+    addChart,
+  );
+
+  $("#drawing-form").replaceChildren(pagesPart(), images, backgrounds, layers, labels, actions, charts);
 }
 
 /** Un identifiant d'onglet à partir de son nom (« Salle de jeux » → salle-de-jeux). */
@@ -909,7 +1045,10 @@ $("#drawing-preview").addEventListener("click", (event) => {
 
 $("#drawing-save").addEventListener("click", async () => {
   if (!drawingEdit.pages) return;
-  for (const page of drawingEdit.pages) page.actions = page.actions.filter((id) => id !== "");
+  for (const page of drawingEdit.pages) {
+    page.actions = page.actions.filter((id) => id !== "");
+    page.charts = page.charts.filter((chart) => chart.entity_id !== "");
+  }
   const button = $("#drawing-save");
   button.disabled = true;
   const { status, data } = await api("PUT", "/api/home/drawing", { pages: drawingEdit.pages }).catch(() => ({ status: 0, data: {} }));

@@ -1526,7 +1526,7 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
    ====================================================================== */
 
 /* Ce qui n'existe que dans les styles « plan » et la mise en page « tableau ». */
-.house, .gauges, .title-block, .room-hum, .room-line, .board-covers, .house-actions, .board-people { display: none; }
+.house, .gauges, .title-block, .room-hum, .room-line, .board-covers, .house-actions, .board-people, .board-charts { display: none; }
 
 :root[data-theme="plan"] {
   --bar: #f3f5f9;
@@ -2282,3 +2282,34 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .drawing-ambiances select { width: 100%; min-width: 0; }
 .drawing-ambiance-group { display: grid; gap: 0.4rem; }
 .drawing-ambiance-group > b { font-size: 0.85rem; }
+
+/* ---------- Courbes (étape 40) : une carte par appareil, sa courbe dessous. */
+[data-layout="board"] .board-charts:not([hidden]) { display: grid; gap: 8px; }
+.chart-card { --chart: var(--series-1); margin: 0; padding: 0.55rem 0.7rem 0.35rem; display: grid; gap: 0.3rem; border-radius: 14px; background: var(--card); box-shadow: var(--shadow, none); min-width: 0; }
+.chart-card[role="button"] { cursor: pointer; }
+.chart-card:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.chart-card figcaption { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
+.chart-card .house-action-text { flex: 1; }
+.chart-card .chart-icon { color: var(--chart); background: color-mix(in srgb, var(--chart) 18%, transparent); }
+.chart-period { flex: none; font-size: 0.7rem; color: var(--muted); }
+.chart-line { display: block; width: 100%; height: 64px; color: var(--chart); }
+.chart-card .auto-meta { margin: 0; }
+.chart-ambre { --chart: var(--series-4); }
+.chart-orange { --chart: var(--series-2); }
+.chart-rouge { --chart: #e5484d; }
+.chart-vert { --chart: var(--series-3); }
+.chart-cyan { --chart: #12a5c0; }
+.chart-bleu { --chart: var(--series-1); }
+.chart-violet { --chart: var(--series-6); }
+.chart-rose { --chart: var(--series-5); }
+[data-theme|="plan"] .chart-card { border: 1px solid var(--ink-line); box-shadow: none; border-radius: 4px; }
+[data-theme|="plan"] .chart-card .chart-icon { background: transparent; border: 1px solid var(--ink-line); border-radius: 4px; }
+[data-theme="maquette"] .chart-card { background: var(--card); box-shadow: none; }
+[data-theme="maquette"] .chart-ambre { --chart: var(--m-amber); }
+[data-theme="maquette"] .chart-orange { --chart: var(--m-orange); }
+[data-theme="maquette"] .chart-rouge { --chart: var(--m-red); }
+[data-theme="maquette"] .chart-vert { --chart: var(--m-green); }
+[data-theme="maquette"] .chart-cyan { --chart: var(--m-cyan); }
+[data-theme="maquette"] .chart-bleu { --chart: var(--m-blue); }
+[data-theme="maquette"] .chart-violet { --chart: var(--m-purple); }
+[data-theme="maquette"] .chart-rose { --chart: #ec407a; }
