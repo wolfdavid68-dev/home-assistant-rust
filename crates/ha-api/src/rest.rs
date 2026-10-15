@@ -9,6 +9,7 @@ use axum::body::Bytes;
 use axum::extract::{ConnectInfo, Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use ha_auth::Permission;
 use ha_core::{Attributes, EntityId};
 use ha_storage::AuditRecord;
 use serde::Deserialize;
@@ -20,6 +21,7 @@ use crate::ApiState;
 use crate::auth::Authenticated;
 use crate::error::ApiError;
 use crate::json::{format_timestamp, state_to_json};
+use crate::roles;
 
 /// Nombre de lignes d'historique renvoyées par défaut.
 const DEFAULT_HISTORY_LIMIT: u32 = 100;
@@ -184,22 +186,32 @@ pub(crate) async fn root(auth: Authenticated) -> Json<Value> {
         "message": "API en marche",
         "version": ha_core::VERSION,
         "user": auth.user.username,
+        "role": auth.user.role.as_str(),
+        "role_label": auth.user.role.label(),
+        "permissions": roles::permissions_json(&auth.user),
     }))
 }
 
 /// `GET /api/states` : tous les états.
 pub(crate) async fn list_states(
     State(state): State<Arc<ApiState>>,
-    _auth: Authenticated,
+    auth: Authenticated,
 ) -> Json<Value> {
-    let states: Vec<Value> = state.core.states.all().iter().map(state_to_json).collect();
+    let states: Vec<Value> = state
+        .core
+        .states
+        .all()
+        .iter()
+        .filter(|s| roles::can_see(&auth.user, s.entity_id(), Some(s)))
+        .map(state_to_json)
+        .collect();
     Json(Value::Array(states))
 }
 
 /// `GET /api/states/{entity_id}`
 pub(crate) async fn get_state(
     State(state): State<Arc<ApiState>>,
-    _auth: Authenticated,
+    auth: Authenticated,
     Path(entity_id): Path<String>,
 ) -> Result<Json<Value>, ApiError> {
     let entity_id = parse_entity_id(&entity_id)?;
@@ -207,6 +219,8 @@ pub(crate) async fn get_state(
         .core
         .states
         .get(&entity_id)
+        // Caché : comme s'il n'existait pas (on ne révèle pas qu'il existe).
+        .filter(|current| roles::can_see(&auth.user, &entity_id, Some(current)))
         .ok_or(ApiError::NotFound)?;
     Ok(Json(state_to_json(&current)))
 }
@@ -220,6 +234,7 @@ pub(crate) async fn set_state(
     Path(entity_id): Path<String>,
     body: Bytes,
 ) -> Result<Response, ApiError> {
+    roles::require(&auth.user, Permission::WriteStates)?;
     let entity_id = parse_entity_id(&entity_id)?;
     let request: SetStateRequest = parse_json(&body)?;
 
@@ -262,6 +277,7 @@ pub(crate) async fn delete_state(
     auth: Authenticated,
     Path(entity_id): Path<String>,
 ) -> Result<StatusCode, ApiError> {
+    roles::require(&auth.user, Permission::WriteStates)?;
     let entity_id = parse_entity_id(&entity_id)?;
     if !state.core.states.remove(&entity_id) {
         return Err(ApiError::NotFound);
@@ -282,10 +298,11 @@ pub(crate) async fn delete_state(
 /// `GET /api/history/{entity_id}?limit=100` : du plus récent au plus ancien.
 pub(crate) async fn history(
     State(state): State<Arc<ApiState>>,
-    _auth: Authenticated,
+    auth: Authenticated,
     Path(entity_id): Path<String>,
     Query(query): Query<HistoryQuery>,
 ) -> Result<Json<Value>, ApiError> {
+    roles::require(&auth.user, Permission::ReadHistory)?;
     let entity_id = parse_entity_id(&entity_id)?;
     let limit = query.limit.unwrap_or(DEFAULT_HISTORY_LIMIT);
     let entries = state.store.history(&entity_id, limit).await?;
@@ -316,9 +333,10 @@ pub(crate) async fn history(
 /// du plus récent au plus ancien.
 pub(crate) async fn logbook(
     State(state): State<Arc<ApiState>>,
-    _auth: Authenticated,
+    auth: Authenticated,
     Query(query): Query<LogbookQuery>,
 ) -> Result<Json<Value>, ApiError> {
+    roles::require(&auth.user, Permission::ReadHistory)?;
     let hours = query.hours.unwrap_or(DEFAULT_SERIES_HOURS);
     if !(1..=MAX_SERIES_HOURS).contains(&hours) {
         return Err(ApiError::BadRequest(format!(
@@ -357,10 +375,11 @@ pub(crate) async fn logbook(
 /// période, résumé pour un graphique (courbe et changements de valeur).
 pub(crate) async fn history_series(
     State(state): State<Arc<ApiState>>,
-    _auth: Authenticated,
+    auth: Authenticated,
     Path(entity_id): Path<String>,
     Query(query): Query<SeriesQuery>,
 ) -> Result<Json<Value>, ApiError> {
+    roles::require(&auth.user, Permission::ReadHistory)?;
     let entity_id = parse_entity_id(&entity_id)?;
     let hours = query.hours.unwrap_or(DEFAULT_SERIES_HOURS);
     if !(1..=MAX_SERIES_HOURS).contains(&hours) {
@@ -411,6 +430,18 @@ pub(crate) async fn call_service(
         Some(Value::String(entity_id)) => parse_entity_id(&entity_id)?,
         _ => return Err(ApiError::BadRequest("champ « entity_id » attendu".into())),
     };
+    let current = state.core.states.get(&entity_id);
+    if !roles::can_control(&auth.user, &entity_id, current.as_ref()) {
+        tracing::warn!(
+            "{domain}.{service} sur {entity_id} refusé à {} ({})",
+            auth.user.username,
+            auth.user.role.label()
+        );
+        return Err(ApiError::Forbidden(format!(
+            "ton compte ({}) ne permet pas de commander cet appareil",
+            auth.user.role.label()
+        )));
+    }
     state
         .core
         .call_service_from(
@@ -440,9 +471,10 @@ pub(crate) async fn call_service(
 /// `GET /api/audit?limit=100` : le journal d'audit, du plus récent au plus ancien.
 pub(crate) async fn audit_log(
     State(state): State<Arc<ApiState>>,
-    _auth: Authenticated,
+    auth: Authenticated,
     Query(query): Query<HistoryQuery>,
 ) -> Result<Json<Value>, ApiError> {
+    roles::require(&auth.user, Permission::ReadAudit)?;
     let limit = query.limit.unwrap_or(DEFAULT_AUDIT_LIMIT);
     let entries: Vec<Value> = state
         .store
@@ -465,7 +497,7 @@ pub(crate) async fn audit_log(
 }
 
 /// `GET /api/areas` : les pièces de la maison et leurs appareils.
-pub(crate) async fn areas(State(state): State<Arc<ApiState>>, _auth: Authenticated) -> Json<Value> {
+pub(crate) async fn areas(State(state): State<Arc<ApiState>>, auth: Authenticated) -> Json<Value> {
     let areas: Vec<Value> = state
         .areas
         .iter()
@@ -473,6 +505,10 @@ pub(crate) async fn areas(State(state): State<Arc<ApiState>>, _auth: Authenticat
             let entities: Vec<Value> = area
                 .entities
                 .iter()
+                .filter(|entity| {
+                    let current = state.core.states.get(&entity.entity_id);
+                    roles::can_see(&auth.user, &entity.entity_id, current.as_ref())
+                })
                 .map(|entity| json!({"entity_id": entity.entity_id.as_str(), "name": entity.name}))
                 .collect();
             json!({"name": area.name, "entities": entities})

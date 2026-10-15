@@ -24,6 +24,10 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
 - Modifier les automatisations depuis le tableau de bord demande de **confirmer son identité** (mot de passe,
   et code si la double authentification est activée), valable 15 minutes pour ce jeton seulement ; chaque
   modification est journalisée et notifiée. `HA_AUTOMATION_EDITOR=off` met l'éditeur en lecture seule.
+- **Rôles** (administrateur, famille, invité) vérifiés **par le serveur** à chaque demande, WebSocket
+  compris ; tout droit non accordé explicitement est refusé. Un invité ne voit pas la présence de la
+  famille ni l'alarme, et ne commande jamais un portail, une porte de garage ou une serrure. Il reste
+  toujours au moins un administrateur ; les rôles ne se changent que sur la machine (`ha-server user role`).
 
 ## Réseau
 

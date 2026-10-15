@@ -9,6 +9,7 @@
 mod error;
 pub mod limiter;
 pub mod password;
+mod role;
 pub mod token;
 pub mod totp;
 
@@ -24,6 +25,7 @@ use zeroize::Zeroizing;
 pub use error::AuthError;
 pub use limiter::LoginLimiter;
 pub use password::{MAX_PASSWORD_LEN, MIN_PASSWORD_LEN};
+pub use role::{Permission, Role};
 pub use token::TOKEN_PREFIX;
 
 /// Usage du secret TOTP, pour son chiffrement dans la base.
@@ -45,6 +47,21 @@ const MAX_CONCURRENT_HASHES: usize = 2;
 pub struct User {
     pub id: i64,
     pub username: String,
+    pub role: Role,
+}
+
+impl User {
+    /// Ce compte a-t-il le droit de… ? (voir [`Role::can`])
+    #[must_use]
+    pub fn can(&self, permission: Permission) -> bool {
+        self.role.can(permission)
+    }
+}
+
+/// Lit le rôle rangé dans la base. Une valeur inconnue (base modifiée à la
+/// main) donne le rôle le plus restreint : jamais plus de droits par erreur.
+fn role_from_db(value: &str) -> Role {
+    Role::parse(value).unwrap_or(Role::Guest)
 }
 
 /// Jeton remis à l'utilisateur après une connexion réussie.
@@ -99,18 +116,29 @@ impl Auth {
         self
     }
 
-    /// Crée un compte.
+    /// Crée un compte **administrateur** (voir [`Auth::create_user_as`]).
     pub async fn create_user(&self, username: &str, password: &str) -> Result<User, AuthError> {
+        self.create_user_as(username, password, Role::Admin).await
+    }
+
+    /// Crée un compte avec ce rôle.
+    pub async fn create_user_as(
+        &self,
+        username: &str,
+        password: &str,
+        role: Role,
+    ) -> Result<User, AuthError> {
         check_username(username)?;
         password::check_password_policy(password)?;
         let hash = self.hash(password).await?;
 
         let result = sqlx::query(
-            "INSERT INTO users (username, password_hash, created_at) VALUES (?1, ?2, ?3)",
+            "INSERT INTO users (username, password_hash, created_at, role) VALUES (?1, ?2, ?3, ?4)",
         )
         .bind(username)
         .bind(&hash)
         .bind(to_micros(SystemTime::now())?)
+        .bind(role.as_str())
         .execute(&self.pool)
         .await;
 
@@ -118,6 +146,7 @@ impl Auth {
             Ok(done) => Ok(User {
                 id: done.last_insert_rowid(),
                 username: username.to_owned(),
+                role,
             }),
             Err(sqlx::Error::Database(error)) if error.is_unique_violation() => {
                 Err(AuthError::UserExists)
@@ -151,25 +180,54 @@ impl Auth {
     }
 
     /// Supprime un compte et ses jetons. Renvoie `false` s'il n'existait pas.
+    /// Le dernier administrateur ne peut pas être supprimé.
     pub async fn delete_user(&self, username: &str) -> Result<bool, AuthError> {
+        let mut tx = self.pool.begin().await?;
+        if is_last_admin(&mut tx, username).await? {
+            return Err(AuthError::LastAdmin);
+        }
         // Les jetons sont supprimés automatiquement (`ON DELETE CASCADE`).
         let deleted = sqlx::query("DELETE FROM users WHERE username = ?1")
             .bind(username)
-            .execute(&self.pool)
+            .execute(&mut *tx)
             .await?
             .rows_affected();
+        tx.commit().await?;
         Ok(deleted > 0)
+    }
+
+    /// Change le rôle d'un compte. Il s'applique tout de suite, même aux
+    /// sessions ouvertes (le rôle est relu à chaque demande). Le dernier
+    /// administrateur ne peut pas perdre son rôle. Renvoie `false` si le
+    /// compte n'existe pas.
+    pub async fn set_role(&self, username: &str, role: Role) -> Result<bool, AuthError> {
+        let mut tx = self.pool.begin().await?;
+        if role != Role::Admin && is_last_admin(&mut tx, username).await? {
+            return Err(AuthError::LastAdmin);
+        }
+        let updated = sqlx::query("UPDATE users SET role = ?1 WHERE username = ?2")
+            .bind(role.as_str())
+            .bind(username)
+            .execute(&mut *tx)
+            .await?
+            .rows_affected();
+        tx.commit().await?;
+        Ok(updated > 0)
     }
 
     /// Tous les comptes, triés par nom.
     pub async fn list_users(&self) -> Result<Vec<User>, AuthError> {
-        let rows: Vec<(i64, String)> =
-            sqlx::query_as("SELECT id, username FROM users ORDER BY username")
+        let rows: Vec<(i64, String, String)> =
+            sqlx::query_as("SELECT id, username, role FROM users ORDER BY username")
                 .fetch_all(&self.pool)
                 .await?;
         Ok(rows
             .into_iter()
-            .map(|(id, username)| User { id, username })
+            .map(|(id, username, role)| User {
+                id,
+                username,
+                role: role_from_db(&role),
+            })
             .collect())
     }
 
@@ -382,8 +440,8 @@ impl Auth {
         // le stocke pas !). On cherche son empreinte SHA-256 dans la base. Le
         // temps de recherche ne dépend que de l'empreinte, qui ne révèle rien
         // du jeton : pas d'attaque possible par mesure du temps de réponse.
-        let row: Option<(i64, String)> = sqlx::query_as(
-            "SELECT users.id, users.username
+        let row: Option<(i64, String, String)> = sqlx::query_as(
+            "SELECT users.id, users.username, users.role
              FROM access_tokens JOIN users ON users.id = access_tokens.user_id
              WHERE access_tokens.token_hash = ?1 AND access_tokens.expires_at > ?2",
         )
@@ -391,7 +449,11 @@ impl Auth {
         .bind(to_micros(SystemTime::now())?)
         .fetch_optional(&self.pool)
         .await?;
-        Ok(row.map(|(id, username)| User { id, username }))
+        Ok(row.map(|(id, username, role)| User {
+            id,
+            username,
+            role: role_from_db(&role),
+        }))
     }
 
     /// Révoque un jeton (déconnexion). Renvoie `false` s'il n'existait pas.
@@ -461,6 +523,23 @@ async fn hash_blocking(password: Zeroizing<String>) -> Result<String, AuthError>
         .map_err(|error| AuthError::Internal(error.to_string()))?
 }
 
+/// Ce compte est-il le seul administrateur ? (Dans une transaction, pour
+/// qu'une autre modification ne puisse pas se glisser entre la vérification
+/// et le changement.)
+async fn is_last_admin(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    username: &str,
+) -> Result<bool, AuthError> {
+    let (is_admin, admins): (i64, i64) = sqlx::query_as(
+        "SELECT
+             (SELECT COUNT(*) FROM users WHERE username = ?1 AND role = 'admin'),
+             (SELECT COUNT(*) FROM users WHERE role = 'admin')",
+    )
+    .bind(username)
+    .fetch_one(&mut **tx)
+    .await?;
+    Ok(is_admin == 1 && admins == 1)
+}
 /// Nom d'utilisateur : 3 à 32 caractères parmi `a-z`, `0-9`, `_`, `-`, `.`.
 fn check_username(username: &str) -> Result<(), AuthError> {
     let valid = (3..=32).contains(&username.len())
