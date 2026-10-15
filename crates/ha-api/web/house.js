@@ -26,6 +26,26 @@ const house = {
 const HOUSE_DEFAULT = "/house.svg";
 const MAX_HOUSE_IMAGE = 3 * 1024 * 1024;
 const WHEN_LABELS = [["always", "Toujours"], ["day", "Le jour"], ["night", "La nuit"]];
+// Les ambiances : le moment, puis le temps qu'il fait. « jour » et « nuit »
+// (soleil) sont le fond de jour et le fond de nuit.
+const MOMENTS = [["jour", "Jour"], ["nuit", "Nuit"]];
+// Tous les temps de la météo, avec le temps « parent » qu'on prend s'il
+// manque un fond (orage → pluie → nuageux → soleil).
+const WEATHERS = [
+  ["soleil", "Soleil", null], ["eclaircies", "Éclaircies", "soleil"], ["nuageux", "Nuageux", "soleil"],
+  ["brouillard", "Brouillard", "nuageux"], ["vent", "Vent", "nuageux"], ["pluie", "Pluie", "nuageux"],
+  ["averses", "Averses", "pluie"], ["orage", "Orage", "pluie"], ["grele", "Grêle", "orage"],
+  ["neige", "Neige", "nuageux"], ["pluie-neige", "Pluie et neige", "neige"],
+];
+const WEATHER_PARENT = Object.fromEntries(WEATHERS.map(([key, , parent]) => [key, parent]));
+const AMBIANCE_KEYS = MOMENTS.flatMap(([moment]) => WEATHERS.filter(([key]) => key !== "soleil").map(([key]) => `${moment}-${key}`));
+/** La condition de la météo (Home Assistant) → le temps. */
+const CONDITION_WEATHER = {
+  "sunny": "soleil", "clear-night": "soleil", "partlycloudy": "eclaircies", "cloudy": "nuageux",
+  "fog": "brouillard", "windy": "vent", "windy-variant": "vent", "rainy": "pluie", "pouring": "averses",
+  "lightning": "orage", "lightning-rainy": "orage", "hail": "grele", "snowy": "neige",
+  "snowy-rainy": "pluie-neige", "exceptional": "nuageux",
+};
 
 // ---------------------------------------------------------------- Chargement
 
@@ -50,6 +70,9 @@ function cleanDrawing(config) {
   for (const area of Array.isArray(config?.areas) ? config.areas : []) if (text(area)) out.areas.push(area);
   if (text(config?.background)) out.background = config.background;
   if (text(config?.night)) out.night = config.night;
+  out.ambiances = {};
+  for (const key of AMBIANCE_KEYS) if (text(config?.ambiances?.[key])) out.ambiances[key] = config.ambiances[key];
+  if (["jour", "nuit", ...AMBIANCE_KEYS].includes(config?.forced)) out.forced = config.forced;
   for (const layer of Array.isArray(config?.layers) ? config.layers : []) {
     out.layers.push({
       image: text(layer.image) ?? "",
@@ -78,7 +101,7 @@ async function loadHouse(force = false) {
     house.pages = cleanPages(data.config);
     house.images = Array.isArray(data.images) ? data.images : [];
     house.editable = data.editable === true;
-    const used = house.pages.flatMap((page) => [page.background, page.night, ...page.layers.map((l) => l.image)]);
+    const used = house.pages.flatMap((page) => [page.background, page.night, ...Object.values(page.ambiances), ...page.layers.map((l) => l.image)]);
     await Promise.all(used.filter(Boolean).map(houseImage));
     selectPage(house.config?.id ?? pageWanted(), false);
   })().catch(() => {});
@@ -120,6 +143,38 @@ function houseNight() {
   return entities.get("sun.sun")?.state === "below_horizon";
 }
 
+/** Le temps qu'il fait, d'après la condition de la météo. */
+function weatherKind() {
+  const weather = [...entities.values()].find((s) => domainOf(s) === "weather");
+  return lookup(CONDITION_WEATHER, weather?.state) ?? "soleil";
+}
+
+/** L'ambiance du moment (« nuit-pluie »…), ou celle imposée par le réglage. */
+function ambianceOf(page) {
+  if (page.forced) return page.forced;
+  const moment = houseNight() ? "nuit" : "jour";
+  const weather = weatherKind();
+  return weather === "soleil" ? moment : `${moment}-${weather}`;
+}
+
+/** Le fond à montrer pour une ambiance : le sien, sinon le plus proche. On
+ *  remonte les temps (orage → pluie → nuageux → soleil) au même moment, puis,
+ *  la nuit, la même chose de jour. */
+function backgroundFor(page, ambiance) {
+  const cut = ambiance.indexOf("-");
+  const moment = cut < 0 ? ambiance : ambiance.slice(0, cut);
+  const weather = cut < 0 ? "soleil" : ambiance.slice(cut + 1);
+  const chain = (when) => {
+    const names = [];
+    for (let w = weather; w; w = WEATHER_PARENT[w]) {
+      names.push(w === "soleil" ? (when === "jour" ? page.background : page.night) : page.ambiances[`${when}-${w}`]);
+    }
+    return names;
+  };
+  const candidates = moment === "nuit" ? [...chain("nuit"), ...chain("jour")] : chain("jour");
+  return candidates.find((name) => name && houseUrl(name)) ?? page.background;
+}
+
 function layerShown(layer, night) {
   const state = entities.get(layer.entity_id);
   if (!state) return false;
@@ -151,12 +206,12 @@ function drawHouse(stage, config, { interactive }) {
   base.src = custom ?? HOUSE_DEFAULT;
   stage.classList.toggle("default-drawing", custom === null);
   const parts = [base];
-  let night = null;
-  const nightUrl = config.night ? houseUrl(config.night) : null;
-  if (nightUrl) {
-    night = el("img", { class: "house-layer house-night", alt: "", draggable: "false" });
-    night.src = nightUrl;
-    parts.push(night);
+  // L'ambiance (nuit, pluie, neige…) : une image de la même taille, posée
+  // sur le fond, qui change en fondu.
+  let ambiance = null;
+  if (custom && (config.night || Object.keys(config.ambiances).length > 0)) {
+    ambiance = el("img", { class: "house-layer house-ambiance off", alt: "", draggable: "false" });
+    parts.push(ambiance);
   }
   const layers = config.layers.map((layer) => {
     const url = houseUrl(layer.image);
@@ -182,7 +237,7 @@ function drawHouse(stage, config, { interactive }) {
     return { label, name, value, node };
   });
   stage.replaceChildren(...parts);
-  const view = { stage, night, layers, labels };
+  const view = { stage, config, ambiance, layers, labels };
   // La taille du dessin n'est connue qu'une fois l'image chargée : ses
   // proportions servent à le faire tenir dans la hauteur de l'écran.
   base.addEventListener("load", () => {
@@ -196,7 +251,12 @@ function updateHouse(view) {
   if (!view) return;
   const isNight = houseNight();
   view.stage.classList.toggle("is-night", isNight);
-  view.night?.classList.toggle("off", !isNight);
+  if (view.ambiance) {
+    const chosen = backgroundFor(view.config, ambianceOf(view.config));
+    const url = chosen && chosen !== view.config.background ? houseUrl(chosen) : null;
+    if (url && view.ambiance.getAttribute("src") !== url) view.ambiance.src = url;
+    view.ambiance.classList.toggle("off", url === null);
+  }
   for (const { layer, img } of view.layers) img.classList.toggle("off", !layerShown(layer, isNight));
   for (const { label, name, value, node } of view.labels) {
     const state = entities.get(label.entity_id);
@@ -608,22 +668,55 @@ function renderDrawingEditor() {
     el("div", { class: "drawing-row" }, nameInput, fileInput, send),
   );
 
-  // Les fonds.
-  const day = imageOptions(draft.background, "Dessin d'exemple");
-  day.addEventListener("change", () => {
-    if (day.value) draft.background = day.value;
-    else { delete draft.background; delete draft.night; }
-    refresh();
+  // Les fonds : un par ambiance (moment × temps). Le jour au soleil est le
+  // fond principal ; les autres sont facultatifs.
+  const groups = [];
+  for (const [moment, momentLabel] of MOMENTS) {
+    const cells = [];
+    for (const [weather, weatherLabel] of WEATHERS) {
+      const key = weather === "soleil" ? moment : `${moment}-${weather}`;
+      const main = key === "jour";
+      const current = main ? draft.background : key === "nuit" ? draft.night : draft.ambiances[key];
+      const select = imageOptions(current, main ? "Dessin d'exemple" : "Le plus proche");
+      select.disabled = !main && !draft.background;
+      select.addEventListener("change", () => {
+        const value = select.value || undefined;
+        if (main) {
+          if (value) draft.background = value;
+          else { delete draft.background; delete draft.night; draft.ambiances = {}; delete draft.forced; }
+        } else if (key === "nuit") {
+          if (value) draft.night = value; else delete draft.night;
+        } else if (value) {
+          draft.ambiances[key] = value;
+        } else {
+          delete draft.ambiances[key];
+        }
+        refresh();
+      });
+      cells.push(field(weatherLabel, select));
+    }
+    groups.push(el("div", { class: "drawing-ambiance-group" }, el("b", { text: momentLabel }), el("div", { class: "drawing-ambiances" }, ...cells)));
+  }
+  const forced = el("select", { "aria-label": "Ambiance affichée" },
+    el("option", { value: "", text: "Automatique (météo et soleil)" }),
+    ...MOMENTS.flatMap(([moment, momentLabel]) => WEATHERS.map(([weather, weatherLabel]) =>
+      el("option", { value: weather === "soleil" ? moment : `${moment}-${weather}`, text: `Toujours : ${momentLabel.toLowerCase()}, ${weatherLabel.toLowerCase()}` }))));
+  forced.value = draft.forced ?? "";
+  forced.disabled = !draft.background;
+  forced.addEventListener("change", () => {
+    if (forced.value) draft.forced = forced.value; else delete draft.forced;
+    renderDrawingPreview();
   });
-  const night = imageOptions(draft.night, "Aucun (le même jour et nuit)");
-  night.disabled = !draft.background;
-  night.addEventListener("change", () => {
-    if (night.value) draft.night = night.value;
-    else delete draft.night;
-    refresh();
-  });
-  const backgrounds = drawingFieldset("Fonds", "", el("div", { class: "drawing-grid" },
-    field("Fond de jour", day), field("Fond de nuit (soleil couché)", night)));
+  const nowKey = ambianceOf({ ...draft, forced: undefined });
+  const nowWeather = nowKey.includes("-") ? nowKey.slice(nowKey.indexOf("-") + 1) : "soleil";
+  const nowText = `Maintenant : ${nowKey.startsWith("nuit") ? "nuit" : "jour"}, ${(WEATHERS.find(([key]) => key === nowWeather)?.[1] ?? nowWeather).toLowerCase()}`;
+  const backgrounds = drawingFieldset(
+    "Fonds et ambiances",
+    "Comme sur les tableaux de domo-blog : un fond par ambiance, choisi d'après le soleil et la météo. Il en manque un ? Le plus proche s'affiche (orage → pluie → nuageux → soleil ; la nuit, puis le même temps de jour).",
+    ...groups,
+    el("div", { class: "drawing-grid" }, field("Ambiance affichée", forced)),
+    el("p", { class: "auto-meta", text: nowText }),
+  );
 
   // Les calques.
   const layerRows = draft.layers.map((layer, index) => {

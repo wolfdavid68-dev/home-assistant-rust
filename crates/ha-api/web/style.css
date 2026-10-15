@@ -2277,3 +2277,8 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
   .house-label.placing::before { animation: none; }
 }
 .drawing-rooms { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; }
+/* Les fonds par ambiance : deux lignes (jour, nuit), quatre temps. */
+.drawing-ambiances { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr)); gap: 0.6rem; }
+.drawing-ambiances select { width: 100%; min-width: 0; }
+.drawing-ambiance-group { display: grid; gap: 0.4rem; }
+.drawing-ambiance-group > b { font-size: 0.85rem; }
