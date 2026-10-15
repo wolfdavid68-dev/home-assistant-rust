@@ -15,7 +15,9 @@ use crate::error::ApiError;
 
 /// Domaines cachés aux invités : la présence de la famille, les messages, et
 /// ce qui dit si la maison est fermée (serrures, sirènes).
-const HIDDEN_FROM_GUESTS: [&str; 9] = [
+const HIDDEN_FROM_GUESTS: [&str; 10] = [
+    // Les notifications et alertes parlent de la maison (porte ouverte…).
+    "persistent_notification",
     "person",
     "device_tracker",
     "zone",

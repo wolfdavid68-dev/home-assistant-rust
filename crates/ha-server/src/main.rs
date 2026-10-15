@@ -304,6 +304,8 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
             .with_reloader(reloader),
     );
     let automations = editor.active().await?;
+    // L'historique des exécutions, partagé entre le moteur et l'API.
+    let traces = ha_automation::Traces::new();
     if !editable {
         info!("éditeur d'automatisations en lecture seule (HA_AUTOMATION_EDITOR=off)");
     }
@@ -312,12 +314,20 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         store.clone(),
         auth,
         areas,
-        Some(ha_api::AutomationEditor { editor, editable }),
+        Some(ha_api::AutomationEditor {
+            editor,
+            editable,
+            traces: traces.clone(),
+        }),
     );
     let api = tokio::spawn(ha_api::serve(listener, Arc::clone(&api_state)));
 
     // On s'abonne AVANT de créer les entités, pour ne rater aucun événement.
     let logger = tokio::spawn(log_state_changes(core.bus.subscribe()));
+
+    // Les notifications du tableau de bord et les alertes de réparation,
+    // avant les automatisations (qui peuvent en créer).
+    let notices = ha_notices::Notices::start(Arc::clone(&core));
 
     // Les entrées sont créées AVANT les automatisations (leur création n'est
     // pas un changement qui déclenche), et démarrées APRÈS (un minuteur qui a
@@ -340,6 +350,7 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
             scenes,
             location,
             reloads: Some(reloads),
+            traces,
         },
         Arc::clone(&core),
     );
@@ -464,6 +475,7 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         assistants.stop().await;
     }
     engine.stop().await;
+    notices.stop().await;
     logbook.stop().await;
     statistics.stop().await;
     if let Some(notifier) = notifier {

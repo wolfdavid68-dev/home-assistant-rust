@@ -47,7 +47,8 @@ fn phrase(old: &State, new: &State) -> Option<String> {
     match domain {
         // Mesures et choses qui changent sans cesse : l'historique s'en charge.
         // Une liste : son état n'est qu'un nombre d'éléments.
-        "weather" | "timer" | "todo" => None,
+        // Les notifications : elles s'affichent déjà sur le tableau de bord.
+        "weather" | "timer" | "todo" | "persistent_notification" => None,
         // L'agenda : le rendez-vous qui commence, ou celui qui se termine.
         "calendar" => {
             let (state, verb) = match value {

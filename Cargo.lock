@@ -875,6 +875,7 @@ name = "ha-automation"
 version = "0.1.0"
 dependencies = [
  "ha-core",
+ "ha-notices",
  "ha-storage",
  "ha-sun",
  "jiff",
@@ -997,6 +998,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ha-notices"
+version = "0.1.0"
+dependencies = [
+ "ha-core",
+ "jiff",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "ha-notify"
 version = "0.1.0"
 dependencies = [
@@ -1043,6 +1056,7 @@ dependencies = [
  "ha-input",
  "ha-logbook",
  "ha-mqtt",
+ "ha-notices",
  "ha-notify",
  "ha-person",
  "ha-somfy",
