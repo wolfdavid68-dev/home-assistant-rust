@@ -271,6 +271,8 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     }
 
     let recorder = Recorder::start(store.clone(), Arc::clone(&core));
+    // Les statistiques long terme : un résumé par heure, gardé des années.
+    let statistics = ha_storage::Statistics::start(store.clone(), history_days);
     // Le journal de bord, avant tout ce qui peut agir sur la maison.
     let logbook = ha_logbook::Logbook::start(store.clone(), Arc::clone(&core));
     if let Err(error) = store
@@ -446,6 +448,7 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     }
     engine.stop().await;
     logbook.stop().await;
+    statistics.stop().await;
     if let Some(notifier) = notifier {
         notifier.stop().await;
     }

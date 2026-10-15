@@ -10,6 +10,7 @@
 //! | GET / POST / DELETE | `/api/states/{entity_id}` | Lire / modifier / supprimer un état |
 //! | GET | `/api/history/{entity_id}` | Historique d'une entité |
 //! | GET | `/api/logbook` | Journal de bord (`?hours=24&entity_id=…`) |
+//! | GET | `/api/statistics/{entity_id}` | Statistiques long terme (`?period=day&days=365`) |
 //! | POST | `/api/services/{domain}/{service}` | Appel de service (`switch/turn_on`…) |
 //! | GET | `/api/automations` | Automatisations (fichier et éditeur) |
 //! | POST | `/api/automations/check` | Vérifie une automatisation sans l'enregistrer |
@@ -121,6 +122,7 @@ pub fn router(state: Arc<ApiState>) -> Router {
         )
         .route("/api/history/{entity_id}", get(rest::history))
         .route("/api/history/{entity_id}/series", get(rest::history_series))
+        .route("/api/statistics/{entity_id}", get(rest::statistics))
         .route("/api/logbook", get(rest::logbook))
         .route("/api/audit", get(rest::audit_log))
         .route("/api/areas", get(rest::areas))

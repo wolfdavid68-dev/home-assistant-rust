@@ -15,6 +15,7 @@ mod error;
 mod logbook;
 mod recorder;
 mod secrets;
+mod statistics;
 mod store;
 
 pub use audit::{AuditCheck, AuditEntry, AuditRecord, MAX_AUDIT_LIMIT, clean_field};
@@ -23,6 +24,9 @@ pub use error::StorageError;
 pub use logbook::{LogbookEntry, MAX_LOGBOOK_LIMIT, NewLogbookEntry};
 pub use recorder::Recorder;
 pub use secrets::{SecretKey, is_sealed};
+pub use statistics::{
+    HourSummary, MAX_STATISTICS_POINTS, Period, StatisticPoint, Statistics, summarize,
+};
 pub use store::{
     HistoryEntry, HistorySeries, MAX_HISTORY_LIMIT, MAX_SERIES_BUCKETS, MAX_SERIES_CHANGES,
     SeriesPoint, StateChange, Store, StoredState, from_micros, to_micros,

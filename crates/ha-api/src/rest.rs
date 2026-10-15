@@ -97,6 +97,16 @@ pub(crate) struct LogbookQuery {
     limit: Option<u32>,
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct StatisticsQuery {
+    period: Option<String>,
+    days: Option<u32>,
+}
+
+/// Période maximale des statistiques : 10 ans (31 jours par heure).
+const MAX_STATISTICS_DAYS: u32 = 3660;
+
 /// Lignes du journal de bord renvoyées par défaut.
 const DEFAULT_LOGBOOK_LIMIT: u32 = 500;
 
@@ -369,6 +379,62 @@ pub(crate) async fn logbook(
         })
         .collect();
     Ok(Json(json!({ "entries": entries })))
+}
+
+/// `GET /api/statistics/{entity_id}?period=day&days=30` : les statistiques
+/// long terme (moyenne, min, max, consommation), par heure, jour ou mois.
+pub(crate) async fn statistics(
+    State(state): State<Arc<ApiState>>,
+    auth: Authenticated,
+    Path(entity_id): Path<String>,
+    Query(query): Query<StatisticsQuery>,
+) -> Result<Json<Value>, ApiError> {
+    roles::require(&auth.user, Permission::ReadHistory)?;
+    let entity_id = parse_entity_id(&entity_id)?;
+    let (period, max_days) = match query.period.as_deref().unwrap_or("day") {
+        "hour" => (ha_storage::Period::Hour, 31),
+        "day" => (ha_storage::Period::Day, MAX_STATISTICS_DAYS),
+        "month" => (ha_storage::Period::Month, MAX_STATISTICS_DAYS),
+        _ => {
+            return Err(ApiError::BadRequest(
+                "« period » : hour, day ou month".into(),
+            ));
+        }
+    };
+    let days = query.days.unwrap_or(30);
+    if !(1..=max_days).contains(&days) {
+        return Err(ApiError::BadRequest(format!(
+            "« days » doit être entre 1 et {max_days} pour cette période"
+        )));
+    }
+    let until = SystemTime::now();
+    let since = until
+        .checked_sub(Duration::from_secs(u64::from(days) * 86_400))
+        .unwrap_or(SystemTime::UNIX_EPOCH);
+    let points: Vec<Value> = state
+        .store
+        .statistics(
+            &entity_id,
+            since,
+            until,
+            period,
+            &jiff::tz::TimeZone::system(),
+        )
+        .await?
+        .iter()
+        .map(|p| {
+            json!({
+                "start": format_timestamp(p.start),
+                "mean": p.mean,
+                "min": p.min,
+                "max": p.max,
+                "change": p.change,
+            })
+        })
+        .collect();
+    Ok(Json(
+        json!({ "entity_id": entity_id.as_str(), "points": points }),
+    ))
 }
 
 /// `GET /api/history/{entity_id}/series?hours=24` : l'historique d'une

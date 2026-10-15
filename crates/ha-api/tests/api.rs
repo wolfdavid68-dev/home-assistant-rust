@@ -142,6 +142,7 @@ async fn every_route_requires_a_token() {
         ("POST", "/api/services/switch/turn_on"),
         ("GET", "/api/audit"),
         ("GET", "/api/logbook"),
+        ("GET", "/api/statistics/sensor.temperature"),
         ("GET", "/api/areas"),
         ("GET", "/api/history/light.salon/series"),
         ("POST", "/api/auth/confirm"),
@@ -1202,4 +1203,40 @@ async fn a_guest_websocket_never_receives_hidden_devices() {
     );
 
     app.state.shutdown();
+}
+
+#[tokio::test]
+async fn statistics_are_checked_and_protected() {
+    let app = TestApp::new().await;
+    let token = app.login().await;
+    let (status, body) = app
+        .request(
+            "GET",
+            "/api/statistics/sensor.temperature?period=day&days=365",
+            Some(&token),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["points"], json!([]));
+    for bad in [
+        "/api/statistics/sensor.temperature?period=week",
+        "/api/statistics/sensor.temperature?period=hour&days=60",
+        "/api/statistics/sensor.temperature?days=0",
+        "/api/statistics/sensor.temperature?days=99999",
+        "/api/statistics/Sensor?days=1",
+    ] {
+        let (status, _) = app.request("GET", bad, Some(&token), None).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{bad}");
+    }
+    let guest = app.login_as("visiteur", ha_auth::Role::Guest).await;
+    let (status, _) = app
+        .request(
+            "GET",
+            "/api/statistics/sensor.temperature",
+            Some(&guest),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
 }
