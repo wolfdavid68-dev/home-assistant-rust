@@ -2072,6 +2072,31 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 
 .board-tab { display: none; }
 
+/* Les onglets (Maison, Garage, Piscine…) : en tête de la barre sur un grand
+   écran ; sur téléphone, une ligne qu'on fait défiler, s'il y en a plusieurs. */
+[data-layout="board"] .board-tab { display: flex; align-items: center; gap: 0.6rem; order: -1; min-width: 0; align-self: stretch; }
+.board-tab svg { width: 20px; height: 20px; flex: none; }
+.board-tabs { display: flex; gap: 2px; min-width: 0; overflow-x: auto; scrollbar-width: none; align-self: stretch; }
+.board-tabs::-webkit-scrollbar { display: none; }
+.board-tab-item {
+  all: unset;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.board-tab-item:hover { color: var(--text); }
+.board-tab-item.active { color: var(--text); font-weight: 600; box-shadow: inset 0 -2px 0 currentColor; }
+.board-tab-item:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+@media (max-width: 999px) {
+  [data-layout="board"] .board-tab { flex-basis: 100%; order: 10; }
+  [data-layout="board"] .board-tab:has(.single) { display: none; }
+}
+
 :root[data-theme="maquette"] {
   --bar: #111111;
   --bg: #12101c;
@@ -2131,19 +2156,9 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 
 /* La barre noire du haut et le rail noir de gauche. */
 [data-theme="maquette"][data-layout="board"] .hero { background: #111111; box-shadow: 0 1px 0 rgb(255 255 255 / 0.06); }
-@media (min-width: 1000px) {
-[data-theme="maquette"][data-layout="board"] .board-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.9rem;
-  align-self: stretch;
-  order: -1;
-  color: #ffffff;
-  font-size: 0.9rem;
-}
-}
-[data-theme="maquette"] .board-tab svg { width: 20px; height: 20px; color: #e0e0e0; }
-[data-theme="maquette"] .board-tab b { font-weight: 600; padding: 0.55rem 1.1rem; box-shadow: inset 0 -2px 0 #ffffff; }
+[data-theme="maquette"] .board-tab svg { color: #e0e0e0; }
+[data-theme="maquette"] .board-tab-item { color: #a3a3ad; }
+[data-theme="maquette"] .board-tab-item.active { color: #ffffff; box-shadow: inset 0 -2px 0 #ffffff; }
 [data-theme="maquette"][data-layout="board"] .greeting { color: #a3a3ad; font-size: 0.85rem; }
 [data-theme="maquette"][data-layout="board"] .greeting a { color: #ffb3ad; }
 @media (min-width: 1000px) {
@@ -2261,3 +2276,4 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
   .house-stage .house-layer { transition: none; }
   .house-label.placing::before { animation: none; }
 }
+.drawing-rooms { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; }

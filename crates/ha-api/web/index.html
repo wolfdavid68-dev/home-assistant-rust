@@ -47,8 +47,8 @@
   <div id="dashboard-view" class="app" hidden>
     <header class="hero">
       <div class="hero-top">
-        <!-- Mise en page « tableau » : l'onglet de la page, comme dans Home Assistant. -->
-        <span class="board-tab" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg><b>Maison</b></span>
+        <!-- Mise en page « tableau » : les onglets (Maison, Garage…), comme dans Home Assistant (house.js). -->
+        <div class="board-tab"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg><nav id="board-tabs" class="board-tabs" aria-label="Onglets"></nav></div>
         <p class="today"><span id="today"></span><span id="clock" class="clock"></span></p>
         <span id="connection" class="status" aria-live="polite">Connexion…</span>
         <span id="weather-pill" class="weather-pill" hidden></span>

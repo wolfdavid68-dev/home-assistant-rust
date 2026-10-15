@@ -239,6 +239,14 @@ const SECTIONS = [
 // Les pièces viennent du fichier areas.yaml (GET /api/areas).
 let areas = [];
 const customNames = new Map();
+// Les pièces de l'onglet affiché (mise en page « tableau », house.js), ou
+// `null` : toute la maison.
+let pageAreas = null;
+
+/** Les pièces à montrer : celles de l'onglet, ou toutes. */
+function shownAreas() {
+  return pageAreas !== null && isBoard() ? areas.filter((area) => pageAreas.has(area.name)) : areas;
+}
 
 async function loadAreas() {
   const response = await fetch("/api/areas", { headers: { Authorization: `Bearer ${token.get()}` } });
@@ -285,7 +293,7 @@ function renderAll() {
 
   const used = new Set();
   // D'abord une section par pièce, dans l'ordre du fichier…
-  const areaGroups = areas.map((area) => {
+  const areaGroups = shownAreas().map((area) => {
     const items = area.entities
       .map((entity) => entities.get(entity.entity_id))
       .filter((state) => state !== undefined);
@@ -304,6 +312,8 @@ function renderAll() {
     return { title, items };
   });
   groups.push({ title: "Autres", items: loose.filter((s) => !used.has(s.entity_id)) });
+  // Un onglet limité à quelques pièces (Garage…) ne montre que leurs appareils.
+  if (pageAreas !== null && isBoard()) groups.length = 0;
 
   container.replaceChildren(
     ...[...areaGroups, ...groups]
@@ -449,12 +459,13 @@ function roomInfo(area) {
 
 function renderPlan() {
   const card = $("#plan");
-  card.hidden = areas.length === 0;
-  if (areas.length === 0) return;
+  const listed = shownAreas();
+  card.hidden = listed.length === 0;
+  if (listed.length === 0) return;
   let lit = 0;
   let warnings = 0;
   const temps = [];
-  const rooms = areas.map((area) => {
+  const rooms = listed.map((area) => {
     const info = roomInfo(area);
     lit += info.lights;
     if (info.alert) warnings += 1;
