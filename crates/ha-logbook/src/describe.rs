@@ -19,6 +19,15 @@ pub fn name_of(entity_id: &EntityId, state: Option<&State>) -> String {
 #[must_use]
 pub fn describe_change(old: Option<&State>, new: Option<&State>) -> Option<String> {
     let (old, new) = (old?, new?);
+    let phrase = phrase(old, new)?;
+    Some(if is_feminine(&name_of(new.entity_id(), Some(new))) {
+        agree(phrase)
+    } else {
+        phrase
+    })
+}
+
+fn phrase(old: &State, new: &State) -> Option<String> {
     let value = new.state();
     if old.state() == value || value == "unknown" {
         return None;
@@ -97,6 +106,99 @@ pub fn describe_change(old: Option<&State>, new: Option<&State>) -> Option<Strin
     }
 }
 
+/// Les noms féminins les plus courants dans une maison. Sans eux, le journal
+/// écrirait « Porte d'entrée s'est ouvert ». La même liste existe dans
+/// l'interface (`app.js`, `FEMININE`) : les garder pareilles.
+const FEMININE: &[&str] = &[
+    "alarme",
+    "allée",
+    "ampoule",
+    "applique",
+    "baie",
+    "barrière",
+    "bouilloire",
+    "box",
+    "buanderie",
+    "cafetière",
+    "caméra",
+    "cave",
+    "chambre",
+    "chaudière",
+    "climatisation",
+    "clim",
+    "cour",
+    "cuisine",
+    "électrovanne",
+    "enceinte",
+    "entrée",
+    "fenêtre",
+    "friteuse",
+    "guirlande",
+    "hotte",
+    "imprimante",
+    "lampe",
+    "lucarne",
+    "lumière",
+    "machine",
+    "multiprise",
+    "piscine",
+    "plaque",
+    "pompe",
+    "porte",
+    "prise",
+    "salle",
+    "serrure",
+    "sirène",
+    "sonde",
+    "sonnette",
+    "station",
+    "suspension",
+    "télé",
+    "télévision",
+    "terrasse",
+    "trappe",
+    "vanne",
+    "véranda",
+    "ventilation",
+    "verrière",
+    "veilleuse",
+    "vmc",
+];
+
+/// Le nom désigne-t-il une chose féminine ? On regarde son premier mot
+/// (« Porte du garage » → « porte »), ou l'article s'il y en a un.
+/// Un identifiant comme `binary_sensor.porte_entree` compte aussi.
+fn is_feminine(name: &str) -> bool {
+    // Sans nom lisible, c'est l'identifiant : on garde ce qui suit le point.
+    let name = if name.contains(char::is_whitespace) {
+        name
+    } else {
+        name.rsplit_once('.').map_or(name, |(_, object)| object)
+    };
+    let lower = name.to_lowercase();
+    let mut words = lower
+        .split(|c: char| c.is_whitespace() || matches!(c, '_' | '-' | '\'' | '’'))
+        .filter(|word| !word.is_empty());
+    match words.next() {
+        Some("la" | "une") => true,
+        Some("le" | "un" | "l") => words.next().is_some_and(|word| FEMININE.contains(&word)),
+        Some(word) => FEMININE.contains(&word),
+        None => false,
+    }
+}
+
+/// Accorde le participe au féminin : « s'est ouvert » → « s'est ouverte ».
+/// Seules les phrases « s'est … » et « a été … » s'accordent ; « détecte de
+/// la fumée » ne change pas.
+fn agree(mut phrase: String) -> String {
+    let agrees = (phrase.starts_with("s'est ") || phrase.starts_with("a été "))
+        && (phrase.ends_with('é') || phrase.ends_with('t'));
+    if agrees {
+        phrase.push('e');
+    }
+    phrase
+}
+
 /// Les mots d'un détecteur, d'après sa sorte (`device_class`).
 fn binary_words(device_class: Option<&str>) -> (&'static str, &'static str) {
     match device_class {
@@ -156,10 +258,10 @@ mod tests {
         let none = json!({});
         for (entity, from, to, attributes, expected) in [
             ("light.salon", "off", "on", &none, "s'est allumé"),
-            ("switch.prise", "on", "off", &none, "s'est éteint"),
+            ("switch.prise", "on", "off", &none, "s'est éteinte"),
             ("input_boolean.vacances", "off", "on", &none, "a été activé"),
             (
-                "binary_sensor.porte",
+                "binary_sensor.portail",
                 "off",
                 "on",
                 &json!({"device_class": "door"}),
@@ -260,6 +362,62 @@ mod tests {
         let light = state("light.salon", "on", json!({}));
         assert_eq!(describe_change(None, Some(&light)), None);
         assert_eq!(describe_change(Some(&light), None), None);
+    }
+
+    #[test]
+    fn participles_agree_with_feminine_names() {
+        for (entity, from, to, attributes, expected) in [
+            (
+                "binary_sensor.porte_entree",
+                "off",
+                "on",
+                json!({"device_class": "door"}),
+                "s'est ouverte",
+            ),
+            (
+                "cover.garage",
+                "open",
+                "closed",
+                json!({"friendly_name": "Porte du garage"}),
+                "s'est fermée",
+            ),
+            (
+                "light.salon",
+                "on",
+                "off",
+                json!({"friendly_name": "Lampe de chevet"}),
+                "s'est éteinte",
+            ),
+            (
+                "switch.cafe",
+                "off",
+                "on",
+                json!({"friendly_name": "La cafetière"}),
+                "s'est allumée",
+            ),
+            (
+                "light.plafond",
+                "off",
+                "on",
+                json!({"friendly_name": "Plafonnier"}),
+                "s'est allumé",
+            ),
+            // Une phrase qui ne s'accorde pas reste telle quelle.
+            (
+                "binary_sensor.sonde",
+                "off",
+                "on",
+                json!({"device_class": "smoke", "friendly_name": "Sonde du couloir"}),
+                "détecte de la fumée !",
+            ),
+            ("cover.porte", "closed", "opening", json!({}), "s'ouvre"),
+        ] {
+            assert_eq!(
+                change(entity, from, to, attributes).as_deref(),
+                Some(expected),
+                "{entity} {from} → {to}"
+            );
+        }
     }
 
     #[test]

@@ -291,8 +291,8 @@ const ALERT_SENSORS = ["smoke", "moisture", "gas", "carbon_monoxide", "problem",
 function alertText(state) {
   const domain = domainOf(state);
   const dc = state.attributes.device_class;
-  if (domain === "cover" && ALERT_COVERS.includes(dc) && ["open", "opening"].includes(state.state)) return "ouvert";
-  if (domain === "binary_sensor" && dc === "garage_door" && state.state === "on") return "ouvert";
+  if (domain === "cover" && ALERT_COVERS.includes(dc) && ["open", "opening"].includes(state.state)) return agree(state, "ouvert");
+  if (domain === "binary_sensor" && dc === "garage_door" && state.state === "on") return agree(state, "ouvert");
   if (domain === "binary_sensor" && ALERT_SENSORS.includes(dc) && state.state === "on") return lookup(BINARY_LABELS, dc)?.[0] ?? "alerte";
   if (domain === "sensor" && dc === "alarm" && state.state === "triggered") return "alarme déclenchée";
   return null;
@@ -420,7 +420,7 @@ function renderPlan() {
 
 function renderScenes() {
   const list = [...entities.values()]
-    .filter((s) => ["scene", "script"].includes(domainOf(s)))
+    .filter((s) => ["scene", "script"].includes(domainOf(s)) && canControl(s))
     .sort((a, b) => nameOf(a).localeCompare(nameOf(b), "fr"));
   const nav = $("#scenes");
   nav.hidden = list.length === 0;
@@ -447,8 +447,28 @@ setInterval(() => { if (!$("#dashboard-view").hidden) renderHome(); }, 30_000);
 
 function renderTile(state) {
   const tile = renderTileContent(state);
+  if (!canControl(state)) makeReadOnly(tile);
   if (account.permissions.history !== false) tile.append(historyButton(state));
   return tile;
+}
+
+/** Ce compte peut-il commander cet appareil ? Les règles viennent du serveur
+ *  (GET /api/, `permissions.controls`, `null` = tout) ; il les vérifie de
+ *  toute façon à chaque commande. */
+function canControl(state) {
+  const controls = account.permissions.controls;
+  if (controls === null || typeof controls !== "object") return true;
+  const domain = domainOf(state);
+  if (!Array.isArray(controls.domains) || !controls.domains.includes(domain)) return false;
+  const forbidden = Array.isArray(controls.forbidden_cover_classes) ? controls.forbidden_cover_classes : [];
+  return !(domain === "cover" && forbidden.includes(state.attributes.device_class));
+}
+
+/** Une tuile en lecture seule : l'état reste lisible, les commandes
+ *  disparaissent (plutôt qu'un refus au moment d'appuyer). */
+function makeReadOnly(tile) {
+  tile.classList.add("readonly");
+  for (const control of tile.querySelectorAll("button, input, select")) control.disabled = true;
 }
 
 function renderTileContent(state) {
@@ -491,7 +511,7 @@ function lightTile(state) {
   const toggle = el(
     "button",
     { class: "tile-toggle", type: "button", "aria-pressed": String(on) },
-    tileHead(state, ICONS.bulb, on ? `Allumée · ${Math.round((brightness / 255) * 100)} %` : state.state === "off" ? "Éteinte" : statusText(state), knob()),
+    tileHead(state, ICONS.bulb, on ? agree(state, `Allumé · ${Math.round((brightness / 255) * 100)}\u202f%`) : statusText(state), knob()),
   );
   toggle.addEventListener("click", () => {
     markPending(state.entity_id);
@@ -509,8 +529,8 @@ function coverTile(state) {
   const position = state.attributes.current_position;
   const subtitle =
     typeof position === "number"
-      ? position >= 100 ? "Ouvert" : position <= 0 ? "Fermé" : `Ouvert à ${Math.round(position)} %`
-      : lookup(COVER_LABELS, state.state) ?? statusText(state);
+      ? agree(state, position >= 100 ? "Ouvert" : position <= 0 ? "Fermé" : `Ouvert à ${Math.round(position)}\u202f%`)
+      : agree(state, lookup(COVER_LABELS, state.state) ?? statusText(state));
   const command = (service, data = {}) => {
     markPending(state.entity_id);
     callService("cover", service, { entity_id: state.entity_id, ...data });
@@ -561,7 +581,7 @@ function switchTile(state) {
 
 function binaryTile(state) {
   const labels = lookup(BINARY_LABELS, state.attributes.device_class) ?? ["Actif", "Inactif"];
-  const text = state.state === "on" ? labels[0] : state.state === "off" ? labels[1] : statusText(state);
+  const text = agree(state, state.state === "on" ? labels[0] : state.state === "off" ? labels[1] : statusText(state));
   const icon = lookup(BINARY_ICONS, state.attributes.device_class) ?? ICONS.door;
   return el(
     "div",
@@ -663,7 +683,7 @@ function weatherTile(state) {
   const [label] = lookup(WEATHER_LABELS, state.state) ?? [statusText(state)];
   const feels = finite(a.apparent_temperature) ? ` · ressenti ${degrees(a.apparent_temperature)}` : "";
   const details = [
-    finite(a.humidity) && `Humidité ${number.format(a.humidity)} %`,
+    finite(a.humidity) && `Humidité ${number.format(a.humidity)}\u202f%`,
     finite(a.wind_speed) && `Vent ${number.format(a.wind_speed)} km/h`,
   ].filter(Boolean).join(" · ");
   const days = (Array.isArray(a.forecast) ? a.forecast : [])
@@ -672,7 +692,7 @@ function weatherTile(state) {
     .map((day) => {
       const [dayLabel] = lookup(WEATHER_LABELS, day.condition) ?? [""];
       const rain = finite(day.precipitation_probability) && day.precipitation_probability >= 30
-        ? `${number.format(day.precipitation_probability)} %` : "";
+        ? `${number.format(day.precipitation_probability)}\u202f%` : "";
       return el(
         "li",
         { title: dayLabel },
@@ -1008,7 +1028,44 @@ function tileClass(state, kind) {
 }
 
 function statusText(state) {
-  return lookup(STATUS_LABELS, state.state) ?? state.state;
+  return agree(state, lookup(STATUS_LABELS, state.state) ?? state.state);
+}
+
+// Les noms féminins les plus courants dans une maison : sans eux, on lirait
+// « Porte du garage : ouvert ». La même liste existe côté serveur, pour le
+// journal de bord (crates/ha-logbook/src/describe.rs) : les garder pareilles.
+const FEMININE = new Set([
+  "alarme", "allée", "ampoule", "applique", "baie", "barrière", "bouilloire", "box", "buanderie",
+  "cafetière", "caméra", "cave", "chambre", "chaudière", "climatisation", "clim", "cour",
+  "cuisine", "électrovanne", "enceinte", "entrée", "fenêtre", "friteuse", "guirlande", "hotte",
+  "imprimante", "lampe", "lucarne", "lumière", "machine", "multiprise", "piscine", "plaque",
+  "pompe", "porte", "prise", "salle", "serrure", "sirène", "sonde", "sonnette", "station",
+  "suspension", "télé", "télévision", "terrasse", "trappe", "vanne", "véranda", "ventilation",
+  "verrière", "veilleuse", "vmc",
+]);
+const FEMININE_FORMS = {
+  ouvert: "ouverte", fermé: "fermée", allumé: "allumée", éteint: "éteinte", connecté: "connectée",
+  déconnecté: "déconnectée", actif: "active", inactif: "inactive", inconnu: "inconnue",
+};
+
+/** Le nom de l'appareil est-il féminin ? On regarde son premier mot, ou
+ *  l'article : « Porte du garage », « La cafetière », binary_sensor.porte_entree. */
+function isFeminine(state) {
+  const words = nameOf(state).toLowerCase().split(/[\s_'’-]+/u).filter(Boolean);
+  const [first, second] = words;
+  if (first === "la" || first === "une") return true;
+  if (first === "le" || first === "un" || first === "l") return FEMININE.has(second);
+  return FEMININE.has(first);
+}
+
+/** Accorde le premier mot d'un libellé : « Ouvert à 85 % » → « Ouverte à 85 % ». */
+function agree(state, text) {
+  if (!isFeminine(state)) return text;
+  return text.replace(/^\p{L}+/u, (word) => {
+    const feminine = lookup(FEMININE_FORMS, word.toLowerCase());
+    if (feminine === undefined) return word;
+    return word[0] === word[0].toLowerCase() ? feminine : feminine[0].toUpperCase() + feminine.slice(1);
+  });
 }
 
 // Modes d'alarme Somfy : [texte affiché, activée ?]
@@ -1021,7 +1078,7 @@ const ALARM_LABELS = {
 const COVER_LABELS = { open: "Ouvert", closed: "Fermé", opening: "Ouverture…", closing: "Fermeture…" };
 const STATUS_LABELS = { on: "Allumé", off: "Éteint", unknown: "Inconnu", unavailable: "Indisponible" };
 const BINARY_LABELS = {
-  door: ["Ouverte", "Fermée"], window: ["Ouverte", "Fermée"], opening: ["Ouvert", "Fermé"],
+  door: ["Ouvert", "Fermé"], window: ["Ouvert", "Fermé"], opening: ["Ouvert", "Fermé"], garage_door: ["Ouvert", "Fermé"],
   motion: ["Mouvement", "Calme"], occupancy: ["Présence", "Personne"],
   smoke: ["Fumée !", "Rien à signaler"],
   connectivity: ["Connecté", "Déconnecté"],
@@ -1346,13 +1403,14 @@ function historyLabel(value, unit) {
   const domain = historyView.entityId.split(".")[0];
   if (domain === "device_tracker" || domain === "person") return value === "home" ? "À la maison" : value === "not_home" ? "Absent" : value;
   if (domain === "sun") return value === "above_horizon" ? "Levé" : value === "below_horizon" ? "Couché" : value;
-  if (domain === "cover") return lookup(COVER_LABELS, value) ?? value;
+  const agreed = (text) => (state ? agree(state, text) : text);
+  if (domain === "cover") return agreed(lookup(COVER_LABELS, value) ?? value);
   if (domain === "binary_sensor") {
     const labels = lookup(BINARY_LABELS, state?.attributes.device_class);
-    if (labels && (value === "on" || value === "off")) return value === "on" ? labels[0] : labels[1];
+    if (labels && (value === "on" || value === "off")) return agreed(value === "on" ? labels[0] : labels[1]);
   }
   if (unit && Number.isFinite(Number(value))) return `${number.format(Number(value))} ${unit}`;
-  return lookup(STATUS_LABELS, value) ?? value;
+  return agreed(lookup(STATUS_LABELS, value) ?? value);
 }
 
 // ---------------------------------------------------------------- Journal
@@ -2503,6 +2561,78 @@ for (const opener of ["#dock-account", "#open-account"]) {
   $(opener).addEventListener("click", () => $("#account-dialog").showModal());
 }
 $("#account-close").addEventListener("click", () => $("#account-dialog").close());
+
+// ---------------------------------------------------------------- Mode tablette
+// Une tablette accrochée au mur : l'écran reste allumé (Wake Lock), en plein
+// écran, et revient à l'accueil après 2 minutes sans contact. C'est un réglage
+// de cet appareil seulement (localStorage) : rien n'est envoyé au serveur.
+const TABLET_KEY = "ha-tablet";
+const IDLE_MS = 120_000;
+const tablet = { lock: null, idle: 0 };
+
+function tabletWanted() {
+  try {
+    return localStorage.getItem(TABLET_KEY) === "1";
+  } catch {
+    return false; // stockage bloqué (navigation privée…)
+  }
+}
+
+/** Empêche l'écran de s'éteindre. Le navigateur relâche ce verrou quand la
+ *  page est cachée : on le redemande à son retour. */
+async function keepAwake() {
+  if (!document.body.classList.contains("tablet") || document.visibilityState !== "visible") return;
+  if (tablet.lock !== null || !("wakeLock" in navigator)) return;
+  try {
+    tablet.lock = await navigator.wakeLock.request("screen");
+    tablet.lock.addEventListener("release", () => { tablet.lock = null; });
+  } catch {
+    // Refusé (batterie faible, page non sécurisée…) : l'écran s'éteindra normalement.
+  }
+}
+
+function setTablet(on, byHand) {
+  document.body.classList.toggle("tablet", on);
+  $("#tablet-mode").checked = on;
+  try {
+    if (on) localStorage.setItem(TABLET_KEY, "1");
+    else localStorage.removeItem(TABLET_KEY);
+  } catch {
+    // Stockage bloqué : le mode ne durera que le temps de la page.
+  }
+  if (on) {
+    keepAwake();
+    // Le plein écran n'est permis qu'en réponse à un geste (ce clic).
+    if (byHand && document.fullscreenElement === null) document.documentElement.requestFullscreen?.().catch(() => {});
+  } else {
+    tablet.lock?.release().catch(() => {});
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  }
+  backHomeLater();
+}
+
+/** Après 2 minutes sans contact, retour à l'accueil. L'éditeur
+ *  d'automatisations et la demande de mot de passe restent ouverts : on n'y
+ *  perd jamais un travail en cours. */
+function backHomeLater() {
+  clearTimeout(tablet.idle);
+  if (!document.body.classList.contains("tablet")) return;
+  tablet.idle = setTimeout(() => {
+    for (const dialog of document.querySelectorAll("dialog[open]")) {
+      if (dialog.id !== "automations" && dialog.id !== "confirm") dialog.close();
+    }
+    if (view.room !== null) {
+      view.room = null;
+      renderAll();
+    }
+    window.scrollTo({ top: 0 });
+  }, IDLE_MS);
+}
+
+for (const type of ["pointerdown", "keydown", "scroll"]) addEventListener(type, backHomeLater, { passive: true });
+document.addEventListener("visibilitychange", keepAwake);
+$("#tablet-mode").addEventListener("change", (event) => setTablet(event.target.checked, true));
+setTablet(tabletWanted(), false);
 
 function showDashboard() {
   $("#login-view").hidden = true;

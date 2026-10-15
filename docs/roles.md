@@ -42,9 +42,11 @@ cargo run -p ha-server -- user list                     # les comptes et leur r�
 En haut, à côté de « En direct », le nom et le rôle du compte : « alice · famille ».
 
 - **Invité** : pas de bouton « Journal de bord », ni « Automatisations », ni historique sur les
-  tuiles, ni journal d'activité. Les tuiles des personnes n'apparaissent pas. Une commande refusée
-  (la porte du garage) affiche un message bref : « Ton compte (invité) ne permet pas de commander
-  cet appareil. »
+  tuiles, ni journal d'activité. Les tuiles des personnes n'apparaissent pas. Les appareils qu'il
+  ne peut pas commander (la porte du garage, le chauffage) restent lisibles mais **sans leurs
+  boutons** ([étape 25](mise-en-forme.md#les-invités-ne-voient-plus-de-boutons-inutiles)). Si une
+  commande est quand même refusée, un message bref le dit : « Ton compte (invité) ne permet pas de
+  commander cet appareil. »
 - **Famille** : tout, mais les automatisations sont en **lecture seule** (pas de « Nouvelle
   automatisation », pas de modification).
 - **Administrateur** : tout, comme avant.

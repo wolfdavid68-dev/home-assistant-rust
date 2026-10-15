@@ -127,11 +127,11 @@ async fn the_logbook_tells_what_happened_and_why() {
     assert_eq!(
         text,
         [
-            "Porte d'entrée s'est ouvert",
+            "Porte d'entrée s'est ouverte",
             "Porte ouverte, lumière éteinte automatisation lancée \
              (déclencheur : Porte d'entrée passe à « on »)",
-            "Lumière du salon s'est éteint (par l'automatisation « Porte ouverte, lumière éteinte »)",
-            "Lumière du salon s'est allumé (par david)",
+            "Lumière du salon s'est éteinte (par l'automatisation « Porte ouverte, lumière éteinte »)",
+            "Lumière du salon s'est allumée (par david)",
         ]
     );
 

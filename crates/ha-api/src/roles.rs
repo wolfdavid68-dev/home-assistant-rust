@@ -76,5 +76,15 @@ pub(crate) fn permissions_json(user: &User) -> Value {
         "write_states": user.can(Permission::WriteStates),
         "audit": user.can(Permission::ReadAudit),
         "all_devices": user.can(Permission::AllDevices),
+        // Ce que le compte peut commander, avec les mêmes règles que
+        // `can_control` : `null` veut dire « tout ».
+        "controls": if user.can(Permission::AllDevices) {
+            Value::Null
+        } else {
+            json!({
+                "domains": GUEST_CONTROLS,
+                "forbidden_cover_classes": FORBIDDEN_COVER_CLASSES,
+            })
+        },
     })
 }
