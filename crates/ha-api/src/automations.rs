@@ -93,7 +93,7 @@ fn editor(state: &ApiState) -> Result<&AutomationEditor, ApiError> {
 }
 
 /// Temps de confirmation restant pour ce jeton.
-fn confirmation_left(state: &ApiState, token: &str) -> Option<Duration> {
+pub(crate) fn confirmation_left(state: &ApiState, token: &str) -> Option<Duration> {
     let key = ha_auth::token::hash_token(token);
     let confirmations = state.confirmations.lock().ok()?;
     let until = confirmations.get(&key)?;

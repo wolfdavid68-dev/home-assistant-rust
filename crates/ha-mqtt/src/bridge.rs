@@ -13,6 +13,7 @@ use serde_json::{Value, json};
 use tracing::{debug, info, warn};
 
 use crate::discovery::{self, Component, Discovery, EntityConfig};
+use crate::profile::attribute_value;
 
 /// Nombre maximal d'entités découvertes : un appareil défaillant (ou
 /// malveillant) ne peut pas en créer à l'infini.
@@ -123,6 +124,39 @@ impl Bridge {
             warn!("service {domain}.{service} incompatible avec {entity_id}");
             return Vec::new();
         }
+        // Une vanne s'ouvre si elle est fermée, et inversement.
+        let service = match (config.component, service) {
+            (Component::Valve, "toggle") => {
+                let open = states
+                    .get(entity_id)
+                    .is_some_and(|s| matches!(s.state(), "open" | "opening"));
+                if open { "close_valve" } else { "open_valve" }
+            }
+            _ => service,
+        };
+        // Les commandes propres au type : verrou, vanne, aspirateur, consignes.
+        if let Some(command) = config.profile.command(service) {
+            let payload = match command.render(data) {
+                Ok(payload) => payload,
+                Err(error) => {
+                    warn!("{domain}.{service} sur {entity_id} refusé : {error}");
+                    return Vec::new();
+                }
+            };
+            if let (None, Some(state)) = (&config.state_topic, command.optimistic) {
+                let attributes = current_attributes(config, entity_id, states);
+                let _ = states.set(entity_id.clone(), state, attributes);
+            }
+            debug!("{entity_id} : envoi de {payload:?} sur {}", command.topic);
+            return vec![Action::Publish {
+                topic: command.topic.clone(),
+                payload,
+            }];
+        }
+        if !config.component.is_on_off() {
+            warn!("service {domain}.{service} non pris en charge par {entity_id}");
+            return Vec::new();
+        }
         let Some(command_topic) = &config.command_topic else {
             warn!("{entity_id} ne peut pas être commandé (pas de sujet de commande)");
             return Vec::new();
@@ -162,7 +196,8 @@ impl Bridge {
         // suppose que oui (mode « optimiste », comme Home Assistant).
         if config.state_topic.is_none() {
             let value = if turn_on { "on" } else { "off" };
-            let _ = states.set(entity_id.clone(), value, base_attributes(config));
+            let attributes = current_attributes(config, entity_id, states);
+            let _ = states.set(entity_id.clone(), value, attributes);
         }
         debug!("{entity_id} : envoi de {payload:?} sur {command_topic}");
         vec![Action::Publish {
@@ -187,10 +222,14 @@ impl Bridge {
             }
             if existing.config.component == config.component {
                 let entity_id = existing.entity_id.clone();
-                let old_topic = existing.config.state_topic.clone();
-                if old_topic != config.state_topic {
-                    actions.extend(old_topic.and_then(|t| self.release(&t)));
-                    actions.extend(config.state_topic.as_ref().and_then(|t| self.acquire(t)));
+                let old_topics = listened_topics(&existing.config);
+                // D'abord les nouveaux, puis les anciens : un sujet gardé n'est
+                // jamais désabonné entre les deux.
+                for topic in listened_topics(&config) {
+                    actions.extend(self.acquire(&topic));
+                }
+                for topic in old_topics {
+                    actions.extend(self.release(&topic));
                 }
                 self.entities
                     .insert(discovery_topic.to_owned(), Tracked { config, entity_id });
@@ -215,7 +254,9 @@ impl Bridge {
             let _ = states.set(entity_id.clone(), "unknown", base_attributes(&config));
         }
         info!("entité MQTT découverte : {entity_id}");
-        actions.extend(config.state_topic.as_ref().and_then(|t| self.acquire(t)));
+        for topic in listened_topics(&config) {
+            actions.extend(self.acquire(&topic));
+        }
         self.by_entity
             .insert(entity_id.clone(), discovery_topic.to_owned());
         self.entities
@@ -230,11 +271,9 @@ impl Bridge {
         self.by_entity.remove(&tracked.entity_id);
         states.remove(&tracked.entity_id);
         info!("entité MQTT retirée : {}", tracked.entity_id);
-        tracked
-            .config
-            .state_topic
-            .and_then(|topic| self.release(&topic))
+        listened_topics(&tracked.config)
             .into_iter()
+            .filter_map(|topic| self.release(&topic))
             .collect()
     }
 
@@ -288,16 +327,35 @@ impl Bridge {
             warn!("message non UTF-8 sur {topic}, ignoré");
             return;
         };
-        for tracked in self
-            .entities
-            .values()
-            .filter(|t| t.config.state_topic.as_deref() == Some(topic))
-        {
-            let Some((value, attributes)) = interpret(&tracked.config, payload) else {
-                continue;
-            };
-            if let Err(error) = states.set(tracked.entity_id.clone(), value, attributes) {
-                warn!("état refusé pour {} : {error}", tracked.entity_id);
+        for tracked in self.entities.values() {
+            let config = &tracked.config;
+            let id = &tracked.entity_id;
+            // L'état principal…
+            if config.state_topic.as_deref() == Some(topic)
+                && let Some((value, mut attributes)) = interpret(config, payload)
+            {
+                keep_profile_attributes(config, id, states, &mut attributes);
+                if let Err(error) = states.set(id.clone(), value, attributes) {
+                    warn!("état refusé pour {id} : {error}");
+                }
+            }
+            // … puis les attributs (consigne, batterie…) arrivés sur ce sujet.
+            for attribute in config
+                .profile
+                .attributes
+                .iter()
+                .filter(|a| a.topic == topic)
+            {
+                let Some(value) = attribute_value(attribute, payload) else {
+                    continue;
+                };
+                let current = states.get(id);
+                let state = current.as_ref().map_or("unknown", |s| s.state()).to_owned();
+                let mut attributes = current_attributes(config, id, states);
+                attributes.insert(attribute.name.into(), value);
+                if let Err(error) = states.set(id.clone(), state, attributes) {
+                    warn!("attribut refusé pour {id} : {error}");
+                }
             }
         }
     }
@@ -323,14 +381,58 @@ fn interpret(config: &EntityConfig, payload: &str) -> Option<(String, Attributes
     }
 
     let value = config.value_template.render(payload)?;
-    match config.component {
-        Component::Sensor => Some((value, attributes)),
-        Component::BinarySensor | Component::Switch | Component::Light => {
-            let Some(on) = on_off(config, &value) else {
-                debug!("valeur inattendue {value:?} pour {}", config.object_id);
-                return None;
-            };
-            Some((if on { "on" } else { "off" }.to_owned(), attributes))
+    if config.component == Component::Sensor {
+        return Some((value, attributes));
+    }
+    if config.component.is_on_off() {
+        let Some(on) = on_off(config, &value) else {
+            debug!("valeur inattendue {value:?} pour {}", config.object_id);
+            return None;
+        };
+        return Some((if on { "on" } else { "off" }.to_owned(), attributes));
+    }
+    // Verrou, vanne, aspirateur, chauffe-eau : seulement les états annoncés.
+    let Some(state) = config.profile.state_for(&value) else {
+        debug!("valeur inattendue {value:?} pour {}", config.object_id);
+        return None;
+    };
+    Some((state.to_owned(), attributes))
+}
+
+/// Les sujets qu'écoute une entité (état et attributs), sans doublon.
+fn listened_topics(config: &EntityConfig) -> Vec<String> {
+    let mut topics: Vec<String> = config.state_topic.iter().cloned().collect();
+    for attribute in &config.profile.attributes {
+        if !topics.contains(&attribute.topic) {
+            topics.push(attribute.topic.clone());
+        }
+    }
+    topics
+}
+
+/// Les attributs de base, plus ceux venus des sujets d'attributs (déjà reçus).
+fn current_attributes(config: &EntityConfig, id: &EntityId, states: &StateMachine) -> Attributes {
+    let mut attributes = base_attributes(config);
+    keep_profile_attributes(config, id, states, &mut attributes);
+    attributes
+}
+
+/// Un nouvel état ne doit pas effacer la consigne ou la batterie reçues avant.
+fn keep_profile_attributes(
+    config: &EntityConfig,
+    id: &EntityId,
+    states: &StateMachine,
+    attributes: &mut Attributes,
+) {
+    let Some(current) = states.get(id) else {
+        return;
+    };
+    for attribute in &config.profile.attributes {
+        if attributes.contains_key(attribute.name) {
+            continue;
+        }
+        if let Some(value) = current.attributes().get(attribute.name) {
+            attributes.insert(attribute.name.into(), value.clone());
         }
     }
 }
@@ -357,5 +459,6 @@ fn base_attributes(config: &EntityConfig) -> Attributes {
             attributes.insert(key.into(), json!(value));
         }
     }
+    config.profile.add_fixed(&mut attributes);
     attributes
 }

@@ -392,6 +392,8 @@ input:not([type="range"]):not([type="checkbox"]), select, textarea {
   box-shadow: var(--shadow);
   padding: 16px;
   display: grid;
+  /* Un nom long (« Humidificateur ») passe à la ligne au lieu d'élargir la tuile. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   align-content: start;
   min-width: 0;
@@ -515,6 +517,18 @@ input[type="range"]::-moz-range-track { background: transparent; }
 .tile.readonly :is(.knob, .presets) { display: none; }
 .tile.readonly .tile-toggle { cursor: default; }
 .tile.readonly .setpoint { justify-content: center; }
+
+/* Serrure, aspirateur : des boutons d'action sous l'état. */
+.tile-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.tile.lock.on .icon, .tile.vacuum.on .icon { background: var(--ok-soft); color: var(--ok); }
+.tile.alert { box-shadow: var(--shadow), inset 0 0 0 2px var(--alert); }
+.setpoint-value {
+  font-family: var(--font-display);
+  font-size: 2.1rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
 
 /* Minuteur : un anneau qui se vide. */
 .timer-row { display: flex; align-items: center; gap: 12px; }

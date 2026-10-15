@@ -9,6 +9,7 @@
 pub mod bridge;
 mod client;
 pub mod discovery;
+pub mod profile;
 pub mod template;
 
 use zeroize::Zeroizing;

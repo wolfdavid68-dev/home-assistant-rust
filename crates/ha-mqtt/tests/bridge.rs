@@ -304,11 +304,12 @@ fn changing_the_state_topic_moves_the_subscription() {
         &core.states,
     );
 
+    // D'abord le nouveau sujet, puis l'ancien : aucun message perdu entre les deux.
     assert_eq!(
         actions,
         [
-            Action::Unsubscribe("ancien".into()),
             Action::Subscribe("nouveau".into()),
+            Action::Unsubscribe("ancien".into()),
         ]
     );
     // Même entité, pas de doublon.

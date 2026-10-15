@@ -164,6 +164,12 @@ async function callService(domain, service, data) {
     showLogin("Session expirée : reconnecte-toi.");
   } else if (response.status === 403) {
     const body = await response.json().catch(() => ({}));
+    // Déverrouiller une porte : le serveur redemande le mot de passe.
+    if (body.confirm === true) {
+      document.getElementById(tileId(data.entity_id))?.classList.remove("pending");
+      askConfirmation(() => callService(domain, service, data));
+      return;
+    }
     flash(typeof body.error === "string" ? `${body.error}.` : "Ton compte ne permet pas cette commande.");
     document.getElementById(tileId(data.entity_id))?.classList.remove("pending");
   }
@@ -185,6 +191,9 @@ const SECTIONS = [
   { title: "Lumières", domains: ["light"] },
   { title: "Volets", domains: ["cover"] },
   { title: "Prises et interrupteurs", domains: ["switch"] },
+  { title: "Serrures et sirènes", domains: ["lock", "siren"] },
+  { title: "Eau et air", domains: ["valve", "humidifier", "water_heater"] },
+  { title: "Aspirateurs", domains: ["vacuum"] },
   { title: "Capteurs", domains: ["sensor"] },
   { title: "Détecteurs", domains: ["binary_sensor"] },
 ];
@@ -295,6 +304,9 @@ function alertText(state) {
   if (domain === "binary_sensor" && dc === "garage_door" && state.state === "on") return agree(state, "ouvert");
   if (domain === "binary_sensor" && ALERT_SENSORS.includes(dc) && state.state === "on") return lookup(BINARY_LABELS, dc)?.[0] ?? "alerte";
   if (domain === "sensor" && dc === "alarm" && state.state === "triggered") return "alarme déclenchée";
+  if (domain === "lock" && state.state === "jammed") return agree(state, "bloqué");
+  if (domain === "vacuum" && state.state === "error") return "en erreur";
+  if (domain === "siren" && state.state === "on") return "sonne";
   return null;
 }
 
@@ -490,6 +502,12 @@ function renderTileContent(state) {
     case "input_button": return inputButtonTile(state);
     case "timer": return timerTile(state);
     case "switch": return switchTile(state);
+    case "siren": return switchTile(state, ICONS.siren, { on: "Sonne !", off: "Au repos" });
+    case "humidifier": return humidifierTile(state);
+    case "lock": return lockTile(state);
+    case "valve": return valveTile(state);
+    case "vacuum": return vacuumTile(state);
+    case "water_heater": return waterHeaterTile(state);
     case "binary_sensor": return binaryTile(state);
     case "sensor": return state.attributes.device_class === "alarm" ? alarmTile(state) : sensorTile(state);
     default: return sensorTile(state);
@@ -562,21 +580,162 @@ function coverTile(state) {
   return el("div", { id: tileId(state.entity_id), class: tileClass(state, "cover") }, ...children);
 }
 
-function switchTile(state) {
+function switchTile(state, icon = ICONS.plug, labels = null) {
   const on = state.state === "on";
+  const text = (labels && lookup(labels, state.state)) ?? statusText(state);
   // Le bouton est à l'intérieur de la tuile (et non la tuile entière), pour
   // que le bouton « historique » puisse être à côté : un bouton ne peut pas
   // en contenir un autre.
   const toggle = el(
     "button",
     { class: "tile-toggle", type: "button", "aria-pressed": String(on) },
-    tileHead(state, ICONS.plug, statusText(state), knob()),
+    tileHead(state, icon, text, knob()),
   );
   toggle.addEventListener("click", () => {
     markPending(state.entity_id);
-    callService("switch", "toggle", { entity_id: state.entity_id });
+    callService(domainOf(state), "toggle", { entity_id: state.entity_id });
   });
   return el("div", { id: tileId(state.entity_id), class: `${tileClass(state, "switch")} has-knob` }, toggle);
+}
+
+// ----- Serrure, vanne, aspirateur, humidificateur, chauffe-eau (MQTT)
+
+/** Un bouton qui envoie une commande à l'appareil de la tuile. */
+function commandButton(state, service, label, options = {}) {
+  const button = el(
+    "button",
+    { type: "button", class: options.icon ? "round" : "action-button", "aria-label": `${label} ${nameOf(state)}` },
+    ...(options.icon ? [svgIcon(options.icon)] : [label]),
+  );
+  if (options.pressed !== undefined) button.setAttribute("aria-pressed", String(options.pressed));
+  button.addEventListener("click", () => {
+    markPending(state.entity_id);
+    callService(domainOf(state), service, { entity_id: state.entity_id, ...options.data });
+  });
+  return button;
+}
+
+function lockTile(state) {
+  const locked = state.state === "locked";
+  const text = agree(state, lookup(LOCK_LABELS, state.state) ?? statusText(state));
+  const buttons = [locked
+    // Déverrouiller : le serveur redemande le mot de passe (voir callService).
+    ? commandButton(state, "unlock", "Déverrouiller")
+    : commandButton(state, "lock", "Verrouiller")];
+  if (state.attributes.supports_open === true) buttons.push(commandButton(state, "open", "Ouvrir la porte"));
+  const classes = [tileClass(state, "lock")];
+  if (locked) classes.push("on");
+  if (state.state === "jammed") classes.push("alert");
+  return el(
+    "div",
+    { id: tileId(state.entity_id), class: classes.join(" ") },
+    tileHead(state, locked ? ICONS.lock : ICONS.unlock, text),
+    el("div", { class: "tile-actions" }, ...buttons),
+  );
+}
+
+function valveTile(state) {
+  const text = agree(state, lookup(COVER_LABELS, state.state) ?? statusText(state));
+  return el(
+    "div",
+    { id: tileId(state.entity_id), class: tileClass(state, "cover") + (state.state === "open" ? " on" : "") },
+    tileHead(state, ICONS.valve, text),
+    el("div", { class: "cover-buttons" },
+      commandButton(state, "open_valve", "Ouvrir", { icon: ICONS.up }),
+      commandButton(state, "close_valve", "Fermer", { icon: ICONS.down })),
+  );
+}
+
+function vacuumTile(state) {
+  const a = state.attributes;
+  const battery = finite(a.battery_level) ? `${Math.round(a.battery_level)}\u202f%` : "";
+  const text = [lookup(VACUUM_LABELS, state.state) ?? statusText(state), battery].filter(Boolean).join(" · ");
+  const cleaning = state.state === "cleaning";
+  const classes = [tileClass(state, "vacuum")];
+  if (cleaning) classes.push("on");
+  if (state.state === "error") classes.push("alert");
+  return el(
+    "div",
+    { id: tileId(state.entity_id), class: classes.join(" ") },
+    tileHead(state, ICONS.vacuum, text),
+    el("div", { class: "cover-buttons" },
+      cleaning
+        ? commandButton(state, "pause", "Mettre en pause", { icon: ICONS.pause })
+        : commandButton(state, "start", "Lancer le ménage", { icon: ICONS.play }),
+      commandButton(state, "stop", "Arrêter", { icon: ICONS.stop }),
+      commandButton(state, "return_to_base", "Renvoyer à sa base", { icon: ICONS.home })),
+  );
+}
+
+/** Une consigne réglable avec − et + (humidité, eau chaude). */
+function stepper(state, { value, min, max, step, unit, service, field, label }) {
+  const adjust = (delta, verb) => {
+    const button = el("button", { type: "button", class: "round", "aria-label": `${verb} ${label} de ${nameOf(state)}`, text: delta > 0 ? "+" : "−" });
+    button.disabled = value === null;
+    button.addEventListener("click", () => {
+      markPending(state.entity_id);
+      const next = Math.min(max, Math.max(min, value + delta));
+      callService(domainOf(state), service, { entity_id: state.entity_id, [field]: next });
+    });
+    return button;
+  };
+  return el("div", { class: "setpoint" },
+    adjust(-step, "Baisser"),
+    el("span", { class: "setpoint-value", text: value === null ? "–" : `${number.format(value)}${unit}` }),
+    adjust(step, "Monter"));
+}
+
+function humidifierTile(state) {
+  const a = state.attributes;
+  const on = state.state === "on";
+  const measured = finite(a.current_humidity) ? `${number.format(a.current_humidity)}\u202f% mesurés` : "";
+  const toggle = el(
+    "button",
+    { class: "tile-toggle", type: "button", "aria-pressed": String(on) },
+    tileHead(state, ICONS.humidity, [statusText(state), measured].filter(Boolean).join(" · "), knob()),
+  );
+  toggle.addEventListener("click", () => {
+    markPending(state.entity_id);
+    callService("humidifier", "toggle", { entity_id: state.entity_id });
+  });
+  return el(
+    "div",
+    { id: tileId(state.entity_id), class: `${tileClass(state, "switch")} has-knob` },
+    toggle,
+    stepper(state, {
+      value: finite(a.humidity) ? a.humidity : null,
+      min: finite(a.min_humidity) ? a.min_humidity : 0,
+      max: finite(a.max_humidity) ? a.max_humidity : 100,
+      step: 5, unit: "\u202f%", service: "set_humidity", field: "humidity", label: "l'humidité voulue",
+    }),
+  );
+}
+
+function waterHeaterTile(state) {
+  const a = state.attributes;
+  const measured = finite(a.current_temperature) ? `${degrees(a.current_temperature)} dans le ballon` : "";
+  const mode = lookup(WATER_HEATER_LABELS, state.state) ?? statusText(state);
+  const modes = (Array.isArray(a.operation_list) ? a.operation_list : [])
+    .filter((m) => typeof m === "string")
+    .map((m) => {
+      const button = el("button", { type: "button", class: "period", text: lookup(WATER_HEATER_LABELS, m) ?? m.replaceAll("_", " "), "aria-pressed": String(state.state === m) });
+      button.addEventListener("click", () => {
+        markPending(state.entity_id);
+        callService("water_heater", "set_operation_mode", { entity_id: state.entity_id, operation_mode: m });
+      });
+      return button;
+    });
+  const children = [
+    tileHead(state, ICONS.flame, [mode, measured].filter(Boolean).join(" · ")),
+    stepper(state, {
+      value: finite(a.temperature) ? a.temperature : null,
+      min: finite(a.min_temp) ? a.min_temp : 40,
+      max: finite(a.max_temp) ? a.max_temp : 65,
+      step: 1, unit: "°", service: "set_temperature", field: "temperature", label: "la température de l'eau",
+    }),
+  ];
+  if (modes.length > 0) children.push(el("div", { class: "presets", role: "group", "aria-label": "Modes" }, ...modes));
+  return el("div", { id: tileId(state.entity_id), class: `tile climate${state.state === "off" ? " stopped" : ""}` }, ...children);
 }
 
 function binaryTile(state) {
@@ -1046,6 +1205,7 @@ const FEMININE = new Set([
 const FEMININE_FORMS = {
   ouvert: "ouverte", fermé: "fermée", allumé: "allumée", éteint: "éteinte", connecté: "connectée",
   déconnecté: "déconnectée", actif: "active", inactif: "inactive", inconnu: "inconnue",
+  verrouillé: "verrouillée", déverrouillé: "déverrouillée", bloqué: "bloquée",
 };
 
 /** Le nom de l'appareil est-il féminin ? On regarde son premier mot, ou
@@ -1074,6 +1234,18 @@ const ALARM_LABELS = {
   total: ["Activée (totale)", true], armed: ["Activée", true],
   partial: ["Activée (partielle)", true], partial1: ["Activée (partielle)", true], partial2: ["Activée (partielle)", true],
   detection: ["Intrusion détectée !", true], sos: ["Alerte SOS !", true],
+};
+const LOCK_LABELS = {
+  locked: "Verrouillé", unlocked: "Déverrouillé", locking: "Verrouillage…", unlocking: "Déverrouillage…",
+  jammed: "Bloqué !", open: "Ouvert", opening: "Ouverture…",
+};
+const VACUUM_LABELS = {
+  cleaning: "Fait le ménage", docked: "Sur sa base", paused: "En pause", idle: "À l'arrêt",
+  returning: "Rentre à sa base", error: "En erreur !",
+};
+const WATER_HEATER_LABELS = {
+  off: "Arrêt", eco: "Éco", electric: "Électrique", gas: "Gaz", heat_pump: "Pompe à chaleur",
+  high_demand: "Forte demande", performance: "Performance",
 };
 const COVER_LABELS = { open: "Ouvert", closed: "Fermé", opening: "Ouverture…", closing: "Fermeture…" };
 const STATUS_LABELS = { on: "Allumé", off: "Éteint", unknown: "Inconnu", unavailable: "Indisponible" };
@@ -1134,6 +1306,12 @@ function svgIcon(paths) {
 
 const ICONS = {
   back: ["M15 18l-6-6 6-6"],
+  lock: ["M5 11h14v10H5z", "M8 11V7a4 4 0 0 1 8 0v4"],
+  unlock: ["M5 11h14v10H5z", "M8 11V7a4 4 0 0 1 7.8-1"],
+  siren: ["M7 18v-6a5 5 0 0 1 10 0v6", "M5 21h14v-3H5z", "M12 3v2", "M4.2 7.2l1.4 1.4", "M19.8 7.2l-1.4 1.4"],
+  valve: ["M4 12h16", "M8 8v8", "M16 8v8", "M12 12V5", "M9 5h6"],
+  vacuum: ["M12 3a9 9 0 1 0 0 18 9 9 0 1 0 0-18z", "M12 8a4 4 0 1 0 0 8 4 4 0 1 0 0-8z", "M12 3v2"],
+  pause: ["M9 5v14", "M15 5v14"],
   bulb: ["M9 18h6", "M10 22h4", "M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"],
   plug: ["M9 2v6", "M15 2v6", "M6 8h12v3a6 6 0 0 1-12 0z", "M12 17v5"],
   door: ["M5 22V3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v19", "M3 22h18", "M15 12h.01"],
@@ -1629,6 +1807,12 @@ const SERVICES = {
   input_select: [["select_option", "Choisir"], ["select_next", "Choix suivant"], ["select_previous", "Choix précédent"], ["select_first", "Premier choix"]],
   input_button: [["press", "Appuyer"]],
   timer: [["start", "Démarrer"], ["pause", "Mettre en pause"], ["cancel", "Annuler"], ["finish", "Terminer"]],
+  lock: [["lock", "Verrouiller"], ["unlock", "Déverrouiller"], ["open", "Ouvrir la porte"]],
+  siren: [["turn_on", "Faire sonner"], ["turn_off", "Arrêter"]],
+  valve: [["open_valve", "Ouvrir"], ["close_valve", "Fermer"], ["toggle", "Inverser"]],
+  vacuum: [["start", "Lancer le ménage"], ["pause", "Mettre en pause"], ["stop", "Arrêter"], ["return_to_base", "Renvoyer à sa base"]],
+  humidifier: [["turn_on", "Allumer"], ["turn_off", "Éteindre"], ["set_humidity", "Régler l'humidité voulue"]],
+  water_heater: [["set_operation_mode", "Choisir un mode"], ["set_temperature", "Régler la température"]],
 };
 const SUN_EVENTS = [["sunrise", "lever du soleil"], ["sunset", "coucher du soleil"], ["dawn", "aube"], ["dusk", "crépuscule"]];
 const WEEKDAYS = [["mon", "lun"], ["tue", "mar"], ["wed", "mer"], ["thu", "jeu"], ["fri", "ven"], ["sat", "sam"], ["sun", "dim"]];
@@ -2172,6 +2356,15 @@ function actionFields(a, refresh) {
   } else if (a.action === "climate.set_preset_mode") {
     fields.push(textField("Préréglage", a.data, "preset_mode", { placeholder: "eco" }));
     delete extra.preset_mode;
+  } else if (a.action === "humidifier.set_humidity") {
+    fields.push(numberField("Humidité voulue (%)", a.data, "humidity"));
+    delete extra.humidity;
+  } else if (a.action === "water_heater.set_temperature") {
+    fields.push(numberField("Température de l'eau (°C)", a.data, "temperature"));
+    delete extra.temperature;
+  } else if (a.action === "water_heater.set_operation_mode") {
+    fields.push(textField("Mode", a.data, "operation_mode", { placeholder: "eco" }));
+    delete extra.operation_mode;
   } else if (a.action === "input_number.set_value") {
     fields.push(numberField("Valeur", a.data, "value"));
     delete extra.value;
