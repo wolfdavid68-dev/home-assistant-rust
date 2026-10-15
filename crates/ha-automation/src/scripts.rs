@@ -259,6 +259,7 @@ fn scene_action(entity: &str, target: SceneTarget) -> Result<Action, String> {
         service: service.to_owned(),
         entity_ids: vec![entity_id],
         data,
+        templates: crate::config::DataTemplates::default(),
     })
 }
 
@@ -313,6 +314,7 @@ mod tests {
                     service,
                     entity_ids,
                     data,
+                    ..
                 } => format!(
                     "{domain}.{service} {} {}",
                     entity_ids[0],

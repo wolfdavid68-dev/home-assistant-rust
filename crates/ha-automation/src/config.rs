@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::error::AutomationError;
+use crate::template::{Scope, Template};
 
 /// Taille maximale du fichier.
 pub const MAX_FILE_SIZE: usize = 1024 * 1024;
@@ -81,13 +82,67 @@ impl<'de> Deserialize<'de> for Text {
     }
 }
 
-/// Concept Rust : `#[serde(untagged)]` essaie chaque variante dans l'ordre.
-/// Ici, cela permet d'écrire `entity_id: light.salon` **ou** une liste.
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+/// Une valeur **ou** une liste : `entity_id: light.salon` ou
+/// `to: [Orange, Rouge]`.
+///
+/// Concept Rust : `#[serde(untagged)]` saurait essayer les deux formes, mais
+/// remplacerait le message d'erreur précis de [`Text`] (« écris-la entre
+/// guillemets ») par un message vague. La lecture est donc écrite à la main :
+/// une liste est lue élément par élément, le reste passe par `Text`.
+#[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(untagged)]
 pub(crate) enum OneOrMany {
     One(Text),
     Many(Vec<Text>),
+}
+
+impl<'de> Deserialize<'de> for OneOrMany {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Visitor;
+
+        impl<'de> serde::de::Visitor<'de> for Visitor {
+            type Value = OneOrMany;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("du texte ou une liste")
+            }
+
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                self,
+                mut seq: A,
+            ) -> Result<OneOrMany, A::Error> {
+                let mut values = Vec::new();
+                while let Some(value) = seq.next_element::<Text>()? {
+                    values.push(value);
+                }
+                Ok(OneOrMany::Many(values))
+            }
+
+            fn visit_str<E: serde::de::Error>(self, value: &str) -> Result<OneOrMany, E> {
+                Ok(OneOrMany::One(Text(value.to_owned())))
+            }
+
+            fn visit_i64<E: serde::de::Error>(self, value: i64) -> Result<OneOrMany, E> {
+                Ok(OneOrMany::One(Text(value.to_string())))
+            }
+
+            fn visit_u64<E: serde::de::Error>(self, value: u64) -> Result<OneOrMany, E> {
+                Ok(OneOrMany::One(Text(value.to_string())))
+            }
+
+            fn visit_f64<E: serde::de::Error>(self, value: f64) -> Result<OneOrMany, E> {
+                Ok(OneOrMany::One(Text(value.to_string())))
+            }
+
+            fn visit_bool<E: serde::de::Error>(self, _: bool) -> Result<OneOrMany, E> {
+                Err(E::custom(
+                    "valeur lue comme vrai/faux : écris-la entre guillemets, par exemple \"on\" ou \"off\"",
+                ))
+            }
+        }
+
+        deserializer.deserialize_any(Visitor)
+    }
 }
 
 impl OneOrMany {
@@ -177,10 +232,17 @@ fn is_true(value: &bool) -> bool {
 enum TriggerConfig {
     State {
         entity_id: OneOrMany,
+        /// Surveiller un attribut (`Vent violent`) plutôt que l'état.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        from: Option<Text>,
+        attribute: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        to: Option<Text>,
+        from: Option<OneOrMany>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        to: Option<OneOrMany>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        not_from: Option<OneOrMany>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        not_to: Option<OneOrMany>,
         #[serde(default, rename = "for", skip_serializing_if = "Option::is_none")]
         for_: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -244,6 +306,8 @@ enum TriggerConfig {
 pub(crate) enum ConditionConfig {
     State {
         entity_id: OneOrMany,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        attribute: Option<String>,
         state: OneOrMany,
     },
     NumericState {
@@ -429,11 +493,15 @@ pub struct Automation {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Trigger {
-    /// Une entité change de valeur (`from` → `to`), éventuellement depuis `for`.
+    /// Une entité (ou l'un de ses attributs) change de valeur (`from` →
+    /// `to`), éventuellement depuis `for`. Les listes vides ne filtrent rien.
     State {
         entity_ids: Vec<EntityId>,
-        from: Option<String>,
-        to: Option<String>,
+        attribute: Option<String>,
+        from: Vec<String>,
+        to: Vec<String>,
+        not_from: Vec<String>,
+        not_to: Vec<String>,
         for_: Option<Duration>,
     },
     /// Une valeur numérique **entre** dans l'intervalle `]above, below[`.
@@ -526,8 +594,10 @@ impl Pattern {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Condition {
+    /// Chaque entité (ou son attribut `attribute`) vaut l'une de ces valeurs.
     State {
         entity_ids: Vec<EntityId>,
+        attribute: Option<String>,
         states: Vec<String>,
     },
     NumericState {
@@ -559,6 +629,8 @@ pub enum Action {
         service: String,
         entity_ids: Vec<EntityId>,
         data: Attributes,
+        /// Les modèles (`{{ … }}`) trouvés dans `data`, calculés à chaque appel.
+        templates: DataTemplates,
     },
     Delay(Duration),
     /// Si les conditions sont vraies, `then`, sinon `otherwise`.
@@ -822,14 +894,22 @@ fn check_trigger(config: TriggerConfig) -> Result<(Trigger, Option<String>), Str
     let trigger = match config {
         TriggerConfig::State {
             entity_id,
+            attribute,
             from,
             to,
+            not_from,
+            not_to,
             for_,
             ..
         } => Trigger::State {
             entity_ids: entity_ids(entity_id)?,
-            from: from.map(|text| text.0),
-            to: to.map(|text| text.0),
+            attribute: attribute
+                .map(|name| check_label(&name, "attribute"))
+                .transpose()?,
+            from: values(from, "from")?,
+            to: values(to, "to")?,
+            not_from: values(not_from, "not_from")?,
+            not_to: values(not_to, "not_to")?,
             for_: for_.as_deref().map(parse_duration).transpose()?,
         },
         TriggerConfig::NumericState {
@@ -1003,10 +1083,22 @@ impl Trigger {
     pub fn describe(&self, states: &ha_core::StateMachine) -> String {
         let names = |ids: &[EntityId]| friendly_names(states, ids, " ou ");
         match self {
-            Self::State { entity_ids, to, .. } => match to {
-                Some(to) => format!("{} passe à « {to} »", names(entity_ids)),
-                None => format!("{} change", names(entity_ids)),
-            },
+            Self::State {
+                entity_ids,
+                attribute,
+                to,
+                ..
+            } => {
+                let subject = match attribute {
+                    Some(attribute) => format!("{attribute} de {}", names(entity_ids)),
+                    None => names(entity_ids),
+                };
+                if to.is_empty() {
+                    format!("{subject} change")
+                } else {
+                    format!("{subject} passe à {}", quoted(to))
+                }
+            }
             Self::NumericState { entity_ids, .. } => {
                 format!("{} passe un seuil", names(entity_ids))
             }
@@ -1097,6 +1189,15 @@ fn duration_text(duration: Duration) -> String {
     parts.join(" ")
 }
 
+/// « « Orange » ou « Rouge » ».
+fn quoted(values: &[String]) -> String {
+    values
+        .iter()
+        .map(|value| format!("« {value} »"))
+        .collect::<Vec<_>>()
+        .join(" ou ")
+}
+
 /// Un nombre sans « .0 » inutile : `20` et non `20.0`.
 fn number_text(value: f64) -> String {
     let text = value.to_string();
@@ -1111,14 +1212,15 @@ impl Condition {
         match self {
             Self::State {
                 entity_ids,
+                attribute,
                 states: expected,
             } => {
-                let values: Vec<String> = expected.iter().map(|s| format!("« {s} »")).collect();
-                format!(
-                    "{} est {}",
-                    friendly_names(states, entity_ids, " et "),
-                    values.join(" ou ")
-                )
+                let names = friendly_names(states, entity_ids, " et ");
+                let subject = match attribute {
+                    Some(attribute) => format!("{attribute} de {names}"),
+                    None => names,
+                };
+                format!("{subject} est {}", quoted(expected))
             }
             Self::NumericState {
                 entity_ids,
@@ -1302,7 +1404,14 @@ impl Action {
 
     fn collect_entities<'a>(&'a self, ids: &mut Vec<&'a EntityId>) {
         match self {
-            Self::Service { entity_ids, .. } => ids.extend(entity_ids),
+            Self::Service {
+                entity_ids,
+                templates,
+                ..
+            } => {
+                ids.extend(entity_ids);
+                ids.extend(templates.entity_ids());
+            }
             Self::Delay(_) => {}
             Self::WaitForTrigger { triggers, .. } => {
                 for trigger in triggers {
@@ -1401,9 +1510,16 @@ fn check_condition(
                 .map(|id| check_label(id, "id de déclencheur"))
                 .collect::<Result<_, _>>()?,
         ),
-        ConditionConfig::State { entity_id, state } => Condition::State {
+        ConditionConfig::State {
+            entity_id,
+            attribute,
+            state,
+        } => Condition::State {
             entity_ids: entity_ids(entity_id)?,
-            states: state.into_vec(),
+            attribute: attribute
+                .map(|name| check_label(&name, "attribute"))
+                .transpose()?,
+            states: values(Some(state), "state")?,
         },
         ConditionConfig::NumericState {
             entity_id,
@@ -1590,14 +1706,137 @@ fn check_action_in(
                     service.action
                 ));
             };
+            let templates = DataTemplates::find(&service.data)?;
             Ok(Action::Service {
                 domain: domain.to_owned(),
                 service: name.to_owned(),
                 entity_ids: entity_ids(target.entity_id)?,
                 data: service.data,
+                templates,
             })
         }
     }
+}
+
+/// Une ou plusieurs valeurs (`to: Orange` ou `to: [Orange, Rouge]`).
+fn values(value: Option<OneOrMany>, name: &str) -> Result<Vec<String>, String> {
+    let list = value.map(OneOrMany::into_vec).unwrap_or_default();
+    if list.len() > MAX_ITEMS {
+        return Err(format!("{name} : {MAX_ITEMS} valeurs au plus"));
+    }
+    if list.iter().any(|v| v.chars().count() > 255) {
+        return Err(format!("{name} : valeur trop longue"));
+    }
+    Ok(list)
+}
+
+/// Où se trouve un modèle dans `data` : `message`, `data › 0 › titre`…
+#[derive(Debug, Clone, PartialEq)]
+enum DataKey {
+    Field(String),
+    Index(usize),
+}
+
+/// Les modèles d'une action (`{{ … }}` dans `data`), et leur place.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DataTemplates(Vec<(Vec<DataKey>, Template)>);
+
+/// Profondeur maximale explorée dans `data`, et nombre de modèles au plus.
+const MAX_DATA_DEPTH: usize = 4;
+const MAX_TEMPLATES: usize = 10;
+
+impl DataTemplates {
+    /// Trouve et vérifie les modèles dans `data`.
+    fn find(data: &Attributes) -> Result<Self, String> {
+        let mut found = Vec::new();
+        for (key, value) in data {
+            find_templates(value, &mut vec![DataKey::Field(key.clone())], &mut found)?;
+        }
+        if found.len() > MAX_TEMPLATES {
+            return Err(format!("data : {MAX_TEMPLATES} modèles au plus"));
+        }
+        Ok(Self(found))
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Les données avec les modèles calculés.
+    pub(crate) fn render(&self, data: &Attributes, scope: &Scope<'_>) -> Attributes {
+        let mut data = data.clone();
+        for (path, template) in &self.0 {
+            let Some((DataKey::Field(first), rest)) = path.split_first() else {
+                continue;
+            };
+            if let Some(slot) = data.get_mut(first).and_then(|value| slot_at(value, rest)) {
+                *slot = template.render(scope);
+            }
+        }
+        data
+    }
+
+    fn entity_ids(&self) -> impl Iterator<Item = &EntityId> {
+        self.0
+            .iter()
+            .flat_map(|(_, template)| template.entity_ids())
+    }
+}
+
+/// La valeur à la place `path` dans `value`.
+fn slot_at<'v>(value: &'v mut Value, path: &[DataKey]) -> Option<&'v mut Value> {
+    let Some((key, rest)) = path.split_first() else {
+        return Some(value);
+    };
+    let next = match (key, value) {
+        (DataKey::Field(name), Value::Object(map)) => map.get_mut(name),
+        (DataKey::Index(index), Value::Array(list)) => list.get_mut(*index),
+        _ => None,
+    };
+    slot_at(next?, rest)
+}
+
+fn find_templates(
+    value: &Value,
+    path: &mut Vec<DataKey>,
+    found: &mut Vec<(Vec<DataKey>, Template)>,
+) -> Result<(), String> {
+    if path.len() > MAX_DATA_DEPTH {
+        return Ok(());
+    }
+    match value {
+        Value::String(text) => {
+            if let Some(template) = Template::parse(text).map_err(|error| {
+                let place: Vec<String> = path
+                    .iter()
+                    .map(|key| match key {
+                        DataKey::Field(name) => name.clone(),
+                        DataKey::Index(index) => index.to_string(),
+                    })
+                    .collect();
+                format!("data.{} : {error}", place.join("."))
+            })? {
+                found.push((path.clone(), template));
+            }
+        }
+        Value::Array(list) => {
+            for (index, item) in list.iter().enumerate() {
+                path.push(DataKey::Index(index));
+                find_templates(item, path, found)?;
+                path.pop();
+            }
+        }
+        Value::Object(map) => {
+            for (key, item) in map {
+                path.push(DataKey::Field(key.clone()));
+                find_templates(item, path, found)?;
+                path.pop();
+            }
+        }
+        Value::Null | Value::Bool(_) | Value::Number(_) => {}
+    }
+    Ok(())
 }
 
 fn entity_ids(value: OneOrMany) -> Result<Vec<EntityId>, String> {

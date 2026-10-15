@@ -14,6 +14,7 @@ use serde_json::Value;
 use tokio::time::Instant;
 
 use crate::config::{Automation, CalendarEdge, Condition, Pattern, TimeAt, Trigger};
+use crate::template::TriggerData;
 
 /// Un déclencheur `state` avec `for:` en attente : « la porte est ouverte…
 /// on vérifiera dans 5 minutes qu'elle l'est toujours ».
@@ -22,10 +23,14 @@ struct Pending {
     automation: usize,
     trigger: usize,
     entity_id: EntityId,
-    /// Valeur attendue et date du changement : si l'une ou l'autre a bougé
-    /// entre-temps, le déclencheur est annulé.
-    value: String,
-    since: SystemTime,
+    /// Attribut surveillé (sinon, l'état).
+    attribute: Option<String>,
+    /// Valeur attendue, et date du changement d'état (sans attribut) : si
+    /// l'une ou l'autre a bougé entre-temps, le déclencheur est annulé.
+    value: Option<String>,
+    since: Option<SystemTime>,
+    /// L'état d'avant le changement (pour `trigger.from_state`).
+    from_state: Option<State>,
     deadline: Instant,
 }
 
@@ -36,11 +41,26 @@ pub struct Evaluator {
     sun: Option<Sun>,
 }
 
-/// Une automatisation déclenchée, et par lequel de ses déclencheurs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Une automatisation déclenchée, par lequel de ses déclencheurs, et le
+/// changement d'état en cause (pour `trigger.to_state`… dans les modèles).
+#[derive(Debug, Clone, PartialEq)]
 pub struct Fired {
     pub automation: usize,
     pub trigger: usize,
+    pub data: Option<TriggerData>,
+}
+
+/// Les automatisations déclenchées : pour chacune, le premier déclencheur.
+type FiredMap = BTreeMap<usize, (usize, Option<TriggerData>)>;
+
+/// Le changement en cause, pour les modèles.
+fn change(entity_id: &EntityId, old: Option<&State>, new: Option<&State>) -> TriggerData {
+    TriggerData {
+        id: None,
+        entity_id: Some(entity_id.clone()),
+        from_state: old.cloned(),
+        to_state: new.cloned(),
+    }
 }
 
 /// Ce qu'il faut pour vérifier une condition, à tout moment (aussi au milieu
@@ -177,34 +197,57 @@ impl Evaluator {
     ) -> Vec<Fired> {
         // Concept Rust : `entry(a).or_insert(t)` garde le **premier**
         // déclencheur qui a fonctionné pour chaque automatisation.
-        let mut fired = BTreeMap::new();
+        let mut fired = FiredMap::new();
         for (a, automation) in self.automations.iter().enumerate() {
             for (t, trigger) in automation.triggers.iter().enumerate() {
                 match trigger {
                     Trigger::State {
                         entity_ids,
+                        attribute,
                         from,
                         to,
+                        not_from,
+                        not_to,
                         for_,
                     } if entity_ids.contains(entity_id) => {
-                        // Un nouveau changement annule toujours l'attente en cours.
+                        let attribute = attribute.as_deref();
+                        let before = watched(old, attribute);
+                        let after = watched(new, attribute);
+                        // La valeur surveillée n'a pas bougé (un autre attribut
+                        // a changé) : rien ne se passe, une attente continue.
+                        if new.is_some() && before == after {
+                            continue;
+                        }
+                        // Sinon, un changement annule toujours l'attente en cours.
                         self.pending.retain(|p| {
                             !(p.automation == a && p.trigger == t && &p.entity_id == entity_id)
                         });
                         let Some(new) = new else { continue };
-                        if !state_matches(from.as_deref(), to.as_deref(), old, new) {
+                        let Some(after) = after else { continue };
+                        let matches = |list: &[String], value: Option<&String>| {
+                            value.is_some_and(|value| list.contains(value))
+                        };
+                        if (!from.is_empty() && !matches(from, before.as_ref()))
+                            || (!to.is_empty() && !to.contains(&after))
+                            || matches(not_from, before.as_ref())
+                            || not_to.contains(&after)
+                        {
                             continue;
                         }
                         match for_ {
                             None => {
-                                fired.entry(a).or_insert(t);
+                                fired
+                                    .entry(a)
+                                    .or_insert((t, Some(change(entity_id, old, Some(new)))));
                             }
                             Some(duration) => self.pending.push(Pending {
                                 automation: a,
                                 trigger: t,
                                 entity_id: entity_id.clone(),
-                                value: new.state().to_owned(),
-                                since: new.last_changed(),
+                                attribute: attribute.map(str::to_owned),
+                                value: Some(after),
+                                since: attribute.is_none().then(|| new.last_changed()),
+                                from_state: old.cloned(),
                                 deadline: now + *duration,
                             }),
                         }
@@ -222,7 +265,9 @@ impl Evaluator {
                         // On déclenche en **entrant** dans l'intervalle, pas à
                         // chaque nouvelle mesure tant qu'on y reste.
                         if inside(new) && !inside(old) {
-                            fired.entry(a).or_insert(t);
+                            fired
+                                .entry(a)
+                                .or_insert((t, Some(change(entity_id, old, new))));
                         }
                     }
                     _ => {}
@@ -237,7 +282,7 @@ impl Evaluator {
     /// valeurs de `event_data` (et peuvent en contenir d'autres).
     #[must_use]
     pub fn fire_on_event(&self, event_type: &str, data: &Attributes) -> Vec<Fired> {
-        let mut fired = BTreeMap::new();
+        let mut fired = FiredMap::new();
         for (a, automation) in self.automations.iter().enumerate() {
             for (t, trigger) in automation.triggers.iter().enumerate() {
                 if let Trigger::Event {
@@ -249,7 +294,7 @@ impl Evaluator {
                         .iter()
                         .all(|(key, value)| data.get(key) == Some(value))
                 {
-                    fired.entry(a).or_insert(t);
+                    fired.entry(a).or_insert((t, None));
                 }
             }
         }
@@ -276,7 +321,7 @@ impl Evaluator {
         instant: Instant,
         states: &StateMachine,
     ) -> Vec<Fired> {
-        let mut fired = BTreeMap::new();
+        let mut fired = FiredMap::new();
         for (a, automation) in self.automations.iter().enumerate() {
             for (t, trigger) in automation.triggers.iter().enumerate() {
                 let crossed_now = match trigger {
@@ -303,7 +348,7 @@ impl Evaluator {
                     _ => false,
                 };
                 if crossed_now {
-                    fired.entry(a).or_insert(t);
+                    fired.entry(a).or_insert((t, None));
                 }
             }
         }
@@ -313,11 +358,22 @@ impl Evaluator {
             .partition(|p| p.deadline <= instant);
         self.pending = waiting;
         for pending in due {
-            let still_true = states.get(&pending.entity_id).is_some_and(|state| {
-                state.state() == pending.value && state.last_changed() == pending.since
+            let current = states.get(&pending.entity_id);
+            let still_true = current.as_ref().is_some_and(|state| {
+                watched(Some(state), pending.attribute.as_deref()) == pending.value
+                    && pending
+                        .since
+                        .is_none_or(|since| state.last_changed() == since)
             });
             if still_true {
-                fired.entry(pending.automation).or_insert(pending.trigger);
+                let data = change(
+                    &pending.entity_id,
+                    pending.from_state.as_ref(),
+                    current.as_ref(),
+                );
+                fired
+                    .entry(pending.automation)
+                    .or_insert((pending.trigger, Some(data)));
             }
         }
         to_fired(fired)
@@ -379,11 +435,12 @@ fn calendar_crossed(
     })
 }
 
-fn to_fired(map: BTreeMap<usize, usize>) -> Vec<Fired> {
+fn to_fired(map: FiredMap) -> Vec<Fired> {
     map.into_iter()
-        .map(|(automation, trigger)| Fired {
+        .map(|(automation, (trigger, data))| Fired {
             automation,
             trigger,
+            data,
         })
         .collect()
 }
@@ -392,13 +449,18 @@ fn automations(fired: Vec<Fired>) -> Vec<usize> {
     fired.into_iter().map(|f| f.automation).collect()
 }
 
-fn state_matches(from: Option<&str>, to: Option<&str>, old: Option<&State>, new: &State) -> bool {
-    let old_value = old.map(State::state);
-    // Seul un changement de **valeur** compte (pas un simple attribut).
-    if old_value == Some(new.state()) {
-        return false;
+/// La valeur surveillée : l'état, ou un attribut écrit en texte (`128`,
+/// `Orange`, `true`). `None` : pas d'entité, ou pas cet attribut.
+pub(crate) fn watched(state: Option<&State>, attribute: Option<&str>) -> Option<String> {
+    let state = state?;
+    let Some(attribute) = attribute else {
+        return Some(state.state().to_owned());
+    };
+    match state.attributes().get(attribute)? {
+        Value::Null => None,
+        Value::String(text) => Some(text.clone()),
+        other => Some(other.to_string()),
     }
-    from.is_none_or(|from| old_value == Some(from)) && to.is_none_or(|to| new.state() == to)
 }
 
 /// `above` et `below` sont exclus, comme dans Home Assistant.
@@ -497,11 +559,11 @@ fn condition_passes(
         Condition::Trigger(ids) => trigger.is_some_and(|t| ids.iter().any(|id| id == t)),
         Condition::State {
             entity_ids,
+            attribute,
             states: expected,
         } => entity_ids.iter().all(|id| {
-            states
-                .get(id)
-                .is_some_and(|state| expected.iter().any(|e| e == state.state()))
+            watched(states.get(id).as_ref(), attribute.as_deref())
+                .is_some_and(|value| expected.contains(&value))
         }),
         Condition::NumericState {
             entity_ids,

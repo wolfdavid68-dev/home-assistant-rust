@@ -24,6 +24,9 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
 - Modifier les automatisations depuis le tableau de bord demande de **confirmer son identité** (mot de passe,
   et code si la double authentification est activée), valable 15 minutes pour ce jeton seulement ; chaque
   modification est journalisée et notifiée. `HA_AUTOMATION_EDITOR=off` met l'éditeur en lecture seule.
+- Les **modèles** des automatisations (`{{ … }}`) ne sont pas du Jinja : un petit interpréteur qui ne sait
+  que **lire** un état ou un attribut et appliquer quelques filtres. Pas de boucles, de calculs, de fichiers
+  ni de réseau ; vérifiés au chargement, 2 000 caractères et 20 expressions au plus, résultat tronqué.
 - **Rôles** (administrateur, famille, invité) vérifiés **par le serveur** à chaque demande, WebSocket
   compris ; tout droit non accordé explicitement est refusé. Un invité ne voit pas la présence de la
   famille ni l'alarme, et ne commande jamais un portail, une porte de garage ou une serrure. Il reste

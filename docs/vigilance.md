@@ -90,32 +90,34 @@ La couleur n'est jamais seule : le niveau est toujours écrit en toutes lettres.
   triggers:
     - trigger: state
       entity_id: sensor.vigilance_meteo
-      to: Orange
-    - trigger: state
-      entity_id: sensor.vigilance_meteo
-      to: Rouge
+      to: [Orange, Rouge]
   actions:
     - action: notify.send_message
       target: {entity_id: notify.telephone}
       data:
-        title: Vigilance météo
-        message: Vigilance orange ou rouge aujourd'hui. Détails sur le tableau de bord.
+        title: "Vigilance {{ trigger.to_state.state | lower }}"
+        message: >-
+          Vigilance {{ trigger.to_state.state | lower }} aujourd'hui.
+          En ce moment : {{ state_attr('sensor.vigilance_meteo', 'niveau_actuel') | lower }}.
         priority: 5
 ```
 
-Fermer les volets en vigilance rouge :
+Fermer les volets dès que le **vent** passe en orange ou rouge (un attribut, étape 34) :
 
 ```yaml
-- id: volets_vigilance_rouge
-  alias: Volets fermés en vigilance rouge
+- id: volets_tempete
+  alias: Volets fermés en vigilance vent
   triggers:
     - trigger: state
       entity_id: sensor.vigilance_meteo
-      to: Rouge
+      attribute: Vent violent
+      to: [Orange, Rouge]
   actions:
     - action: cover.close_cover
       target: {entity_id: cover.volets_salon}
 ```
+
+Les listes, les attributs et les `{{ … }}` sont expliqués dans le guide des [modèles](modeles.md).
 
 ## Si ça ne marche pas
 
