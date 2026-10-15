@@ -16,6 +16,9 @@ commandent.
 | `input_button` | `input_button.bonne_nuit` | date du dernier appui | `press` |
 | `timer` | `timer.lessive` | `idle` / `active` / `paused` | `start`, `pause`, `cancel`, `finish` |
 
+> **Étape 30** : trois nouvelles entrées, `counter`, `input_text` et `input_datetime` (l'heure du
+> réveil, qui peut servir de déclencheur `time`), sont expliquées dans [assistants.md](assistants.md).
+
 ## Mettre en place
 
 1. Copie [inputs.example.yaml](../inputs.example.yaml) en `inputs.yaml` (avec Docker :

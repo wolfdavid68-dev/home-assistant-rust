@@ -1360,3 +1360,46 @@ async fn unlocking_a_door_asks_for_the_password_again() {
     assert_eq!(status, StatusCode::FORBIDDEN);
     assert_ne!(body["confirm"], true);
 }
+
+#[tokio::test]
+async fn a_guest_cannot_open_the_garage_through_a_group() {
+    let app = TestApp::new().await;
+    furnish(&app);
+    // Un groupe de volets qui contient la porte du garage.
+    let Value::Object(group) = json!({"entity_id": ["cover.salon", "cover.garage"]}) else {
+        panic!("un objet est attendu")
+    };
+    app.state
+        .core
+        .states
+        .set("cover.tout".parse().unwrap(), "closed", group)
+        .unwrap();
+    let Value::Object(safe) = json!({"entity_id": ["cover.salon"]}) else {
+        panic!("un objet est attendu")
+    };
+    app.state
+        .core
+        .states
+        .set("cover.salon_seul".parse().unwrap(), "closed", safe)
+        .unwrap();
+    let guest = app.login_as("visiteur", ha_auth::Role::Guest).await;
+    let open = |entity: &str| json!({"entity_id": entity});
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/services/cover/open_cover",
+            Some(&guest),
+            Some(open("cover.tout")),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/services/cover/open_cover",
+            Some(&guest),
+            Some(open("cover.salon_seul")),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+}

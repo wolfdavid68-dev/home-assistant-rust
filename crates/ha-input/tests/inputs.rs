@@ -206,7 +206,7 @@ async fn after_a_restart_values_come_back_and_late_timers_ring() {
 #[test]
 fn the_example_files_are_understood() {
     let config = parse(include_str!("../../../inputs.example.yaml")).unwrap();
-    assert_eq!(config.helpers.len(), 7);
+    assert_eq!(config.helpers.len(), 10);
     let automations =
         ha_automation::parse(include_str!("../../../automations.example.yaml")).unwrap();
     assert!(automations.iter().any(|a| a.id == "lessive_finie"));

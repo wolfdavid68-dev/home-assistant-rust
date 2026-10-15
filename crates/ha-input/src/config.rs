@@ -12,6 +12,12 @@
 //!   test_sirene: {name: Tester la sirène}
 //! timer:
 //!   lessive: {name: Lessive, duration: "01:30:00"}
+//! counter:
+//!   lessives_du_mois: {name: Lessives du mois, step: 1, minimum: 0}
+//! input_text:
+//!   message_ecran: {name: Message de l'écran, max: 40}
+//! input_datetime:
+//!   reveil: {name: Réveil, has_date: false, has_time: true}
 //! ```
 
 use std::collections::{BTreeMap, HashSet};
@@ -67,6 +73,58 @@ struct FileConfig {
     input_button: Option<BTreeMap<String, Option<ButtonConfig>>>,
     #[serde(default)]
     timer: Option<BTreeMap<String, Option<TimerConfig>>>,
+    #[serde(default)]
+    counter: Option<BTreeMap<String, Option<CounterConfig>>>,
+    #[serde(default)]
+    input_text: Option<BTreeMap<String, Option<TextConfig>>>,
+    #[serde(default)]
+    input_datetime: Option<BTreeMap<String, Option<DateTimeConfig>>>,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+struct CounterConfig {
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    initial: Option<i64>,
+    #[serde(default)]
+    step: Option<i64>,
+    #[serde(default)]
+    minimum: Option<i64>,
+    #[serde(default)]
+    maximum: Option<i64>,
+    /// Garder la valeur après un redémarrage (oui par défaut).
+    #[serde(default)]
+    restore: Option<bool>,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+struct TextConfig {
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    min: Option<usize>,
+    #[serde(default)]
+    max: Option<usize>,
+    #[serde(default)]
+    mode: Option<TextMode>,
+    #[serde(default)]
+    initial: Option<String>,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+struct DateTimeConfig {
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    has_date: Option<bool>,
+    #[serde(default)]
+    has_time: Option<bool>,
+    #[serde(default)]
+    initial: Option<String>,
 }
 
 #[derive(Deserialize, Default)]
@@ -143,6 +201,43 @@ impl NumberMode {
     }
 }
 
+/// Comment le tableau de bord affiche un texte : en clair, ou masqué.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TextMode {
+    #[default]
+    Text,
+    Password,
+}
+
+impl TextMode {
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Text => "text",
+            Self::Password => "password",
+        }
+    }
+}
+
+/// Un compteur entier.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Counter {
+    pub initial: i64,
+    pub step: i64,
+    pub minimum: Option<i64>,
+    pub maximum: Option<i64>,
+    pub restore: bool,
+}
+
+/// Une date, une heure, ou les deux.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Moment {
+    Date,
+    Time,
+    Both,
+}
+
 /// Un nombre réglable, entre `min` et `max`, par pas de `step`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Number {
@@ -170,6 +265,20 @@ pub enum Kind {
     Button,
     /// `timer` : un minuteur (`idle`, `active`, `paused`).
     Timer { duration: Duration },
+    /// `counter` : un compteur.
+    Counter(Counter),
+    /// `input_text` : un texte de `min` à `max` caractères.
+    Text {
+        min: usize,
+        max: usize,
+        mode: TextMode,
+        initial: Option<String>,
+    },
+    /// `input_datetime` : une date et/ou une heure (`07:30:00`).
+    DateTime {
+        moment: Moment,
+        initial: Option<jiff::civil::DateTime>,
+    },
 }
 
 /// Une entrée, vérifiée.
@@ -246,7 +355,132 @@ pub fn parse(yaml: &str) -> Result<Config, InputError> {
         };
         helpers.push(helper("timer", &id, config.name, Kind::Timer { duration })?);
     }
+    for (id, config) in section("counter", file.counter)? {
+        let config = config.unwrap_or_default();
+        let kind = check_counter(&config).map_err(|reason| invalid("counter", &id, &reason))?;
+        helpers.push(helper("counter", &id, config.name, kind)?);
+    }
+    for (id, config) in section("input_text", file.input_text)? {
+        let config = config.unwrap_or_default();
+        let kind = check_text(&config).map_err(|reason| invalid("input_text", &id, &reason))?;
+        helpers.push(helper("input_text", &id, config.name, kind)?);
+    }
+    for (id, config) in section("input_datetime", file.input_datetime)? {
+        let config = config.unwrap_or_default();
+        let kind =
+            check_datetime(&config).map_err(|reason| invalid("input_datetime", &id, &reason))?;
+        helpers.push(helper("input_datetime", &id, config.name, kind)?);
+    }
     Ok(Config { helpers })
+}
+
+/// Plus grand texte d'un `input_text` (la longueur maximale d'un état).
+pub const MAX_TEXT: usize = 255;
+/// Les valeurs d'un compteur restent dans ± un milliard.
+const COUNTER_LIMIT: i64 = 1_000_000_000;
+
+fn check_counter(config: &CounterConfig) -> Result<Kind, String> {
+    let step = config.step.unwrap_or(1);
+    let initial = config.initial.unwrap_or(0);
+    let inside = |v: i64| (-COUNTER_LIMIT..=COUNTER_LIMIT).contains(&v);
+    if !(1..=COUNTER_LIMIT).contains(&step) {
+        return Err("step : un entier positif".into());
+    }
+    if ![Some(initial), config.minimum, config.maximum]
+        .into_iter()
+        .flatten()
+        .all(inside)
+    {
+        return Err(format!("valeurs entre -{COUNTER_LIMIT} et {COUNTER_LIMIT}"));
+    }
+    if let (Some(min), Some(max)) = (config.minimum, config.maximum)
+        && min >= max
+    {
+        return Err("minimum doit être plus petit que maximum".into());
+    }
+    if config.minimum.is_some_and(|min| initial < min)
+        || config.maximum.is_some_and(|max| initial > max)
+    {
+        return Err("initial doit être entre minimum et maximum".into());
+    }
+    Ok(Kind::Counter(Counter {
+        initial,
+        step,
+        minimum: config.minimum,
+        maximum: config.maximum,
+        restore: config.restore.unwrap_or(true),
+    }))
+}
+
+fn check_text(config: &TextConfig) -> Result<Kind, String> {
+    let min = config.min.unwrap_or(0);
+    let max = config.max.unwrap_or(100);
+    if max == 0 || max > MAX_TEXT || min > max {
+        return Err(format!("min et max : 0 ≤ min ≤ max ≤ {MAX_TEXT}"));
+    }
+    if let Some(initial) = &config.initial {
+        let count = initial.chars().count();
+        if count < min || count > max || initial.chars().any(char::is_control) {
+            return Err("initial : longueur hors de min et max, ou caractère invalide".into());
+        }
+    }
+    Ok(Kind::Text {
+        min,
+        max,
+        mode: config.mode.unwrap_or_default(),
+        initial: config.initial.clone(),
+    })
+}
+
+fn check_datetime(config: &DateTimeConfig) -> Result<Kind, String> {
+    let moment = match (
+        config.has_date.unwrap_or(false),
+        config.has_time.unwrap_or(false),
+    ) {
+        (true, true) => Moment::Both,
+        (true, false) => Moment::Date,
+        (false, true) => Moment::Time,
+        (false, false) => return Err("has_date ou has_time (ou les deux)".into()),
+    };
+    let initial = config
+        .initial
+        .as_deref()
+        .map(|text| parse_moment(moment, text).ok_or_else(|| format!("initial {text:?} invalide")))
+        .transpose()?;
+    Ok(Kind::DateTime { moment, initial })
+}
+
+/// Lit une date (`2026-10-15`), une heure (`07:30`, `07:30:00`) ou les deux
+/// (`2026-10-15 07:30:00`), selon ce que l'entrée contient. Une heure seule
+/// est rangée au 1er janvier 1970 (seule l'heure compte).
+#[must_use]
+pub fn parse_moment(moment: Moment, text: &str) -> Option<jiff::civil::DateTime> {
+    use jiff::civil::{Date, DateTime, Time};
+    let text = text.trim();
+    let time = |t: &str| -> Option<Time> {
+        let t = if t.len() == 5 {
+            format!("{t}:00")
+        } else {
+            t.to_owned()
+        };
+        t.parse::<Time>()
+            .ok()
+            .map(|t| t.with().subsec_nanosecond(0).build().unwrap_or(t))
+    };
+    let in_range = |date: Date| (2000..=2100).contains(&date.year());
+    match moment {
+        Moment::Date => text
+            .parse::<Date>()
+            .ok()
+            .filter(|d| in_range(*d))
+            .map(|d| d.to_datetime(Time::midnight())),
+        Moment::Time => time(text).map(|t| Date::constant(1970, 1, 1).to_datetime(t)),
+        Moment::Both => {
+            let (date, rest) = text.split_once([' ', 'T'])?;
+            let date = date.parse::<Date>().ok().filter(|d| in_range(*d))?;
+            Some(DateTime::from_parts(date, time(rest)?))
+        }
+    }
 }
 
 fn section<T>(

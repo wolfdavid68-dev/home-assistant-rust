@@ -9,7 +9,7 @@ use jiff::Timestamp;
 use serde_json::{Value, json};
 use tokio::time::Instant;
 
-use crate::config::{Helper, Kind, Number, parse_duration};
+use crate::config::{Counter, Helper, Kind, Moment, Number, parse_duration, parse_moment};
 
 /// Où en est un minuteur.
 #[derive(Debug, Clone, PartialEq)]
@@ -37,6 +37,10 @@ enum Current {
     /// Date du dernier appui.
     Button(Option<Timestamp>),
     Timer(TimerState),
+    Counter(i64),
+    Text(String),
+    /// `None` : jamais réglée.
+    DateTime(Option<jiff::civil::DateTime>),
 }
 
 /// Une entrée et sa valeur actuelle.
@@ -86,6 +90,27 @@ impl Entry {
                 finished_while_down = finished;
                 Current::Timer(state)
             }
+            Kind::Counter(counter) => Current::Counter(
+                restored_state
+                    .filter(|_| counter.restore)
+                    .and_then(|s| s.parse().ok())
+                    .map_or(counter.initial, |value| counter.clamp(value)),
+            ),
+            Kind::Text {
+                min, max, initial, ..
+            } => Current::Text(
+                initial
+                    .clone()
+                    .or_else(|| {
+                        restored_state
+                            .filter(|s| *s != "unknown" && text_fits(s, *min, *max))
+                            .map(str::to_owned)
+                    })
+                    .unwrap_or_default(),
+            ),
+            Kind::DateTime { moment, initial } => Current::DateTime(
+                initial.or_else(|| restored_state.and_then(|s| parse_moment(*moment, s))),
+            ),
         };
         (Self { helper, value }, finished_while_down)
     }
@@ -156,6 +181,45 @@ impl Entry {
             (Kind::Timer { duration }, Current::Timer(timer)) => {
                 return timer_call(timer, *duration, service, data, now, wall);
             }
+            (Kind::Counter(counter), Current::Counter(value)) => {
+                *value = match service {
+                    "increment" => counter.clamp(value.saturating_add(counter.step)),
+                    "decrement" => counter.clamp(value.saturating_sub(counter.step)),
+                    "reset" => counter.initial,
+                    "set_value" => {
+                        let wanted = data
+                            .get("value")
+                            .and_then(Value::as_i64)
+                            .ok_or("« value » : un entier est attendu")?;
+                        if counter.clamp(wanted) != wanted {
+                            return Err("« value » hors de minimum et maximum".into());
+                        }
+                        wanted
+                    }
+                    _ => return unknown(),
+                };
+            }
+            (Kind::Text { min, max, .. }, Current::Text(text)) => {
+                if service != "set_value" {
+                    return unknown();
+                }
+                let wanted = data
+                    .get("value")
+                    .and_then(Value::as_str)
+                    .ok_or("« value » : un texte est attendu")?;
+                if !text_fits(wanted, *min, *max) {
+                    return Err(format!(
+                        "« value » : de {min} à {max} caractères, sans caractère de contrôle"
+                    ));
+                }
+                wanted.clone_into(text);
+            }
+            (Kind::DateTime { moment, .. }, Current::DateTime(current)) => {
+                if service != "set_datetime" {
+                    return unknown();
+                }
+                *current = Some(set_datetime(*moment, *current, data)?);
+            }
             _ => return Err("entrée incohérente".into()),
         }
         Ok(None)
@@ -222,10 +286,108 @@ impl Entry {
                 attributes.insert("remaining".into(), hms(remaining).into());
                 state.to_owned()
             }
+            (Kind::Counter(counter), Current::Counter(value)) => {
+                attributes.insert("initial".into(), json!(counter.initial));
+                attributes.insert("step".into(), json!(counter.step));
+                if let Some(minimum) = counter.minimum {
+                    attributes.insert("minimum".into(), json!(minimum));
+                }
+                if let Some(maximum) = counter.maximum {
+                    attributes.insert("maximum".into(), json!(maximum));
+                }
+                value.to_string()
+            }
+            (Kind::Text { min, max, mode, .. }, Current::Text(text)) => {
+                attributes.insert("min".into(), json!(min));
+                attributes.insert("max".into(), json!(max));
+                attributes.insert("mode".into(), mode.as_str().into());
+                text.clone()
+            }
+            (Kind::DateTime { moment, .. }, Current::DateTime(current)) => {
+                let (has_date, has_time) = match moment {
+                    Moment::Date => (true, false),
+                    Moment::Time => (false, true),
+                    Moment::Both => (true, true),
+                };
+                attributes.insert("has_date".into(), json!(has_date));
+                attributes.insert("has_time".into(), json!(has_time));
+                match current {
+                    None => "unknown".to_owned(),
+                    Some(at) => {
+                        if has_date {
+                            attributes.insert("year".into(), json!(at.year()));
+                            attributes.insert("month".into(), json!(at.month()));
+                            attributes.insert("day".into(), json!(at.day()));
+                        }
+                        if has_time {
+                            attributes.insert("hour".into(), json!(at.hour()));
+                            attributes.insert("minute".into(), json!(at.minute()));
+                            attributes.insert("second".into(), json!(at.second()));
+                        }
+                        match moment {
+                            Moment::Date => at.strftime("%Y-%m-%d").to_string(),
+                            Moment::Time => at.strftime("%H:%M:%S").to_string(),
+                            Moment::Both => at.strftime("%Y-%m-%d %H:%M:%S").to_string(),
+                        }
+                    }
+                }
+            }
             _ => "unknown".to_owned(),
         };
         (state, attributes)
     }
+}
+
+impl Counter {
+    /// Ramène une valeur entre `minimum` et `maximum` (s'il y en a).
+    #[must_use]
+    pub fn clamp(&self, value: i64) -> i64 {
+        let value = self.minimum.map_or(value, |min| value.max(min));
+        self.maximum.map_or(value, |max| value.min(max))
+    }
+}
+
+/// Un texte de `min` à `max` caractères, sans caractère de contrôle.
+fn text_fits(text: &str, min: usize, max: usize) -> bool {
+    let count = text.chars().count();
+    (min..=max).contains(&count) && !text.chars().any(char::is_control)
+}
+
+/// `input_datetime.set_datetime` : `datetime` (« 2026-10-15 07:30:00 »),
+/// ou `date` et/ou `time`. Une partie absente garde sa valeur actuelle.
+fn set_datetime(
+    moment: Moment,
+    current: Option<jiff::civil::DateTime>,
+    data: &Attributes,
+) -> Result<jiff::civil::DateTime, String> {
+    let text = |key: &str| data.get(key).and_then(Value::as_str);
+    let invalid = |key: &str| format!("« {key} » invalide");
+    if let Some(datetime) = text("datetime") {
+        return parse_moment(Moment::Both, datetime)
+            .filter(|_| moment == Moment::Both)
+            .ok_or_else(|| invalid("datetime"));
+    }
+    let base = current.unwrap_or_else(|| {
+        jiff::civil::Date::constant(1970, 1, 1).to_datetime(jiff::civil::Time::midnight())
+    });
+    let day = match text("date") {
+        Some(asked) if moment != Moment::Time => parse_moment(Moment::Date, asked)
+            .ok_or_else(|| invalid("date"))?
+            .date(),
+        Some(_) => return Err(invalid("date")),
+        None => base.date(),
+    };
+    let time = match text("time") {
+        Some(time) if moment != Moment::Date => parse_moment(Moment::Time, time)
+            .ok_or_else(|| invalid("time"))?
+            .time(),
+        Some(_) => return Err(invalid("time")),
+        None => base.time(),
+    };
+    if text("date").is_none() && text("time").is_none() {
+        return Err("il faut datetime, date ou time".into());
+    }
+    Ok(jiff::civil::DateTime::from_parts(day, time))
 }
 
 impl Number {
@@ -642,5 +804,145 @@ mod tests {
         assert_eq!(hms(Duration::from_millis(400)), "0:00:01");
         assert_eq!(parse_hms("1:05:09"), Some(Duration::from_secs(3909)));
         assert_eq!(parse_hms("0:61:00"), None);
+    }
+
+    fn one(yaml: &str, restored: Option<&State>) -> Entry {
+        let helper = parse(yaml).unwrap().helpers.remove(0);
+        Entry::new(helper, restored, Instant::now(), Timestamp::now()).0
+    }
+
+    #[test]
+    fn a_counter_stays_within_its_bounds() {
+        let now = Instant::now();
+        let mut entry = one(
+            "counter:\n  lessives: {step: 2, minimum: 0, maximum: 5}",
+            None,
+        );
+        assert_eq!(state(&entry, now), "0");
+        call(&mut entry, "decrement", json!({}), now).unwrap();
+        assert_eq!(state(&entry, now), "0", "pas sous le minimum");
+        for _ in 0..4 {
+            call(&mut entry, "increment", json!({}), now).unwrap();
+        }
+        assert_eq!(state(&entry, now), "5", "pas au-dessus du maximum");
+        assert!(call(&mut entry, "set_value", json!({"value": 9}), now).is_err());
+        call(&mut entry, "set_value", json!({"value": 3}), now).unwrap();
+        call(&mut entry, "reset", json!({}), now).unwrap();
+        assert_eq!(state(&entry, now), "0");
+        assert_eq!(entry.render(now).1["maximum"], 5);
+    }
+
+    #[test]
+    fn a_counter_keeps_its_value_after_a_restart() {
+        let core = ha_core::Core::new();
+        let id: ha_core::EntityId = "counter.lessives".parse().unwrap();
+        core.states.set(id.clone(), "7", Attributes::new()).unwrap();
+        let restored = core.states.get(&id);
+        assert_eq!(
+            state(
+                &one("counter:\n  lessives:", restored.as_ref()),
+                Instant::now()
+            ),
+            "7"
+        );
+        // Sauf si on le demande.
+        assert_eq!(
+            state(
+                &one("counter:\n  lessives: {restore: false}", restored.as_ref()),
+                Instant::now()
+            ),
+            "0"
+        );
+    }
+
+    #[test]
+    fn a_text_is_checked() {
+        let now = Instant::now();
+        let mut entry = one("input_text:\n  message: {max: 10, mode: password}", None);
+        call(&mut entry, "set_value", json!({"value": "Bonne nuit"}), now).unwrap();
+        assert_eq!(state(&entry, now), "Bonne nuit");
+        for bad in [
+            json!({"value": "beaucoup trop long"}),
+            json!({"value": "a\nb"}),
+            json!({}),
+        ] {
+            assert!(
+                call(&mut entry, "set_value", bad.clone(), now).is_err(),
+                "{bad}"
+            );
+        }
+        assert_eq!(entry.render(now).1["mode"], "password");
+    }
+
+    #[test]
+    fn a_wake_up_time() {
+        let now = Instant::now();
+        let mut entry = one(
+            "input_datetime:\n  reveil: {has_time: true, initial: '06:45'}",
+            None,
+        );
+        assert_eq!(state(&entry, now), "06:45:00");
+        call(&mut entry, "set_datetime", json!({"time": "07:30"}), now).unwrap();
+        let (value, attributes) = entry.render(now);
+        assert_eq!(value, "07:30:00");
+        assert_eq!(
+            (attributes["hour"].clone(), attributes["minute"].clone()),
+            (json!(7), json!(30))
+        );
+        assert!(!attributes.contains_key("year"));
+        // Une date n'a pas de sens pour une heure seule.
+        assert!(
+            call(
+                &mut entry,
+                "set_datetime",
+                json!({"date": "2026-10-15"}),
+                now
+            )
+            .is_err()
+        );
+        assert!(call(&mut entry, "set_datetime", json!({"time": "25:00"}), now).is_err());
+
+        let mut both = one(
+            "input_datetime:\n  depart: {has_date: true, has_time: true}",
+            None,
+        );
+        assert_eq!(state(&both, now), "unknown");
+        call(
+            &mut both,
+            "set_datetime",
+            json!({"datetime": "2026-10-20 08:15:00"}),
+            now,
+        )
+        .unwrap();
+        assert_eq!(state(&both, now), "2026-10-20 08:15:00");
+        call(
+            &mut both,
+            "set_datetime",
+            json!({"date": "2026-10-21"}),
+            now,
+        )
+        .unwrap();
+        assert_eq!(
+            state(&both, now),
+            "2026-10-21 08:15:00",
+            "l'heure est gardée"
+        );
+    }
+
+    #[test]
+    fn new_kinds_refuse_mistakes() {
+        for bad in [
+            "counter:\n  a: {step: 0}",
+            "counter:\n  a: {minimum: 5, maximum: 5}",
+            "counter:\n  a: {initial: 10, maximum: 5}",
+            "input_text:\n  a: {max: 300}",
+            "input_text:\n  a: {min: 5, max: 2}",
+            "input_text:\n  a: {max: 3, initial: 'trop long'}",
+            "input_datetime:\n  a: {}",
+            "input_datetime:\n  a: {has_time: true, initial: '24:00'}",
+            "input_datetime:\n  a: {has_date: true, initial: '1850-01-01'}",
+        ] {
+            assert!(parse(bad).is_err(), "{bad}");
+        }
     }
 }

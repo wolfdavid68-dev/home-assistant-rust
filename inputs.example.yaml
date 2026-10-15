@@ -46,3 +46,25 @@ timer:
   lessive:
     name: Lessive
     duration: "01:30:00"
+
+# Un compteur entier, avec un pas (step) et, si on veut, des bornes.
+# Services : counter.increment, counter.decrement, counter.reset, counter.set_value.
+counter:
+  lessives_du_mois:
+    name: Lessives du mois
+    step: 1
+    minimum: 0
+
+# Un texte (de min à max caractères ; mode: password pour le masquer).
+input_text:
+  message_ecran:
+    name: Message de l'écran
+    max: 40
+
+# Une date et/ou une heure. Une heure réglable sert de déclencheur :
+#   triggers: [{trigger: time, at: input_datetime.reveil}]
+input_datetime:
+  reveil:
+    name: Réveil
+    has_time: true
+    initial: "07:00"

@@ -1,0 +1,61 @@
+# Assistants calculés : des entités qui se déduisent d'autres (voir
+# docs/assistants.md). Copie ce fichier en derived.yaml (avec Docker :
+# config/derived.yaml), puis vérifie-le : ha-server derived check
+
+# Un groupe : allumé si au moins un membre l'est (all: true : si tous le sont).
+# Une commande sur le groupe va à chaque membre.
+# type : light, switch, fan, cover ou binary_sensor (l'entité s'appelle
+# light.lumieres_du_bas, cover.tous_les_volets…).
+group:
+  lumieres_du_bas:
+    name: Lumières du bas
+    type: light
+    entities: [light.salon, light.cuisine]
+  tous_les_volets:
+    name: Tous les volets
+    type: cover
+    entities: [cover.salon, cover.chambre]
+
+# Une plage horaire : schedule.chauffage_matin est « on » pendant les plages.
+# Jours : monday … sunday. « 24:00 » veut dire jusqu'à minuit.
+schedule:
+  chauffage_matin:
+    name: Chauffage du matin
+    monday: [{from: "06:30", to: "08:00"}]
+    tuesday: [{from: "06:30", to: "08:00"}]
+    wednesday: [{from: "06:30", to: "08:00"}]
+    thursday: [{from: "06:30", to: "08:00"}]
+    friday: [{from: "06:30", to: "08:00"}]
+    saturday: [{from: "08:00", to: "10:00"}]
+    sunday: [{from: "08:00", to: "10:00"}]
+
+# Le minimum, le maximum, la moyenne… de plusieurs capteurs (sensor.xxx).
+# type : min, max, mean, median, last, sum ou range.
+min_max:
+  temperature_moyenne:
+    name: Température moyenne
+    type: mean
+    entities: [sensor.temperature_salon, sensor.temperature_chambre]
+    round_digits: 1
+
+# Un seuil (binary_sensor.xxx) : « on » au-dessus de upper, au-dessous de
+# lower, ou entre les deux. L'hystérésis évite de clignoter autour de la limite.
+threshold:
+  salle_de_bain_humide:
+    name: Salle de bain humide
+    entity_id: sensor.humidite_salle_de_bain
+    upper: 70
+    hysteresis: 3
+
+# La consommation depuis le début de l'heure, du jour, de la semaine, du mois
+# ou de l'année, d'après un compteur qui ne fait que monter (kWh, m³…).
+# cycle : hourly, daily, weekly, monthly ou yearly.
+utility_meter:
+  electricite_du_jour:
+    name: Électricité du jour
+    source: sensor.compteur_electricite
+    cycle: daily
+  electricite_du_mois:
+    name: Électricité du mois
+    source: sensor.compteur_electricite
+    cycle: monthly

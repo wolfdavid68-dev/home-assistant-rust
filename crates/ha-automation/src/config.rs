@@ -442,8 +442,9 @@ pub enum Trigger {
         above: Option<f64>,
         below: Option<f64>,
     },
-    /// Tous les jours à une heure précise (heure locale).
-    Time { at: Vec<Time> },
+    /// Tous les jours à une heure précise (heure locale), ou à l'heure
+    /// réglée dans une entrée `input_datetime` (l'heure du réveil).
+    Time { at: Vec<TimeAt> },
     /// Au lever, au coucher du soleil… avec un décalage (`-00:30:00` :
     /// une demi-heure avant).
     Sun {
@@ -468,6 +469,15 @@ pub enum Trigger {
         edge: CalendarEdge,
         offset: SignedDuration,
     },
+}
+
+/// L'heure d'un déclencheur `time`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TimeAt {
+    /// `07:30`.
+    Fixed(Time),
+    /// `input_datetime.reveil` : l'heure (ou la date et l'heure) qu'elle contient.
+    Entity(EntityId),
 }
 
 /// Le début ou la fin d'un rendez-vous.
@@ -839,7 +849,7 @@ fn check_trigger(config: TriggerConfig) -> Result<(Trigger, Option<String>), Str
             at: at
                 .into_vec()
                 .iter()
-                .map(|t| parse_time(t))
+                .map(|t| parse_time_at(t))
                 .collect::<Result<_, _>>()?,
         },
         TriggerConfig::Sun { event, offset, .. } => Trigger::Sun {
@@ -1016,8 +1026,15 @@ impl Trigger {
                 format!("{} passe un seuil", names(entity_ids))
             }
             Self::Time { at } => {
-                let times: Vec<String> =
-                    at.iter().map(|t| t.strftime("%H:%M").to_string()).collect();
+                let times: Vec<String> = at
+                    .iter()
+                    .map(|t| match t {
+                        TimeAt::Fixed(time) => time.strftime("%H:%M").to_string(),
+                        TimeAt::Entity(id) => {
+                            format!("l'heure de {}", names(std::slice::from_ref(id)))
+                        }
+                    })
+                    .collect();
                 format!("il est {}", times.join(" ou "))
             }
             Self::Sun { event, .. } => match event {
@@ -1440,6 +1457,20 @@ fn check_range(above: Option<f64>, below: Option<f64>) -> Result<(), String> {
 }
 
 /// `"07:30"` ou `"07:30:15"`.
+/// `07:30`, ou une entrée `input_datetime.reveil`.
+fn parse_time_at(value: &str) -> Result<TimeAt, String> {
+    if !value.contains('.') {
+        return parse_time(value).map(TimeAt::Fixed);
+    }
+    let entity_id = EntityId::new(value).map_err(|error| error.to_string())?;
+    if entity_id.domain() != "input_datetime" {
+        return Err(format!(
+            "time : {entity_id} n'est ni une heure (07:30) ni une entrée input_datetime"
+        ));
+    }
+    Ok(TimeAt::Entity(entity_id))
+}
+
 fn parse_time(value: &str) -> Result<Time, String> {
     let parts: Vec<&str> = value.split(':').collect();
     let numbers: Option<Vec<i8>> = parts.iter().map(|p| p.parse().ok()).collect();
@@ -1568,7 +1599,7 @@ mod tests {
         let Trigger::Time { at } = &second.triggers[1] else {
             panic!("time attendu");
         };
-        assert_eq!(at[0], Time::new(6, 30, 0, 0).unwrap());
+        assert_eq!(at[0], TimeAt::Fixed(Time::new(6, 30, 0, 0).unwrap()));
     }
 
     #[test]

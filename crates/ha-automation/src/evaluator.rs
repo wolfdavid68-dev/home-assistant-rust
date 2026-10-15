@@ -13,7 +13,7 @@ use jiff::tz::TimeZone;
 use serde_json::Value;
 use tokio::time::Instant;
 
-use crate::config::{Automation, CalendarEdge, Condition, Pattern, Trigger};
+use crate::config::{Automation, CalendarEdge, Condition, Pattern, TimeAt, Trigger};
 
 /// Un déclencheur `state` avec `for:` en attente : « la porte est ouverte…
 /// on vérifiera dans 5 minutes qu'elle l'est toujours ».
@@ -280,7 +280,10 @@ impl Evaluator {
         for (a, automation) in self.automations.iter().enumerate() {
             for (t, trigger) in automation.triggers.iter().enumerate() {
                 let crossed_now = match trigger {
-                    Trigger::Time { at } => at.iter().any(|time| crossed(previous, now, *time)),
+                    Trigger::Time { at } => at.iter().any(|at| match at {
+                        TimeAt::Fixed(time) => crossed(previous, now, *time),
+                        TimeAt::Entity(id) => entity_time_crossed(states, id, previous, now),
+                    }),
                     Trigger::TimePattern {
                         hours,
                         minutes,
@@ -409,6 +412,40 @@ fn crossed(previous: DateTime, now: DateTime, time: Time) -> bool {
         .into_iter()
         .map(|date| date.to_datetime(time))
         .any(|moment| previous < moment && moment <= now)
+}
+
+/// L'heure réglée dans une entrée `input_datetime` est-elle passée entre
+/// `previous` (exclu) et `now` ? Une heure seule (`07:30:00`) sonne chaque
+/// jour ; une date (`2026-10-20`) à minuit ce jour-là ; une date et une heure
+/// une seule fois.
+fn entity_time_crossed(
+    states: &StateMachine,
+    id: &EntityId,
+    previous: DateTime,
+    now: DateTime,
+) -> bool {
+    let Some(state) = states.get(id) else {
+        return false;
+    };
+    let text = state.state();
+    // Une heure seule (`07:30:00`). Attention : `jiff` accepte aussi de lire
+    // une heure dans « 2026-10-16 07:30:00 » (il garde l'heure) ; on vérifie
+    // donc d'abord qu'il n'y a pas de date.
+    if !text.contains('-')
+        && let Ok(time) = text.parse::<Time>()
+    {
+        return crossed(previous, now, time);
+    }
+    let moment = text
+        .replacen(' ', "T", 1)
+        .parse::<DateTime>()
+        .ok()
+        .or_else(|| {
+            text.parse::<Date>()
+                .ok()
+                .map(|d| d.to_datetime(Time::midnight()))
+        });
+    moment.is_some_and(|moment| previous < moment && moment <= now)
 }
 
 /// Un moment du motif est-il passé entre `previous` (exclu) et `now` ?

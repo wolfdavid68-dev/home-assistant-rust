@@ -147,7 +147,17 @@ fn phrase(old: &State, new: &State) -> Option<String> {
         // Une télécommande : laquelle de ses touches.
         "event" => text(attributes, "event_type").map(|kind| format!("signale « {kind} »")),
         // Un texte « mot de passe » n'est jamais écrit dans le journal.
-        "text" if text(attributes, "mode") == Some("password") => Some("a été modifié".into()),
+        "text" | "input_text" if text(attributes, "mode") == Some("password") => {
+            Some("a été modifié".into())
+        }
+        // Une heure (« 07:30:00 ») s'écrit sans les secondes.
+        "input_datetime" => Some(format!(
+            "réglé à {}",
+            value
+                .strip_suffix(":00")
+                .filter(|_| value.len() > 5)
+                .unwrap_or(value)
+        )),
         "alarm_control_panel" => Some(
             match value {
                 "disarmed" => "a été désarmé",
@@ -164,10 +174,14 @@ fn phrase(old: &State, new: &State) -> Option<String> {
             }
             .into(),
         ),
-        "input_number" | "number" => Some(match text(attributes, "unit_of_measurement") {
-            Some(unit) => format!("réglé à {value} {unit}"),
-            None => format!("réglé à {value}"),
-        }),
+        // Une plage horaire (« Chauffage du matin »).
+        "schedule" => on_off("commence", "se termine"),
+        "input_number" | "number" | "counter" => {
+            Some(match text(attributes, "unit_of_measurement") {
+                Some(unit) => format!("réglé à {value} {unit}"),
+                None => format!("réglé à {value}"),
+            })
+        }
         _ => Some(format!("passe à « {value} »")),
     }
 }
@@ -537,6 +551,28 @@ mod tests {
                 none.clone(),
                 "réglé à 200",
             ),
+            (
+                "schedule.chauffage_matin",
+                "off",
+                "on",
+                none.clone(),
+                "commence",
+            ),
+            (
+                "input_datetime.reveil",
+                "07:00:00",
+                "06:45:00",
+                none.clone(),
+                "réglé à 06:45",
+            ),
+            (
+                "input_text.code",
+                "a",
+                "b",
+                json!({"mode": "password"}),
+                "a été modifié",
+            ),
+            ("counter.lessives", "2", "3", none.clone(), "réglé à 3"),
             (
                 "calendar.maison",
                 "off",

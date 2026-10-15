@@ -496,8 +496,7 @@ pub(crate) async fn call_service(
         Some(Value::String(entity_id)) => parse_entity_id(&entity_id)?,
         _ => return Err(ApiError::BadRequest("champ « entity_id » attendu".into())),
     };
-    let current = state.core.states.get(&entity_id);
-    if !roles::can_control(&auth.user, &entity_id, current.as_ref()) {
+    if !roles::can_control_with_members(&auth.user, &entity_id, &state.core.states) {
         tracing::warn!(
             "{domain}.{service} sur {entity_id} refusé à {} ({})",
             auth.user.username,

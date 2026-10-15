@@ -6,7 +6,10 @@
 //! - `input_select.mode_maison` : un choix dans une liste ;
 //! - `input_button.test_sirene` : un bouton (son état : la date du dernier appui) ;
 //! - `timer.lessive` : un minuteur, qui publie l'événement `timer.finished`
-//!   quand il arrive à zéro.
+//!   quand il arrive à zéro ;
+//! - `counter.lessives_du_mois` : un compteur ;
+//! - `input_text.message_ecran` : un texte ;
+//! - `input_datetime.reveil` : une date et/ou une heure (l'heure du réveil).
 //!
 //! Leurs valeurs sont gardées après un redémarrage. Un minuteur qui aurait
 //! dû sonner pendant l'arrêt sonne au démarrage.
@@ -29,12 +32,15 @@ pub use config::{
 pub use helper::{Entry, hms};
 
 /// Les domaines des entrées.
-pub const DOMAINS: [&str; 5] = [
+pub const DOMAINS: [&str; 8] = [
     "input_boolean",
     "input_number",
     "input_select",
     "input_button",
     "timer",
+    "counter",
+    "input_text",
+    "input_datetime",
 ];
 
 /// La tâche qui fait vivre les entrées.
