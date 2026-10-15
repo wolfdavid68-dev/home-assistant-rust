@@ -60,11 +60,13 @@ pièce. Les portes de garage, les portails et les volets déjà en boutons rapid
 La maquette vient en premier, puis ses boutons, les pièces sur deux colonnes, les scènes et les
 volets. Les repères défilent sur une seule ligne.
 
-## Sur une télé
+## Sur une télé ou un ordinateur
 
-Le dessin tient dans la hauteur de l'écran, quelles que soient ses proportions. Ses boutons
-restent donc visibles sans faire défiler. L'en-tête tient sur une ligne, et la barre du bas du
-téléphone devient un rail d'icônes à gauche, pour lui laisser la place.
+**Tout tient sur un écran**, comme sur les tableaux de référence : l'en-tête d'une ligne, puis les
+pièces et la maquette côte à côte, de la même hauteur, puis les volets. La maquette prend la
+place qui reste, en gardant ses proportions ; si les volets sont nombreux, elle rétrécit. Les
+tuiles sont petites et serrées, « Régler » se pose dans le coin du dessin, et la barre du bas du
+téléphone devient un rail d'icônes à gauche. Les autres appareils suivent, en dessous.
 
 ## Sécurité
 
@@ -83,5 +85,7 @@ téléphone devient un rail d'icônes à gauche, pour lui laisser la place.
   vient du nom : « chambre » donne un lit, « cuisine » une casserole, « garage » une voiture…
 - `house.js` dessine les boutons rapides et les volets. L'assemblage du dessin a un nouveau champ,
   `actions`.
-- Le dessin garde ses proportions (`--ratio`, lu sur l'image une fois chargée), et sa largeur est
-  limitée pour qu'il tienne en hauteur : `min(100 %, (hauteur de l'écran − 330 px) × ratio)`.
+- La première rangée a la hauteur de l'écran moins l'en-tête et les volets (`--covers-h`, mesurée
+  par un `ResizeObserver`). Le cadre du dessin est un conteneur CSS (`container-type: size`) : le
+  dessin y prend `min(100cqw, 100cqh × ratio)`, ses proportions (`--ratio`) étant lues sur l'image
+  une fois chargée.

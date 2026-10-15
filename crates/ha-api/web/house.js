@@ -701,3 +701,9 @@ $("#drawing-save").addEventListener("click", async () => {
 for (const id of ["#drawing-close", "#drawing-cancel"]) $(id).addEventListener("click", () => $("#drawing").close());
 $("#open-drawing").addEventListener("click", openDrawingEditor);
 addEventListener("resize", () => { if (house.view) fitLabels(house.view); }, { passive: true });
+// La hauteur des volets, pour que le dessin et les pièces prennent juste le
+// reste de l'écran (mise en page « tableau » : tout tient sur un écran).
+new ResizeObserver(([entry]) => {
+  document.documentElement.style.setProperty("--covers-h", `${Math.ceil(entry.target.offsetHeight)}px`);
+  if (house.view) fitLabels(house.view);
+}).observe($("#board-covers"));

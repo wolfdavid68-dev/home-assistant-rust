@@ -2011,7 +2011,40 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
   [data-layout="board"] .house { grid-area: house; }
   /* Le dessin tient dans la hauteur de l'écran : les boutons et les volets
      restent visibles sans défiler, sur une télé comme sur un ordinateur. */
-  [data-layout="board"] #house-stage { width: min(100%, calc((100dvh - 290px) * var(--ratio, 1.35))); justify-self: center; }
+  /* Tout tient sur un écran, comme sur les tableaux de référence : la
+     première rangée (pièces | dessin) prend la hauteur que laissent l'en-tête
+     et les volets ; le dessin s'y adapte en gardant ses proportions. */
+  [data-layout="board"] .layout { grid-template-rows: max(520px, calc(100dvh - 76px - var(--covers-h, 0px) - 24px)) auto auto auto; margin-top: 0; gap: 10px; }
+  [data-layout="board"] .overview { min-height: 0; overflow-y: auto; scrollbar-width: none; align-content: start; gap: 10px; }
+  [data-layout="board"] .overview::-webkit-scrollbar { display: none; }
+  [data-layout="board"] .house:not([hidden]) { display: flex; flex-direction: column; min-height: 0; gap: 8px; align-self: stretch; }
+  [data-layout="board"] .house-frame { flex: 1; min-height: 0; container-type: size; display: grid; place-items: center; }
+  [data-layout="board"] #house-stage { width: min(100cqw, calc(100cqh * var(--ratio, 1.35))); }
+  :root[data-layout="board"] .board-covers > h2 { display: none; }
+  /* « Régler » en surimpression, dans le coin du dessin. */
+  [data-layout="board"] .house { position: relative; }
+  [data-layout="board"] .house-caption:has(button) { position: absolute; top: 58px; right: 20px; z-index: 2; }
+  [data-layout="board"] .house-caption .ghost { min-height: 30px; padding: 0.2rem 0.75rem; font-size: 0.78rem; backdrop-filter: blur(6px); }
+  /* L'en-tête sur une seule ligne : la date, l'état de la maison, la météo. */
+  [data-layout="board"] .hero { display: flex; align-items: center; gap: 1.1rem; padding-block: 0.7rem 0.6rem; }
+  [data-layout="board"] .hero-top { display: contents; }
+  [data-layout="board"] .today { flex: none; order: 0; }
+  [data-layout="board"] :is(.status, .weather-pill, .actions) { order: 2; }
+  [data-layout="board"] .greeting { order: 1; flex: 1; min-width: 0; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.92rem; font-weight: 500; color: var(--text-2); }
+  [data-layout="board"] .clock { font-size: 1.3rem; }
+  [data-theme|="plan"][data-layout="board"] .hero::after { display: none; }
+  /* Des tuiles plus petites et serrées. */
+  [data-layout="board"] :is(.room, .person-chip) { min-height: 50px; padding: 6px 10px; }
+  [data-layout="board"] :is(.room-icon, .house-action-icon, .person-avatar) { width: 30px; height: 30px; }
+  [data-layout="board"] :is(.room-icon, .house-action-icon) svg { width: 16px; height: 16px; }
+  [data-layout="board"] :is(.room-line-name, .house-action-text b) { font-size: 0.8rem; }
+  [data-layout="board"] :is(.room-line-info, .house-action-text span) { font-size: 0.69rem; }
+  [data-layout="board"] :is(.house-action, .cover-row) { padding: 0.4rem 0.55rem; }
+  [data-layout="board"] .cover-row-buttons .round { width: 34px; height: 30px; }
+  [data-layout="board"] .cover-row-buttons .round svg { width: 16px; height: 16px; }
+  [data-layout="board"] .gauge { min-height: 28px; font-size: 0.74rem; padding-block: 0.15rem; }
+  [data-layout="board"] .scene { min-height: 40px; font-size: 0.82rem; }
+  [data-layout="board"] .legend { font-size: 0.72rem; }
   [data-layout="board"] .board-covers { grid-area: covers; }
   [data-layout="board"] .sections { grid-area: sections; }
   [data-layout="board"] .title-block { grid-area: title; }
