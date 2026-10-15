@@ -12,6 +12,7 @@ ha-areas = { path = "../ha-areas" }
 ha-auth = { path = "../ha-auth" }
 ha-automation = { path = "../ha-automation" }
 ha-core = { path = "../ha-core" }
+jiff.workspace = true
 ha-storage = { path = "../ha-storage" }
 serde.workspace = true
 serde_json.workspace = true

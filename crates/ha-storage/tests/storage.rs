@@ -564,3 +564,140 @@ async fn logbook_entries_are_filtered_cleaned_and_purged() {
     );
     assert_eq!(store.purge_logbook(now).await.unwrap(), 3);
 }
+
+/// Une ligne d'historique à une date précise (le recorder, lui, date à
+/// « maintenant »).
+async fn history_at(store: &Store, entity: &str, at: jiff::Timestamp, state: &str) {
+    sqlx::query(
+        "INSERT INTO state_history (entity_id, state, attributes, last_changed, last_updated, recorded_at)
+         VALUES (?1, ?2, '{}', ?3, ?3, ?3)",
+    )
+    .bind(entity)
+    .bind(state)
+    .bind(at.as_microsecond())
+    .execute(store.pool())
+    .await
+    .unwrap();
+}
+
+async fn current(store: &Store, entity: &str, attributes: serde_json::Value) {
+    sqlx::query(
+        "INSERT INTO states (entity_id, state, attributes, last_changed, last_updated)
+         VALUES (?1, '0', ?2, 0, 0)",
+    )
+    .bind(entity)
+    .bind(attributes.to_string())
+    .execute(store.pool())
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn statistics_are_compiled_per_hour_and_grouped_per_local_day() {
+    use ha_storage::Period;
+    let store = Store::open_in_memory().await.unwrap();
+    current(
+        &store,
+        "sensor.temperature",
+        json!({"unit_of_measurement": "°C"}),
+    )
+    .await;
+    current(
+        &store,
+        "sensor.compteur",
+        json!({"unit_of_measurement": "kWh", "device_class": "energy"}),
+    )
+    .await;
+    // Sans unité : ignoré.
+    current(&store, "sensor.mode", json!({})).await;
+
+    // Paris : 21 h UTC = 23 h, 22 h UTC = minuit le lendemain (heure d'été : +2 h).
+    let at = |time: &str| time.parse::<jiff::Timestamp>().unwrap();
+    history_at(
+        &store,
+        "sensor.temperature",
+        at("2026-10-14T20:30:00Z"),
+        "18",
+    )
+    .await;
+    history_at(
+        &store,
+        "sensor.temperature",
+        at("2026-10-14T21:00:00Z"),
+        "20",
+    )
+    .await;
+    history_at(
+        &store,
+        "sensor.temperature",
+        at("2026-10-14T21:50:00Z"),
+        "26",
+    )
+    .await;
+    history_at(
+        &store,
+        "sensor.temperature",
+        at("2026-10-14T22:30:00Z"),
+        "unavailable",
+    )
+    .await;
+    history_at(&store, "sensor.compteur", at("2026-10-14T20:59:00Z"), "100").await;
+    history_at(
+        &store,
+        "sensor.compteur",
+        at("2026-10-14T21:30:00Z"),
+        "102.5",
+    )
+    .await;
+    history_at(&store, "sensor.compteur", at("2026-10-14T22:10:00Z"), "0.5").await;
+    history_at(&store, "sensor.mode", at("2026-10-14T21:10:00Z"), "12").await;
+
+    let oldest = SystemTime::from(at("2026-10-14T21:00:00Z"));
+    let now = SystemTime::from(at("2026-10-14T23:00:05Z"));
+    assert_eq!(store.catch_up_statistics(oldest, now).await.unwrap(), 2);
+    // Une deuxième fois : rien à refaire.
+    assert_eq!(store.catch_up_statistics(oldest, now).await.unwrap(), 0);
+
+    let zone = jiff::tz::TimeZone::get("Europe/Paris").unwrap();
+    let id = |e: &str| e.parse::<EntityId>().unwrap();
+    let all = |entity: &str, period| {
+        let store = store.clone();
+        let zone = zone.clone();
+        let entity = id(entity);
+        async move {
+            store
+                .statistics(&entity, SystemTime::UNIX_EPOCH, now, period, &zone)
+                .await
+                .unwrap()
+        }
+    };
+
+    let hours = all("sensor.temperature", Period::Hour).await;
+    assert_eq!(hours.len(), 2);
+    // 21 h : 20 °C pendant 50 min, 26 °C pendant 10 min → 21 °C.
+    assert!((hours[0].mean - 21.0).abs() < 1e-9, "{}", hours[0].mean);
+    assert_eq!((hours[0].min, hours[0].max), (20.0, 26.0));
+    // 22 h : 26 °C pendant 30 min, puis indisponible.
+    assert!((hours[1].mean - 26.0).abs() < 1e-9);
+
+    // Par jour (Paris) : 21 h UTC est le 14, 22 h UTC est déjà le 15.
+    let days = all("sensor.temperature", Period::Day).await;
+    assert_eq!(days.len(), 2);
+    assert_eq!(
+        jiff::Timestamp::try_from(days[1].start).unwrap(),
+        at("2026-10-14T22:00:00Z"),
+        "minuit à Paris"
+    );
+
+    // Compteur : 2,5 kWh puis 0,5 (après une remise à zéro), 3 kWh au mois.
+    let counter = all("sensor.compteur", Period::Hour).await;
+    assert_eq!(
+        counter.iter().map(|p| p.change).collect::<Vec<_>>(),
+        [Some(2.5), Some(0.5)]
+    );
+    let month = all("sensor.compteur", Period::Month).await;
+    assert_eq!(month.len(), 1);
+    assert_eq!(month[0].change, Some(3.0));
+
+    assert_eq!(all("sensor.mode", Period::Hour).await, Vec::new());
+}

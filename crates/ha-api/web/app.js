@@ -854,6 +854,7 @@ const historyView = { entityId: null, hours: 24 };
 const number = new Intl.NumberFormat("fr", { maximumFractionDigits: 1 });
 const shortTime = new Intl.DateTimeFormat("fr", { hour: "2-digit", minute: "2-digit" });
 const dayTime = new Intl.DateTimeFormat("fr", { weekday: "short", hour: "2-digit", minute: "2-digit" });
+const shortDay = new Intl.DateTimeFormat("fr", { day: "numeric", month: "short" });
 // Valeurs qui veulent dire « actif » : colorées dans la frise.
 const ACTIVE_STATES = new Set(["on", "home", "open", "above_horizon", "playing", "unlocked"]);
 
@@ -892,11 +893,16 @@ for (const button of document.querySelectorAll("#history .period")) {
   });
 }
 
+// Au-delà d'une semaine, l'historique détaillé n'existe plus : on lit les
+// statistiques long terme (un point par jour).
+const LONG_TERM_HOURS = 168;
+
 async function loadHistory() {
-  for (const button of document.querySelectorAll(".period")) {
+  for (const button of document.querySelectorAll("#history .period")) {
     button.setAttribute("aria-pressed", String(Number(button.dataset.hours) === historyView.hours));
   }
   $("#history-summary").textContent = "Chargement…";
+  if (historyView.hours > LONG_TERM_HOURS) return loadStatistics();
   const url = `/api/history/${encodeURIComponent(historyView.entityId)}/series?hours=${historyView.hours}`;
   const response = await fetch(url, { headers: { Authorization: `Bearer ${token.get()}` } });
   if (response.status === 401) {
@@ -907,6 +913,60 @@ async function loadHistory() {
   }
   if (!response.ok) throw new Error("historique");
   drawHistory(await response.json());
+}
+
+async function loadStatistics() {
+  const days = Math.round(historyView.hours / 24);
+  const { status, data } = await api("GET", `/api/statistics/${encodeURIComponent(historyView.entityId)}?period=day&days=${days}`);
+  if (status !== 200) throw new Error("statistiques");
+  const until = Date.now();
+  const since = until - days * 86400000;
+  const points = (Array.isArray(data.points) ? data.points : [])
+    .filter((p) => Number.isFinite(p.mean) && !Number.isNaN(Date.parse(p.start)))
+    .map((p) => ({ at: p.start, mean: p.mean, min: p.min, max: p.max, change: p.change }));
+  const counter = points.some((p) => Number.isFinite(p.change));
+  if (!counter) {
+    drawHistory({ since: new Date(since).toISOString(), until: new Date(until).toISOString(), numeric: points, changes: [] });
+    if (points.length === 0) {
+      $("#history-summary").textContent = "Pas encore de statistiques : elles se calculent chaque heure, pour les capteurs avec une unité.";
+    }
+    return;
+  }
+  drawConsumption(points, since, until);
+}
+
+/** Un compteur (énergie, eau…) : la consommation de chaque jour, en barres. */
+function drawConsumption(points, since, until) {
+  const unit = entities.get(historyView.entityId)?.attributes.unit_of_measurement ?? "";
+  const x = (time) => CHART.left + ((time - since) / Math.max(1, until - since)) * (CHART.width - CHART.left - CHART.right);
+  const chart = svg("svg", { viewBox: `0 0 ${CHART.width} ${CHART.height}`, role: "img", "aria-label": `Consommation de ${$("#history-title").textContent}` });
+  for (const [time, anchor] of [[since, "start"], [(since + until) / 2, "middle"], [until, "end"]]) {
+    const label = svg("text", { x: x(time), y: CHART.height - 8, class: "axis", "text-anchor": anchor });
+    label.textContent = shortDay.format(new Date(time));
+    chart.append(label);
+  }
+  const high = Math.max(...points.map((p) => p.change ?? 0), 1e-9) * 1.1;
+  const y = (value) => CHART.top + ((high - value) / high) * (CHART.height - CHART.top - CHART.bottom);
+  for (const value of [high / 1.1, high / 2.2]) {
+    chart.append(svg("line", { x1: CHART.left, x2: CHART.width - CHART.right, y1: y(value), y2: y(value), class: "grid" }));
+    const label = svg("text", { x: CHART.left - 6, y: y(value) + 4, class: "axis", "text-anchor": "end" });
+    label.textContent = `${number.format(value)}${unit ? ` ${unit}` : ""}`;
+    chart.append(label);
+  }
+  const width = Math.max(1, ((CHART.width - CHART.left - CHART.right) * 86400000) / Math.max(1, until - since) * 0.75);
+  for (const p of points) {
+    const value = p.change ?? 0;
+    const bar = svg("rect", { x: x(Date.parse(p.at)), y: y(value), width, height: Math.max(0, y(0) - y(value)), class: "bar", rx: 2 });
+    const title = svg("title");
+    title.textContent = `${dayFormat.format(new Date(p.at))} : ${number.format(value)} ${unit}`;
+    bar.append(title);
+    chart.append(bar);
+  }
+  $("#history-chart").replaceChildren(chart);
+  const total = points.reduce((sum, p) => sum + (p.change ?? 0), 0);
+  $("#history-summary").textContent =
+    `${number.format(total)} ${unit} au total · ${number.format(total / Math.max(1, points.length))} ${unit} par jour en moyenne`;
+  $("#history-changes").replaceChildren();
 }
 
 function svg(tag, attributes = {}) {
@@ -928,7 +988,7 @@ function drawHistory(data) {
   const chart = svg("svg", { viewBox: `0 0 ${CHART.width} ${CHART.height}`, role: "img", "aria-label": `Historique de ${$("#history-title").textContent}` });
 
   // Graduations du temps : début, milieu, fin.
-  const format = historyView.hours > 24 ? dayTime : shortTime;
+  const format = historyView.hours > LONG_TERM_HOURS ? shortDay : historyView.hours > 24 ? dayTime : shortTime;
   for (const [time, anchor] of [[since, "start"], [(since + until) / 2, "middle"], [until, "end"]]) {
     const label = svg("text", { x: x(time), y: CHART.height - 8, class: "axis", "text-anchor": anchor });
     label.textContent = format.format(new Date(time));

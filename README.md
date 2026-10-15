@@ -32,6 +32,7 @@ Un noyau domotique en Rust, inspiré de Home Assistant.
 - [Étape 21 : le journal de bord, expliqué](docs/journal-de-bord.md)
 - [Étape 22 : répéter, attendre, toutes les N minutes, expliqué](docs/automatisations-encore.md)
 - [Étape 23 : les comptes avec rôles, expliqué](docs/roles.md)
+- [Étape 24 : les statistiques long terme, expliqué](docs/statistiques.md)
 - [Étape 5 : les automatisations, expliqué](docs/etape-5-automatisations.md)
 - [Modernisation du code, expliquée](docs/modernisation.md)
 - [Étape 6 : l'interface web, expliquée](docs/etape-6-interface-web.md)

@@ -336,7 +336,7 @@ input[type="range"] {
   letter-spacing: normal;
   color: var(--text);
 }
-.periods { display: flex; gap: 0.5rem; margin: 0.9rem 0; }
+.periods { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.9rem 0; }
 .period {
   font: inherit;
   padding: 0.35rem 0.8rem;
@@ -352,6 +352,7 @@ input[type="range"] {
 .history-chart .grid { stroke: var(--border); stroke-width: 1; }
 .history-chart .band { fill: var(--accent-soft); stroke: none; }
 .history-chart .curve { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; }
+.history-chart .bar { fill: var(--accent); }
 .history-chart .segment { fill: var(--border); }
 .history-chart .segment.active { fill: var(--on); }
 .history-chart .segment.missing { fill: var(--bg); }
