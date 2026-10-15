@@ -48,6 +48,9 @@ const MAX_LAYERS: usize = 16;
 const MAX_LABELS: usize = 30;
 const MAX_ACTIONS: usize = 12;
 const MAX_CHARTS: usize = 6;
+const MAX_ZONES: usize = 24;
+/// La plus petite zone à toucher : 1 % de côté.
+const MIN_ZONE_SIDE: f64 = 1.0;
 /// Les couleurs d'une courbe (celles du thème : Material dans « Maquette »).
 const CHART_COLORS: [&str; 8] = [
     "ambre", "orange", "rouge", "vert", "cyan", "bleu", "violet", "rose",
@@ -139,6 +142,23 @@ struct Page {
     /// Les courbes de la colonne de gauche (la puissance du NAS sur 24 h…).
     #[serde(default)]
     charts: Vec<Chart>,
+    /// Les zones à toucher sur le dessin (le porche, la porte du garage…).
+    #[serde(default)]
+    zones: Vec<Zone>,
+}
+
+/// Une zone à toucher : un rectangle sur le dessin (en % de sa largeur et de
+/// sa hauteur, depuis le coin en haut à gauche) qui commande un appareil.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct Zone {
+    entity_id: String,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
 }
 
 /// Une courbe : un capteur, sur une durée, dans une couleur.
@@ -399,6 +419,29 @@ fn check_page(config: &Page, images: &HashSet<String>) -> Result<(), ApiError> {
             check_text(&format!("courbe {n}, nom"), name)?;
         }
     }
+    if config.zones.len() > MAX_ZONES {
+        return Err(ApiError::BadRequest(format!("{MAX_ZONES} zones au plus")));
+    }
+    for (index, zone) in config.zones.iter().enumerate() {
+        let n = index + 1;
+        check_entity(&zone.entity_id)?;
+        let inside = |v: f64| v.is_finite() && (0.0..=100.0).contains(&v);
+        let side = |v: f64| v.is_finite() && (MIN_ZONE_SIDE..=100.0).contains(&v);
+        if !inside(zone.x)
+            || !inside(zone.y)
+            || !side(zone.w)
+            || !side(zone.h)
+            || zone.x + zone.w > 100.0 + 1e-9
+            || zone.y + zone.h > 100.0 + 1e-9
+        {
+            return Err(ApiError::BadRequest(format!(
+                "zone {n} : un rectangle d'au moins 1 %, dans le dessin"
+            )));
+        }
+        if let Some(name) = &zone.name {
+            check_text(&format!("zone {n}, nom"), name)?;
+        }
+    }
     if config.labels.len() > MAX_LABELS {
         return Err(ApiError::BadRequest(format!(
             "{MAX_LABELS} valeurs au plus"
@@ -426,6 +469,11 @@ fn tidy(mut drawing: Drawing) -> Drawing {
     for label in drawing.pages.iter_mut().flat_map(|page| &mut page.labels) {
         label.x = (label.x * 10.0).round() / 10.0;
         label.y = (label.y * 10.0).round() / 10.0;
+    }
+    for zone in drawing.pages.iter_mut().flat_map(|page| &mut page.zones) {
+        for value in [&mut zone.x, &mut zone.y, &mut zone.w, &mut zone.h] {
+            *value = (*value * 10.0).round() / 10.0;
+        }
     }
     drawing
 }
@@ -463,6 +511,7 @@ fn visible_to(state: &ApiState, user: &User, mut drawing: Drawing) -> Drawing {
         page.labels.retain(|label| can_see(&label.entity_id));
         page.actions.retain(|entity_id| can_see(entity_id));
         page.charts.retain(|chart| can_see(&chart.entity_id));
+        page.zones.retain(|zone| can_see(&zone.entity_id));
     }
     drawing
 }
@@ -702,6 +751,11 @@ mod tests {
                 {"entity_id":"sensor.nvr","color":"ambre","hours":6}]}"#,
         );
         assert!(check_page(&charts, &images).is_ok());
+        let zones = config(
+            r#"{"zones":[{"entity_id":"light.porche","x":40,"y":55.5,"w":8,"h":10,"name":"Porche"},
+                {"entity_id":"cover.garage","x":90,"y":0,"w":10,"h":100}]}"#,
+        );
+        assert!(check_page(&zones, &images).is_ok());
         let tidied = tidy(Drawing { pages: vec![good] });
         assert!((tidied.pages[0].labels[0].y - 8.3).abs() < 1e-9);
 
@@ -722,6 +776,10 @@ mod tests {
             r#"{"charts":[{"entity_id":"sensor.nas","color":"fuchsia","hours":24}]}"#,
             r#"{"charts":[{"entity_id":"sensor.nas","color":"vert","hours":12}]}"#,
             r#"{"charts":[{"entity_id":"pas un capteur","color":"vert","hours":24}]}"#,
+            r#"{"zones":[{"entity_id":"light.porche","x":95,"y":0,"w":10,"h":10}]}"#,
+            r#"{"zones":[{"entity_id":"light.porche","x":10,"y":10,"w":0.5,"h":10}]}"#,
+            r#"{"zones":[{"entity_id":"light.porche","x":-1,"y":10,"w":5,"h":10}]}"#,
+            r#"{"zones":[{"entity_id":"pas un appareil","x":1,"y":1,"w":5,"h":5}]}"#,
         ] {
             assert!(check_page(&config(bad), &images).is_err(), "{bad}");
         }
