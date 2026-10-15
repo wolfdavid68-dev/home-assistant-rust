@@ -16,6 +16,7 @@ areas.yaml
 scripts.yaml
 scenes.yaml
 alexa.yaml
+thermostats.yaml
 
 # Sauvegardes de la base (contiennent les jetons Hue et Somfy)
 sauvegardes/

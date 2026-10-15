@@ -25,6 +25,7 @@
 //! ha-server automations delete <id>  supprime une automatisation de l'éditeur
 //! ha-server areas check           vérifie le fichier des pièces
 //! ha-server alexa check           vérifie le fichier des appareils pour Alexa
+//! ha-server thermostats check     vérifie le fichier des thermostats
 //! ha-server audit [nombre]        affiche le journal d'audit
 //! ha-server audit verify          vérifie que le journal n'a pas été modifié
 //! ha-server healthcheck           vérifie qu'un serveur répond (pour Docker)
@@ -44,6 +45,7 @@
 //! - `HA_MQTT_DISCOVERY_PREFIX` : préfixe de découverte (par défaut `homeassistant`) ;
 //! - `HA_LATITUDE` et `HA_LONGITUDE` : position de la maison, pour le soleil
 //!   (deux décimales suffisent, par exemple 48.85 et 2.35) ;
+//! - `HA_THERMOSTATS_PATH` : fichier des thermostats (par défaut `thermostats.yaml`) ;
 //! - `HA_METEO` : `on` pour la météo locale avec Open-Meteo (il faut la
 //!   position de la maison) ; `HA_METEO_URL` pour un serveur auto-hébergé ;
 //! - `HA_SCRIPTS_PATH` et `HA_SCENES_PATH` : scripts et scènes (par défaut
@@ -116,6 +118,7 @@ async fn main() -> ExitCode {
         ["automations", rest @ ..] => cli::automations_command(rest).await,
         ["areas", "check"] => cli::check_areas(&areas_path()),
         ["alexa", "check"] => cli::check_alexa(&alexa_path()),
+        ["thermostats", "check"] => cli::check_thermostats(&thermostats_path()),
         ["audit", rest @ ..] => cli::audit_command(rest).await,
         ["healthcheck"] => match parse_bind() {
             Ok(bind) => health::check(bind).await,
@@ -201,6 +204,8 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     let ntfy = ntfy_config()?;
     let alexa_settings = alexa_settings()?;
     let weather_config = weather_config(location)?;
+    let thermostat_configs = ha_thermostat::load(&thermostats_path())
+        .map_err(|error| format!("{} : {error}", thermostats_path().display()))?;
     if location.is_none() && ha_automation::uses_sun(&automations) {
         return Err(
             "des automatisations utilisent le soleil : indique la position de la maison \
@@ -284,6 +289,10 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         Arc::clone(&core),
     );
     let sun = location.map(|location| SunTracker::start(location, Arc::clone(&core)));
+    // Après la restauration des états : chaque thermostat reprend sa
+    // consigne et son mode d'avant l'arrêt.
+    let thermostats = (!thermostat_configs.is_empty())
+        .then(|| ha_thermostat::Thermostats::start(thermostat_configs, Arc::clone(&core)));
     let weather = match weather_config {
         Some(config) => Some(ha_weather::Weather::start(config, Arc::clone(&core))?),
         None => None,
@@ -369,6 +378,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     }
     if let Some(alexa) = alexa {
         alexa.stop().await;
+    }
+    if let Some(thermostats) = thermostats {
+        thermostats.stop().await;
     }
     engine.stop().await;
     if let Some(notifier) = notifier {
@@ -461,6 +473,12 @@ fn weather_config(location: Option<Location>) -> Result<Option<ha_weather::Confi
         }
         Ok(other) => Err(format!("HA_METEO : « {other} » invalide (on ou off)")),
     }
+}
+
+pub(crate) fn thermostats_path() -> std::path::PathBuf {
+    std::env::var("HA_THERMOSTATS_PATH")
+        .unwrap_or_else(|_| "thermostats.yaml".to_owned())
+        .into()
 }
 
 pub(crate) fn alexa_path() -> std::path::PathBuf {

@@ -973,6 +973,7 @@ dependencies = [
  "ha-somfy",
  "ha-storage",
  "ha-sun",
+ "ha-thermostat",
  "ha-tls",
  "ha-weather",
  "jiff",
@@ -1029,6 +1030,19 @@ version = "0.1.0"
 dependencies = [
  "ha-core",
  "jiff",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "ha-thermostat"
+version = "0.1.0"
+dependencies = [
+ "ha-core",
+ "serde",
+ "serde-saphyr",
  "serde_json",
  "thiserror",
  "tokio",

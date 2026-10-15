@@ -1,0 +1,23 @@
+# Thermostats (voir docs/thermostat.md).
+# Copie ce fichier en thermostats.yaml (avec Docker : config/thermostats.yaml).
+#
+# Un thermostat allume et éteint un radiateur branché sur une prise connectée
+# (ou un relais) d'après un capteur de température. Il devient une entité
+# climate.<id>, pilotable depuis le tableau de bord et les automatisations.
+
+- id: salon
+  name: Chauffage du salon
+  heater: switch.radiateur_salon        # la prise du radiateur
+  sensor: sensor.temperature_salon      # le thermomètre de la pièce
+  window: binary_sensor.fenetre_salon   # facultatif : fenêtre ouverte = chauffage coupé
+  target: 19                            # consigne au tout premier démarrage
+  # Facultatif (valeurs par défaut) :
+  # min_temp: 7          # la consigne ne descend jamais plus bas
+  # max_temp: 25         # … ni plus haut ; au-delà, le radiateur est coupé
+  # tolerance: 0.3       # marge : allume à 18,7 °C, éteint à 19,3 °C
+  # min_cycle: 5min      # pas plus d'un changement toutes les 5 minutes
+  presets:
+    confort: 20
+    eco: 17
+    absent: 15
+    hors_gel: 7

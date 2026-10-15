@@ -160,3 +160,32 @@
       data:
         title: Orage
         message: Un orage arrive sur la maison. Pense à rentrer le linge !
+
+# Programmation du chauffage (il faut thermostats.yaml, voir docs/thermostat.md) :
+# confort en semaine de 6 h 30 à 22 h 30, éco la nuit.
+- id: chauffage_matin
+  alias: Chauffage confort le matin
+  triggers:
+    - trigger: time
+      at: "06:30"
+  conditions:
+    - condition: time
+      weekday: [lun, mar, mer, jeu, ven]
+  actions:
+    - action: climate.set_preset_mode
+      target:
+        entity_id: climate.salon
+      data:
+        preset_mode: confort
+
+- id: chauffage_nuit
+  alias: Chauffage éco la nuit
+  triggers:
+    - trigger: time
+      at: "22:30"
+  actions:
+    - action: climate.set_preset_mode
+      target:
+        entity_id: climate.salon
+      data:
+        preset_mode: eco

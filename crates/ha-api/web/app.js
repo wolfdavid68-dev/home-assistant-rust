@@ -174,6 +174,7 @@ const SECTIONS = [
   { title: "Scènes et scripts", domains: ["scene", "script"] },
   // Les capteurs de la météo (sensor.meteo_…) vont avec la météo.
   { title: "Météo, présence et soleil", domains: ["weather", "device_tracker", "sun", "notify"], extra: (s) => s.entity_id.startsWith("sensor.meteo_") },
+  { title: "Chauffage", domains: ["climate"] },
   { title: "Lumières", domains: ["light"] },
   { title: "Volets", domains: ["cover"] },
   { title: "Prises et interrupteurs", domains: ["switch"] },
@@ -246,6 +247,7 @@ function renderTileContent(state) {
     case "device_tracker": return presenceTile(state);
     case "sun": return sunTile(state);
     case "weather": return weatherTile(state);
+    case "climate": return climateTile(state);
     case "scene":
     case "script": return actionTile(state);
     case "notify": return notifyTile(state);
@@ -460,6 +462,62 @@ function weatherTile(state) {
   );
 }
 
+// Le thermostat : consigne (− / +), marche / arrêt, préréglages.
+const PRESET_LABELS = { confort: "Confort", eco: "Éco", absent: "Absent", hors_gel: "Hors-gel", nuit: "Nuit" };
+
+function climateTile(state) {
+  const a = state.attributes;
+  const heating = a.hvac_action === "heating";
+  const on = state.state === "heat";
+  const target = finite(a.temperature) ? a.temperature : null;
+  const step = finite(a.target_temp_step) && a.target_temp_step > 0 ? a.target_temp_step : 0.5;
+  const measured = finite(a.current_temperature) ? `${degrees(a.current_temperature)} mesurés` : "température inconnue";
+  const subtitle = [on ? (heating ? "Chauffe" : "En veille") : "Arrêté", measured].join(" · ");
+  const command = (service, data = {}) => {
+    markPending(state.entity_id);
+    callService("climate", service, { entity_id: state.entity_id, ...data });
+  };
+  const adjust = (delta, label) => {
+    const button = el("button", { type: "button", class: "round", "aria-label": `${label} la consigne de ${nameOf(state)}`, text: delta > 0 ? "+" : "−" });
+    button.disabled = target === null;
+    button.addEventListener("click", () => {
+      const min = finite(a.min_temp) ? a.min_temp : 5;
+      const max = finite(a.max_temp) ? a.max_temp : 30;
+      command("set_temperature", { temperature: Math.min(max, Math.max(min, target + delta)) });
+    });
+    return button;
+  };
+  const power = el("button", { type: "button", class: "action-button", text: on ? "Éteindre" : "Allumer" });
+  power.addEventListener("click", () => command("set_hvac_mode", { hvac_mode: on ? "off" : "heat" }));
+  const presets = (Array.isArray(a.preset_modes) ? a.preset_modes : [])
+    .filter((preset) => typeof preset === "string")
+    .map((preset) => {
+      const label = lookup(PRESET_LABELS, preset) ?? preset.replaceAll("_", " ");
+      const button = el("button", { type: "button", class: "period", text: label, "aria-pressed": String(a.preset_mode === preset) });
+      button.addEventListener("click", () => command("set_preset_mode", { preset_mode: preset }));
+      return button;
+    });
+  const children = [
+    tileHead(state, ICONS.flame, subtitle),
+    el(
+      "div",
+      { class: "setpoint" },
+      adjust(-step, "Baisser"),
+      el("div", { class: "value", text: target === null ? "—" : number.format(target) }, el("small", { text: "°C" })),
+      adjust(step, "Monter"),
+    ),
+  ];
+  if (typeof a.info === "string") children.push(el("p", { class: "error climate-info", text: a.info }));
+  if (presets.length > 0) children.push(el("div", { class: "presets", role: "group", "aria-label": "Préréglages" }, ...presets));
+  children.push(power);
+  return el(
+    "div",
+    // Pas de `tileClass` : l'état « heat » n'est pas « on », et « chauffe » se voit à part.
+    { id: tileId(state.entity_id), class: `tile climate${heating ? " heating" : ""}${on ? "" : " stopped"}` },
+    ...children,
+  );
+}
+
 // Le soleil : levé ou couché, et l'heure du prochain changement.
 const hourMinute = new Intl.DateTimeFormat("fr", { hour: "2-digit", minute: "2-digit" });
 function sunTile(state) {
@@ -606,6 +664,7 @@ const ICONS = {
   globe: ["M12 3a9 9 0 1 0 0 18 9 9 0 1 0 0-18z", "M3 12h18", "M12 3a14 14 0 0 1 0 18", "M12 3a14 14 0 0 0 0 18"],
   data_rate: ["M4 17l5-5 4 4 7-8", "M15 8h5v5"],
   cloud: ["M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z"],
+  flame: ["M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"],
   partly: ["M12 2v2", "M4.9 4.9l1.4 1.4", "M20 12h2", "M19.1 4.9l-1.4 1.4", "M15.9 13A4 4 0 0 0 8.1 9.2", "M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6z"],
   rain: ["M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2", "M16 14v6", "M8 14v6", "M12 16v6"],
   snow: ["M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2", "M8 15h.01", "M8 19h.01", "M12 17h.01", "M12 21h.01", "M16 15h.01", "M16 19h.01"],
@@ -894,6 +953,7 @@ const SERVICES = {
   script: [["turn_on", "Lancer"], ["turn_off", "Arrêter"]],
   scene: [["turn_on", "Activer"]],
   notify: [["send_message", "Envoyer une notification"]],
+  climate: [["set_preset_mode", "Choisir un préréglage"], ["set_temperature", "Régler la consigne"], ["turn_on", "Allumer"], ["turn_off", "Éteindre"]],
 };
 const SUN_EVENTS = [["sunrise", "lever du soleil"], ["sunset", "coucher du soleil"], ["dawn", "aube"], ["dusk", "crépuscule"]];
 const WEEKDAYS = [["mon", "lun"], ["tue", "mar"], ["wed", "mer"], ["thu", "jeu"], ["fri", "ven"], ["sat", "sam"], ["sun", "dim"]];
@@ -1292,6 +1352,12 @@ function actionFields(a, refresh) {
   } else if (a.action === "cover.set_cover_position") {
     fields.push(numberField("Position (0 = fermé, 100 = ouvert)", a.data, "position"));
     delete extra.position;
+  } else if (a.action === "climate.set_temperature") {
+    fields.push(numberField("Consigne (°C)", a.data, "temperature"));
+    delete extra.temperature;
+  } else if (a.action === "climate.set_preset_mode") {
+    fields.push(textField("Préréglage", a.data, "preset_mode", { placeholder: "eco" }));
+    delete extra.preset_mode;
   } else if (a.action === "notify.send_message") {
     fields.push(textField("Titre (facultatif)", a.data, "title"), textField("Message", a.data, "message"));
     fields.push(selectField("Priorité", a.data, "priority", [[1, "1 (discrète)"], [2, "2"], [3, "3 (normale)"], [4, "4"], [5, "5 (urgente)"]], true));
