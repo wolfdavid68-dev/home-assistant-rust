@@ -218,10 +218,18 @@ pub(crate) async fn list(
         .await
         .map_err(automation_error)?;
     let latest = automations.traces.latest();
+    let mut layouts = automations
+        .editor
+        .layouts()
+        .await
+        .map_err(automation_error)?;
     let list: Vec<Value> = entries
         .iter()
         .map(|entry| {
             let mut value = entry_json(entry);
+            if let Some(layout) = layouts.remove(&entry.id) {
+                value["layout"] = layout;
+            }
             if let Some(trace) = latest.get(&entry.id) {
                 value["last_run"] = json!({
                     "started": trace.started.to_string(),
@@ -252,6 +260,27 @@ pub(crate) async fn check(
     let mut response = config_json(&config);
     response["warnings"] = json!(warnings(&state, &automation));
     Ok(Json(response))
+}
+
+/// `PUT /api/automations/{id}/layout` : la place des blocs dans le schéma.
+///
+/// Pas de confirmation d'identité : déplacer un bloc ne change rien à ce que
+/// fait l'automatisation. Il faut quand même le droit de les modifier.
+pub(crate) async fn save_layout(
+    State(state): State<Arc<ApiState>>,
+    auth: Authenticated,
+    Path(id): Path<String>,
+    body: Bytes,
+) -> Result<StatusCode, ApiError> {
+    roles::require(&auth.user, Permission::EditAutomations)?;
+    let automations = editor(&state)?;
+    let layout = parse_json::<Value>(&body)?;
+    automations
+        .editor
+        .save_layout(&id, &layout)
+        .await
+        .map_err(automation_error)?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// `PUT /api/automations/{id}` : crée ou modifie (confirmation requise).
@@ -372,6 +401,7 @@ fn trace_json(trace: &Trace) -> Value {
         "started": trace.started.to_string(),
         "finished": trace.finished.map(|t| t.to_string()),
         "trigger": trace.trigger,
+        "trigger_index": trace.trigger_index,
         "conditions": trace.conditions.iter().map(|check| json!({
             "description": check.description,
             "passed": check.passed,

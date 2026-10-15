@@ -103,6 +103,33 @@ impl Store {
         Ok(deleted > 0)
     }
 
+    /// La place des blocs dans le schéma, pour chaque automatisation qui en a
+    /// une : (identifiant, JSON).
+    pub async fn automation_layouts(&self) -> Result<Vec<(String, String)>, StorageError> {
+        Ok(
+            sqlx::query_as("SELECT automation_id, layout FROM automation_layouts")
+                .fetch_all(self.pool())
+                .await?,
+        )
+    }
+
+    /// Enregistre la place des blocs (sans nouvelle version de
+    /// l'automatisation : rien ne change dans ce qu'elle fait).
+    pub async fn save_automation_layout(&self, id: &str, layout: &str) -> Result<(), StorageError> {
+        let now = to_micros(SystemTime::now())?;
+        sqlx::query(
+            "INSERT INTO automation_layouts (automation_id, layout, updated_at) VALUES (?1, ?2, ?3)
+             ON CONFLICT (automation_id) DO UPDATE SET
+                 layout = excluded.layout, updated_at = excluded.updated_at",
+        )
+        .bind(id)
+        .bind(layout)
+        .bind(now)
+        .execute(self.pool())
+        .await?;
+        Ok(())
+    }
+
     /// Les versions d'une automatisation, de la plus récente à la plus ancienne.
     pub async fn automation_versions(
         &self,

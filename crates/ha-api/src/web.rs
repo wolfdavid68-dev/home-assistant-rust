@@ -11,6 +11,7 @@ use axum::response::IntoResponse;
 
 const INDEX_HTML: &str = include_str!("../web/index.html");
 const APP_JS: &str = include_str!("../web/app.js");
+const CANVAS_JS: &str = include_str!("../web/canvas.js");
 const STYLE_CSS: &str = include_str!("../web/style.css");
 const ICON_SVG: &str = include_str!("../web/icon.svg");
 const MANIFEST: &str = include_str!("../web/manifest.webmanifest");
@@ -46,6 +47,10 @@ pub(crate) async fn index() -> impl IntoResponse {
 
 pub(crate) async fn app_js() -> impl IntoResponse {
     file("text/javascript; charset=utf-8", APP_JS)
+}
+
+pub(crate) async fn canvas_js() -> impl IntoResponse {
+    file("text/javascript; charset=utf-8", CANVAS_JS)
 }
 
 pub(crate) async fn style_css() -> impl IntoResponse {

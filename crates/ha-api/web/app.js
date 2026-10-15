@@ -2528,6 +2528,7 @@ $("#automations-close").addEventListener("click", () => $("#automations").close(
 // ----- Liste
 
 async function showAutoList(notice = "") {
+  $("#automations").classList.remove("canvas-mode");
   $("#auto-edit-view").hidden = true;
   $("#auto-trace-view").hidden = true;
   $("#auto-list-view").hidden = false;
@@ -2704,7 +2705,8 @@ function openAutoEditor(entry) {
   auto.existingId = entry.id;
   auto.source = entry.source;
   auto.config = structuredClone(entry.config ?? { id: entry.id, triggers: [], actions: [] });
-  auto.mode = entry.source === "file" || !auto.editable ? "yaml" : "form";
+  // Par défaut, le schéma (étape 35) : en blocs reliés, façon n8n.
+  auto.mode = "canvas";
   $("#auto-list-view").hidden = true;
   $("#auto-trace-view").hidden = true;
   $("#auto-edit-view").hidden = false;
@@ -2713,7 +2715,7 @@ function openAutoEditor(entry) {
   $("#auto-yaml").value = entry.yaml ?? "";
   setAutoStatus("");
   renderAutoEditor();
-  if (entry.id === null) $("#auto-form input")?.focus();
+  if (entry.id === null) $("#auto-canvas-meta input")?.focus();
 }
 
 function readOnly() {
@@ -2722,10 +2724,12 @@ function readOnly() {
 
 function renderAutoEditor() {
   const ro = readOnly();
+  $("#auto-tab-canvas").setAttribute("aria-pressed", String(auto.mode === "canvas"));
   $("#auto-tab-form").setAttribute("aria-pressed", String(auto.mode === "form"));
   $("#auto-tab-yaml").setAttribute("aria-pressed", String(auto.mode === "yaml"));
   $("#auto-tab-form").hidden = ro;
-  $("#auto-tab-yaml").hidden = ro;
+  $("#automations").classList.toggle("canvas-mode", auto.mode === "canvas");
+  $("#auto-canvas-wrap").hidden = auto.mode !== "canvas";
   $("#auto-form").hidden = auto.mode !== "form";
   $("#auto-yaml-label").hidden = auto.mode !== "yaml";
   $("#auto-yaml").readOnly = ro;
@@ -2734,10 +2738,49 @@ function renderAutoEditor() {
   $("#auto-duplicate").hidden = !auto.editable || auto.existingId === null;
   $("#auto-versions").hidden = auto.source === "file";
   if (auto.mode === "form") renderAutoForm();
+  if (auto.mode === "canvas") {
+    // Nom, identifiant, mode : repliés, sauf pour une nouvelle automatisation
+    // (il faut lui donner un nom). Le schéma garde ainsi toute la place.
+    const meta = $("#auto-canvas-meta");
+    const details = el("details", { class: "canvas-meta" }, el("summary", { text: `${auto.config.alias || auto.config.id || "Nouvelle automatisation"} · nom et réglages` }), ...metaFields(auto.config, true));
+    details.open = auto.existingId === null;
+    meta.replaceChildren(details);
+    if (ro) for (const control of meta.querySelectorAll("input, select")) control.disabled = true;
+    showCanvas();
+  }
 }
+
+/** Quitte le schéma : la configuration dessinée doit être complète. */
+function leaveCanvas() {
+  if (auto.mode !== "canvas") return true;
+  if (readOnly()) return true;
+  const { config, errors } = canvasRequest();
+  if (errors.length > 0) {
+    setAutoStatus(`Pour changer de vue : ${errors.join(" ")}`, "error");
+    return false;
+  }
+  auto.config = config;
+  return true;
+}
+
+$("#auto-tab-canvas").addEventListener("click", async () => {
+  if (auto.mode === "canvas") return;
+  if (auto.mode === "yaml" && !readOnly()) {
+    const result = await checkAutomation({ yaml: $("#auto-yaml").value });
+    if (!result) return;
+    auto.config = result.config;
+  }
+  auto.mode = "canvas";
+  renderAutoEditor();
+});
 
 $("#auto-tab-form").addEventListener("click", async () => {
   if (auto.mode === "form") return;
+  if (auto.mode === "canvas") {
+    if (!leaveCanvas()) return;
+    auto.mode = "form";
+    return renderAutoEditor();
+  }
   // YAML → formulaire : le serveur lit le YAML et renvoie le JSON.
   const result = await checkAutomation({ yaml: $("#auto-yaml").value });
   if (!result) return;
@@ -2748,6 +2791,11 @@ $("#auto-tab-form").addEventListener("click", async () => {
 
 $("#auto-tab-yaml").addEventListener("click", async () => {
   if (auto.mode === "yaml") return;
+  if (readOnly()) {
+    auto.mode = "yaml";
+    return renderAutoEditor();
+  }
+  if (!leaveCanvas()) return;
   // Formulaire → YAML : il faut une automatisation valide.
   const result = await checkAutomation({ config: auto.config });
   if (!result) return setAutoStatus("Corrige d'abord l'erreur ci-dessus pour passer en YAML.", "error", true);
@@ -2759,12 +2807,21 @@ $("#auto-tab-yaml").addEventListener("click", async () => {
 $("#auto-yaml").addEventListener("input", () => scheduleCheck());
 
 function currentRequest() {
+  if (auto.mode === "canvas") {
+    // Le schéma incomplet (bloc non relié…) n'est pas envoyé au serveur.
+    const { config, errors } = canvasRequest();
+    return errors.length > 0 ? { invalid: errors } : { config };
+  }
   return auto.mode === "yaml" ? { yaml: $("#auto-yaml").value } : { config: auto.config };
 }
 
 /** Vérifie auprès du serveur ; affiche le résultat. Renvoie la réponse si valide. */
 async function checkAutomation(request = currentRequest()) {
   const seq = ++auto.checkSeq;
+  if (request.invalid) {
+    setAutoStatus(request.invalid.join(" "), "error");
+    return null;
+  }
   const { status, data } = await api("POST", "/api/automations/check", request);
   if (seq !== auto.checkSeq) return null; // une vérification plus récente est partie
   if (status !== 200) {
@@ -2790,10 +2847,8 @@ function setAutoStatus(text, kind = "", append = false, warnings = []) {
 
 // ----- Le formulaire
 
-function renderAutoForm() {
-  const c = auto.config;
-  const form = $("#auto-form");
-  const scroll = $("#automations").scrollTop;
+/** Nom, identifiant, activée, et mode : en tête du formulaire et du schéma. */
+function metaFields(c, compact = false) {
   const alias = textField("Nom", c, "alias", { placeholder: "Volets au coucher du soleil" });
   alias.querySelector("input").addEventListener("input", () => {
     // À la création, l'identifiant suit le nom.
@@ -2829,11 +2884,19 @@ function renderAutoForm() {
     if (mode.value !== "queued" && mode.value !== "parallel") delete c.max;
     scheduleCheck();
   });
+  const modeLabel = el("label", {}, el("span", { class: "label", text: compact ? "Si elle se redéclenche" : "Si elle se redéclenche pendant qu'elle tourne encore" }), mode);
+  if (compact) return [el("div", { class: "auto-row canvas-meta-row" }, alias, id, modeLabel, el("label", { class: "check" }, enabled, "Activée"))];
+  return [el("div", { class: "auto-row" }, alias, id), el("label", { class: "check" }, enabled, "Activée"), modeLabel];
+}
 
+function renderAutoForm() {
+  // Dans le schéma, les blocs (« + Ajouter… ») redessinent le panneau du bloc.
+  if (auto.mode === "canvas") return openPanel(canvas.selected);
+  const c = auto.config;
+  const form = $("#auto-form");
+  const scroll = $("#automations").scrollTop;
   form.replaceChildren(
-    el("div", { class: "auto-row" }, alias, id),
-    el("label", { class: "check" }, enabled, "Activée"),
-    el("label", {}, el("span", { class: "label", text: "Si elle se redéclenche pendant qu'elle tourne encore" }), mode),
+    ...metaFields(c),
     itemsBlock("Quand…", "Déclencheurs : l'un d'eux suffit.", c, "triggers", TRIGGER_KINDS, "trigger", triggerFields),
     itemsBlock("Si… (facultatif)", "Conditions : toutes doivent être vraies.", c, "conditions", CONDITION_KINDS, "condition", conditionFields),
     itemsBlock("Alors…", "Actions, dans l'ordre.", c, "actions", ACTION_KINDS, null, actionFields),
@@ -3319,6 +3382,7 @@ function slug(text) {
 
 $("#auto-save").addEventListener("click", () => {
   const request = currentRequest();
+  if (request.invalid) return setAutoStatus(request.invalid.join(" "), "error");
   const id = auto.mode === "yaml" ? auto.existingId ?? yamlId($("#auto-yaml").value) : auto.config.id;
   if (!id) return setAutoStatus("Donne un nom (ou un identifiant) à l'automatisation.", "error");
   saveAutomation(id, request, auto.existingId === null ? "Automatisation créée." : "Automatisation enregistrée.");
@@ -3337,6 +3401,8 @@ async function saveAutomation(id, request, done) {
     return showAutoList(data.error ?? "Enregistrement impossible.");
   }
   const warnings = data.warnings?.length ? ` Attention : ${data.warnings.join(" ; ")}.` : "";
+  // Depuis le schéma : la place des blocs, sous leurs noms définitifs.
+  if (auto.mode === "canvas" && !$("#auto-edit-view").hidden) await saveCanvasLayout(id).catch(() => {});
   showAutoList(done + warnings);
 }
 
@@ -3355,6 +3421,7 @@ async function deleteAutomation(id) {
 
 $("#auto-duplicate").addEventListener("click", async () => {
   // Depuis le YAML, on repasse par le serveur pour obtenir le JSON.
+  if (!leaveCanvas()) return;
   let config = auto.config;
   if (auto.mode === "yaml") {
     const result = await checkAutomation({ yaml: $("#auto-yaml").value }).catch(() => null);
@@ -3421,6 +3488,7 @@ const timeOnly = new Intl.DateTimeFormat("fr", { hour: "2-digit", minute: "2-dig
 const trace = { entry: null, runs: [], selected: 0 };
 
 async function openTraces(entry) {
+  $("#automations").classList.remove("canvas-mode");
   trace.entry = entry;
   trace.selected = 0;
   $("#auto-list-view").hidden = true;
