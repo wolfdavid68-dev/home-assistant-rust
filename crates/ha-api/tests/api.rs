@@ -122,6 +122,7 @@ async fn every_route_requires_a_token() {
         ("POST", "/api/auth/logout"),
         ("POST", "/api/services/switch/turn_on"),
         ("GET", "/api/audit"),
+        ("GET", "/api/logbook"),
         ("GET", "/api/areas"),
         ("GET", "/api/history/light.salon/series"),
         ("POST", "/api/auth/confirm"),
@@ -414,11 +415,13 @@ async fn service_calls_are_published_on_the_bus() {
         service,
         entity_id,
         data,
+        origin,
     } = event.as_ref()
     else {
         panic!("CallService attendu, reçu {event:?}");
     };
     assert_eq!((domain.as_str(), service.as_str()), ("light", "turn_on"));
+    assert_eq!(*origin, ha_core::Origin::User("david".into()));
     assert_eq!(entity_id.as_str(), "light.salon");
     assert_eq!(data["brightness"], 128);
 
@@ -934,4 +937,55 @@ async fn a_read_only_editor_refuses_changes() {
         .request("GET", "/api/automations", Some(&token), None)
         .await;
     assert_eq!(body["editable"], false);
+}
+
+#[tokio::test]
+async fn the_logbook_is_read_with_filters() {
+    let app = TestApp::new().await;
+    let token = app.login().await;
+    let door: ha_core::EntityId = "binary_sensor.porte".parse().unwrap();
+    for (entity_id, name) in [(Some(&door), "Porte"), (None, "Bonne nuit")] {
+        app.state
+            .store
+            .add_logbook(ha_storage::NewLogbookEntry {
+                entity_id,
+                name,
+                message: "message",
+                cause: Some("par david"),
+            })
+            .await
+            .unwrap();
+    }
+
+    let (status, body) = app.request("GET", "/api/logbook", Some(&token), None).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let names: Vec<&str> = body["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| e["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["Bonne nuit", "Porte"]);
+    assert_eq!(body["entries"][1]["entity_id"], "binary_sensor.porte");
+    assert_eq!(body["entries"][1]["cause"], "par david");
+
+    let (_, body) = app
+        .request(
+            "GET",
+            "/api/logbook?hours=1&entity_id=binary_sensor.porte",
+            Some(&token),
+            None,
+        )
+        .await;
+    assert_eq!(body["entries"].as_array().unwrap().len(), 1);
+
+    for bad in [
+        "/api/logbook?hours=0",
+        "/api/logbook?hours=100000",
+        "/api/logbook?entity_id=Porte",
+        "/api/logbook?inconnu=1",
+    ] {
+        let (status, _) = app.request("GET", bad, Some(&token), None).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{bad}");
+    }
 }

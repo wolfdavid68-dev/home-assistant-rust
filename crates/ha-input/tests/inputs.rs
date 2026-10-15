@@ -106,7 +106,10 @@ async fn a_finished_timer_triggers_an_automation() {
 
     let mut fired = Vec::new();
     while let Ok(event) = events.try_recv() {
-        if let Event::Fired { event_type, data } = event.as_ref() {
+        // Les événements des minuteurs (pas `automation_triggered`).
+        if let Event::Fired { event_type, data } = event.as_ref()
+            && event_type.starts_with("timer.")
+        {
             fired.push((event_type.clone(), data["entity_id"].clone()));
         }
     }

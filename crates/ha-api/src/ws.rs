@@ -253,6 +253,7 @@ fn event_message(id: u64, event: &Event) -> Value {
             service,
             entity_id,
             data,
+            ..
         } => json!({
             "id": id,
             "type": "event",

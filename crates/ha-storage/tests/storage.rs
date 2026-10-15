@@ -495,3 +495,72 @@ async fn history_series_summarises_numbers_and_changes() {
         .unwrap();
     assert_eq!(empty, ha_storage::HistorySeries::default());
 }
+
+#[tokio::test]
+async fn logbook_entries_are_filtered_cleaned_and_purged() {
+    let store = Store::open_in_memory().await.unwrap();
+    let door = id("binary_sensor.porte");
+    let entry = |entity_id, name, message, cause| ha_storage::NewLogbookEntry {
+        entity_id,
+        name,
+        message,
+        cause,
+    };
+    store
+        .add_logbook(entry(Some(&door), "Porte", "s'est ouverte", None))
+        .await
+        .unwrap();
+    store
+        .add_logbook(entry(
+            None,
+            "Bonne nuit",
+            "automatisation lancée",
+            Some("déclencheur : il est 22:30"),
+        ))
+        .await
+        .unwrap();
+    // Un nom piégé : caractères de contrôle remplacés, et l'injection SQL
+    // reste du texte.
+    store
+        .add_logbook(entry(
+            Some(&door),
+            "Porte\n'); DROP TABLE logbook; --",
+            "s'est fermée",
+            Some("par David"),
+        ))
+        .await
+        .unwrap();
+
+    let now = SystemTime::now() + Duration::from_secs(1);
+    let all = store
+        .logbook(SystemTime::UNIX_EPOCH, now, None, 100)
+        .await
+        .unwrap();
+    assert_eq!(all.len(), 3);
+    assert_eq!(all[0].message, "s'est fermée", "le plus récent d'abord");
+    assert_eq!(all[0].name, "Porte\u{fffd}'); DROP TABLE logbook; --");
+    assert_eq!(all[0].cause.as_deref(), Some("par David"));
+    assert_eq!(all[1].entity_id, None);
+
+    let door_only = store
+        .logbook(SystemTime::UNIX_EPOCH, now, Some(&door), 100)
+        .await
+        .unwrap();
+    assert_eq!(door_only.len(), 2);
+    let limited = store
+        .logbook(SystemTime::UNIX_EPOCH, now, None, 1)
+        .await
+        .unwrap();
+    assert_eq!(limited.len(), 1);
+    let future = store
+        .logbook(now, now + Duration::from_mins(1), None, 100)
+        .await
+        .unwrap();
+    assert_eq!(future, Vec::new());
+
+    assert_eq!(
+        store.purge_logbook(SystemTime::UNIX_EPOCH).await.unwrap(),
+        0
+    );
+    assert_eq!(store.purge_logbook(now).await.unwrap(), 3);
+}

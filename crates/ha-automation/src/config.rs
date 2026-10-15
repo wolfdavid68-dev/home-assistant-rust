@@ -745,6 +745,53 @@ fn parse_offset(value: &str) -> Result<SignedDuration, String> {
     Ok(if negative { -duration } else { duration })
 }
 
+impl Trigger {
+    /// La raison, en français : « Porte d'entrée passe à « on » », « il est
+    /// 07:30 », « coucher du soleil »… Les noms des appareils viennent de
+    /// leur `friendly_name`.
+    #[must_use]
+    pub fn describe(&self, states: &ha_core::StateMachine) -> String {
+        let names = |ids: &[EntityId]| {
+            ids.iter()
+                .map(|id| {
+                    states
+                        .get(id)
+                        .and_then(|s| {
+                            s.attributes()
+                                .get("friendly_name")
+                                .and_then(Value::as_str)
+                                .map(str::to_owned)
+                        })
+                        .unwrap_or_else(|| id.as_str().to_owned())
+                })
+                .collect::<Vec<_>>()
+                .join(" ou ")
+        };
+        match self {
+            Self::State { entity_ids, to, .. } => match to {
+                Some(to) => format!("{} passe à « {to} »", names(entity_ids)),
+                None => format!("{} change", names(entity_ids)),
+            },
+            Self::NumericState { entity_ids, .. } => {
+                format!("{} passe un seuil", names(entity_ids))
+            }
+            Self::Time { at } => {
+                let times: Vec<String> =
+                    at.iter().map(|t| t.strftime("%H:%M").to_string()).collect();
+                format!("il est {}", times.join(" ou "))
+            }
+            Self::Sun { event, .. } => match event {
+                SunEvent::Sunrise => "lever du soleil",
+                SunEvent::Sunset => "coucher du soleil",
+                SunEvent::Dawn => "aube",
+                SunEvent::Dusk => "crépuscule",
+            }
+            .to_owned(),
+            Self::Event { event_type, .. } => format!("événement {event_type}"),
+        }
+    }
+}
+
 /// Les automatisations utilisent-elles le soleil ? (Il faut alors la
 /// position de la maison.)
 #[must_use]

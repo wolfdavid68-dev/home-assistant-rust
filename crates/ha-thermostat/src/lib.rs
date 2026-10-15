@@ -289,7 +289,7 @@ async fn run(
                             thermostat.evaluate(&core, false);
                         }
                     }
-                    Event::CallService { domain, service, entity_id, data } if domain == "climate" => {
+                    Event::CallService { domain, service, entity_id, data, .. } if domain == "climate" => {
                         if let Some(thermostat) = thermostats.iter_mut().find(|t| &t.entity == entity_id) {
                             thermostat.on_call(service, data);
                             thermostat.evaluate(&core, true);

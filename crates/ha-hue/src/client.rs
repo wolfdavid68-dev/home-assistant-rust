@@ -113,7 +113,7 @@ async fn run(pairing: Pairing, core: Arc<Core>, token: CancellationToken) {
 
                 received = events.recv() => match received {
                     Ok(event) => {
-                        if let Event::CallService { domain, service, entity_id, data } = event.as_ref()
+                        if let Event::CallService { domain, service, entity_id, data, .. } = event.as_ref()
                             && let Some((id, body)) =
                                 lights.command(domain, service, entity_id, data, &core.states)
                         {

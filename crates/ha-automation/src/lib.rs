@@ -23,7 +23,7 @@ pub use config::{
     parse_configs, uses_sun,
 };
 pub use editor::Editor;
-pub use engine::{Engine, Reloader, Reloads, Setup, reload_channel};
+pub use engine::{AUTOMATION_TRIGGERED, Engine, Reloader, Reloads, Setup, reload_channel};
 pub use error::AutomationError;
 pub use scripts::{Scene, Script, parse_scenes, parse_scripts};
 

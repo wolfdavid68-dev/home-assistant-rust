@@ -12,6 +12,7 @@ mod audit;
 mod automations;
 pub mod backup;
 mod error;
+mod logbook;
 mod recorder;
 mod secrets;
 mod store;
@@ -19,6 +20,7 @@ mod store;
 pub use audit::{AuditCheck, AuditEntry, AuditRecord, MAX_AUDIT_LIMIT, clean_field};
 pub use automations::{AutomationVersion, MAX_VERSIONS, StoredAutomation};
 pub use error::StorageError;
+pub use logbook::{LogbookEntry, MAX_LOGBOOK_LIMIT, NewLogbookEntry};
 pub use recorder::Recorder;
 pub use secrets::{SecretKey, is_sealed};
 pub use store::{

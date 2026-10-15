@@ -943,6 +943,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ha-logbook"
+version = "0.1.0"
+dependencies = [
+ "ha-automation",
+ "ha-core",
+ "ha-storage",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "ha-mqtt"
 version = "0.1.0"
 dependencies = [
@@ -998,6 +1010,7 @@ dependencies = [
  "ha-freebox",
  "ha-hue",
  "ha-input",
+ "ha-logbook",
  "ha-mqtt",
  "ha-notify",
  "ha-person",

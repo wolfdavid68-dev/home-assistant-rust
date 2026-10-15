@@ -1,0 +1,274 @@
+//! Les phrases du journal : « s'est ouverte », « est à la maison »…
+//! Aucune base, aucune attente ici : faciles à tester.
+
+use ha_core::{Attributes, EntityId, State};
+use serde_json::Value;
+
+/// Le nom affiché d'une entité : son `friendly_name`, sinon son identifiant.
+#[must_use]
+pub fn name_of(entity_id: &EntityId, state: Option<&State>) -> String {
+    state
+        .and_then(|s| s.attributes().get("friendly_name"))
+        .and_then(Value::as_str)
+        .map_or_else(|| entity_id.as_str().to_owned(), str::to_owned)
+}
+
+/// La phrase pour un changement d'état, ou `None` s'il ne mérite pas d'être
+/// noté : création au démarrage, simple changement d'attributs, mesure
+/// (température…), météo, minuteur (ses événements sont plus précis).
+#[must_use]
+pub fn describe_change(old: Option<&State>, new: Option<&State>) -> Option<String> {
+    let (old, new) = (old?, new?);
+    let value = new.state();
+    if old.state() == value || value == "unknown" {
+        return None;
+    }
+    let attributes = new.attributes();
+    let domain = new.entity_id().domain();
+    if value == "unavailable" {
+        return Some("est indisponible".into());
+    }
+    let on_off = |on: &str, off: &str| match value {
+        "on" => Some(on.to_owned()),
+        "off" => Some(off.to_owned()),
+        _ => Some(format!("passe à « {value} »")),
+    };
+    match domain {
+        // Mesures et choses qui changent sans cesse : l'historique s'en charge.
+        "weather" | "timer" => None,
+        "sensor" if attributes.contains_key("unit_of_measurement") => None,
+        "sensor" if text(attributes, "device_class") == Some("timestamp") => None,
+        "light" | "switch" | "fan" => on_off("s'est allumé", "s'est éteint"),
+        "input_boolean" => on_off("a été activé", "a été désactivé"),
+        "binary_sensor" => {
+            let (on, off) = binary_words(text(attributes, "device_class"));
+            on_off(on, off)
+        }
+        "cover" => Some(
+            match value {
+                "open" => "s'est ouvert",
+                "closed" => "s'est fermé",
+                "opening" => "s'ouvre",
+                "closing" => "se ferme",
+                _ => return Some(format!("passe à « {value} »")),
+            }
+            .into(),
+        ),
+        "person" | "device_tracker" => Some(
+            match value {
+                "home" => "est à la maison",
+                "not_home" => "n'est plus à la maison",
+                _ => return Some(format!("est à « {value} »")),
+            }
+            .into(),
+        ),
+        "zone" => Some(match value.parse::<u32>() {
+            Ok(0) => "plus personne à la maison".into(),
+            Ok(1) => "1 personne à la maison".into(),
+            Ok(count) => format!("{count} personnes à la maison"),
+            Err(_) => format!("passe à « {value} »"),
+        }),
+        "sun" => Some(
+            match value {
+                "above_horizon" => "lever du soleil",
+                "below_horizon" => "coucher du soleil",
+                _ => return None,
+            }
+            .into(),
+        ),
+        "climate" => Some(
+            match value {
+                "heat" => "chauffage en marche",
+                "off" => "chauffage arrêté",
+                _ => return Some(format!("passe en mode « {value} »")),
+            }
+            .into(),
+        ),
+        // Leur état est une date : celle du dernier usage.
+        "scene" => Some("activée".into()),
+        "input_button" => Some("a été appuyé".into()),
+        "notify" => Some("notification envoyée".into()),
+        "script" => (value == "on").then(|| "lancé".into()),
+        "input_number" => Some(match text(attributes, "unit_of_measurement") {
+            Some(unit) => format!("réglé à {value} {unit}"),
+            None => format!("réglé à {value}"),
+        }),
+        _ => Some(format!("passe à « {value} »")),
+    }
+}
+
+/// Les mots d'un détecteur, d'après sa sorte (`device_class`).
+fn binary_words(device_class: Option<&str>) -> (&'static str, &'static str) {
+    match device_class {
+        Some("door" | "window" | "garage_door" | "opening") => ("s'est ouvert", "s'est fermé"),
+        Some("motion" | "occupancy" | "presence") => {
+            ("détecte un mouvement", "ne détecte plus de mouvement")
+        }
+        Some("smoke") => ("détecte de la fumée !", "ne détecte plus de fumée"),
+        Some("moisture") => ("détecte une fuite d'eau !", "ne détecte plus de fuite"),
+        Some("connectivity") => ("s'est connecté", "s'est déconnecté"),
+        _ => ("s'est activé", "s'est désactivé"),
+    }
+}
+
+/// La phrase pour un événement d'un minuteur (`timer.finished`…).
+#[must_use]
+pub fn describe_timer_event(event_type: &str) -> Option<&'static str> {
+    Some(match event_type {
+        "timer.started" => "démarré",
+        "timer.restarted" => "relancé",
+        "timer.paused" => "en pause",
+        "timer.cancelled" => "annulé",
+        "timer.finished" => "terminé",
+        _ => return None,
+    })
+}
+
+fn text<'a>(attributes: &'a Attributes, key: &str) -> Option<&'a str> {
+    attributes.get(key).and_then(Value::as_str)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ha_core::Core;
+    use serde_json::json;
+
+    /// Un état, tel que le noyau le fabrique.
+    fn state(entity: &str, value: &str, attributes: Value) -> State {
+        let Value::Object(attributes) = attributes else {
+            panic!("un objet est attendu")
+        };
+        let core = Core::new();
+        let id: EntityId = entity.parse().unwrap();
+        core.states.set(id.clone(), value, attributes).unwrap();
+        core.states.get(&id).unwrap()
+    }
+
+    fn change(entity: &str, from: &str, to: &str, attributes: Value) -> Option<String> {
+        let old = state(entity, from, attributes.clone());
+        let new = state(entity, to, attributes);
+        describe_change(Some(&old), Some(&new))
+    }
+
+    #[test]
+    fn changes_become_sentences() {
+        let none = json!({});
+        for (entity, from, to, attributes, expected) in [
+            ("light.salon", "off", "on", &none, "s'est allumé"),
+            ("switch.prise", "on", "off", &none, "s'est éteint"),
+            ("input_boolean.vacances", "off", "on", &none, "a été activé"),
+            (
+                "binary_sensor.porte",
+                "off",
+                "on",
+                &json!({"device_class": "door"}),
+                "s'est ouvert",
+            ),
+            (
+                "binary_sensor.couloir",
+                "on",
+                "off",
+                &json!({"device_class": "motion"}),
+                "ne détecte plus de mouvement",
+            ),
+            (
+                "binary_sensor.fumee",
+                "off",
+                "on",
+                &json!({"device_class": "smoke"}),
+                "détecte de la fumée !",
+            ),
+            ("cover.salon", "open", "closing", &none, "se ferme"),
+            ("person.david", "not_home", "home", &none, "est à la maison"),
+            ("zone.home", "1", "0", &none, "plus personne à la maison"),
+            ("zone.home", "1", "2", &none, "2 personnes à la maison"),
+            (
+                "sun.sun",
+                "below_horizon",
+                "above_horizon",
+                &none,
+                "lever du soleil",
+            ),
+            ("climate.salon", "off", "heat", &none, "chauffage en marche"),
+            (
+                "input_select.mode",
+                "Normal",
+                "Nuit",
+                &none,
+                "passe à « Nuit »",
+            ),
+            (
+                "input_number.consigne",
+                "19",
+                "21.5",
+                &json!({"unit_of_measurement": "°C"}),
+                "réglé à 21.5 °C",
+            ),
+            (
+                "light.salon",
+                "on",
+                "unavailable",
+                &none,
+                "est indisponible",
+            ),
+            (
+                "sensor.alarme",
+                "disarmed",
+                "armed",
+                &json!({"device_class": "alarm"}),
+                "passe à « armed »",
+            ),
+        ] {
+            assert_eq!(
+                change(entity, from, to, attributes.clone()).as_deref(),
+                Some(expected),
+                "{entity} {from} → {to}"
+            );
+        }
+    }
+
+    #[test]
+    fn noise_is_left_out() {
+        let none = json!({});
+        for (entity, from, to, attributes) in [
+            (
+                "sensor.temperature",
+                "19.5",
+                "19.6",
+                json!({"unit_of_measurement": "°C"}),
+            ),
+            (
+                "sensor.derniere_sauvegarde",
+                "a",
+                "b",
+                json!({"device_class": "timestamp"}),
+            ),
+            ("weather.maison", "sunny", "rainy", none.clone()),
+            ("timer.lessive", "idle", "active", none.clone()),
+            ("light.salon", "on", "on", none.clone()),
+            ("light.salon", "unavailable", "unknown", none.clone()),
+            ("script.depart", "on", "off", none.clone()),
+        ] {
+            assert_eq!(
+                change(entity, from, to, attributes),
+                None,
+                "{entity} {from} → {to}"
+            );
+        }
+        // Création (démarrage) et suppression : rien.
+        let light = state("light.salon", "on", json!({}));
+        assert_eq!(describe_change(None, Some(&light)), None);
+        assert_eq!(describe_change(Some(&light), None), None);
+    }
+
+    #[test]
+    fn names_and_timer_events() {
+        let id: EntityId = "light.salon".parse().unwrap();
+        let named = state("light.salon", "on", json!({"friendly_name": "Salon"}));
+        assert_eq!(name_of(&id, Some(&named)), "Salon");
+        assert_eq!(name_of(&id, None), "light.salon");
+        assert_eq!(describe_timer_event("timer.finished"), Some("terminé"));
+        assert_eq!(describe_timer_event("timer.inconnu"), None);
+    }
+}

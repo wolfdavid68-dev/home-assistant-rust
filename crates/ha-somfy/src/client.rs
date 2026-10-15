@@ -113,7 +113,7 @@ async fn run(pairing: Pairing, core: Arc<Core>, token: CancellationToken) {
 
                 received = events.recv() => match received {
                     Ok(event) => {
-                        if let Event::CallService { domain, service, entity_id, data } = event.as_ref()
+                        if let Event::CallService { domain, service, entity_id, data, .. } = event.as_ref()
                             && let Some(command) = devices.command(domain, service, entity_id, data)
                         {
                             let api = api.clone();

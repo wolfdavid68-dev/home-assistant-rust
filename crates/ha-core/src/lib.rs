@@ -7,6 +7,7 @@
 mod entity_id;
 mod error;
 mod event;
+mod origin;
 mod state;
 mod state_machine;
 pub mod task;
@@ -14,6 +15,7 @@ pub mod task;
 pub use entity_id::{EntityId, MAX_ENTITY_ID_LEN, slugify};
 pub use error::CoreError;
 pub use event::{DEFAULT_BUS_CAPACITY, Event, EventBus};
+pub use origin::Origin;
 pub use state::{Attributes, MAX_STATE_LEN, State};
 pub use state_machine::StateMachine;
 pub use task::Background;
@@ -77,6 +79,18 @@ impl Core {
         entity_id: EntityId,
         data: Attributes,
     ) -> Result<(), CoreError> {
+        self.call_service_from(Origin::System, domain, service, entity_id, data)
+    }
+
+    /// Comme [`Core::call_service`], en disant qui le demande.
+    pub fn call_service_from(
+        &self,
+        origin: Origin,
+        domain: &str,
+        service: &str,
+        entity_id: EntityId,
+        data: Attributes,
+    ) -> Result<(), CoreError> {
         for name in [domain, service] {
             if !is_valid_name(name) {
                 return Err(CoreError::InvalidServiceName(name.to_owned()));
@@ -87,6 +101,7 @@ impl Core {
             service: service.to_owned(),
             entity_id,
             data,
+            origin,
         });
         Ok(())
     }

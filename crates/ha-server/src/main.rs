@@ -237,6 +237,8 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     // On oublie l'historique et le journal d'audit trop anciens.
     let purged = store.purge_history(days_ago(history_days)).await?;
     info!("historique conservé : {history_days} jours ({purged} lignes anciennes supprimées)");
+    // Le journal de bord est gardé aussi longtemps que l'historique.
+    store.purge_logbook(days_ago(history_days)).await?;
     let purged = store.purge_audit(days_ago(audit_days)).await?;
     info!("journal d'audit conservé : {audit_days} jours ({purged} lignes anciennes supprimées)");
     // Le journal a-t-il été modifié pendant que le serveur était arrêté ?
@@ -267,6 +269,19 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     }
 
     let recorder = Recorder::start(store.clone(), Arc::clone(&core));
+    // Le journal de bord, avant tout ce qui peut agir sur la maison.
+    let logbook = ha_logbook::Logbook::start(store.clone(), Arc::clone(&core));
+    if let Err(error) = store
+        .add_logbook(ha_storage::NewLogbookEntry {
+            entity_id: None,
+            name: "Serveur",
+            message: "a démarré",
+            cause: None,
+        })
+        .await
+    {
+        warn!("journal de bord : écriture impossible ({error})");
+    }
 
     // API HTTP / WebSocket.
     let listener = tokio::net::TcpListener::bind(bind).await?;
@@ -428,6 +443,7 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         inputs.stop().await;
     }
     engine.stop().await;
+    logbook.stop().await;
     if let Some(notifier) = notifier {
         notifier.stop().await;
     }
