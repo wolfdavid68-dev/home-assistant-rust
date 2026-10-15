@@ -509,6 +509,13 @@ input[type="range"]::-moz-range-track { background: transparent; }
 .heat-badge { padding: 2px 9px; border-radius: 999px; background: var(--heat-soft); color: var(--heat-ink); font-size: 0.75rem; font-weight: 600; }
 .climate-info { font-size: 0.8rem; }
 
+/* Ce que le compte ne peut pas commander (un invité et le thermostat…) :
+   l'état reste lisible, les commandes disparaissent. */
+.tile.readonly :is(button, input, select):disabled:not(.tile-toggle),
+.tile.readonly :is(.knob, .presets) { display: none; }
+.tile.readonly .tile-toggle { cursor: default; }
+.tile.readonly .setpoint { justify-content: center; }
+
 /* Minuteur : un anneau qui se vide. */
 .timer-row { display: flex; align-items: center; gap: 12px; }
 .ring { width: 48px; height: 48px; flex: none; transform: rotate(-90deg); }
@@ -674,6 +681,19 @@ input[type="range"]::-moz-range-track { background: transparent; }
 .account-dialog { width: min(420px, calc(100vw - 2rem)); gap: 1rem; }
 .account-dialog[open] { display: grid; }
 .account { margin: 0; color: var(--muted); }
+.tablet-option { display: grid; gap: 0.35rem; padding: 0.8rem 0; border-block: 1px solid var(--line); }
+.tablet-option .account { font-size: 0.85rem; }
+
+/* Mode tablette murale : la grande horloge, toujours visible. */
+body.tablet .clock {
+  display: inline;
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 4vw, 2.6rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
 .account strong { color: var(--text); }
 
 /* Journal de bord */

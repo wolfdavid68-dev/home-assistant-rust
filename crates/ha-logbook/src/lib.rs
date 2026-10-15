@@ -3,8 +3,8 @@
 //!
 //! ```text
 //! 22:30  Bonne nuit        automatisation lancée   déclencheur : il est 22:30
-//! 22:30  Lumière du salon  s'est éteint            par l'automatisation « Bonne nuit »
-//! 22:41  Porte d'entrée    s'est ouvert
+//! 22:30  Lumière du salon  s'est éteinte           par l'automatisation « Bonne nuit »
+//! 22:41  Porte d'entrée    s'est ouverte
 //! ```
 //!
 //! La cause d'un changement vient de la **dernière commande** envoyée au même

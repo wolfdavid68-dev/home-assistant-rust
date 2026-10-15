@@ -137,3 +137,69 @@ et la feuille de style s'en sert : `background: linear-gradient(… var(--fill) 
 - Les boutons glissants restent de vrais boutons, avec `aria-pressed` (« enfoncé » ou non) : un
   lecteur d'écran annonce s'ils sont allumés.
 - Les contrastes de texte ont été choisis pour rester lisibles dans les deux thèmes.
+
+## Finitions
+
+### « La porte est ouverte », pas « ouvert »
+
+Le tableau de bord et le journal de bord **accordent** les mots avec le nom de l'appareil : « Porte du
+garage : ouverte », « Lampe de chevet s'est éteinte », mais « Plafonnier s'est éteint ».
+
+Comment le programme sait-il qu'un nom est féminin ? Il regarde **le premier mot** du nom (« Porte »
+du garage) et le cherche dans une liste de mots féminins courants dans une maison (porte, fenêtre,
+lampe, prise, cafetière…). Un article l'aide aussi : « **La** box » est féminin. Si ton appareil a un
+nom féminin qui manque à la liste, il suffit de l'ajouter (deux endroits, gardés pareils :
+`crates/ha-logbook/src/describe.rs` et `crates/ha-api/web/app.js`).
+
+En Rust, le premier mot s'obtient ainsi :
+
+```rust
+let mut words = lower
+    .split(|c: char| c.is_whitespace() || matches!(c, '_' | '-' | '\'' | '’'))
+    .filter(|word| !word.is_empty());
+match words.next() {
+    Some("la" | "une") => true,
+    Some("le" | "un" | "l") => words.next().is_some_and(|word| FEMININE.contains(&word)),
+    Some(word) => FEMININE.contains(&word),
+    None => false,
+}
+```
+
+- `split(|c: char| …)` coupe le texte partout où la **fermeture** (la petite fonction entre `|…|`)
+  répond « oui » : espaces, `_` (pour `binary_sensor.porte_entree`), tirets, apostrophes.
+- `words` est un **itérateur** : `next()` donne le mot suivant, ou `None` s'il n'y en a plus. C'est
+  pour ça qu'il est `mut` : le lire le fait avancer.
+- `Some("la" | "une")` : un **motif** qui accepte l'un ou l'autre mot.
+- `is_some_and(…)` : vrai seulement s'il y a un mot **et** qu'il est dans la liste.
+
+### Les invités ne voient plus de boutons inutiles
+
+Avant, un invité voyait les boutons du chauffage ou de la porte du garage, et recevait un refus en
+appuyant. Maintenant, ces tuiles restent **lisibles** (la température, l'état de la porte) mais leurs
+commandes disparaissent, et les scripts aussi.
+
+Les règles ne sont écrites qu'**une fois**, dans le serveur (`crates/ha-api/src/roles.rs`). Il les
+envoie au tableau de bord dans `GET /api/` :
+
+```json
+"controls": {
+  "domains": ["light", "switch", "fan", "scene", "cover"],
+  "forbidden_cover_classes": ["garage", "gate", "door"]
+}
+```
+
+(`null` pour la famille et les administrateurs : tout.) Cacher un bouton n'est qu'une politesse : le
+serveur **vérifie toujours** chaque commande, comme avant.
+
+### Le mode tablette murale
+
+Dans **Mon compte**, coche **Mode tablette murale** sur la tablette accrochée au mur :
+
+- l'écran **reste allumé** (l'API *Wake Lock* du navigateur) ;
+- le tableau de bord passe en **plein écran**, avec une grande horloge ;
+- après **2 minutes sans contact**, il revient à l'accueil (sauf si l'éditeur d'automatisations ou
+  la demande de mot de passe sont ouverts : on ne perd jamais un travail en cours).
+
+C'est un réglage **de cet appareil seulement** (gardé dans le navigateur), rien n'est envoyé au
+serveur. Le navigateur n'accepte de garder l'écran allumé que sur une page sécurisée : en HTTPS
+(étape 7), ou à l'adresse `localhost`.

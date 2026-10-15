@@ -1072,6 +1072,18 @@ async fn a_guest_sees_and_controls_only_safe_devices() {
     let (_, body) = app.request("GET", "/api/", Some(&guest), None).await;
     assert_eq!(body["role"], "guest");
     assert_eq!(body["permissions"]["history"], false);
+    // Le tableau de bord reçoit ce que l'invité peut commander, pour cacher
+    // le reste.
+    assert_eq!(
+        body["permissions"]["controls"],
+        json!({
+            "domains": ["light", "switch", "fan", "scene", "cover"],
+            "forbidden_cover_classes": ["garage", "gate", "door"],
+        })
+    );
+    let family = app.login_as("alice", ha_auth::Role::Family).await;
+    let (_, body) = app.request("GET", "/api/", Some(&family), None).await;
+    assert_eq!(body["permissions"]["controls"], Value::Null);
 
     // La présence et l'alarme sont cachées, même en les demandant directement.
     let (_, listed) = app.request("GET", "/api/states", Some(&guest), None).await;
