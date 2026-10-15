@@ -7,7 +7,7 @@ direct** :
 
 ![Tableau de bord sur ordinateur](images/tableau-de-bord-ordinateur.png)
 
-<img src="images/tableau-de-bord-telephone.png" alt="Tableau de bord sur téléphone, thème sombre" width="300">
+<img src="images/tableau-de-bord-telephone-sombre.png" alt="Tableau de bord sur téléphone, thème sombre" width="300">
 
 - **Lumières** : toucher la tuile allume ou éteint ; un curseur règle la luminosité.
 - **Prises et interrupteurs** : toucher la tuile allume ou éteint.

@@ -133,6 +133,9 @@ pub fn router(state: Arc<ApiState>) -> Router {
         .route("/app.js", get(web::app_js))
         .route("/style.css", get(web::style_css))
         .route("/icon.svg", get(web::icon_svg))
+        .route("/fonts/geist.woff2", get(web::font_geist))
+        .route("/fonts/geist-mono.woff2", get(web::font_geist_mono))
+        .route("/fonts/bricolage-grotesque.woff2", get(web::font_bricolage))
         .route("/manifest.webmanifest", get(web::manifest))
         .layer(DefaultBodyLimit::max(MAX_BODY_SIZE))
         // En-têtes de sécurité sur toutes les réponses.

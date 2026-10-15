@@ -56,6 +56,7 @@ $("#login-form").addEventListener("submit", async (event) => {
 });
 
 $("#logout").addEventListener("click", async () => {
+  $("#account-dialog").close();
   const current = token.get();
   token.clear();
   live.close();
@@ -140,7 +141,8 @@ function setStatus(text, isLive) {
 function onStateChanged({ entity_id, new_state }) {
   if (new_state) entities.set(entity_id, new_state);
   else entities.delete(entity_id);
-  const existing = document.getElementById(tileId(entity_id));
+  scheduleHome();
+  const existing = document.querySelector(`.sections #${CSS.escape(tileId(entity_id))}`);
   if (existing && new_state) existing.replaceWith(renderTile(new_state));
   else {
     // Entité ajoutée ou supprimée : on redessine tout.
@@ -176,7 +178,6 @@ function markPending(entityId) {
 
 // ---------------------------------------------------------------- Affichage
 const SECTIONS = [
-  { title: "Scènes et scripts", domains: ["scene", "script"] },
   { title: "Entrées", domains: ["input_boolean", "input_number", "input_select", "input_button", "timer"] },
   // Les capteurs de la météo (sensor.meteo_…) vont avec la météo.
   { title: "Météo, présence et soleil", domains: ["weather", "zone", "person", "device_tracker", "sun", "notify"], extra: (s) => s.entity_id.startsWith("sensor.meteo_") },
@@ -206,13 +207,36 @@ async function loadAreas() {
   renderAll();
 }
 
+// La pièce affichée seule (après un toucher sur le plan), ou `null`.
+const view = { room: null };
+
 function renderAll() {
+  renderHome();
   const container = $("#sections");
   // Par nom, sauf la météo, la maison et les personnes, en tête de leur section.
   const first = (state) => lookup({ weather: 0, zone: 1, person: 2 }, domainOf(state)) ?? 3;
   const sorted = [...entities.values()].sort(
     (a, b) => first(a) - first(b) || nameOf(a).localeCompare(nameOf(b), "fr"),
   );
+  const section = (title, items) =>
+    el("section", {}, el("h2", { text: title }), el("div", { class: "grid" }, ...items.map(renderTile)));
+
+  // Une seule pièce : son nom, un bouton retour, ses appareils.
+  const room = view.room === null ? undefined : areas.find((area) => area.name === view.room);
+  if (room) {
+    const items = room.entities.map((entity) => entities.get(entity.entity_id)).filter((state) => state !== undefined);
+    const back = el("button", { type: "button", class: "back", "aria-label": "Revenir à toute la maison" }, svgIcon(ICONS.back));
+    back.addEventListener("click", () => showRoom(null));
+    container.replaceChildren(
+      el("section", {},
+        el("div", { class: "room-view-head" }, back, el("h2", { text: room.name })),
+        el("div", { class: "grid" }, ...items.map(renderTile)),
+      ),
+    );
+    $("#empty").hidden = true;
+    return;
+  }
+
   const used = new Set();
   // D'abord une section par pièce, dans l'ordre du fichier…
   const areaGroups = areas.map((area) => {
@@ -222,23 +246,204 @@ function renderAll() {
     items.forEach((s) => used.add(s.entity_id));
     return { title: area.name, items };
   });
-  // … puis, par type, les appareils qui ne sont dans aucune pièce.
+  // … puis, par type, les appareils qui ne sont dans aucune pièce. Les scènes
+  // et les scripts sont déjà en haut, en boutons.
+  const loose = sorted.filter((s) => !used.has(s.entity_id) && !["scene", "script"].includes(domainOf(s)));
   const groups = SECTIONS.map(({ title, domains, extra }) => {
-    const items = sorted.filter((s) => !used.has(s.entity_id) && (domains.includes(domainOf(s)) || extra?.(s)));
+    const items = loose.filter((s) => !used.has(s.entity_id) && (domains.includes(domainOf(s)) || extra?.(s)));
     items.forEach((s) => used.add(s.entity_id));
     return { title, items };
   });
-  groups.push({ title: "Autres", items: sorted.filter((s) => !used.has(s.entity_id)) });
+  groups.push({ title: "Autres", items: loose.filter((s) => !used.has(s.entity_id)) });
 
   container.replaceChildren(
     ...[...areaGroups, ...groups]
       .filter((group) => group.items.length > 0)
-      .map(({ title, items }) =>
-        el("section", {}, el("h2", { text: title }), el("div", { class: "grid" }, ...items.map(renderTile))),
-      ),
+      .map(({ title, items }) => section(title, items)),
   );
   $("#empty").hidden = entities.size > 0;
 }
+
+function showRoom(name) {
+  view.room = name;
+  renderAll();
+  $("#sections").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+}
+
+// ---------------------------------------------------------------- Accueil
+// La salutation, le résumé, la météo, le plan de la maison et les scènes.
+// Redessinés à chaque changement d'état (au plus une fois par image).
+let homePending = false;
+function scheduleHome() {
+  if (homePending) return;
+  homePending = true;
+  requestAnimationFrame(() => {
+    homePending = false;
+    renderHome();
+  });
+}
+
+const fullDate = new Intl.DateTimeFormat("fr", { weekday: "long", day: "numeric", month: "long" });
+const ALERT_COVERS = ["garage", "gate", "door"];
+const ALERT_SENSORS = ["smoke", "moisture", "gas", "carbon_monoxide", "problem", "safety"];
+
+/** Ce qui demande de l'attention : portail ou garage ouvert, fumée, fuite… */
+function alertText(state) {
+  const domain = domainOf(state);
+  const dc = state.attributes.device_class;
+  if (domain === "cover" && ALERT_COVERS.includes(dc) && ["open", "opening"].includes(state.state)) return "ouvert";
+  if (domain === "binary_sensor" && dc === "garage_door" && state.state === "on") return "ouvert";
+  if (domain === "binary_sensor" && ALERT_SENSORS.includes(dc) && state.state === "on") return lookup(BINARY_LABELS, dc)?.[0] ?? "alerte";
+  if (domain === "sensor" && dc === "alarm" && state.state === "triggered") return "alarme déclenchée";
+  return null;
+}
+
+function alerts() {
+  return [...entities.values()]
+    .map((state) => ({ state, text: alertText(state) }))
+    .filter((alert) => alert.text !== null);
+}
+
+function joinNames(names) {
+  return names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} et ${names.at(-1)}`;
+}
+
+function renderHome() {
+  const now = new Date();
+  $("#today").textContent = fullDate.format(now);
+  $("#clock").textContent = hourMinute.format(now);
+
+  // La salutation, et ce qui demande de l'attention.
+  const hour = now.getHours();
+  const hello = hour >= 5 && hour < 18 ? "Bonjour" : "Bonsoir";
+  const who = account.user ? ` ${account.user.charAt(0).toUpperCase()}${account.user.slice(1)}` : "";
+  const found = alerts();
+  const greeting = $("#greeting");
+  if (found.length === 0) {
+    greeting.replaceChildren(`${hello}${who}. Tout est calme.`);
+  } else if (found.length === 1) {
+    const target = found[0].state.entity_id;
+    const link = el("a", { href: `#${tileId(target)}`, text: nameOf(found[0].state) });
+    link.addEventListener("click", (event) => {
+      event.preventDefault();
+      if (view.room !== null) showRoom(null);
+      const tile = document.getElementById(tileId(target));
+      tile?.scrollIntoView({ behavior: "smooth", block: "center" });
+      tile?.querySelector("button")?.focus({ preventScroll: true });
+    });
+    greeting.replaceChildren(`${hello}${who}. Tout est calme, sauf `, link, ".");
+  } else {
+    greeting.replaceChildren(`${hello}${who}. ${found.length} choses demandent ton attention.`);
+  }
+
+  // Qui est là.
+  const zone = entities.get("zone.home");
+  const people = Array.isArray(zone?.attributes.persons) ? zone.attributes.persons.filter((p) => typeof p === "string") : null;
+  const parts = [];
+  if (found.length > 0) parts.push(found.map((a) => `${nameOf(a.state)} : ${a.text}`).join(" · "));
+  if (people) parts.push(people.length === 0 ? "Personne à la maison" : `${joinNames(people)} ${people.length > 1 ? "sont" : "est"} à la maison`);
+  $("#summary").textContent = parts.join(" · ");
+
+  // La météo, en une pastille.
+  const weather = [...entities.values()].find((s) => domainOf(s) === "weather");
+  const pill = $("#weather-pill");
+  pill.hidden = !weather;
+  if (weather) {
+    const label = lookup(WEATHER_LABELS, weather.state)?.[0] ?? "";
+    const temp = finite(weather.attributes.temperature) ? `${number.format(weather.attributes.temperature)}°` : "";
+    pill.replaceChildren(svgIcon(weatherIcon(weather.state)), el("strong", { text: temp }), label);
+  }
+
+  renderPlan();
+  renderScenes();
+}
+
+/** Ce qu'on sait d'une pièce : lumières, température, alertes. */
+function roomInfo(area) {
+  const states = area.entities.map((e) => entities.get(e.entity_id)).filter((s) => s !== undefined);
+  const lights = states.filter((s) => domainOf(s) === "light" && s.state === "on").length;
+  const temperature = states
+    .map((s) => (domainOf(s) === "climate" ? s.attributes.current_temperature
+      : s.attributes.device_class === "temperature" ? Number(s.state) : NaN))
+    .find((t) => finite(t) || (typeof t === "number" && Number.isFinite(t)));
+  const alert = states.map(alertText).find((text) => text !== null);
+  const open = states.filter((s) => domainOf(s) === "binary_sensor"
+    && ["door", "window", "opening"].includes(s.attributes.device_class) && s.state === "on").length;
+  const heating = states.some((s) => domainOf(s) === "climate" && s.attributes.hvac_action === "heating");
+  return { count: states.length, lights, temperature, alert, open, heating };
+}
+
+function renderPlan() {
+  const card = $("#plan");
+  card.hidden = areas.length === 0;
+  if (areas.length === 0) return;
+  let lit = 0;
+  let warnings = 0;
+  const temps = [];
+  const rooms = areas.map((area) => {
+    const info = roomInfo(area);
+    lit += info.lights;
+    if (info.alert) warnings += 1;
+    if (Number.isFinite(info.temperature)) temps.push(info.temperature);
+    const detail = info.alert ? info.alert
+      : info.lights > 0 ? `${info.lights} lumière${info.lights > 1 ? "s" : ""}`
+      : info.open > 0 ? `${info.open} ouverture${info.open > 1 ? "s" : ""}`
+      : info.heating ? "chauffe" : "";
+    const classes = ["room"];
+    if (info.count >= 4) classes.push("big");
+    if (info.alert) classes.push("alert");
+    else if (info.lights > 0) classes.push("lit");
+    const room = el(
+      "button",
+      { type: "button", class: classes.join(" "), "aria-label": [area.name, detail, Number.isFinite(info.temperature) ? `${number.format(info.temperature)} degrés` : ""].filter(Boolean).join(", ") },
+      el("span", { class: "room-name", text: area.name }),
+      el("span", { class: "room-foot" },
+        el("span", { text: detail }),
+        Number.isFinite(info.temperature) ? el("span", { class: "room-temp", text: `${number.format(info.temperature)}°` }) : el("span")),
+    );
+    room.addEventListener("click", () => showRoom(area.name));
+    return room;
+  });
+  const legend = el("div", { class: "legend" });
+  if (lit > 0) legend.append(el("span", {}, el("i"), `${lit} lumière${lit > 1 ? "s" : ""} allumée${lit > 1 ? "s" : ""}`));
+  if (warnings > 0) legend.append(el("span", {}, el("i", { class: "alert" }), `${warnings} alerte${warnings > 1 ? "s" : ""}`));
+  if (temps.length > 0) {
+    const mean = temps.reduce((sum, t) => sum + t, 0) / temps.length;
+    legend.append(el("span", {}, el("b", { text: `${number.format(mean)}°` }), " en moyenne"));
+  }
+  card.replaceChildren(
+    el("div", { class: "plan-head" }, el("h2", { text: "La maison" })),
+    el("div", { class: "plan" }, ...rooms),
+    legend,
+  );
+}
+
+function renderScenes() {
+  const list = [...entities.values()]
+    .filter((s) => ["scene", "script"].includes(domainOf(s)))
+    .sort((a, b) => nameOf(a).localeCompare(nameOf(b), "fr"));
+  const nav = $("#scenes");
+  nav.hidden = list.length === 0;
+  nav.replaceChildren(...list.map((state) => {
+    const isScript = domainOf(state) === "script";
+    const running = isScript && state.state === "on";
+    const button = el(
+      "button",
+      { type: "button", id: `scene-${state.entity_id}`, class: running ? "scene on" : "scene", "aria-pressed": isScript ? String(running) : "false" },
+      svgIcon(isScript ? (running ? ICONS.stop : ICONS.play) : ICONS.sparkle),
+      el("span", { text: nameOf(state) }),
+    );
+    button.addEventListener("click", () => {
+      button.classList.add("pending");
+      setTimeout(() => button.classList.remove("pending"), 5000);
+      callService(domainOf(state), running ? "turn_off" : "turn_on", { entity_id: state.entity_id });
+    });
+    return button;
+  }));
+}
+
+// L'heure, chaque minute (et la salutation avec).
+setInterval(() => { if (!$("#dashboard-view").hidden) renderHome(); }, 30_000);
 
 function renderTile(state) {
   const tile = renderTileContent(state);
@@ -278,6 +483,7 @@ function lightTile(state) {
     type: "range", min: "1", max: "255", value: String(brightness),
     "aria-label": `Luminosité de ${nameOf(state)}`,
   });
+  fillSlider(slider);
   slider.addEventListener("change", () => {
     markPending(state.entity_id);
     callService("light", "turn_on", { entity_id: state.entity_id, brightness: Number(slider.value) });
@@ -285,7 +491,7 @@ function lightTile(state) {
   const toggle = el(
     "button",
     { class: "tile-toggle", type: "button", "aria-pressed": String(on) },
-    tileHead(state, ICONS.bulb, on ? `Allumée · ${Math.round((brightness / 255) * 100)} %` : state.state === "off" ? "Éteinte" : statusText(state)),
+    tileHead(state, ICONS.bulb, on ? `Allumée · ${Math.round((brightness / 255) * 100)} %` : state.state === "off" ? "Éteinte" : statusText(state), knob()),
   );
   toggle.addEventListener("click", () => {
     markPending(state.entity_id);
@@ -293,7 +499,7 @@ function lightTile(state) {
   });
   return el(
     "div",
-    { id: tileId(state.entity_id), class: tileClass(state, "light") },
+    { id: tileId(state.entity_id), class: `${tileClass(state, "light")} has-knob` },
     toggle,
     on ? slider : el("span"),
   );
@@ -329,6 +535,7 @@ function coverTile(state) {
       type: "range", min: "0", max: "100", step: "5", value: String(Math.round(position)),
       "aria-label": `Position de ${nameOf(state)}`,
     });
+    fillSlider(slider);
     slider.addEventListener("change", () => command("set_cover_position", { position: Number(slider.value) }));
     children.push(slider);
   }
@@ -343,13 +550,13 @@ function switchTile(state) {
   const toggle = el(
     "button",
     { class: "tile-toggle", type: "button", "aria-pressed": String(on) },
-    tileHead(state, ICONS.plug, statusText(state)),
+    tileHead(state, ICONS.plug, statusText(state), knob()),
   );
   toggle.addEventListener("click", () => {
     markPending(state.entity_id);
     callService("switch", "toggle", { entity_id: state.entity_id });
   });
-  return el("div", { id: tileId(state.entity_id), class: tileClass(state, "switch") }, toggle);
+  return el("div", { id: tileId(state.entity_id), class: `${tileClass(state, "switch")} has-knob` }, toggle);
 }
 
 function binaryTile(state) {
@@ -503,10 +710,10 @@ function inputBooleanTile(state) {
   const toggle = el(
     "button",
     { class: "tile-toggle", type: "button", "aria-pressed": String(on) },
-    tileHead(state, ICONS.toggle, on ? "Activé" : state.state === "off" ? "Désactivé" : statusText(state)),
+    tileHead(state, ICONS.toggle, on ? "Activé" : state.state === "off" ? "Désactivé" : statusText(state), knob()),
   );
   toggle.addEventListener("click", () => inputCommand(state, "toggle"));
-  return el("div", { id: tileId(state.entity_id), class: tileClass(state, "switch") }, toggle);
+  return el("div", { id: tileId(state.entity_id), class: `${tileClass(state, "switch")} has-knob` }, toggle);
 }
 
 function inputNumberTile(state) {
@@ -531,6 +738,7 @@ function inputNumberTile(state) {
       type: "range", min: String(min), max: String(max), step: String(step),
       value: String(Number.isFinite(value) ? value : min), "aria-label": `Valeur de ${nameOf(state)}`,
     });
+    fillSlider(slider);
     // Pendant le glissement, la valeur s'affiche ; elle est envoyée au lâcher.
     slider.addEventListener("input", () => {
       shown.firstChild.textContent = number.format(Number(slider.value));
@@ -594,16 +802,64 @@ function timerTile(state) {
     : [button("start", "Démarrer")];
   const subtitle = [lookup(TIMER_LABELS, state.state) ?? statusText(state), typeof a.duration === "string" ? `durée ${a.duration}` : ""]
     .filter(Boolean).join(" · ");
+  const total = seconds(a.duration);
+  const left = active ? (Date.parse(a.finishes_at) - Date.now()) / 1000 : seconds(a.remaining) ?? total;
   return el(
     "div",
     { id: tileId(state.entity_id), class: `tile sensor${state.state === "active" ? " on" : ""}` },
     tileHead(state, ICONS.timer, subtitle),
-    remaining,
+    el("div", { class: "timer-row" }, ring(total, left ?? 0, active ? a.finishes_at : null), remaining),
     el("div", { class: "presets", role: "group", "aria-label": `Commandes de ${nameOf(state)}` }, ...buttons),
   );
 }
 
+/** Le cadran d'un thermostat : l'arc jusqu'à la consigne, un point pour la mesure. */
+function dial(target, measured, min, max) {
+  const r = 52;
+  const sweep = 2 * Math.PI * r * 0.75;
+  const full = 2 * Math.PI * r;
+  const part = (value) => Math.min(1, Math.max(0, (value - min) / Math.max(1e-9, max - min)));
+  const picture = svg("svg", { viewBox: "0 0 132 132", role: "img", "aria-label": target === null ? "Consigne inconnue" : `Consigne ${number.format(target)} degrés` });
+  picture.append(svg("circle", { cx: 66, cy: 66, r, class: "track", "stroke-dasharray": `${sweep} ${full}`, transform: "rotate(135 66 66)" }));
+  if (target !== null) {
+    picture.append(svg("circle", { cx: 66, cy: 66, r, class: "arc", "stroke-dasharray": `${sweep * part(target)} ${full}`, transform: "rotate(135 66 66)" }));
+  }
+  if (measured !== null) {
+    const angle = ((135 + 270 * part(measured)) * Math.PI) / 180;
+    picture.append(svg("circle", { cx: 66 + r * Math.cos(angle), cy: 66 + r * Math.sin(angle), r: 5, class: "now" }));
+  }
+  return el("div", { class: "dial" }, picture,
+    el("div", { class: "value", text: target === null ? "—" : `${number.format(target)}°` }));
+}
+
+/** `1:30:00` → 5400 secondes. */
+function seconds(hms) {
+  const match = typeof hms === "string" ? /^(\d+):(\d{2}):(\d{2})$/.exec(hms) : null;
+  return match ? Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]) : null;
+}
+
+/** Un anneau qui se vide pendant que le minuteur tourne. */
+function ring(totalSeconds, leftSeconds, finishesAt) {
+  const full = 2 * Math.PI * 20;
+  const picture = svg("svg", { viewBox: "0 0 48 48", class: "ring", "aria-hidden": "true" });
+  picture.append(svg("circle", { cx: 24, cy: 24, r: 20, class: "track" }));
+  const arc = svg("circle", { cx: 24, cy: 24, r: 20, class: "arc", "stroke-dasharray": full });
+  const share = totalSeconds ? Math.min(1, Math.max(0, leftSeconds / totalSeconds)) : 0;
+  arc.setAttribute("stroke-dashoffset", String(full * (1 - share)));
+  if (finishesAt && totalSeconds) {
+    arc.dataset.ringFinishes = finishesAt;
+    arc.dataset.ringTotal = String(totalSeconds);
+  }
+  picture.append(arc);
+  return picture;
+}
+
 function tickCountdowns() {
+  const full = 2 * Math.PI * 20;
+  for (const arc of document.querySelectorAll("[data-ring-finishes]")) {
+    const left = Math.max(0, (Date.parse(arc.dataset.ringFinishes) - Date.now()) / 1000);
+    arc.setAttribute("stroke-dashoffset", String(full * (1 - Math.min(1, left / Number(arc.dataset.ringTotal)))));
+  }
   for (const node of document.querySelectorAll("[data-finishes-at]")) {
     node.textContent = timerRemaining(node.dataset.finishesAt);
   }
@@ -644,15 +900,14 @@ function climateTile(state) {
       button.addEventListener("click", () => command("set_preset_mode", { preset_mode: preset }));
       return button;
     });
+  const min = finite(a.min_temp) ? a.min_temp : 5;
+  const max = finite(a.max_temp) ? a.max_temp : 30;
   const children = [
     tileHead(state, ICONS.flame, subtitle),
-    el(
-      "div",
-      { class: "setpoint" },
+    el("div", { class: "setpoint" },
       adjust(-step, "Baisser"),
-      el("div", { class: "value", text: target === null ? "—" : number.format(target) }, el("small", { text: "°C" })),
-      adjust(step, "Monter"),
-    ),
+      dial(target, finite(a.current_temperature) ? a.current_temperature : null, min, max),
+      adjust(step, "Monter")),
   ];
   if (typeof a.info === "string") children.push(el("p", { class: "error climate-info", text: a.info }));
   if (presets.length > 0) children.push(el("div", { class: "presets", role: "group", "aria-label": "Préréglages" }, ...presets));
@@ -693,7 +948,9 @@ function alarmTile(state) {
 function sensorTile(state) {
   if (state.attributes.device_class === "timestamp") return timestampTile(state);
   const unit = state.attributes.unit_of_measurement;
-  const value = el("div", { class: "value", text: state.state });
+  // « 22.2 » s'affiche « 22,2 » (à la française).
+  const numeric = /^-?\d+(\.\d+)?$/.test(state.state) ? number.format(Number(state.state)) : state.state;
+  const value = el("div", { class: "value", text: numeric });
   if (unit) value.append(el("small", { text: unit }));
   return el(
     "div",
@@ -717,13 +974,30 @@ function timestampTile(state) {
   return tile;
 }
 
-function tileHead(state, icon, subtitle) {
-  return el(
+function tileHead(state, icon, subtitle, extra) {
+  const head = el(
     "div",
     { class: "tile-head" },
     el("span", { class: "icon" }, svgIcon(icon)),
     el("div", {}, el("div", { class: "name", text: nameOf(state), title: state.entity_id }), el("div", { class: "sub", text: subtitle })),
   );
+  if (extra) head.append(extra);
+  return head;
+}
+
+/** L'interrupteur dessiné à droite d'une tuile qu'on allume d'un toucher. */
+const knob = () => el("span", { class: "knob", "aria-hidden": "true" });
+
+/** Un curseur se remplit jusqu'à sa valeur (et suit le doigt). */
+function fillSlider(slider) {
+  const update = () => {
+    const min = Number(slider.min) || 0;
+    const max = Number(slider.max) || 100;
+    const percent = ((Number(slider.value) - min) / Math.max(1e-9, max - min)) * 100;
+    slider.style.setProperty("--fill", `${Math.min(100, Math.max(0, percent))}%`);
+  };
+  update();
+  slider.addEventListener("input", update);
 }
 
 function tileClass(state, kind) {
@@ -802,6 +1076,7 @@ function svgIcon(paths) {
 }
 
 const ICONS = {
+  back: ["M15 18l-6-6 6-6"],
   bulb: ["M9 18h6", "M10 22h4", "M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"],
   plug: ["M9 2v6", "M15 2v6", "M6 8h12v3a6 6 0 0 1-12 0z", "M12 17v5"],
   door: ["M5 22V3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v19", "M3 22h18", "M15 12h.01"],
@@ -2196,10 +2471,14 @@ async function loadAccount() {
   account.user = typeof data.user === "string" ? data.user : "";
   account.roleLabel = typeof data.role_label === "string" ? data.role_label : "";
   account.permissions = data.permissions ?? {};
-  $("#account").textContent = account.roleLabel ? `${account.user} · ${account.roleLabel}` : account.user;
+  $("#account").replaceChildren(el("strong", { text: account.user }), account.roleLabel ? ` · ${account.roleLabel}` : "");
+  $("#open-account").textContent = account.user.charAt(0);
   $("#open-logbook").hidden = !account.permissions.history;
+  $("#dock-logbook").hidden = !account.permissions.history;
   $("#open-automations").hidden = !account.permissions.automations;
+  $("#dock-automations").hidden = !account.permissions.automations;
   $("#journal").hidden = !account.permissions.audit;
+  $(".dock").style.gridTemplateColumns = `repeat(${$(".dock").querySelectorAll(":scope > :not([hidden])").length}, minmax(0, 1fr))`;
   renderAll();
 }
 
@@ -2211,6 +2490,19 @@ function flash(text) {
   clearTimeout(flash.timer);
   flash.timer = setTimeout(() => { box.hidden = true; }, 4000);
 }
+
+// Barre du bas (téléphone) et fenêtre du compte.
+$("#dock-home").addEventListener("click", (event) => {
+  event.preventDefault();
+  if (view.room !== null) showRoom(null);
+  window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+});
+$("#dock-logbook").addEventListener("click", () => openLogbook());
+$("#dock-automations").addEventListener("click", () => $("#open-automations").click());
+for (const opener of ["#dock-account", "#open-account"]) {
+  $(opener).addEventListener("click", () => $("#account-dialog").showModal());
+}
+$("#account-close").addEventListener("click", () => $("#account-dialog").close());
 
 function showDashboard() {
   $("#login-view").hidden = true;

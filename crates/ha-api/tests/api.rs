@@ -472,6 +472,9 @@ async fn dashboard_files_are_served_with_security_headers() {
         ("/style.css", "text/css; charset=utf-8"),
         ("/icon.svg", "image/svg+xml"),
         ("/manifest.webmanifest", "application/manifest+json"),
+        ("/fonts/geist.woff2", "font/woff2"),
+        ("/fonts/geist-mono.woff2", "font/woff2"),
+        ("/fonts/bricolage-grotesque.woff2", "font/woff2"),
     ] {
         let response = app
             .router()
@@ -491,6 +494,31 @@ async fn dashboard_files_are_served_with_security_headers() {
         assert_eq!(headers[header::X_CONTENT_TYPE_OPTIONS], "nosniff");
         assert_eq!(headers[header::X_FRAME_OPTIONS], "DENY");
     }
+}
+
+#[tokio::test]
+async fn embedded_fonts_are_real_woff2_and_allowed_by_the_policy() {
+    let app = TestApp::new().await;
+    let response = app
+        .router()
+        .oneshot(
+            Request::builder()
+                .uri("/fonts/geist.woff2")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let policy = response.headers()[header::CONTENT_SECURITY_POLICY]
+        .to_str()
+        .unwrap()
+        .to_owned();
+    // Les polices viennent du serveur lui-même, jamais d'un site extérieur.
+    assert!(policy.contains("font-src 'self'"), "{policy}");
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert!(body.starts_with(b"wOF2"), "pas un fichier WOFF2");
 }
 
 #[tokio::test]

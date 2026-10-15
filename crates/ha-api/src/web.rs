@@ -14,13 +14,18 @@ const APP_JS: &str = include_str!("../web/app.js");
 const STYLE_CSS: &str = include_str!("../web/style.css");
 const ICON_SVG: &str = include_str!("../web/icon.svg");
 const MANIFEST: &str = include_str!("../web/manifest.webmanifest");
+// Polices (licence SIL Open Font License, voir `web/fonts/OFL-*.txt`) :
+// intégrées elles aussi, pour ne rien charger depuis Internet.
+const FONT_GEIST: &[u8] = include_bytes!("../web/fonts/geist.woff2");
+const FONT_GEIST_MONO: &[u8] = include_bytes!("../web/fonts/geist-mono.woff2");
+const FONT_BRICOLAGE: &[u8] = include_bytes!("../web/fonts/bricolage-grotesque.woff2");
 
 /// Politique de sécurité du contenu (CSP) : le navigateur ne charge **que**
 /// des ressources venant de ce serveur, et refuse tout script écrit
 /// directement dans la page. Même si un nom d'appareil piégé arrivait à
 /// s'insérer dans la page, il ne pourrait pas exécuter de code.
 pub const CONTENT_SECURITY_POLICY: &str = "default-src 'none'; script-src 'self'; style-src 'self'; \
-     img-src 'self'; connect-src 'self'; manifest-src 'self'; \
+     img-src 'self'; font-src 'self'; connect-src 'self'; manifest-src 'self'; \
      base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 
 fn file(content_type: &'static str, body: &'static str) -> impl IntoResponse {
@@ -53,4 +58,31 @@ pub(crate) async fn icon_svg() -> impl IntoResponse {
 
 pub(crate) async fn manifest() -> impl IntoResponse {
     file("application/manifest+json", MANIFEST)
+}
+
+/// Une police : elle ne change qu'avec une nouvelle version du serveur, le
+/// navigateur peut la garder une semaine.
+fn font(body: &'static [u8]) -> impl IntoResponse {
+    (
+        [
+            (header::CONTENT_TYPE, HeaderValue::from_static("font/woff2")),
+            (
+                header::CACHE_CONTROL,
+                HeaderValue::from_static("public, max-age=604800"),
+            ),
+        ],
+        body,
+    )
+}
+
+pub(crate) async fn font_geist() -> impl IntoResponse {
+    font(FONT_GEIST)
+}
+
+pub(crate) async fn font_geist_mono() -> impl IntoResponse {
+    font(FONT_GEIST_MONO)
+}
+
+pub(crate) async fn font_bricolage() -> impl IntoResponse {
+    font(FONT_BRICOLAGE)
 }
