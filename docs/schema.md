@@ -25,6 +25,17 @@ Les onglets **Formulaire** et **YAML** montrent toujours la même automatisation
 | retirer un fil              | le choisir, puis « Retirer le fil » (ou Suppr)   | pareil                            |
 | retirer un bloc             | « Supprimer le bloc » dans ses réglages (ou Suppr) | pareil                          |
 | tout voir / tout ranger     | « Tout voir » ; « Ranger » replace les blocs     | pareil                            |
+| revenir à 100 %             | toucher le pourcentage de zoom                   | pareil                            |
+| aller ailleurs d'un coup    | la **mini-carte**, en bas à droite (toucher ou glisser) | (cachée : l'écran est trop petit) |
+| trouver un bloc à ajouter   | taper son nom dans la recherche du menu, Entrée  | pareil                            |
+
+Un nouveau bloc se pose toujours sur une **place libre**, et la vue glisse pour que les réglages
+ouverts ne cachent jamais le bloc qu'on règle.
+
+Chaque famille a sa couleur et son icône : jaune pour les déclencheurs, orange pour les conditions et
+les choix, bleu pour les commandes, violet pour les attentes, vert pour les répétitions. Les sorties
+sont des pastilles : « alors » en vert, « sinon » en rouge, « ensuite » en gris. Le nom est
+toujours écrit : la couleur ne fait que l'accompagner.
 
 Au clavier : Tab passe d'un bloc à l'autre, Entrée ouvre ses réglages, les flèches le déplacent
 (Maj + flèche : de 50 px).
@@ -57,8 +68,9 @@ Le schéma est vérifié pendant que tu travailles :
 La liste **Exécutions**, en haut du schéma, montre les dix dernières. En en choisissant une :
 
 - le déclencheur qui l'a lancée, les conditions vraies et les actions faites passent en **vert**,
-  avec l'heure (et la branche choisie : « alors », « option 2 »…) ;
-- une condition fausse, une action refusée ou une attente dépassée passent en **rouge** ;
+  avec ✓ et l'heure (et la branche choisie : « alors », « option 2 »…) ; le long des fils du chemin
+  suivi, le courant s'anime (sauf si le système demande de réduire les animations) ;
+- une condition fausse, une action refusée ou une attente dépassée passent en **rouge**, avec ✕ ;
 - ce qui n'a pas été atteint est **grisé**.
 
 Le statut est toujours **écrit** sur le bloc (« vraie », « 18:06:37 · alors »), pas seulement
@@ -69,8 +81,8 @@ donné par la couleur.
 ![Le schéma sur téléphone : les réglages d'un bloc montent du bas](images/schema-telephone.png)
 
 Le même canevas, qu'on déplace avec un doigt et qu'on zoome en pinçant. Les réglages d'un bloc
-montent du bas de l'écran ; le nom et les réglages de l'automatisation sont repliés au-dessus du
-schéma pour lui laisser la place.
+montent du bas de l'écran, et la vue glisse pour garder le bloc visible au-dessus ; le nom et les
+réglages de l'automatisation sont repliés au-dessus du schéma pour lui laisser la place.
 
 ## Ce qui est enregistré
 
@@ -121,6 +133,14 @@ l'aller-retour redonne exactement la même configuration.
 Les fils sont des courbes SVG (`C`, deux points de contrôle à l'horizontale, comme n8n) ; les blocs,
 des éléments HTML placés au-dessus. Tout est dans un calque déplacé et agrandi par une seule
 transformation CSS (`translate(…) scale(…)`) : se déplacer ou zoomer ne redessine rien.
+
+À l'ouverture, le schéma est cadré pour tenir dans la fenêtre, sans descendre sous 55 % : un
+schéma trop grand montre son début (les déclencheurs) plutôt que des blocs illisibles. Le quadrillage
+du fond suit le déplacement et le zoom.
+
+Deux pièges évités : donner le focus à un bloc à moitié caché ferait **défiler** le canevas lui-même
+(même en `overflow: hidden`) et décalerait la barre d'outils ; et la place du panneau est mesurée
+sans son animation d'arrivée (`offsetTop`, qui ignore les transformations CSS).
 
 Les gestes passent par les **Pointer Events**, les mêmes pour la souris, le stylet et les doigts :
 deux doigts posés en même temps donnent un pincement (zoom autour de leur milieu, plus le

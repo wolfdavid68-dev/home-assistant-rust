@@ -16,9 +16,11 @@
 // itemsBlock, triggerFields, describeAction…) : les deux partagent la même
 // portée globale, un nom ne doit donc pas être déclaré deux fois.
 
-const NODE_W = 236;
-const NODE_MIN_H = 76;
-const PORT_GAP = 30;
+const NODE_W = 264;
+const NODE_MIN_H = 84;
+const PORT_GAP = 32;
+// À l'ouverture, le zoom ne descend pas plus bas : un schéma doit rester lisible.
+const FIT_MIN_SCALE = 0.55;
 const COL = 300;
 const ROW = 140;
 const MIN_SCALE = 0.3;
@@ -40,7 +42,37 @@ const canvas = {
   drag: null,
   layoutTimer: null,
   readOnly: false,
+  // Blocs qui viennent d'apparaître (animés une seule fois).
+  fresh: new Set(),
 };
+
+/** La famille d'un bloc : sa couleur et son icône. */
+function nodeCategory(node) {
+  if (node.kind === "trigger") return "trigger";
+  if (node.kind === "condition") return "condition";
+  switch (actionKind(node.item)) {
+    case "if":
+    case "choose":
+    case "condition":
+      return "flow";
+    case "delay":
+    case "wait_for_trigger":
+      return "time";
+    case "repeat":
+      return "loop";
+    default:
+      return "action";
+  }
+}
+
+/** La couleur d'une sortie : « alors » en vert, « sinon » en rouge… */
+function portTone(port) {
+  if (port === "then") return "yes";
+  if (port === "else") return "no";
+  if (port === "next") return "next";
+  if (port === "body") return "loop";
+  return "option";
+}
 
 // Les sorties de chaque sorte de bloc : [nom, libellé].
 function outputs(node) {
@@ -140,6 +172,7 @@ function stripBranches(item) {
 function addNode(kind, item, x, y, path = null) {
   const key = `n${canvas.nextKey++}`;
   canvas.nodes.set(key, { key, kind, item, x, y, path });
+  canvas.fresh.add(key);
   return key;
 }
 
@@ -384,8 +417,6 @@ function runStatus(node) {
 function renderCanvas() {
   const root = $("#auto-canvas");
   const { loose, errors } = graphToConfig(auto.config ?? {});
-  const stage = $("#canvas-stage");
-  stage.style.transform = `translate(${canvas.view.x}px, ${canvas.view.y}px) scale(${canvas.view.scale})`;
   root.classList.toggle("tracing", canvas.run !== null);
   root.classList.toggle("readonly", canvas.readOnly);
 
@@ -397,7 +428,8 @@ function renderCanvas() {
     if (!from || !to) return;
     const d = curve(portPoint(from, wire.port), portPoint(to, null));
     const reached = canvas.run && runStatus(from) && runStatus(to);
-    const path = svg("path", { d, class: `wire${index === canvas.selectedWire ? " selected" : ""}${reached ? " reached" : ""}` });
+    const tone = outputs(from).length > 1 ? ` tone-${portTone(wire.port)}` : "";
+    const path = svg("path", { d, class: `wire${tone}${index === canvas.selectedWire ? " selected" : ""}${reached ? " reached" : ""}` });
     // Une zone plus large, invisible, pour viser le fil au doigt.
     const hit = svg("path", { d, class: "wire-hit", "data-wire": String(index) });
     wires.append(path, hit);
@@ -412,7 +444,8 @@ function renderCanvas() {
   const blocks = [...canvas.nodes.values()].map((node) => {
     const [label, kind] = nodeTitle(node);
     const status = runStatus(node);
-    const classes = ["node", `node-${node.kind === "action" ? actionKind(node.item) : node.kind}`];
+    const classes = ["node", `node-${node.kind === "action" ? actionKind(node.item) : node.kind}`, `cat-${nodeCategory(node)}`];
+    if (canvas.fresh.has(node.key)) classes.push("fresh");
     if (outputs(node).some(([, text]) => text)) classes.push("node-ports");
     if (node.key === canvas.selected) classes.push("selected");
     if (loose.has(node.key)) classes.push("loose");
@@ -425,21 +458,33 @@ function renderCanvas() {
     const body = el(
       "button",
       { type: "button", class: "node-body", "data-node": node.key, "aria-label": `${label} : ${kind}. ${nodeText(node)}` },
-      el("span", { class: "node-head" }, el("span", { class: "node-icon" }, svgIcon(nodeIcon(node))), el("span", { class: "node-kind", text: `${label} · ${kind}` })),
-      el("span", { class: "node-text", text: nodeText(node) || "à compléter" }),
+      el("span", { class: "node-icon" }, svgIcon(nodeIcon(node))),
+      el(
+        "span",
+        { class: "node-titles" },
+        // La famille (Quand, Si, Alors) est dite par la couleur, l'icône et
+        // le nom pour les lecteurs d'écran : ici, la sorte seulement.
+        el("span", { class: "node-kind", text: kind }),
+        el("span", { class: `node-text${nodeText(node) ? "" : " empty"}`, text: nodeText(node) || "À compléter" }),
+      ),
     );
     box.append(body);
-    if (status?.detail) box.append(el("span", { class: "node-run", text: status.detail }));
+    if (status) {
+      // Le résultat est écrit (et pas seulement donné par la couleur).
+      const mark = status.status === "done" ? "✓" : "✕";
+      box.append(el("span", { class: "node-run", text: `${mark} ${status.detail || (status.status === "done" ? "fait" : "arrêté")}` }));
+    }
     if (hasInput(node)) box.append(el("span", { class: "port port-in", "data-in": node.key, title: "Entrée" }));
     const list = outputs(node);
     list.forEach(([port, text]) => {
       const [, y] = portPoint(node, port);
       const top = y - node.y;
-      const out = el("span", { class: "port port-out", "data-out": node.key, "data-port": port, title: text || "Sortie" });
+      const tone = list.length > 1 ? ` tone-${portTone(port)}` : "";
+      const out = el("span", { class: `port port-out${tone}${wireFrom(node.key, port) ? " linked" : ""}`, "data-out": node.key, "data-port": port, title: text || "Sortie" });
       out.style.top = `${top}px`;
       box.append(out);
       if (text) {
-        const name = el("span", { class: "port-label", text });
+        const name = el("span", { class: `port-label${tone}`, text });
         name.style.top = `${top}px`;
         box.append(name);
       }
@@ -453,7 +498,10 @@ function renderCanvas() {
     return box;
   });
   $("#canvas-nodes").replaceChildren(...blocks);
-  $("#canvas-errors").replaceChildren(...errors.map((error) => el("li", { text: error })));
+  canvas.fresh.clear();
+  $("#canvas-empty").hidden = canvas.nodes.size > 0 || canvas.readOnly;
+  applyView();
+  $("#canvas-errors").replaceChildren(...errors.map((error) => el("li", {}, el("span", { class: "canvas-error-mark", "aria-hidden": "true", text: "!" }), error)));
   $("#canvas-wire-delete").hidden = canvas.selectedWire === null || canvas.readOnly;
   $("#canvas-add").hidden = canvas.readOnly;
   $("#canvas-tidy").hidden = canvas.readOnly;
@@ -478,16 +526,62 @@ function openPanel(key) {
   const box = el("div", { class: "auto-fields" }, ...fields);
   const remove = el("button", { type: "button", class: "ghost danger small", text: "Supprimer le bloc" });
   remove.addEventListener("click", () => removeNode(key));
-  const close = el("button", { type: "button", class: "ghost small", text: "Fermer", "aria-label": "Fermer les réglages du bloc" });
+  const close = el("button", { type: "button", class: "canvas-panel-close", "aria-label": "Fermer les réglages du bloc", text: "×" });
   close.addEventListener("click", () => openPanel(null));
+  panel.className = `canvas-panel cat-${nodeCategory(node)}`;
   panel.replaceChildren(
-    el("div", { class: "canvas-panel-head" }, el("strong", { text: `${label} · ${kind}` }), close),
+    el(
+      "div",
+      { class: "canvas-panel-head" },
+      el("span", { class: "node-icon" }, svgIcon(nodeIcon(node))),
+      el("span", { class: "canvas-panel-titles" }, el("small", { text: label }), el("strong", { text: kind })),
+      close,
+    ),
     box,
   );
-  if (!canvas.readOnly) panel.append(el("div", { class: "auto-actions" }, remove));
+  if (!canvas.readOnly) panel.append(el("div", { class: "canvas-panel-foot" }, remove));
   else for (const control of box.querySelectorAll("input, select, button, textarea")) control.disabled = true;
   panel.hidden = false;
   renderCanvas();
+  keepVisible(node);
+}
+
+/** Le panneau ne doit pas cacher le bloc qu'il règle : la vue glisse pour
+ *  le garder à côté (à gauche du panneau ; au-dessus, sur téléphone). */
+function keepVisible(node) {
+  const area = $("#auto-canvas").getBoundingClientRect();
+  // La place du panneau sans son animation d'arrivée (offsetTop/Left
+  // ignorent les transformations CSS).
+  const box = $("#canvas-panel");
+  const panel = { top: area.top + box.offsetTop, left: area.left + box.offsetLeft };
+  const { scale } = canvas.view;
+  const left = node.x * scale + canvas.view.x;
+  const top = node.y * scale + canvas.view.y;
+  const width = (NODE_W + 60) * scale; // le bloc et son « + »
+  const height = nodeHeight(node) * scale;
+  const sheet = panel.top - area.top > area.height / 4; // panneau en bas
+  let dx = 0;
+  let dy = 0;
+  if (sheet) {
+    const bottom = panel.top - area.top - 16;
+    if (top + height > bottom) dy = bottom - (top + height);
+    if (top + dy < 64) dy = 64 - top;
+    if (left + width > area.width - 16) dx = area.width - 16 - (left + width);
+    if (left + dx < 16) dx = 16 - left;
+  } else {
+    const right = panel.left - area.left - 16;
+    if (left + width > right) dx = right - (left + width);
+    if (left + dx < 16) dx = 16 - left;
+    if (top < 64) dy = 64 - top;
+    if (top + dy + height > area.height - 16) dy = area.height - 16 - height - top;
+  }
+  if (dx === 0 && dy === 0) return;
+  const stage = $("#canvas-stage");
+  stage.classList.add("gliding");
+  canvas.view.x += dx;
+  canvas.view.y += dy;
+  applyView();
+  setTimeout(() => stage.classList.remove("gliding"), 320);
 }
 
 /** Les champs d'un bloc : ceux du formulaire, sans les suites d'actions
@@ -576,19 +670,50 @@ function openAddMenu(screenX, screenY, at, from = null) {
   groups.push(["Si… (condition)", "condition", CONDITION_KINDS]);
   groups.push(["Alors… (action)", "action", ACTION_KINDS]);
   const list = el("div", { class: "canvas-menu-list", role: "menu" });
+  const none = el("p", { class: "canvas-menu-none", text: "Aucun bloc ne correspond.", hidden: "" });
+  const search = el("input", { type: "search", class: "canvas-menu-search", placeholder: "Chercher un bloc…", "aria-label": "Chercher un bloc", autocomplete: "off" });
+  search.addEventListener("input", () => {
+    const words = search.value.trim().toLowerCase();
+    for (const item of list.querySelectorAll(".canvas-menu-item")) item.hidden = words !== "" && !item.textContent.toLowerCase().includes(words);
+    for (const title of list.querySelectorAll(".canvas-menu-title")) {
+      let next = title.nextElementSibling;
+      let any = false;
+      while (next && !next.classList.contains("canvas-menu-title")) {
+        any ||= !next.hidden;
+        next = next.nextElementSibling;
+      }
+      title.hidden = !any;
+    }
+    none.hidden = [...list.querySelectorAll(".canvas-menu-item")].some((item) => !item.hidden);
+  });
+  search.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      [...list.querySelectorAll(".canvas-menu-item")].find((item) => !item.hidden)?.click();
+      event.preventDefault();
+    } else if (event.key === "Escape") {
+      menu.hidden = true;
+    }
+  });
   for (const [title, kind, kinds] of groups) {
-    list.append(el("p", { class: "canvas-menu-title", text: title }));
+    list.append(el("p", { class: `canvas-menu-title cat-${kind === "action" ? "action" : kind}`, text: title }));
     for (const [value, [text, make]] of Object.entries(kinds)) {
       // Une condition « du début » n'existe que juste après les déclencheurs ;
       // ailleurs, c'est « continuer seulement si… » (une action).
       if (kind === "condition" && fromNode && fromNode.kind !== "trigger" && fromNode.kind !== "condition") continue;
       if (kind === "action" && value === "condition" && (!fromNode || fromNode.kind === "trigger")) continue;
-      const item = el("button", { type: "button", role: "menuitem", class: "canvas-menu-item", text });
+      const sample = { kind, item: make() };
+      const item = el(
+        "button",
+        { type: "button", role: "menuitem", class: `canvas-menu-item cat-${nodeCategory(sample)}` },
+        el("span", { class: "node-icon" }, svgIcon(nodeIcon(sample))),
+        el("span", { text }),
+      );
       item.addEventListener("click", () => {
         menu.hidden = true;
         let made = make();
         if (kind === "action") made = stripBranches(made);
-        const key = addNode(kind, made, at[0], at[1]);
+        const [x, y] = freeSpot(at[0], at[1]);
+        const key = addNode(kind, made, x, y);
         if (fromNode) {
           // Ajouté entre deux blocs : le bloc suivant passe après le nouveau.
           const after = wireFrom(fromNode.key, from.port);
@@ -609,14 +734,26 @@ function openAddMenu(screenX, screenY, at, from = null) {
   close.addEventListener("click", () => {
     menu.hidden = true;
   });
-  menu.replaceChildren(list, close);
+  menu.replaceChildren(search, list, none, close);
   menu.hidden = false;
   const area = $("#auto-canvas").getBoundingClientRect();
   const left = Math.min(Math.max(8, screenX - area.left), Math.max(8, area.width - 280));
-  const top = Math.min(Math.max(8, screenY - area.top), Math.max(8, area.height - 320));
+  const top = Math.min(Math.max(8, screenY - area.top), Math.max(8, area.height - 380));
   menu.style.left = `${left}px`;
   menu.style.top = `${top}px`;
-  list.querySelector("button")?.focus();
+  search.focus({ preventScroll: true });
+}
+
+/** Une place libre près de `[x, y]` : un nouveau bloc ne se pose jamais
+ *  sur un autre (on descend d'une demi-ligne jusqu'à trouver de la place). */
+function freeSpot(x, y) {
+  const snap = (v) => Math.round(v / 10) * 10;
+  let top = snap(y);
+  const left = snap(x);
+  const overlaps = (t) => [...canvas.nodes.values()].some((n) =>
+    left < n.x + NODE_W + 24 && n.x < left + NODE_W + 24 && t < n.y + nodeHeight(n) + 24 && n.y < t + NODE_MIN_H + 24);
+  for (let i = 0; i < 40 && overlaps(top); i++) top += ROW / 2;
+  return [left, top];
 }
 
 /** Le bloc où arrivent les déclencheurs. */
@@ -648,7 +785,83 @@ function zoomAt(clientX, clientY, factor) {
   canvas.view.x = px - ((px - canvas.view.x) * scale) / canvas.view.scale;
   canvas.view.y = py - ((py - canvas.view.y) * scale) / canvas.view.scale;
   canvas.view.scale = scale;
-  $("#canvas-stage").style.transform = `translate(${canvas.view.x}px, ${canvas.view.y}px) scale(${scale})`;
+  applyView();
+}
+
+/** Applique la vue (déplacement et zoom) : une seule transformation CSS ;
+ *  le pourcentage et la mini-carte suivent. */
+function applyView() {
+  const { x, y, scale } = canvas.view;
+  $("#canvas-stage").style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+  // Le quadrillage suit le schéma : on sent qu'on se déplace.
+  const area = $("#auto-canvas");
+  area.style.backgroundPosition = `${x}px ${y}px`;
+  area.style.backgroundSize = `${20 * scale}px ${20 * scale}px`;
+  $("#canvas-zoom-level").textContent = `${Math.round(scale * 100)} %`;
+  renderMinimap();
+}
+
+/** Les limites du schéma (blocs), en coordonnées du schéma. */
+function bounds() {
+  const nodes = [...canvas.nodes.values()];
+  if (nodes.length === 0) return null;
+  return {
+    minX: Math.min(...nodes.map((n) => n.x)),
+    minY: Math.min(...nodes.map((n) => n.y)),
+    maxX: Math.max(...nodes.map((n) => n.x + NODE_W)),
+    maxY: Math.max(...nodes.map((n) => n.y + nodeHeight(n))),
+  };
+}
+
+const MAP_W = 180;
+const MAP_H = 112;
+
+/** La mini-carte : tous les blocs, et le rectangle de ce qu'on voit. */
+function renderMinimap() {
+  const map = $("#canvas-minimap");
+  const box = bounds();
+  // Un élément SVG n'a pas de propriété `hidden` : on passe par l'attribut.
+  const hide = !box || canvas.nodes.size < 2;
+  map.toggleAttribute("hidden", hide);
+  if (hide) return;
+  const area = $("#auto-canvas").getBoundingClientRect();
+  const view = {
+    minX: -canvas.view.x / canvas.view.scale,
+    minY: -canvas.view.y / canvas.view.scale,
+    maxX: (area.width - canvas.view.x) / canvas.view.scale,
+    maxY: (area.height - canvas.view.y) / canvas.view.scale,
+  };
+  const all = {
+    minX: Math.min(box.minX, view.minX) - 40,
+    minY: Math.min(box.minY, view.minY) - 40,
+    maxX: Math.max(box.maxX, view.maxX) + 40,
+    maxY: Math.max(box.maxY, view.maxY) + 40,
+  };
+  const k = Math.min(MAP_W / (all.maxX - all.minX), MAP_H / (all.maxY - all.minY));
+  const ox = (MAP_W - (all.maxX - all.minX) * k) / 2;
+  const oy = (MAP_H - (all.maxY - all.minY) * k) / 2;
+  canvas.map = { k, ox, oy, minX: all.minX, minY: all.minY };
+  const at = (x, y) => [ox + (x - all.minX) * k, oy + (y - all.minY) * k];
+  const shapes = [...canvas.nodes.values()].map((node) => {
+    const [x, y] = at(node.x, node.y);
+    return svg("rect", { x, y, width: Math.max(3, NODE_W * k), height: Math.max(2, nodeHeight(node) * k), rx: 2, class: `mm-node cat-${nodeCategory(node)}` });
+  });
+  const [vx, vy] = at(view.minX, view.minY);
+  shapes.push(svg("rect", { x: vx, y: vy, width: (view.maxX - view.minX) * k, height: (view.maxY - view.minY) * k, rx: 4, class: "mm-view" }));
+  map.replaceChildren(...shapes);
+}
+
+/** Centre la vue sur le point de la mini-carte touché. */
+function minimapGoTo(clientX, clientY) {
+  if (!canvas.map) return;
+  const rect = $("#canvas-minimap").getBoundingClientRect();
+  const { k, ox, oy, minX, minY } = canvas.map;
+  const x = (clientX - rect.left - ox) / k + minX;
+  const y = (clientY - rect.top - oy) / k + minY;
+  const area = $("#auto-canvas").getBoundingClientRect();
+  canvas.view.x = area.width / 2 - x * canvas.view.scale;
+  canvas.view.y = area.height / 2 - y * canvas.view.scale;
+  applyView();
 }
 
 /** Tout le schéma dans la fenêtre. */
@@ -664,11 +877,16 @@ function fitView() {
   const maxX = Math.max(...nodes.map((n) => n.x + NODE_W + 90));
   const maxY = Math.max(...nodes.map((n) => n.y + nodeHeight(n)));
   const pad = 32;
-  const scale = Math.min(1, Math.max(MIN_SCALE, Math.min((area.width - 2 * pad) / (maxX - minX), (area.height - 2 * pad) / (maxY - minY))));
+  const top = 72; // la barre d'outils
+  const fit = Math.min((area.width - 2 * pad) / (maxX - minX), (area.height - top - pad) / (maxY - minY));
+  // Trop grand pour tenir lisiblement : on montre le début (les déclencheurs).
+  const scale = Math.min(1, Math.max(FIT_MIN_SCALE, fit));
+  const freeX = area.width - 2 * pad - (maxX - minX) * scale;
+  const freeY = area.height - top - pad - (maxY - minY) * scale;
   canvas.view = {
     scale,
-    x: pad - minX * scale + Math.max(0, (area.width - 2 * pad - (maxX - minX) * scale) / 2),
-    y: pad - minY * scale + Math.max(0, (area.height - 2 * pad - (maxY - minY) * scale) / 2),
+    x: pad - minX * scale + Math.max(0, freeX / 2),
+    y: top - minY * scale + Math.max(0, freeY / 2),
   };
 }
 
@@ -691,9 +909,22 @@ async function saveLayout(id, layout) {
 function setupCanvasEvents() {
   const area = $("#auto-canvas");
 
+  // Donner le focus à un bloc à moitié hors de la vue ferait défiler le
+  // canevas lui-même (même en `overflow: hidden`), et décalerait la barre
+  // d'outils et le panneau : seule la transformation déplace la vue.
+  area.addEventListener("scroll", () => {
+    area.scrollLeft = 0;
+    area.scrollTop = 0;
+  });
+
   area.addEventListener("pointerdown", (event) => {
     // Un appui ailleurs que dans le menu le ferme.
     if (!event.target.closest?.(".canvas-menu")) $("#canvas-menu").hidden = true;
+    // Les boutons, le panneau, le menu : pas un geste sur le canevas.
+    if (event.target.closest?.(".port-add, .canvas-tools, .canvas-panel, .canvas-menu, .canvas-errors, .canvas-minimap, .canvas-empty")) return;
+    // Premier doigt d'un geste : on oublie ceux d'avant (un doigt « perdu »
+    // ferait croire à un pincement).
+    if (event.isPrimary) canvas.pointers.clear();
     canvas.pointers.set(event.pointerId, [event.clientX, event.clientY]);
     if (canvas.pointers.size === 2) {
       // Deux doigts : on pince pour zoomer (et on annule le geste en cours).
@@ -705,7 +936,6 @@ function setupCanvasEvents() {
     const out = target.closest?.("[data-out]");
     const node = target.closest?.("[data-node]");
     const hit = target.closest?.("[data-wire]");
-    if (target.closest?.(".port-add, .canvas-tools, .canvas-panel, .canvas-menu, .canvas-errors")) return;
     area.setPointerCapture(event.pointerId);
     if (out && !canvas.readOnly) {
       const from = canvas.nodes.get(out.dataset.out);
@@ -744,7 +974,7 @@ function setupCanvasEvents() {
       canvas.view.x = drag.vx + event.clientX - drag.sx;
       canvas.view.y = drag.vy + event.clientY - drag.sy;
       drag.moved ||= Math.hypot(event.clientX - drag.sx, event.clientY - drag.sy) > 4;
-      $("#canvas-stage").style.transform = `translate(${canvas.view.x}px, ${canvas.view.y}px) scale(${canvas.view.scale})`;
+      applyView();
     } else if (drag.type === "node") {
       if (!drag.moved && Math.hypot(event.clientX - drag.sx, event.clientY - drag.sy) < 5) return;
       drag.moved = true;
@@ -790,7 +1020,7 @@ function setupCanvasEvents() {
   area.addEventListener("pointercancel", end);
 
   area.addEventListener("wheel", (event) => {
-    if (event.target.closest(".canvas-panel, .canvas-menu, .canvas-errors")) return;
+    if (event.target.closest(".canvas-panel, .canvas-menu, .canvas-errors, .canvas-minimap")) return;
     event.preventDefault();
     if (event.ctrlKey || event.metaKey) {
       // Pincement sur un pavé tactile (ou Ctrl + molette) : zoom.
@@ -798,7 +1028,7 @@ function setupCanvasEvents() {
     } else {
       canvas.view.x -= event.deltaX;
       canvas.view.y -= event.deltaY;
-      $("#canvas-stage").style.transform = `translate(${canvas.view.x}px, ${canvas.view.y}px) scale(${canvas.view.scale})`;
+      applyView();
     }
   }, { passive: false });
 
@@ -835,7 +1065,7 @@ function setupCanvasEvents() {
       if (event.key === "ArrowUp") node.y -= step;
       if (event.key === "ArrowDown") node.y += step;
       renderCanvas();
-      area.querySelector(`.node-body[data-node="${node.key}"]`)?.focus();
+      area.querySelector(`.node-body[data-node="${node.key}"]`)?.focus({ preventScroll: true });
       scheduleLayoutSave();
       event.preventDefault();
     }
@@ -845,6 +1075,25 @@ function setupCanvasEvents() {
   $("#canvas-panel").addEventListener("input", () => renderCanvas());
   $("#canvas-panel").addEventListener("change", () => renderCanvas());
 
+  // La mini-carte : toucher ou glisser pour se déplacer.
+  const map = $("#canvas-minimap");
+  map.addEventListener("pointerdown", (event) => {
+    map.setPointerCapture(event.pointerId);
+    minimapGoTo(event.clientX, event.clientY);
+    event.stopPropagation();
+  });
+  map.addEventListener("pointermove", (event) => {
+    if (map.hasPointerCapture(event.pointerId)) minimapGoTo(event.clientX, event.clientY);
+  });
+  $("#canvas-zoom-level").addEventListener("click", () => {
+    const r = area.getBoundingClientRect();
+    zoomAt(r.left + r.width / 2, r.top + r.height / 2, 1 / canvas.view.scale);
+  });
+  $("#canvas-empty-add").addEventListener("click", (event) => {
+    const r = area.getBoundingClientRect();
+    const [x, y] = toCanvas(r.left + r.width / 2, r.top + r.height / 2);
+    openAddMenu(event.clientX, event.clientY, [x - NODE_W / 2, y]);
+  });
   $("#canvas-zoom-in").addEventListener("click", () => {
     const r = area.getBoundingClientRect();
     zoomAt(r.left + r.width / 2, r.top + r.height / 2, 1.2);
@@ -902,7 +1151,7 @@ async function showCanvas() {
   configToGraph(auto.config ?? { triggers: [], actions: [] }, entry?.layout ?? {});
   $("#canvas-panel").hidden = true;
   $("#canvas-menu").hidden = true;
-  renderCanvas();
+  // Cadrer d'abord, dessiner ensuite : les blocs apparaissent une seule fois.
   fitView();
   renderCanvas();
   await loadCanvasRuns();
