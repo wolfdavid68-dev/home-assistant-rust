@@ -18,13 +18,14 @@ Reprendre la mise en page des tableaux de bord isométriques de Home Assistant (
 - **puis les volets**, sur toute la largeur, trois ou quatre par ligne, avec ▲ ■ ▼, et tous les
   autres appareils comme avant.
 
-Les icônes sont rondes et s'allument en couleur : dorée pour une lumière allumée ou une porte
+Les icônes sont rondes et s'allument en couleur : orange pour une lumière allumée ou une porte
 ouverte, rouge pour une alerte.
 
 ## Choisir l'apparence
 
-**Mon compte → Apparence → Maquette** : un fond sombre en dégradé, violet vers bleu nuit, et des
-tuiles translucides. C'est fait pour une maquette 3D sur fond sombre : l'article de domo-blog
+**Mon compte → Apparence → Maquette** : un fond presque noir, avec une lueur magenta en haut à
+droite, violette en haut et bleu-vert en bas ; des panneaux plus sombres que le fond, des icônes
+rondes qui s'allument en orange, comme sur les tableaux de domo-blog. C'est fait pour une maquette 3D sur fond sombre : l'article de domo-blog
 demande à l'IA un fond `#1C1C1C`.
 
 Les deux styles « plan d'architecte » prennent aussi cette mise en page. Clair et sombre gardent
