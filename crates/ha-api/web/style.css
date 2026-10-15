@@ -515,3 +515,15 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .forecast .min { color: var(--muted); }
 .forecast .rain { color: #3b82f6; min-height: 1em; font-size: 0.75rem; }
 .attribution { color: var(--muted); font-size: 0.7rem; }
+
+/* ---------- Thermostat ---------- */
+
+.setpoint { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.setpoint .round { flex: 0 0 44px; height: 44px; font-size: 1.4rem; line-height: 1; }
+.setpoint .round:disabled { opacity: 0.4; cursor: default; }
+.presets { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.presets .period { font-size: 0.8rem; padding: 0.25rem 0.7rem; }
+.tile.climate.heating { background: var(--accent-soft); border-color: var(--accent); }
+.tile.climate.heating .icon { background: var(--accent); color: #fff; }
+.tile.climate.stopped .setpoint .value { color: var(--muted); }
+.climate-info { font-size: 0.8rem; }

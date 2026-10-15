@@ -61,6 +61,7 @@ Les fonctions de Home Assistant les plus utiles au quotidien, une par une, dans 
 ### Troisième partie : aller plus loin
 
 - [x] **15. Météo locale** : conditions, température, prévisions sur 5 jours avec Open-Meteo (sans compte), capteurs pour les automatisations ([guide](docs/meteo.md))
+- [x] **16. Thermostat** : un radiateur sur prise connectée piloté d'après un thermomètre, consigne, préréglages, fenêtre ouverte, programmation par automatisations ([guide](docs/thermostat.md))
 
 En parallèle, dès que tu me donnes les informations : commande du chauffage Somfy (résultat de
 `somfy devices`), puis de l'alarme (avec confirmation et journal).

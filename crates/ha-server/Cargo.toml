@@ -18,6 +18,7 @@ ha-hue = { path = "../ha-hue" }
 ha-mqtt = { path = "../ha-mqtt" }
 ha-notify = { path = "../ha-notify" }
 ha-somfy = { path = "../ha-somfy" }
+ha-thermostat = { path = "../ha-thermostat" }
 ha-tls = { path = "../ha-tls" }
 ha-weather = { path = "../ha-weather" }
 jiff.workspace = true

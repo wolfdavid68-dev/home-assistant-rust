@@ -40,6 +40,7 @@ utilisation :
   ha-server automations delete <id>  supprime une automatisation de l'éditeur
   ha-server areas check           vérifie le fichier des pièces
   ha-server alexa check           vérifie le fichier des appareils pour Alexa
+  ha-server thermostats check     vérifie le fichier des thermostats
   ha-server audit [nombre]        affiche le journal d'audit
   ha-server audit verify          vérifie que le journal n'a pas été modifié
   ha-server healthcheck           vérifie qu'un serveur répond (pour Docker)";
@@ -930,6 +931,32 @@ pub fn check_alexa(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
             Some(name) => println!("  - {} « {name} »", device.entity_id),
             None => println!("  - {} (nom de l'appareil)", device.entity_id),
         }
+    }
+    Ok(())
+}
+
+/// `ha-server thermostats check` : vérifie `thermostats.yaml`.
+pub fn check_thermostats(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
+    if !path.exists() {
+        println!("{} n'existe pas : aucun thermostat.", path.display());
+        return Ok(());
+    }
+    let thermostats =
+        ha_thermostat::load(path).map_err(|error| format!("{} : {error}", path.display()))?;
+    println!(
+        "{} : {} thermostat(s) valide(s)",
+        path.display(),
+        thermostats.len()
+    );
+    for t in &thermostats {
+        let window = t
+            .window
+            .as_ref()
+            .map_or_else(String::new, |w| format!(", fenêtre {w}"));
+        println!(
+            "  - climate.{} « {} » : {} d'après {}{window}, {}–{} °C",
+            t.id, t.name, t.heater, t.sensor, t.min_temp, t.max_temp
+        );
     }
     Ok(())
 }
