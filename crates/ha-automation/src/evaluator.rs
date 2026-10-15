@@ -10,9 +10,10 @@ use ha_sun::{Location, SunEvent};
 use jiff::SignedDuration;
 use jiff::civil::{Date, DateTime, Time};
 use jiff::tz::TimeZone;
+use serde_json::Value;
 use tokio::time::Instant;
 
-use crate::config::{Automation, Condition, Pattern, Trigger};
+use crate::config::{Automation, CalendarEdge, Condition, Pattern, Trigger};
 
 /// Un déclencheur `state` avec `for:` en attente : « la porte est ouverte…
 /// on vérifiera dans 5 minutes qu'elle l'est toujours ».
@@ -291,6 +292,11 @@ impl Evaluator {
                                 .is_some_and(|moment| previous < moment && moment <= now)
                         })
                     }),
+                    Trigger::Calendar {
+                        entity_id,
+                        edge,
+                        offset,
+                    } => calendar_crossed(states, entity_id, *edge, *offset, previous, now),
                     _ => false,
                 };
                 if crossed_now {
@@ -336,6 +342,38 @@ impl Evaluator {
             .iter()
             .all(|condition| condition_passes(condition, states, now, self.sun.as_ref(), trigger))
     }
+}
+
+/// Un rendez-vous de l'agenda commence (ou se termine), décalage compris,
+/// entre `previous` et `now` ? Les rendez-vous viennent de l'attribut
+/// `events` de l'agenda (`{"start": "2026-10-15T18:30:00", …}`) : le moteur
+/// n'a pas besoin de lire la base.
+fn calendar_crossed(
+    states: &StateMachine,
+    entity_id: &EntityId,
+    edge: CalendarEdge,
+    offset: SignedDuration,
+    previous: DateTime,
+    now: DateTime,
+) -> bool {
+    let Some(calendar) = states.get(entity_id) else {
+        return false;
+    };
+    let Some(events) = calendar
+        .attributes()
+        .get("events")
+        .and_then(Value::as_array)
+    else {
+        return false;
+    };
+    events.iter().any(|event| {
+        event
+            .get(edge.field())
+            .and_then(Value::as_str)
+            .and_then(|text| text.parse::<DateTime>().ok())
+            .and_then(|moment| moment.checked_add(offset).ok())
+            .is_some_and(|moment| previous < moment && moment <= now)
+    })
 }
 
 fn to_fired(map: BTreeMap<usize, usize>) -> Vec<Fired> {

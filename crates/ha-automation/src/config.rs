@@ -227,6 +227,16 @@ enum TriggerConfig {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         id: Option<String>,
     },
+    /// Le début ou la fin d'un rendez-vous de l'agenda, avec un décalage
+    /// (`-00:30:00` : une demi-heure avant).
+    Calendar {
+        entity_id: String,
+        event: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        offset: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        id: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -452,7 +462,35 @@ pub enum Trigger {
         minutes: Pattern,
         second: i8,
     },
+    /// Le début (ou la fin) d'un rendez-vous de l'agenda, plus `offset`.
+    Calendar {
+        entity_id: EntityId,
+        edge: CalendarEdge,
+        offset: SignedDuration,
+    },
 }
+
+/// Le début ou la fin d'un rendez-vous.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CalendarEdge {
+    Start,
+    End,
+}
+
+impl CalendarEdge {
+    /// Le nom du champ de l'attribut `events` de l'agenda.
+    #[must_use]
+    pub fn field(self) -> &'static str {
+        match self {
+            Self::Start => "start",
+            Self::End => "end",
+        }
+    }
+}
+
+/// Le décalage d'un déclencheur `calendar` : une semaine au plus, car l'agenda
+/// ne publie que les rendez-vous de la semaine passée et du mois à venir.
+const MAX_CALENDAR_OFFSET: SignedDuration = SignedDuration::from_hours(7 * 24);
 
 /// Un morceau de motif horaire.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -768,7 +806,8 @@ fn check_trigger(config: TriggerConfig) -> Result<(Trigger, Option<String>), Str
         | TriggerConfig::Time { id, .. }
         | TriggerConfig::Sun { id, .. }
         | TriggerConfig::TimePattern { id, .. }
-        | TriggerConfig::Event { id, .. } => id.clone(),
+        | TriggerConfig::Event { id, .. }
+        | TriggerConfig::Calendar { id, .. } => id.clone(),
     };
     let trigger = match config {
         TriggerConfig::State {
@@ -817,6 +856,35 @@ fn check_trigger(config: TriggerConfig) -> Result<(Trigger, Option<String>), Str
             seconds,
             ..
         } => check_time_pattern(hours, minutes, seconds)?,
+        TriggerConfig::Calendar {
+            entity_id,
+            event,
+            offset,
+            ..
+        } => {
+            let entity_id = EntityId::new(&entity_id).map_err(|error| error.to_string())?;
+            if entity_id.domain() != "calendar" {
+                return Err(format!("calendar : {entity_id} n'est pas un agenda"));
+            }
+            let edge = match event.as_str() {
+                "start" => CalendarEdge::Start,
+                "end" => CalendarEdge::End,
+                _ => return Err(format!("calendar : event {event:?} (start ou end)")),
+            };
+            let offset = offset
+                .as_deref()
+                .map(parse_offset)
+                .transpose()?
+                .unwrap_or_default();
+            if offset.abs() > MAX_CALENDAR_OFFSET {
+                return Err("calendar : le décalage est d'une semaine au plus".into());
+            }
+            Trigger::Calendar {
+                entity_id,
+                edge,
+                offset,
+            }
+        }
         TriggerConfig::Event {
             event_type,
             event_data,
@@ -960,6 +1028,18 @@ impl Trigger {
             }
             .to_owned(),
             Self::Event { event_type, .. } => format!("événement {event_type}"),
+            Self::Calendar {
+                entity_id, edge, ..
+            } => match edge {
+                CalendarEdge::Start => format!(
+                    "un rendez-vous de {} commence",
+                    names(std::slice::from_ref(entity_id))
+                ),
+                CalendarEdge::End => format!(
+                    "un rendez-vous de {} se termine",
+                    names(std::slice::from_ref(entity_id))
+                ),
+            },
             Self::TimePattern { hours, minutes, .. } => match (hours, minutes) {
                 (Pattern::Any, Pattern::Every(step)) => format!("toutes les {step} minutes"),
                 (Pattern::Every(step), Pattern::At(0)) => format!("toutes les {step} heures"),

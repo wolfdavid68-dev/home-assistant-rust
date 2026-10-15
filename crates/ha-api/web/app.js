@@ -184,6 +184,7 @@ function markPending(entityId) {
 
 // ---------------------------------------------------------------- Affichage
 const SECTIONS = [
+  { title: "Agenda et listes", domains: ["calendar", "todo"] },
   { title: "Entrées", domains: ["input_boolean", "input_number", "input_select", "input_button", "timer"] },
   // Les capteurs de la météo (sensor.meteo_…) vont avec la météo.
   { title: "Météo, présence et soleil", domains: ["weather", "zone", "person", "device_tracker", "sun", "notify"], extra: (s) => s.entity_id.startsWith("sensor.meteo_") },
@@ -354,6 +355,12 @@ function renderHome() {
   const parts = [];
   if (found.length > 0) parts.push(found.map((a) => `${nameOf(a.state)} : ${a.text}`).join(" · "));
   if (people) parts.push(people.length === 0 ? "Personne à la maison" : `${joinNames(people)} ${people.length > 1 ? "sont" : "est"} à la maison`);
+  const agenda = [...entities.values()].find((s) => domainOf(s) === "calendar");
+  if (agenda) {
+    const next = calendarEvents(agenda).find((e) => e.endDate > now && !e.all_day);
+    if (next && next.startDate <= now) parts.push(`En ce moment : ${next.summary}`);
+    else if (next && agendaDay(next.startDate) === "Aujourd'hui") parts.push(`${next.summary} à ${hourMinute.format(next.startDate)}`);
+  }
   $("#summary").textContent = parts.join(" · ");
 
   // La météo, en une pastille.
@@ -508,6 +515,8 @@ function renderTileContent(state) {
     case "valve": return valveTile(state);
     case "vacuum": return vacuumTile(state);
     case "water_heater": return waterHeaterTile(state);
+    case "todo": return todoTile(state);
+    case "calendar": return calendarTile(state);
     case "binary_sensor": return binaryTile(state);
     case "sensor": return state.attributes.device_class === "alarm" ? alarmTile(state) : sensorTile(state);
     default: return sensorTile(state);
@@ -664,6 +673,114 @@ function vacuumTile(state) {
         : commandButton(state, "start", "Lancer le ménage", { icon: ICONS.play }),
       commandButton(state, "stop", "Arrêter", { icon: ICONS.stop }),
       commandButton(state, "return_to_base", "Renvoyer à sa base", { icon: ICONS.home })),
+  );
+}
+
+// ----- Listes et agenda
+
+/** Un petit formulaire « texte + bouton » (ajouter un élément…). */
+function addForm(placeholder, label, onSubmit, extra = []) {
+  const input = el("input", { type: "text", maxlength: "200", placeholder, "aria-label": placeholder, required: "" });
+  const form = el("form", { class: "add-form" }, input, ...extra, el("button", { type: "submit", class: "action-button", text: label }));
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const text = input.value.trim();
+    if (!text) return;
+    onSubmit(text, form);
+    input.value = "";
+  });
+  return form;
+}
+
+function todoTile(state) {
+  const items = (Array.isArray(state.attributes.items) ? state.attributes.items : [])
+    .filter((item) => item && typeof item.summary === "string");
+  const left = items.filter((item) => item.status !== "completed").length;
+  const command = (service, data = {}) => callService("todo", service, { entity_id: state.entity_id, ...data });
+  const rows = items.map((item) => {
+    const done = item.status === "completed";
+    const box = el("input", { type: "checkbox", "aria-label": `${item.summary} : fait` });
+    box.checked = done;
+    box.addEventListener("change", () => command("update_item", { item: item.uid, status: box.checked ? "completed" : "needs_action" }));
+    const remove = el("button", { type: "button", class: "item-remove", "aria-label": `Retirer ${item.summary}`, text: "×" });
+    remove.addEventListener("click", () => command("remove_item", { item: item.uid }));
+    const due = typeof item.due === "string" ? el("span", { class: "item-due", text: shortDate.format(new Date(`${item.due}T12:00:00`)) }) : "";
+    return el("li", { class: done ? "done" : "" }, el("label", {}, box, el("span", { text: item.summary }), due), remove);
+  });
+  const children = [
+    tileHead(state, ICONS.list, left === 0 ? "Rien à faire" : `${left} à faire`),
+    rows.length > 0 ? el("ul", { class: "todo-list" }, ...rows) : el("p", { class: "muted", text: "La liste est vide." }),
+    addForm("Ajouter…", "Ajouter", (text) => command("add_item", { item: text })),
+  ];
+  if (items.length > left) {
+    const clear = el("button", { type: "button", class: "ghost small", text: "Retirer ce qui est fait" });
+    clear.addEventListener("click", () => command("remove_completed_items"));
+    children.push(clear);
+  }
+  return el("div", { id: tileId(state.entity_id), class: "tile wide-tile" }, ...children);
+}
+
+const shortDate = new Intl.DateTimeFormat("fr", { weekday: "short", day: "numeric", month: "short" });
+
+/** « Aujourd'hui », « Demain », « jeu. 22 oct. » (pour l'agenda ; le journal
+ *  de bord a son propre `dayLabel`, tourné vers le passé). */
+function agendaDay(date) {
+  const today = new Date();
+  const start = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((start(date) - start(today)) / 86_400_000);
+  return days === 0 ? "Aujourd'hui" : days === 1 ? "Demain" : shortDate.format(date);
+}
+
+/** Les rendez-vous publiés par l'agenda, du plus tôt au plus tard. */
+function calendarEvents(state) {
+  return (Array.isArray(state.attributes.events) ? state.attributes.events : [])
+    .filter((e) => e && typeof e.summary === "string" && typeof e.start === "string" && typeof e.end === "string")
+    .map((e) => ({ ...e, startDate: new Date(e.start), endDate: new Date(e.end) }))
+    .filter((e) => !Number.isNaN(e.startDate.getTime()) && !Number.isNaN(e.endDate.getTime()));
+}
+
+function calendarTile(state) {
+  const now = Date.now();
+  const coming = calendarEvents(state).filter((e) => e.endDate.getTime() > now).slice(0, 8);
+  const current = state.state === "on";
+  const subtitle = current && typeof state.attributes.message === "string"
+    ? `En ce moment : ${state.attributes.message}`
+    : coming.length === 0 ? "Rien de prévu" : `${coming.length} rendez-vous à venir`;
+  const rows = [];
+  let lastDay = "";
+  for (const e of coming) {
+    const day = agendaDay(e.startDate);
+    if (day !== lastDay) rows.push(el("li", { class: "day", text: day }));
+    lastDay = day;
+    const when = e.all_day ? "Journée" : hourMinute.format(e.startDate);
+    const remove = el("button", { type: "button", class: "item-remove", "aria-label": `Supprimer ${e.summary}`, text: "×" });
+    remove.addEventListener("click", () => {
+      if (window.confirm(`Supprimer « ${e.summary} » ?`)) callService("calendar", "delete_event", { entity_id: state.entity_id, uid: e.uid });
+    });
+    const ongoing = e.startDate.getTime() <= now;
+    rows.push(el("li", { class: ongoing ? "event now" : "event" },
+      el("span", { class: "event-time", text: when }),
+      el("span", { class: "event-name", text: e.summary }),
+      remove));
+  }
+  // Nouveau rendez-vous : un titre, un jour, une heure (sans heure : toute la journée).
+  const day = el("input", { type: "date", "aria-label": "Jour", required: "" });
+  day.value = new Date(now - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+  const time = el("input", { type: "time", "aria-label": "Heure (vide : toute la journée)" });
+  const form = addForm("Nouveau rendez-vous…", "Ajouter", (summary) => {
+    if (!day.value) return;
+    const data = time.value
+      ? { start_date_time: `${day.value} ${time.value}` }
+      : { start_date: day.value };
+    callService("calendar", "create_event", { entity_id: state.entity_id, summary, ...data });
+    time.value = "";
+  }, [el("div", { class: "add-when" }, day, time)]);
+  return el(
+    "div",
+    { id: tileId(state.entity_id), class: `tile wide-tile${current ? " on" : ""}` },
+    tileHead(state, ICONS.calendar, subtitle),
+    rows.length > 0 ? el("ol", { class: "agenda-list" }, ...rows) : el("p", { class: "muted", text: "Aucun rendez-vous dans le mois qui vient." }),
+    form,
   );
 }
 
@@ -1312,6 +1429,7 @@ const ICONS = {
   valve: ["M4 12h16", "M8 8v8", "M16 8v8", "M12 12V5", "M9 5h6"],
   vacuum: ["M12 3a9 9 0 1 0 0 18 9 9 0 1 0 0-18z", "M12 8a4 4 0 1 0 0 8 4 4 0 1 0 0-8z", "M12 3v2"],
   pause: ["M9 5v14", "M15 5v14"],
+  calendar: ["M4 6h16v15H4z", "M4 10h16", "M8 3v4", "M16 3v4"],
   bulb: ["M9 18h6", "M10 22h4", "M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"],
   plug: ["M9 2v6", "M15 2v6", "M6 8h12v3a6 6 0 0 1-12 0z", "M12 17v5"],
   door: ["M5 22V3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v19", "M3 22h18", "M15 12h.01"],
@@ -1771,6 +1889,7 @@ const TRIGGER_KINDS = {
   sun: ["Lever ou coucher du soleil", () => ({ trigger: "sun", event: "sunset" })],
   event: ["Un événement (minuteur fini…)", () => ({ trigger: "event", event_type: "timer.finished", event_data: {} })],
   time_pattern: ["Régulièrement (toutes les N minutes)", () => ({ trigger: "time_pattern", minutes: "/15" })],
+  calendar: ["Un rendez-vous de l'agenda", () => ({ trigger: "calendar", event: "start", entity_id: "calendar.maison", offset: "-00:30:00" })],
 };
 // Dans une attente, le soleil n'est pas possible (le serveur le refuse).
 const WAIT_TRIGGER_KINDS = Object.fromEntries(Object.entries(TRIGGER_KINDS).filter(([kind]) => kind !== "sun"));
@@ -1813,6 +1932,8 @@ const SERVICES = {
   vacuum: [["start", "Lancer le ménage"], ["pause", "Mettre en pause"], ["stop", "Arrêter"], ["return_to_base", "Renvoyer à sa base"]],
   humidifier: [["turn_on", "Allumer"], ["turn_off", "Éteindre"], ["set_humidity", "Régler l'humidité voulue"]],
   water_heater: [["set_operation_mode", "Choisir un mode"], ["set_temperature", "Régler la température"]],
+  todo: [["add_item", "Ajouter à la liste"], ["remove_completed_items", "Retirer ce qui est fait"]],
+  calendar: [["create_event", "Ajouter un rendez-vous"]],
 };
 const SUN_EVENTS = [["sunrise", "lever du soleil"], ["sunset", "coucher du soleil"], ["dawn", "aube"], ["dusk", "crépuscule"]];
 const WEEKDAYS = [["mon", "lun"], ["tue", "mar"], ["wed", "mer"], ["thu", "jeu"], ["fri", "ven"], ["sat", "sam"], ["sun", "dim"]];
@@ -1920,6 +2041,8 @@ function describeTrigger(t) {
       return `à ${asList(t.at).join(", ")}`;
     case "sun":
       return `${offsetText(t.offset)}${sunLabel(t.event)}`;
+    case "calendar":
+      return `${offsetText(t.offset)}${t.event === "end" ? "fin" : "début"} d'un rendez-vous de ${entityNames(t.entity_id)}`;
     case "event":
       return `événement ${t.event_type}${t.event_data?.entity_id ? ` de ${entityNames(t.event_data.entity_id)}` : ""}`;
     case "time_pattern": {
@@ -2232,6 +2355,8 @@ function triggerKindFields(t) {
       return [timeField("Heure", t, "at")];
     case "sun":
       return [selectField("Événement", t, "event", SUN_EVENTS), offsetField(t, "offset")];
+    case "calendar":
+      return [entityField(t, "entity_id"), selectField("Moment", t, "event", [["start", "début du rendez-vous"], ["end", "fin du rendez-vous"]]), offsetField(t, "offset")];
     case "time_pattern":
       return [
         textField("Heures (facultatif)", t, "hours", { placeholder: "* , /2 ou 7" }),
@@ -2356,6 +2481,18 @@ function actionFields(a, refresh) {
   } else if (a.action === "climate.set_preset_mode") {
     fields.push(textField("Préréglage", a.data, "preset_mode", { placeholder: "eco" }));
     delete extra.preset_mode;
+  } else if (a.action === "todo.add_item") {
+    fields.push(textField("Élément", a.data, "item", { placeholder: "Lait" }));
+    delete extra.item;
+  } else if (a.action === "calendar.create_event") {
+    fields.push(
+      textField("Titre", a.data, "summary"),
+      textField("Début", a.data, "start_date_time", { placeholder: "2026-10-20 18:30" }),
+      textField("Fin (facultatif)", a.data, "end_date_time", { placeholder: "2026-10-20 19:30" }),
+    );
+    delete extra.summary;
+    delete extra.start_date_time;
+    delete extra.end_date_time;
   } else if (a.action === "humidifier.set_humidity") {
     fields.push(numberField("Humidité voulue (%)", a.data, "humidity"));
     delete extra.humidity;

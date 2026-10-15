@@ -73,6 +73,7 @@ Les fonctions de Home Assistant les plus utiles au quotidien, une par une, dans 
 - [x] **25. Nouvelle mise en forme** : « Tout est calme, sauf… », plan des pièces, vue par pièce, cadran du thermostat, barre du bas sur téléphone ; thème clair le jour, sombre le soir ; polices embarquées, rien chargé depuis Internet ([guide](docs/mise-en-forme.md))
 - [x] **26. Finitions** : accords (« porte ouverte »), boutons cachés aux invités quand ils ne servent à rien, mode tablette murale (écran allumé, plein écran, retour à l'accueil) ([guide](docs/mise-en-forme.md#finitions))
 - [x] **27. Nouveaux appareils MQTT** : serrures (déverrouiller redemande le mot de passe), sirènes, vannes, aspirateurs, humidificateurs, chauffe-eau ([guide](docs/appareils-mqtt.md))
+- [x] **28. Agenda et listes** : liste de courses, tâches et agenda de la maison gardés chez toi ; déclencheur `calendar` (« 30 minutes avant un rendez-vous ») ([guide](docs/agenda.md))
 
 En parallèle, dès que tu me donnes les informations : commande du chauffage Somfy (résultat de
 `somfy devices`), puis de l'alarme (avec confirmation et journal).

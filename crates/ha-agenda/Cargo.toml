@@ -1,0 +1,22 @@
+[package]
+name = "ha-agenda"
+description = "Listes (courses, tâches) et agenda de la maison"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ha-core = { path = "../ha-core" }
+ha-storage = { path = "../ha-storage" }
+jiff.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["sync", "rt", "macros", "time"] }
+tracing.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["sync", "rt", "macros", "time", "test-util"] }
+
+[lints]
+workspace = true

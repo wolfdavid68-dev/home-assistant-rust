@@ -1,8 +1,8 @@
 //! Ce que chaque compte peut voir et commander (voir `ha_auth::Role`).
 //!
 //! Un **invité** ne voit pas la présence de la famille (personnes,
-//! téléphones, zone Maison), ni l'alarme, ni les serrures et sirènes, ni les
-//! notifications. Il ne
+//! téléphones, zone Maison), ni l'alarme, ni les serrures et sirènes, ni
+//! l'agenda et les listes, ni les notifications. Il ne
 //! commande que des appareils sans risque : lumières, prises, ventilateurs,
 //! scènes, et les volets (jamais un portail, une porte de garage ou une
 //! porte).
@@ -15,13 +15,17 @@ use crate::error::ApiError;
 
 /// Domaines cachés aux invités : la présence de la famille, les messages, et
 /// ce qui dit si la maison est fermée (serrures, sirènes).
-const HIDDEN_FROM_GUESTS: [&str; 6] = [
+const HIDDEN_FROM_GUESTS: [&str; 8] = [
     "person",
     "device_tracker",
     "zone",
     "notify",
     "lock",
     "siren",
+    // L'agenda dit quand la maison est vide (« Vacances »), les listes sont
+    // celles de la famille.
+    "calendar",
+    "todo",
 ];
 /// Domaines qu'un invité peut commander.
 const GUEST_CONTROLS: [&str; 5] = ["light", "switch", "fan", "scene", "cover"];
