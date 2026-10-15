@@ -20,6 +20,9 @@ pub enum StorageError {
     #[error("chiffrement des secrets : {0}")]
     Secret(&'static str),
 
+    #[error("sauvegarde : {0}")]
+    Backup(String),
+
     #[error("date hors limites : {0}")]
     Timestamp(&'static str),
 }

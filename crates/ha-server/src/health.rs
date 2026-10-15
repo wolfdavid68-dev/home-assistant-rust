@@ -16,6 +16,13 @@ const TIMEOUT: Duration = Duration::from_secs(3);
 /// La première ligne de la réponse suffit (« HTTP/1.1 200 OK »).
 const MAX_READ: u64 = 64;
 
+/// Un serveur répond-il déjà à cette adresse ? (Sans rien afficher.)
+pub async fn is_running(bind: SocketAddr) -> bool {
+    tokio::time::timeout(TIMEOUT, status_line(local_target(bind)))
+        .await
+        .is_ok_and(|status| status.is_ok_and(|status| is_ok(&status)))
+}
+
 pub async fn check(bind: SocketAddr) -> Result<(), Box<dyn Error>> {
     let status = tokio::time::timeout(TIMEOUT, status_line(local_target(bind)))
         .await

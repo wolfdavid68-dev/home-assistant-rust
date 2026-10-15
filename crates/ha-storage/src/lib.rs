@@ -10,6 +10,7 @@
 
 mod audit;
 mod automations;
+pub mod backup;
 mod error;
 mod recorder;
 mod secrets;

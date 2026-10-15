@@ -544,6 +544,7 @@ function alarmTile(state) {
 }
 
 function sensorTile(state) {
+  if (state.attributes.device_class === "timestamp") return timestampTile(state);
   const unit = state.attributes.unit_of_measurement;
   const value = el("div", { class: "value", text: state.state });
   if (unit) value.append(el("small", { text: unit }));
@@ -553,6 +554,20 @@ function sensorTile(state) {
     tileHead(state, lookup(ICONS, state.attributes.device_class) ?? ICONS.gauge, `il y a ${ago(state.last_changed)}`),
     value,
   );
+}
+
+// Une date (dernière sauvegarde…) : « il y a 3 heures », et l'erreur éventuelle.
+function timestampTile(state) {
+  const valid = !Number.isNaN(Date.parse(state.state));
+  const failure = typeof state.attributes.erreur === "string" ? state.attributes.erreur : "";
+  const tile = el(
+    "div",
+    { id: tileId(state.entity_id), class: tileClass(state, "sensor") },
+    tileHead(state, ICONS.archive, valid ? dateTime.format(new Date(state.state)) : "Jamais"),
+    el("div", { class: "value small-value", text: valid ? `il y a ${ago(state.state)}` : "—" }),
+  );
+  if (failure) tile.append(el("p", { class: "error climate-info", text: `Dernier essai échoué : ${failure}` }));
+  return tile;
 }
 
 function tileHead(state, icon, subtitle) {
@@ -664,6 +679,7 @@ const ICONS = {
   globe: ["M12 3a9 9 0 1 0 0 18 9 9 0 1 0 0-18z", "M3 12h18", "M12 3a14 14 0 0 1 0 18", "M12 3a14 14 0 0 0 0 18"],
   data_rate: ["M4 17l5-5 4 4 7-8", "M15 8h5v5"],
   cloud: ["M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z"],
+  archive: ["M3 4h18v4H3z", "M5 8v12h14V8", "M10 12h4"],
   flame: ["M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"],
   partly: ["M12 2v2", "M4.9 4.9l1.4 1.4", "M20 12h2", "M19.1 4.9l-1.4 1.4", "M15.9 13A4 4 0 0 0 8.1 9.2", "M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6z"],
   rain: ["M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2", "M16 14v6", "M8 14v6", "M12 16v6"],
@@ -873,6 +889,9 @@ const AUDIT_LABELS = {
   freebox_new_device: "nouvel appareil sur le réseau",
   confirm: "identité confirmée",
   confirm_failed: "échec de confirmation",
+  backup: "sauvegarde",
+  backup_failed: "échec de sauvegarde",
+  backup_restore: "sauvegarde restaurée",
   automation_create: "automatisation créée",
   automation_update: "automatisation modifiée",
   automation_delete: "automatisation supprimée",
@@ -896,7 +915,7 @@ async function loadJournal() {
       const what = [entry.target, entry.detail].filter(Boolean).join(" · ");
       return el(
         "li",
-        { class: ["login_failed", "confirm_failed", "freebox_new_device"].includes(entry.action) ? "failed" : "" },
+        { class: ["login_failed", "confirm_failed", "backup_failed", "freebox_new_device"].includes(entry.action) ? "failed" : "" },
         el("time", { datetime: entry.at, text: dateTime.format(new Date(entry.at)) }),
         el("strong", { text: entry.actor }),
         el("span", { text: lookup(AUDIT_LABELS, entry.action) ?? entry.action }),

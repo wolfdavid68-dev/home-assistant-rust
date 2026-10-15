@@ -40,6 +40,8 @@ COPY --from=builder --chown=65532:65532 /data-empty /data
 # La clé qui chiffre les secrets de la base est rangée à part : une
 # sauvegarde de /data seule ne suffit pas à lire les jetons des appareils.
 COPY --from=builder --chown=65532:65532 /data-empty /cle
+# Les sauvegardes automatiques de chaque nuit, dans leur propre volume.
+COPY --from=builder --chown=65532:65532 /data-empty /sauvegardes
 
 ENV HA_DB_PATH=/data/ha.db \
     HA_KEY_PATH=/cle/ha.key \
@@ -49,12 +51,13 @@ ENV HA_DB_PATH=/data/ha.db \
     HA_SCENES_PATH=/config/scenes.yaml \
     HA_ALEXA_PATH=/config/alexa.yaml \
     HA_THERMOSTATS_PATH=/config/thermostats.yaml \
+    HA_BACKUP_DIR=/sauvegardes \
     HA_BIND=0.0.0.0:8123 \
     TZ=Europe/Paris
 
 USER nonroot
 WORKDIR /data
-VOLUME ["/data", "/cle"]
+VOLUME ["/data", "/cle", "/sauvegardes"]
 EXPOSE 8123
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
