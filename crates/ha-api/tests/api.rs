@@ -1651,7 +1651,7 @@ async fn the_house_drawing_is_assembled_from_checked_images() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         body["config"],
-        json!({"layers": [], "labels": [], "actions": []})
+        json!({"pages": [{"id": "maison", "name": "Maison", "areas": [], "layers": [], "labels": [], "actions": []}]})
     );
     assert_eq!(body["editable"], true);
 
@@ -1692,8 +1692,11 @@ async fn the_house_drawing_is_assembled_from_checked_images() {
         );
     }
 
-    // L'assemblage : un fond, un calque, une valeur.
-    let drawing = json!({
+    // Deux onglets : la maison (un fond, des calques, des valeurs), et la
+    // cuisine seule.
+    let home = json!({
+        "id": "maison",
+        "name": "Maison",
         "background": "jour",
         "layers": [
             {"image": "garage_ouvert", "entity_id": "cover.garage", "states": ["open", "opening"]},
@@ -1705,16 +1708,32 @@ async fn the_house_drawing_is_assembled_from_checked_images() {
         ],
         "actions": ["light.porche", "person.alice"],
     });
+    let kitchen = json!({"id": "cuisine", "name": "Cuisine", "areas": ["Cuisine"]});
     let (status, body) = app
-        .request("PUT", "/api/home/drawing", Some(&token), Some(drawing))
+        .request(
+            "PUT",
+            "/api/home/drawing",
+            Some(&token),
+            Some(json!({"pages": [home, kitchen]})),
+        )
         .await;
     assert_eq!(status, StatusCode::OK, "{body}");
-    assert_eq!(body["config"]["labels"][0]["x"], 90.0);
-    assert_eq!(body["config"]["layers"][0]["when"], "always");
+    assert_eq!(body["config"]["pages"][0]["labels"][0]["x"], 90.0);
+    assert_eq!(body["config"]["pages"][0]["layers"][0]["when"], "always");
+    assert_eq!(body["config"]["pages"][1]["areas"], json!(["Cuisine"]));
+    let page = |extra: Value| {
+        let mut page = json!({"id": "maison", "name": "Maison"});
+        page.as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        json!({"pages": [page]})
+    };
     for bad in [
-        json!({"background": "absente"}),
-        json!({"layers": [{"image": "jour", "entity_id": "cover.garage", "states": []}]}),
-        json!({"labels": [{"entity_id": "sensor.a", "x": -1, "y": 0}]}),
+        page(json!({"background": "absente"})),
+        page(json!({"layers": [{"image": "jour", "entity_id": "cover.garage", "states": []}]})),
+        page(json!({"labels": [{"entity_id": "sensor.a", "x": -1, "y": 0}]})),
+        page(json!({"areas": ["Grenier"]})),
+        json!({"pages": []}),
         json!({"script": "alert(1)"}),
     ] {
         let (status, body) = app
@@ -1741,7 +1760,7 @@ async fn the_house_drawing_is_assembled_from_checked_images() {
         .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["editable"], false);
-    assert_eq!(body["config"]["background"], "jour");
+    assert_eq!(body["config"]["pages"][0]["background"], "jour");
     let (status, _) = app
         .request("PUT", "/api/home/drawing", Some(&family), Some(json!({})))
         .await;
@@ -1757,12 +1776,13 @@ async fn the_house_drawing_is_assembled_from_checked_images() {
     let (_, body) = app
         .request("GET", "/api/home/drawing", Some(&guest), None)
         .await;
-    let layers = body["config"]["layers"].as_array().unwrap();
+    let home = &body["config"]["pages"][0];
+    let layers = home["layers"].as_array().unwrap();
     assert_eq!(layers.len(), 1);
     assert_eq!(layers[0]["entity_id"], "cover.garage");
-    assert_eq!(body["config"]["labels"].as_array().unwrap().len(), 1);
-    assert_eq!(body["config"]["labels"][0]["entity_id"], "sensor.dehors");
-    assert_eq!(body["config"]["actions"], json!(["light.porche"]));
+    assert_eq!(home["labels"].as_array().unwrap().len(), 1);
+    assert_eq!(home["labels"][0]["entity_id"], "sensor.dehors");
+    assert_eq!(home["actions"], json!(["light.porche"]));
 
     // Chaque changement est dans le journal d'audit.
     let (_, body) = app.request("GET", "/api/audit", Some(&token), None).await;

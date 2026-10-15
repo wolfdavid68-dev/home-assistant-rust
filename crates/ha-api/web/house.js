@@ -12,7 +12,9 @@
 "use strict";
 
 const house = {
-  config: emptyDrawing(),
+  // Les onglets (Maison, Garage…), et celui qui est affiché.
+  pages: [homePage()],
+  config: null,
   images: [],
   editable: false,
   // Images lues avec le jeton, gardées en mémoire : « nom@date » → blob:…
@@ -31,10 +33,21 @@ function emptyDrawing() {
   return { layers: [], labels: [], actions: [] };
 }
 
-/** Recopie l'assemblage reçu en ne gardant que ce qu'on attend. */
+function homePage() {
+  return { id: "maison", name: "Maison", areas: [], ...emptyDrawing() };
+}
+
+/** Les onglets reçus (ou, avant les onglets, un seul dessin). */
+function cleanPages(config) {
+  const pages = Array.isArray(config?.pages) ? config.pages.map(cleanDrawing) : [cleanDrawing({ id: "maison", name: "Maison", ...config })];
+  return pages.length > 0 ? pages : [homePage()];
+}
+
+/** Recopie un onglet reçu en ne gardant que ce qu'on attend. */
 function cleanDrawing(config) {
   const text = (value) => (typeof value === "string" && value !== "" ? value : undefined);
-  const out = emptyDrawing();
+  const out = { id: text(config?.id) ?? "maison", name: text(config?.name) ?? "Maison", areas: [], ...emptyDrawing() };
+  for (const area of Array.isArray(config?.areas) ? config.areas : []) if (text(area)) out.areas.push(area);
   if (text(config?.background)) out.background = config.background;
   if (text(config?.night)) out.night = config.night;
   for (const layer of Array.isArray(config?.layers) ? config.layers : []) {
@@ -62,12 +75,12 @@ async function loadHouse(force = false) {
   house.loading = (async () => {
     const { status, data } = await api("GET", "/api/home/drawing");
     if (status !== 200) return;
-    house.config = cleanDrawing(data.config);
+    house.pages = cleanPages(data.config);
     house.images = Array.isArray(data.images) ? data.images : [];
     house.editable = data.editable === true;
-    const used = [house.config.background, house.config.night, ...house.config.layers.map((l) => l.image)];
+    const used = house.pages.flatMap((page) => [page.background, page.night, ...page.layers.map((l) => l.image)]);
     await Promise.all(used.filter(Boolean).map(houseImage));
-    buildHouse();
+    selectPage(house.config?.id ?? pageWanted(), false);
   })().catch(() => {});
   return house.loading;
 }
@@ -209,7 +222,53 @@ function fitLabels(view) {
   }
 }
 
+// ---------------------------------------------------------------- Onglets
+// Maison, Garage, Piscine… : chacun son dessin, ses boutons, et les pièces
+// qu'il montre. L'onglet ouvert est retenu sur cet appareil (localStorage) :
+// la tablette du garage reste sur « Garage ».
+const PAGE_KEY = "ha-page";
+
+function pageWanted() {
+  try {
+    return localStorage.getItem(PAGE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+/** Affiche un onglet : son dessin, et seulement ses pièces (pageAreas, lu
+ *  par app.js). */
+function selectPage(id, remember = true) {
+  house.config = house.pages.find((page) => page.id === id) ?? house.pages[0];
+  pageAreas = house.config.areas.length > 0 ? new Set(house.config.areas) : null;
+  if (remember) {
+    try {
+      localStorage.setItem(PAGE_KEY, house.config.id);
+    } catch {
+      // Stockage bloqué : l'onglet ne sera pas retenu.
+    }
+  }
+  buildHouse();
+  renderTabs();
+  if (!$("#dashboard-view").hidden) renderAll();
+}
+
+function renderTabs() {
+  const nav = $("#board-tabs");
+  nav.replaceChildren(...house.pages.map((page) => {
+    const current = page.id === house.config?.id;
+    const tab = el("button", { type: "button", class: current ? "board-tab-item active" : "board-tab-item", "aria-current": current ? "page" : "false", text: page.name });
+    tab.addEventListener("click", () => {
+      if (page.id !== house.config?.id) selectPage(page.id);
+    });
+    return tab;
+  }));
+  // Un seul onglet : rien à choisir sur téléphone.
+  nav.classList.toggle("single", house.pages.length === 1);
+}
+
 function buildHouse() {
+  house.config ??= house.pages[0];
   house.view = drawHouse($("#house-stage"), house.config, { interactive: true });
   updateHouse(house.view);
   houseCaption();
@@ -375,9 +434,11 @@ function coverRow(state) {
  *  boutons rapides), en lignes sous le dessin. */
 function renderCovers() {
   const box = $("#board-covers");
+  const inPage = pageAreas === null ? null
+    : new Set(areas.filter((a) => pageAreas.has(a.name)).flatMap((a) => a.entities.map((e) => e.entity_id)));
   const covers = [...entities.values()]
     .filter((s) => domainOf(s) === "cover" && !ALERT_COVERS.includes(s.attributes.device_class)
-      && !house.config.actions.includes(s.entity_id))
+      && !house.config.actions.includes(s.entity_id) && (inPage === null || inPage.has(s.entity_id)))
     .sort((a, b) => nameOf(a).localeCompare(nameOf(b), "fr"));
   box.hidden = covers.length === 0;
   box.replaceChildren(el("h2", { text: "Volets" }), el("div", { class: "cover-rows" }, ...covers.map(coverRow)));
@@ -414,6 +475,7 @@ function renderHouse() {
     return;
   }
   if (house.loading === null && token.get()) loadHouse();
+  if (house.config === null) return;
   updateHouse(house.view);
   renderGauges();
   renderActions();
@@ -441,13 +503,15 @@ $("#theme").addEventListener("change", (event) => {
 // Pour l'administrateur : les images, les fonds, les calques et les valeurs.
 // Rien n'est enregistré avant « Enregistrer », sauf l'envoi d'une image.
 
-const drawingEdit = { draft: null, placing: -1, view: null };
+// `pages` : la copie de tous les onglets ; `draft` : celui qu'on règle.
+const drawingEdit = { pages: null, draft: null, placing: -1, view: null };
 
 async function openDrawingEditor() {
   $("#account-dialog").close();
   await loadHouse(true);
   await Promise.all(house.images.map((image) => houseImage(image.name)));
-  drawingEdit.draft = structuredClone(house.config);
+  drawingEdit.pages = structuredClone(house.pages);
+  drawingEdit.draft = drawingEdit.pages.find((page) => page.id === house.config?.id) ?? drawingEdit.pages[0];
   drawingEdit.placing = -1;
   drawingStatus("");
   renderDrawingEditor();
@@ -666,7 +730,74 @@ function renderDrawingEditor() {
     addAction,
   );
 
-  $("#drawing-form").replaceChildren(images, backgrounds, layers, labels, actions);
+  $("#drawing-form").replaceChildren(pagesPart(), images, backgrounds, layers, labels, actions);
+}
+
+/** Un identifiant d'onglet à partir de son nom (« Salle de jeux » → salle-de-jeux). */
+function pageId(name) {
+  const base = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 30) || "onglet";
+  let id = base;
+  for (let n = 2; drawingEdit.pages.some((page) => page.id === id); n += 1) id = `${base.slice(0, 27)}-${n}`;
+  return id;
+}
+
+/** Les onglets : lequel on règle, son nom, ses pièces ; en ajouter, en retirer. */
+function pagesPart() {
+  const refresh = () => renderDrawingEditor();
+  const draft = drawingEdit.draft;
+  const choose = el("select", { "aria-label": "Onglet à régler" }, ...drawingEdit.pages.map((page) => el("option", { value: page.id, text: page.name })));
+  choose.value = draft.id;
+  choose.addEventListener("change", () => {
+    drawingEdit.draft = drawingEdit.pages.find((page) => page.id === choose.value) ?? drawingEdit.pages[0];
+    drawingEdit.placing = -1;
+    refresh();
+  });
+  const add = el("button", { type: "button", class: "ghost small", text: "+ Nouvel onglet" });
+  add.disabled = drawingEdit.pages.length >= 8;
+  add.addEventListener("click", () => {
+    const page = { id: pageId("Nouvel onglet"), name: "Nouvel onglet", areas: [], ...emptyDrawing() };
+    drawingEdit.pages.push(page);
+    drawingEdit.draft = page;
+    refresh();
+    $("#drawing-form .drawing-part input")?.select();
+  });
+  const remove = el("button", { type: "button", class: "ghost small danger", text: "Retirer cet onglet" });
+  remove.disabled = drawingEdit.pages.length === 1;
+  remove.addEventListener("click", () => {
+    drawingEdit.pages = drawingEdit.pages.filter((page) => page !== draft);
+    drawingEdit.draft = drawingEdit.pages[0];
+    refresh();
+  });
+  const first = el("button", { type: "button", class: "ghost small", text: "Mettre en premier" });
+  first.disabled = drawingEdit.pages[0] === draft;
+  first.addEventListener("click", () => {
+    drawingEdit.pages = [draft, ...drawingEdit.pages.filter((page) => page !== draft)];
+    refresh();
+  });
+  const name = el("input", { type: "text", value: draft.name, maxlength: "30", "aria-label": "Nom de l'onglet" });
+  // Sans tout redessiner : « change » arrive quand le champ perd le focus.
+  name.addEventListener("change", () => {
+    draft.name = name.value.trim() || draft.name;
+    name.value = draft.name;
+    if (choose.selectedOptions[0]) choose.selectedOptions[0].textContent = draft.name;
+  });
+  // Les pièces de cet onglet (aucune cochée : toutes).
+  const rooms = el("div", { class: "drawing-rooms" }, ...areas.map((area) => {
+    const box = el("input", { type: "checkbox" });
+    box.checked = draft.areas.includes(area.name);
+    box.addEventListener("change", () => {
+      draft.areas = box.checked ? [...draft.areas, area.name] : draft.areas.filter((a) => a !== area.name);
+    });
+    return el("label", { class: "check" }, box, ` ${area.name}`);
+  }));
+  return drawingFieldset(
+    "Onglets",
+    "Chaque onglet a son dessin, ses boutons, et les pièces qu'il montre (aucune cochée : toute la maison). Le premier s'ouvre par défaut.",
+    el("div", { class: "drawing-row" }, choose, add),
+    el("div", { class: "drawing-grid" }, field("Nom de l'onglet", name)),
+    areas.length > 0 ? field("Pièces montrées", rooms) : "",
+    el("div", { class: "drawing-row" }, first, remove),
+  );
 }
 
 // Poser une valeur : un toucher sur l'aperçu donne sa place, en % de l'image.
@@ -684,16 +815,15 @@ $("#drawing-preview").addEventListener("click", (event) => {
 });
 
 $("#drawing-save").addEventListener("click", async () => {
-  const draft = drawingEdit.draft;
-  if (!draft) return;
-  draft.actions = draft.actions.filter((id) => id !== "");
+  if (!drawingEdit.pages) return;
+  for (const page of drawingEdit.pages) page.actions = page.actions.filter((id) => id !== "");
   const button = $("#drawing-save");
   button.disabled = true;
-  const { status, data } = await api("PUT", "/api/home/drawing", draft).catch(() => ({ status: 0, data: {} }));
+  const { status, data } = await api("PUT", "/api/home/drawing", { pages: drawingEdit.pages }).catch(() => ({ status: 0, data: {} }));
   button.disabled = false;
   if (status !== 200) return drawingStatus(data.error ?? "Enregistrement impossible.", "error");
-  house.config = cleanDrawing(data.config);
-  buildHouse();
+  house.pages = cleanPages(data.config);
+  selectPage(drawingEdit.draft.id);
   $("#drawing").close();
   flash("Dessin de la maison enregistré");
 });

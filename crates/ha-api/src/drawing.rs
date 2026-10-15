@@ -49,15 +49,44 @@ const MAX_LABELS: usize = 30;
 const MAX_ACTIONS: usize = 12;
 const MAX_STATES: usize = 10;
 const MAX_TEXT_CHARS: usize = 60;
+const MAX_PAGES: usize = 8;
+const MAX_PAGE_ID_CHARS: usize = 30;
+const MAX_PAGE_NAME_CHARS: usize = 30;
 
-/// L'assemblage du dessin.
+/// Les onglets du tableau de bord (Maison, Garage, Piscine…), chacun avec
+/// son dessin. Le premier est celui qui s'ouvre.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct Drawing {
+    pages: Vec<Page>,
+}
+
+impl Default for Drawing {
+    fn default() -> Self {
+        Self {
+            pages: vec![Page::home()],
+        }
+    }
+}
+
+/// Un onglet : son nom, les pièces qu'il montre, et l'assemblage de son
+/// dessin.
 ///
 /// Concept Rust : le même type sert à **lire** la demande (`Deserialize`,
 /// avec `deny_unknown_fields`) et à **réécrire** ce qui est rangé
 /// (`Serialize`) : seul ce qui a été vérifié est gardé.
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-struct DrawingConfig {
+struct Page {
+    /// Identifiant court (`maison`, `garage`), gardé par chaque écran pour
+    /// rouvrir le même onglet.
+    #[serde(default)]
+    id: String,
+    #[serde(default)]
+    name: String,
+    /// Les pièces montrées (noms de `areas.yaml`) ; vide : toutes.
+    #[serde(default)]
+    areas: Vec<String>,
     /// Le fond (de jour, ou toujours s'il n'y a pas de fond de nuit).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     background: Option<String>,
@@ -71,6 +100,17 @@ struct DrawingConfig {
     /// Les boutons rapides sous le dessin (porche, parking, garage…).
     #[serde(default)]
     actions: Vec<String>,
+}
+
+impl Page {
+    /// L'onglet « Maison », celui d'avant les onglets.
+    fn home() -> Self {
+        Self {
+            id: "maison".into(),
+            name: "Maison".into(),
+            ..Self::default()
+        }
+    }
 }
 
 /// Un calque : visible quand l'appareil est dans l'un des états (ou dans
@@ -156,9 +196,64 @@ fn check_entity(entity_id: &str) -> Result<EntityId, ApiError> {
         .map_err(|error: ha_core::CoreError| ApiError::BadRequest(error.to_string()))
 }
 
-/// Vérifie l'assemblage : des images qui existent, des appareils bien
-/// écrits, des positions sur le dessin.
-fn check_config(config: &DrawingConfig, images: &HashSet<String>) -> Result<(), ApiError> {
+/// Vérifie les onglets : 1 à 8, des identifiants courts et uniques, des
+/// noms, des pièces qui existent, et le dessin de chacun.
+fn check_drawing(
+    drawing: &Drawing,
+    images: &HashSet<String>,
+    areas: &HashSet<&str>,
+) -> Result<(), ApiError> {
+    if drawing.pages.is_empty() || drawing.pages.len() > MAX_PAGES {
+        return Err(ApiError::BadRequest(format!("1 à {MAX_PAGES} onglets")));
+    }
+    let mut ids = HashSet::new();
+    for page in &drawing.pages {
+        let valid_id = !page.id.is_empty()
+            && page.id.chars().count() <= MAX_PAGE_ID_CHARS
+            && page
+                .id
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+        if !valid_id {
+            return Err(ApiError::BadRequest(format!(
+                "onglet « {} » : identifiant de 1 à {MAX_PAGE_ID_CHARS} caractères parmi a-z, 0-9 et -",
+                page.id
+            )));
+        }
+        if !ids.insert(page.id.as_str()) {
+            return Err(ApiError::BadRequest(format!(
+                "onglet « {} » en double",
+                page.id
+            )));
+        }
+        if page.name.chars().count() > MAX_PAGE_NAME_CHARS {
+            return Err(ApiError::BadRequest(format!(
+                "onglet « {} » : nom de {MAX_PAGE_NAME_CHARS} caractères au plus",
+                page.id
+            )));
+        }
+        check_text("nom d'onglet", &page.name)?;
+        for area in &page.areas {
+            if !areas.contains(area.as_str()) {
+                return Err(ApiError::BadRequest(format!(
+                    "onglet « {} » : pièce « {area} » introuvable dans areas.yaml",
+                    page.name
+                )));
+            }
+        }
+        check_page(page, images).map_err(|error| match error {
+            ApiError::BadRequest(message) => {
+                ApiError::BadRequest(format!("onglet « {} » : {message}", page.name))
+            }
+            other => other,
+        })?;
+    }
+    Ok(())
+}
+
+/// Vérifie le dessin d'un onglet : des images qui existent, des appareils
+/// bien écrits, des positions sur le dessin.
+fn check_page(config: &Page, images: &HashSet<String>) -> Result<(), ApiError> {
     let known = |name: &String| -> Result<(), ApiError> {
         if images.contains(name) {
             Ok(())
@@ -233,39 +328,57 @@ fn check_config(config: &DrawingConfig, images: &HashSet<String>) -> Result<(), 
 
 /// Arrondit les positions au dixième de pour-cent : assez précis, et rien
 /// de plus n'est gardé.
-fn tidy(mut config: DrawingConfig) -> DrawingConfig {
-    for label in &mut config.labels {
+fn tidy(mut drawing: Drawing) -> Drawing {
+    for label in drawing.pages.iter_mut().flat_map(|page| &mut page.labels) {
         label.x = (label.x * 10.0).round() / 10.0;
         label.y = (label.y * 10.0).round() / 10.0;
     }
-    config
+    drawing
+}
+
+/// Relit ce qui est rangé. Avant les onglets, c'était le dessin d'une seule
+/// page : il devient l'onglet « Maison ». Un contenu illisible vaut « pas de
+/// dessin ».
+fn parse_stored(text: &str) -> Drawing {
+    if let Ok(drawing) = serde_json::from_str::<Drawing>(text) {
+        return drawing;
+    }
+    match serde_json::from_str::<Page>(text) {
+        Ok(page) => Drawing {
+            pages: vec![Page {
+                id: "maison".into(),
+                name: "Maison".into(),
+                ..page
+            }],
+        },
+        Err(_) => Drawing::default(),
+    }
 }
 
 /// Ce qu'un compte peut voir de l'assemblage : un invité ne voit ni les
 /// calques ni les valeurs des appareils qui lui sont cachés.
-fn visible_to(state: &ApiState, user: &User, mut config: DrawingConfig) -> DrawingConfig {
+fn visible_to(state: &ApiState, user: &User, mut drawing: Drawing) -> Drawing {
     let can_see = |entity_id: &str| {
         entity_id.parse::<EntityId>().is_ok_and(|id| {
             let current = state.core.states.get(&id);
             roles::can_see(user, &id, current.as_ref())
         })
     };
-    config.layers.retain(|layer| can_see(&layer.entity_id));
-    config.labels.retain(|label| can_see(&label.entity_id));
-    config.actions.retain(|entity_id| can_see(entity_id));
-    config
+    for page in &mut drawing.pages {
+        page.layers.retain(|layer| can_see(&layer.entity_id));
+        page.labels.retain(|label| can_see(&label.entity_id));
+        page.actions.retain(|entity_id| can_see(entity_id));
+    }
+    drawing
 }
 
-async fn stored_config(state: &ApiState) -> Result<DrawingConfig, ApiError> {
+async fn stored_config(state: &ApiState) -> Result<Drawing, ApiError> {
     let stored = state
         .store
         .home_drawing()
         .await
         .map_err(|error| ApiError::Internal(error.to_string()))?;
-    // Relu dans la base : un contenu illisible vaut « pas de dessin ».
-    Ok(stored
-        .and_then(|text| serde_json::from_str(&text).ok())
-        .unwrap_or_default())
+    Ok(stored.map(|text| parse_stored(&text)).unwrap_or_default())
 }
 
 async fn image_names(state: &ApiState) -> Result<Vec<ha_storage::HomeImageInfo>, ApiError> {
@@ -309,13 +422,14 @@ pub(crate) async fn put(
     body: Bytes,
 ) -> Result<Json<Value>, ApiError> {
     roles::require(&auth.user, Permission::EditDashboard)?;
-    let config = tidy(parse_json::<DrawingConfig>(&body)?);
+    let config = tidy(parse_json::<Drawing>(&body)?);
     let images: HashSet<String> = image_names(&state)
         .await?
         .into_iter()
         .map(|image| image.name)
         .collect();
-    check_config(&config, &images)?;
+    let areas: HashSet<&str> = state.areas.iter().map(|area| area.name.as_str()).collect();
+    check_drawing(&config, &images, &areas)?;
     let text =
         serde_json::to_string(&config).map_err(|error| ApiError::Internal(error.to_string()))?;
     let username = &auth.user.username;
@@ -325,12 +439,8 @@ pub(crate) async fn put(
         .await
         .map_err(|error| ApiError::Internal(error.to_string()))?;
     tracing::info!("dessin de la maison réglé par {username}");
-    let detail = format!(
-        "{} calque(s), {} valeur(s), {} bouton(s)",
-        config.layers.len(),
-        config.labels.len(),
-        config.actions.len()
-    );
+    let names: Vec<&str> = config.pages.iter().map(|page| page.name.as_str()).collect();
+    let detail = format!("onglets : {}", names.join(", "));
     audit(&state, username, "drawing_set", None, Some(&detail), client).await;
     Ok(Json(json!({ "config": config })))
 }
@@ -416,9 +526,11 @@ pub(crate) async fn delete_image(
     roles::require(&auth.user, Permission::EditDashboard)?;
     check_name(&name)?;
     let config = stored_config(&state).await?;
-    let used = config.background.as_ref() == Some(&name)
-        || config.night.as_ref() == Some(&name)
-        || config.layers.iter().any(|layer| layer.image == name);
+    let used = config.pages.iter().any(|page| {
+        page.background.as_ref() == Some(&name)
+            || page.night.as_ref() == Some(&name)
+            || page.layers.iter().any(|layer| layer.image == name)
+    });
     if used {
         return Err(ApiError::BadRequest(format!(
             "l'image « {name} » sert encore au dessin : retire-la d'abord du fond ou des calques"
@@ -472,7 +584,7 @@ mod tests {
         }
     }
 
-    fn config(json: &str) -> DrawingConfig {
+    fn config(json: &str) -> Page {
         serde_json::from_str(json).unwrap()
     }
 
@@ -484,8 +596,9 @@ mod tests {
                 "states":["open","opening"],"when":"day"}],
                 "labels":[{"entity_id":"sensor.dehors","x":90,"y":8.25,"name":"Dehors"}]}"#,
         );
-        assert!(check_config(&good, &images).is_ok());
-        assert!((tidy(good).labels[0].y - 8.3).abs() < 1e-9);
+        assert!(check_page(&good, &images).is_ok());
+        let tidied = tidy(Drawing { pages: vec![good] });
+        assert!((tidied.pages[0].labels[0].y - 8.3).abs() < 1e-9);
 
         for bad in [
             r#"{"background":"nuit"}"#,
@@ -497,8 +610,44 @@ mod tests {
             r#"{"actions":["light.porche","light.porche"]}"#,
             r#"{"actions":["pas un appareil"]}"#,
         ] {
-            assert!(check_config(&config(bad), &images).is_err(), "{bad}");
+            assert!(check_page(&config(bad), &images).is_err(), "{bad}");
         }
-        assert!(serde_json::from_str::<DrawingConfig>(r#"{"script":"x"}"#).is_err());
+        assert!(serde_json::from_str::<Page>(r#"{"script":"x"}"#).is_err());
+    }
+
+    #[test]
+    fn pages_are_checked() {
+        let images: HashSet<String> = HashSet::new();
+        let areas: HashSet<&str> = ["Garage", "Salon"].into();
+        let drawing = |json: &str| serde_json::from_str::<Drawing>(json).unwrap();
+        let good = drawing(
+            r#"{"pages":[{"id":"maison","name":"Maison"},
+                {"id":"garage","name":"Garage","areas":["Garage"]}]}"#,
+        );
+        assert!(check_drawing(&good, &images, &areas).is_ok());
+        for bad in [
+            r#"{"pages":[]}"#,
+            r#"{"pages":[{"id":"a","name":"A"},{"id":"a","name":"B"}]}"#,
+            r#"{"pages":[{"id":"Maison","name":"Maison"}]}"#,
+            r#"{"pages":[{"id":"m","name":""}]}"#,
+            r#"{"pages":[{"id":"m","name":"M","areas":["Grenier"]}]}"#,
+        ] {
+            assert!(
+                check_drawing(&drawing(bad), &images, &areas).is_err(),
+                "{bad}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_drawing_from_before_the_pages_becomes_the_home_page() {
+        let old = r#"{"background":"jour","layers":[],"labels":[],"actions":["light.porche"]}"#;
+        let drawing = parse_stored(old);
+        assert_eq!(drawing.pages.len(), 1);
+        assert_eq!(drawing.pages[0].id, "maison");
+        assert_eq!(drawing.pages[0].name, "Maison");
+        assert_eq!(drawing.pages[0].background.as_deref(), Some("jour"));
+        assert_eq!(drawing.pages[0].actions, ["light.porche"]);
+        assert_eq!(parse_stored("pas du json").pages[0].id, "maison");
     }
 }
