@@ -20,6 +20,7 @@ pub const AUTHORIZATION_TIMEOUT: Duration = Duration::from_mins(2);
 const MAX_TRACKED: usize = 50;
 
 /// Ce qu'il faut savoir pour se reconnecter à la Freebox.
+#[derive(Clone)]
 pub struct Pairing {
     pub host: String,
     pub device_name: String,

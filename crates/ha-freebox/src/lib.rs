@@ -16,5 +16,11 @@ pub mod pairing;
 pub mod presence;
 
 pub use client::Freebox;
+
+/// L'identifiant de l'intégration, propriétaire de ses entités (voir
+/// [`ha_core::integrations`]).
+pub const ID: &str = "freebox";
+/// Son nom affiché.
+pub const NAME: &str = "Freebox";
 pub use error::FreeboxError;
 pub use pairing::Pairing;

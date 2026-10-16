@@ -2,7 +2,7 @@
 //! événement `StateChanged` à chaque changement.
 
 use std::collections::HashMap;
-use std::sync::{PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::sync::{Arc, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::time::SystemTime;
 
 use crate::entity_id::EntityId;
@@ -54,15 +54,36 @@ impl StateMachine {
         new_state: impl Into<String>,
         attributes: Attributes,
     ) -> Result<bool, CoreError> {
-        let new_state: String = new_state.into();
+        self.update(entity_id, new_state.into(), attributes, None)
+    }
+
+    /// `owner` : le nouveau propriétaire, ou `None` pour garder l'actuel.
+    fn update(
+        &self,
+        entity_id: EntityId,
+        new_state: String,
+        attributes: Attributes,
+        owner: Option<&str>,
+    ) -> Result<bool, CoreError> {
         check_state_len(&entity_id, &new_state)?;
 
         let now = SystemTime::now();
         let mut states = self.write();
         let old = states.get(&entity_id);
+        let owner: Option<Arc<str>> = match owner {
+            Some(owner) => Some(Arc::from(owner)),
+            None => old.and_then(|old| old.owner.clone()),
+        };
 
         let last_changed = match old {
             Some(old) if old.state() == new_state && old.attributes() == &attributes => {
+                // Rien ne change, sauf peut-être le propriétaire : on le note
+                // sans publier d'événement.
+                if old.owner != owner {
+                    let mut kept = old.clone();
+                    kept.owner = owner;
+                    states.insert(entity_id, kept);
+                }
                 return Ok(false);
             }
             // Seuls les attributs changent : la date de changement de valeur est conservée.
@@ -70,7 +91,14 @@ impl StateMachine {
             _ => now,
         };
 
-        let state = State::new(entity_id.clone(), new_state, attributes, last_changed, now);
+        let state = State::new(
+            entity_id.clone(),
+            new_state,
+            attributes,
+            last_changed,
+            now,
+            owner,
+        );
         let old_state = states.insert(entity_id.clone(), state.clone());
 
         // On publie pendant que le verrou est tenu : ainsi les événements sortent
@@ -81,6 +109,41 @@ impl StateMachine {
             new_state: Some(state),
         });
         Ok(true)
+    }
+
+    /// Comme [`StateMachine::set`], pour une entité publiée par l'intégration
+    /// `owner` (`hue`, `mqtt`…), qui en devient propriétaire : si elle tombe
+    /// en panne, ses entités passent « indisponibles » (voir
+    /// [`crate::integrations`]).
+    pub fn set_by(
+        &self,
+        owner: &str,
+        entity_id: EntityId,
+        new_state: impl Into<String>,
+        attributes: Attributes,
+    ) -> Result<bool, CoreError> {
+        self.update(entity_id, new_state.into(), attributes, Some(owner))
+    }
+
+    /// Les entités publiées par l'intégration `owner`, triées.
+    #[must_use]
+    pub fn owned_by(&self, owner: &str) -> Vec<EntityId> {
+        let mut ids: Vec<EntityId> = self
+            .read()
+            .values()
+            .filter(|state| state.owner() == Some(owner))
+            .map(|state| state.entity_id().clone())
+            .collect();
+        ids.sort();
+        ids
+    }
+
+    /// L'intégration qui publie cette entité, si on la connaît.
+    #[must_use]
+    pub fn owner_of(&self, entity_id: &EntityId) -> Option<String> {
+        self.read()
+            .get(entity_id)
+            .and_then(|state| state.owner().map(str::to_owned))
     }
 
     /// Remet en place un état sauvegardé (au démarrage), avec ses dates d'origine.
@@ -98,6 +161,26 @@ impl StateMachine {
         last_changed: SystemTime,
         last_updated: SystemTime,
     ) -> Result<bool, CoreError> {
+        self.restore_owned(
+            entity_id,
+            state,
+            attributes,
+            last_changed,
+            last_updated,
+            None,
+        )
+    }
+
+    /// Comme [`StateMachine::restore`], avec l'intégration propriétaire.
+    pub fn restore_owned(
+        &self,
+        entity_id: EntityId,
+        state: impl Into<String>,
+        attributes: Attributes,
+        last_changed: SystemTime,
+        last_updated: SystemTime,
+        owner: Option<&str>,
+    ) -> Result<bool, CoreError> {
         let state: String = state.into();
         check_state_len(&entity_id, &state)?;
 
@@ -111,6 +194,7 @@ impl StateMachine {
             attributes,
             last_changed,
             last_updated,
+            owner.map(Arc::from),
         );
         states.insert(entity_id, restored);
         Ok(true)

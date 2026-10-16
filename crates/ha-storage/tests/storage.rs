@@ -158,6 +158,25 @@ async fn states_are_restored_with_their_dates_and_without_events() {
 }
 
 #[tokio::test]
+async fn the_owning_integration_survives_a_restart() {
+    let (core, store, recorder) = setup().await;
+    let lamp = id("light.salon");
+    core.states
+        .set_by("hue", lamp.clone(), "on", attrs(json!({})))
+        .unwrap();
+    core.states
+        .set(id("sensor.libre"), "1", attrs(json!({})))
+        .unwrap();
+    recorder.stop().await;
+
+    let restarted = Core::new();
+    store.restore_into(&restarted.states).await.unwrap();
+    assert_eq!(restarted.states.owner_of(&lamp).as_deref(), Some("hue"));
+    assert_eq!(restarted.states.owned_by("hue"), vec![lamp]);
+    assert_eq!(restarted.states.owner_of(&id("sensor.libre")), None);
+}
+
+#[tokio::test]
 async fn sql_injection_attempt_is_stored_as_plain_text() {
     let (core, store, recorder) = setup().await;
     let evil = "'); DROP TABLE states; --";

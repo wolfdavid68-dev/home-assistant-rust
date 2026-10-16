@@ -1,7 +1,9 @@
 //! La boucle principale : relevé régulier des appareils et de la connexion,
 //! publication des états, signalement des nouveaux appareils.
 
+use ha_core::Health;
 use std::sync::Arc;
+use std::time::SystemTime;
 use std::time::{Duration, Instant};
 
 use ha_core::{Background, CancellationToken, Core};
@@ -36,9 +38,22 @@ impl Freebox {
         core: Arc<Core>,
         interval: Duration,
     ) -> Self {
-        Self(Background::spawn("l'intégration Freebox", move |token| {
-            run(pairing, store, core, token, interval)
-        }))
+        // Sous surveillance : si elle plante, elle est relancée.
+        let supervisor = Arc::clone(&core);
+        Self(ha_core::supervise(
+            supervisor,
+            crate::ID,
+            crate::NAME,
+            move |token| {
+                run(
+                    pairing.clone(),
+                    store.clone(),
+                    Arc::clone(&core),
+                    token,
+                    interval,
+                )
+            },
+        ))
     }
 
     pub async fn stop(self) {
@@ -83,7 +98,7 @@ async fn run(
             let connection = session.connection().await.ok();
             let update = presence.update(&hosts, connection.as_ref(), Instant::now());
             for (entity_id, state, attributes) in update.states {
-                if let Err(error) = core.states.set(entity_id, state, attributes) {
+                if let Err(error) = core.states.set_by(crate::ID, entity_id, state, attributes) {
                     warn!("Freebox : état refusé ({error})");
                 }
             }
@@ -96,6 +111,7 @@ async fn run(
 
         let wait = match result {
             Ok(()) => {
+                core.report(crate::ID, crate::NAME, Health::Connected);
                 backoff = interval;
                 interval
             }
@@ -103,6 +119,14 @@ async fn run(
                 warn!(
                     "Freebox : relevé impossible ({error}), nouvel essai dans {} s",
                     backoff.as_secs()
+                );
+                core.report(
+                    crate::ID,
+                    crate::NAME,
+                    Health::Retrying {
+                        error: format!("relevé impossible ({error})"),
+                        retry_at: SystemTime::now() + backoff,
+                    },
                 );
                 // On rouvrira une session au prochain essai.
                 session = None;

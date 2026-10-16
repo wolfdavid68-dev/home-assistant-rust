@@ -15,6 +15,12 @@ pub mod pairing;
 pub mod sse;
 
 pub use client::Hue;
+
+/// L'identifiant de l'intégration, propriétaire de ses entités (voir
+/// [`ha_core::integrations`]).
+pub const ID: &str = "hue";
+/// Son nom affiché.
+pub const NAME: &str = "Hue";
 pub use error::HueError;
 /// Les connexions HTTPS épinglées viennent de la crate commune `ha-tls`.
 pub use ha_tls as tls;

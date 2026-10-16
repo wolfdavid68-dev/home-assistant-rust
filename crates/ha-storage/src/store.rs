@@ -30,6 +30,8 @@ pub struct StoredState {
     pub attributes: Attributes,
     pub last_changed: SystemTime,
     pub last_updated: SystemTime,
+    /// L'intégration qui publiait l'entité (`hue`, `mqtt`…), si on la connaît.
+    pub owner: Option<String>,
 }
 
 /// Un point d'une courbe : moyenne, minimum et maximum d'une valeur
@@ -86,6 +88,8 @@ pub struct Store {
 
 /// Ligne brute de la table `states` : (entity_id, state, attributes, last_changed, last_updated).
 type StateRow = (String, String, String, i64, i64);
+/// Ligne brute de la table `states`, avec l'intégration propriétaire.
+type OwnedStateRow = (String, String, String, i64, i64, Option<String>);
 
 /// Ligne brute de la table `state_history`, avec les colonnes qui peuvent être NULL.
 type HistoryRow = (
@@ -211,19 +215,21 @@ impl Store {
             // SQLite les traite comme des données, pas comme du SQL : une
             // valeur comme `'); DROP TABLE states; --` est stockée telle quelle.
             sqlx::query(
-                "INSERT INTO states (entity_id, state, attributes, last_changed, last_updated)
-                 VALUES (?1, ?2, ?3, ?4, ?5)
+                "INSERT INTO states (entity_id, state, attributes, last_changed, last_updated, owner)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)
                  ON CONFLICT (entity_id) DO UPDATE SET
                      state = excluded.state,
                      attributes = excluded.attributes,
                      last_changed = excluded.last_changed,
-                     last_updated = excluded.last_updated",
+                     last_updated = excluded.last_updated,
+                     owner = excluded.owner",
             )
             .bind(&row.0)
             .bind(&row.1)
             .bind(&row.2)
             .bind(row.3)
             .bind(row.4)
+            .bind(state.owner())
             .execute(&mut *tx)
             .await?;
             sqlx::query(
@@ -264,14 +270,15 @@ impl Store {
         for state in states {
             let row = encode(state)?;
             sqlx::query(
-                "INSERT INTO states (entity_id, state, attributes, last_changed, last_updated)
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                "INSERT INTO states (entity_id, state, attributes, last_changed, last_updated, owner)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             )
             .bind(row.0)
             .bind(row.1)
             .bind(row.2)
             .bind(row.3)
             .bind(row.4)
+            .bind(state.owner())
             .execute(&mut *tx)
             .await?;
         }
@@ -284,17 +291,21 @@ impl Store {
     /// Une ligne illisible (fichier modifié à la main, par exemple) est ignorée
     /// avec un avertissement plutôt que d'empêcher le démarrage.
     pub async fn load_states(&self) -> Result<Vec<StoredState>, StorageError> {
-        let rows: Vec<StateRow> = sqlx::query_as(
-            "SELECT entity_id, state, attributes, last_changed, last_updated
+        let rows: Vec<OwnedStateRow> = sqlx::query_as(
+            "SELECT entity_id, state, attributes, last_changed, last_updated, owner
              FROM states ORDER BY entity_id",
         )
         .fetch_all(&self.pool)
         .await?;
 
         let mut states = Vec::with_capacity(rows.len());
-        for (entity_id, state, attributes, last_changed, last_updated) in rows {
+        for (entity_id, state, attributes, last_changed, last_updated, owner) in rows {
             match decode(&entity_id, state, &attributes, last_changed, last_updated) {
-                Ok(stored) => states.push(stored),
+                // Un propriétaire mal écrit (fichier modifié à la main) est oublié.
+                Ok(stored) => states.push(StoredState {
+                    owner: owner.filter(|owner| ha_core::is_valid_name(owner)),
+                    ..stored
+                }),
                 Err(error) => warn!("état sauvegardé ignoré pour {entity_id:?} : {error}"),
             }
         }
@@ -307,12 +318,13 @@ impl Store {
         let mut restored = 0;
         for stored in self.load_states().await? {
             let entity_id = stored.entity_id.clone();
-            match machine.restore(
+            match machine.restore_owned(
                 stored.entity_id,
                 stored.state,
                 stored.attributes,
                 stored.last_changed,
                 stored.last_updated,
+                stored.owner.as_deref(),
             ) {
                 Ok(true) => restored += 1,
                 Ok(false) => {}
@@ -494,6 +506,7 @@ fn decode(
         attributes,
         last_changed: from_micros(last_changed)?,
         last_updated: from_micros(last_updated)?,
+        owner: None,
     })
 }
 

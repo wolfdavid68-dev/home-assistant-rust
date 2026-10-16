@@ -25,7 +25,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use ha_core::{
-    Attributes, Background, CancellationToken, Core, EntityId, Event, State, StateMachine,
+    Attributes, Background, CancellationToken, Core, EntityId, Event, Health, State, StateMachine,
 };
 use jiff::Timestamp;
 use serde_json::Value;
@@ -53,6 +53,10 @@ pub const IGNORED: &str = "ignored";
 /// Un appareil est signalé injoignable après ce délai.
 pub const UNAVAILABLE_AFTER: Duration = Duration::from_hours(1);
 const UNAVAILABLE_PREFIX: &str = "repair_unavailable_";
+/// Une intégration (Hue, Somfy…) est signalée en panne après ce délai : un
+/// redémarrage du pont ou du broker ne doit pas déclencher d'alerte.
+pub const INTEGRATION_ALERT_AFTER: Duration = Duration::from_mins(5);
+const INTEGRATION_PREFIX: &str = "repair_integration_";
 /// Délai avant la première vérification : au démarrage, les appareils
 /// mettent un peu de temps à se reconnecter.
 const FIRST_CHECK: Duration = Duration::from_mins(2);
@@ -312,7 +316,12 @@ async fn run(
                 Err(RecvError::Closed) => break,
             },
             _ = checks.tick() => {
-                reconcile(&core.states, UNAVAILABLE_PREFIX, &unavailable(&core.states, SystemTime::now()));
+                let now = SystemTime::now();
+                // D'abord les intégrations en panne (leurs appareils passent
+                // « indisponibles »), puis les alertes.
+                core.check_integrations(now);
+                reconcile(&core.states, INTEGRATION_PREFIX, &integration_issues(&core, now));
+                reconcile(&core.states, UNAVAILABLE_PREFIX, &unavailable(&core, now));
             }
         }
     }
@@ -337,15 +346,93 @@ fn on_call(states: &StateMachine, service: &str, entity_id: &EntityId, data: &At
     }
 }
 
-/// Les appareils qui ne répondent plus depuis au moins [`UNAVAILABLE_AFTER`].
+/// « le 16/10 à 10:32 ».
+fn when(time: SystemTime, zone: &jiff::tz::TimeZone) -> String {
+    Timestamp::try_from(time).map_or_else(
+        |_| "longtemps".into(),
+        |t| {
+            t.to_zoned(zone.clone())
+                .strftime("le %d/%m à %H:%M")
+                .to_string()
+        },
+    )
+}
+
+/// Les intégrations en panne depuis au moins [`INTEGRATION_ALERT_AFTER`] :
+/// une seule alerte pour Hue, plutôt qu'une par lampe.
 #[must_use]
-pub fn unavailable(states: &StateMachine, now: SystemTime) -> Vec<Issue> {
+pub fn integration_issues(core: &Core, now: SystemTime) -> Vec<Issue> {
     let zone = jiff::tz::TimeZone::system();
+    core.integrations()
+        .into_iter()
+        .filter(|status| {
+            status.health.is_down()
+                && now
+                    .duration_since(status.since)
+                    .is_ok_and(|down| down >= INTEGRATION_ALERT_AFTER)
+        })
+        .map(|status| {
+            let (error, retry_at, severity) = match &status.health {
+                Health::Crashed { error, retry_at } => {
+                    (format!("Elle {error}."), Some(*retry_at), Severity::Error)
+                }
+                Health::Retrying { error, retry_at } => (
+                    format!("Erreur : {error}."),
+                    Some(*retry_at),
+                    Severity::Warning,
+                ),
+                _ => (
+                    "Elle n'a pas encore réussi à se connecter.".to_owned(),
+                    None,
+                    Severity::Warning,
+                ),
+            };
+            let retry = retry_at
+                .map(|at| format!(" Nouvel essai {}.", when(at, &zone)))
+                .unwrap_or_default();
+            let devices = if status.unavailable && status.entities > 0 {
+                format!(
+                    " Ses {} appareils sont indisponibles en attendant.",
+                    status.entities
+                )
+            } else {
+                String::new()
+            };
+            Issue {
+                key: status.id.to_owned(),
+                title: format!("{} ne répond plus", status.name),
+                message: format!(
+                    "{} est en panne depuis {}. {error}{retry}{devices}",
+                    status.name,
+                    when(status.since, &zone)
+                ),
+                severity,
+            }
+        })
+        .collect()
+}
+
+/// Les appareils qui ne répondent plus depuis au moins [`UNAVAILABLE_AFTER`].
+/// Ceux d'une intégration en panne n'ont pas d'alerte à eux : celle de
+/// l'intégration suffit.
+#[must_use]
+pub fn unavailable(core: &Core, now: SystemTime) -> Vec<Issue> {
+    let zone = jiff::tz::TimeZone::system();
+    let down: Vec<&str> = core
+        .integrations()
+        .into_iter()
+        .filter(|status| status.unavailable)
+        .map(|status| status.id)
+        .collect();
+    let states = &core.states;
     states
         .all()
         .into_iter()
         .filter(|state| {
             state.state() == "unavailable"
+                && states
+                    .owner_of(state.entity_id())
+                    .is_none_or(|owner| !down.contains(&owner.as_str()))
                 && state.entity_id().domain() != DOMAIN
                 && now
                     .duration_since(state.last_changed())
@@ -354,14 +441,7 @@ pub fn unavailable(states: &StateMachine, now: SystemTime) -> Vec<Issue> {
         .map(|state| {
             let entity_id = state.entity_id();
             let name = text(state.attributes(), "friendly_name").unwrap_or(entity_id.as_str());
-            let since = Timestamp::try_from(state.last_changed()).map_or_else(
-                |_| "longtemps".into(),
-                |t| {
-                    t.to_zoned(zone.clone())
-                        .strftime("le %d/%m à %H:%M")
-                        .to_string()
-                },
-            );
+            let since = when(state.last_changed(), &zone);
             Issue {
                 key: entity_id.as_str().replace('.', "_"),
                 title: format!("{name} ne répond plus"),
@@ -536,13 +616,59 @@ mod tests {
             .set(id("light.cuisine"), "on", Attributes::new())
             .unwrap();
         let now = SystemTime::now();
-        assert_eq!(unavailable(&core.states, now), Vec::<Issue>::new());
+        assert_eq!(unavailable(&core, now), Vec::<Issue>::new());
         let later = now + UNAVAILABLE_AFTER + Duration::from_secs(1);
-        let issues = unavailable(&core.states, later);
+        let issues = unavailable(&core, later);
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].key, "light_salon");
         assert_eq!(issues[0].title, "Lampe du salon ne répond plus");
         assert!(issues[0].message.contains("(light.salon)"));
+    }
+
+    #[test]
+    fn a_broken_integration_gets_one_alert_not_one_per_device() {
+        let core = Core::new();
+        core.report("hue", "Hue", Health::Connected);
+        for name in ["salon", "cuisine", "chambre"] {
+            core.states
+                .set_by("hue", id(&format!("light.{name}")), "on", Attributes::new())
+                .unwrap();
+        }
+        let now = SystemTime::now();
+        core.report(
+            "hue",
+            "Hue",
+            Health::Retrying {
+                error: "pont injoignable".into(),
+                retry_at: now,
+            },
+        );
+        assert_eq!(integration_issues(&core, now), Vec::<Issue>::new());
+        let later = now + INTEGRATION_ALERT_AFTER + Duration::from_secs(1);
+        core.check_integrations(later);
+        let issues = integration_issues(&core, later);
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].key, "hue");
+        assert_eq!(issues[0].title, "Hue ne répond plus");
+        assert!(
+            issues[0].message.contains("pont injoignable"),
+            "{}",
+            issues[0].message
+        );
+        assert!(
+            issues[0].message.contains("Ses 3 appareils"),
+            "{}",
+            issues[0].message
+        );
+        // Les lampes sont indisponibles, mais sans alerte chacune.
+        assert_eq!(
+            core.states.get(&id("light.salon")).unwrap().state(),
+            "unavailable"
+        );
+        assert_eq!(
+            unavailable(&core, later + UNAVAILABLE_AFTER * 2),
+            Vec::<Issue>::new()
+        );
     }
 
     #[tokio::test]

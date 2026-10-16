@@ -351,7 +351,7 @@ fn publish(tracked: &Tracked, states: &StateMachine) {
         "unavailable".to_owned()
     };
 
-    if let Err(error) = states.set(tracked.entity_id.clone(), value, attributes) {
+    if let Err(error) = states.set_by(crate::ID, tracked.entity_id.clone(), value, attributes) {
         warn!("état refusé pour {} : {error}", tracked.entity_id);
     }
 }

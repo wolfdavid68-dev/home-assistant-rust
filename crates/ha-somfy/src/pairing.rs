@@ -15,6 +15,7 @@ use crate::error::SomfyError;
 const TOKEN_CONTEXT: &str = "somfy_box.token";
 
 /// Ce qu'il faut savoir pour se reconnecter à la box.
+#[derive(Clone)]
 pub struct Pairing {
     pub host: String,
     pub gateway_id: String,
