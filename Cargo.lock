@@ -1134,6 +1134,7 @@ dependencies = [
  "ha-notify",
  "ha-person",
  "ha-push",
+ "ha-simulation",
  "ha-somfy",
  "ha-storage",
  "ha-sun",
@@ -1150,6 +1151,21 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "zeroize",
+]
+
+[[package]]
+name = "ha-simulation"
+version = "0.1.0"
+dependencies = [
+ "ha-core",
+ "ha-storage",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "sqlx",
+ "thiserror",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

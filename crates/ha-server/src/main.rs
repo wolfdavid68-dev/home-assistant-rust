@@ -86,6 +86,8 @@
 //! - `HA_AREAS_PATH` : fichier des pièces (par défaut `areas.yaml`) ;
 //! - `HA_CALENDARS_PATH` : agendas en ligne, fichiers ICS (par défaut
 //!   `calendriers.yaml`) ;
+//! - `HA_SIMULATION_PATH` : simulation de présence (par défaut
+//!   `simulation.yaml`) ;
 //! - `HA_AUTOMATIONS_PATH` : fichier d'automatisations (par défaut `automations.yaml`) ;
 //! - `HA_ALEXA_IP` : adresse de cette machine sur le réseau local, pour
 //!   piloter les appareils de `alexa.yaml` à la voix (`HA_ALEXA_PATH`,
@@ -128,6 +130,7 @@ const DEFAULT_AUDIT_DAYS: u32 = 365;
 const DEFAULT_AUTOMATIONS_PATH: &str = "automations.yaml";
 const DEFAULT_AREAS_PATH: &str = "areas.yaml";
 const DEFAULT_CALENDARS_PATH: &str = "calendriers.yaml";
+const DEFAULT_SIMULATION_PATH: &str = "simulation.yaml";
 const DEFAULT_GUARD_PATH: &str = "guard.yaml";
 
 /// Concept Rust : `#[tokio::main]` démarre le moteur asynchrone de tokio.
@@ -154,6 +157,7 @@ async fn main() -> ExitCode {
         ["automations", rest @ ..] => cli::automations_command(rest).await,
         ["areas", "check"] => cli::check_areas(&areas_path()),
         ["calendriers", "check"] => cli::check_calendars(&calendars_path()),
+        ["simulation", "check"] => cli::check_simulation(&simulation_path()),
         ["guard", "check"] => cli::check_guard(&areas_path(), &guard_path()),
         ["alexa", "check"] => cli::check_alexa(&alexa_path()),
         ["thermostats", "check"] => cli::check_thermostats(&thermostats_path()),
@@ -233,6 +237,12 @@ fn areas_path() -> std::path::PathBuf {
 fn calendars_path() -> std::path::PathBuf {
     std::env::var("HA_CALENDARS_PATH")
         .unwrap_or_else(|_| DEFAULT_CALENDARS_PATH.to_owned())
+        .into()
+}
+
+fn simulation_path() -> std::path::PathBuf {
+    std::env::var("HA_SIMULATION_PATH")
+        .unwrap_or_else(|_| DEFAULT_SIMULATION_PATH.to_owned())
         .into()
 }
 
@@ -472,6 +482,20 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     // consigne et son mode d'avant l'arrêt.
     let persons = (!person_configs.is_empty())
         .then(|| ha_person::Persons::start(person_configs, Arc::clone(&core)));
+    // Simulation de présence (étape 58) : après la restauration des états,
+    // pour qu'elle reste armée après un redémarrage.
+    let presence_simulation = match ha_simulation::load(&simulation_path()) {
+        Ok(Some(config)) => Some(ha_simulation::Simulation::start(
+            config,
+            store.clone(),
+            Arc::clone(&core),
+        )),
+        Ok(None) => None,
+        Err(error) => {
+            warn!("simulation de présence : {error}");
+            None
+        }
+    };
     let thermostats = (!thermostat_configs.is_empty())
         .then(|| ha_thermostat::Thermostats::start(thermostat_configs, Arc::clone(&core)));
     let backups = if let Some(settings) = backup_settings {
@@ -615,6 +639,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     }
     if let Some(calendars) = calendars {
         calendars.stop().await;
+    }
+    if let Some(presence_simulation) = presence_simulation {
+        presence_simulation.stop().await;
     }
     if let Some(sun) = sun {
         sun.stop().await;

@@ -473,6 +473,26 @@ impl Store {
         Ok(HistorySeries { numeric, changes })
     }
 
+    /// L'état de `entity_id` à l'instant `at` : le dernier enregistré avant
+    /// (ou à) cet instant. `None` si rien n'était enregistré, ou si l'entité
+    /// avait été supprimée. Pour rejouer le passé (simulation de présence).
+    pub async fn state_at(
+        &self,
+        entity_id: &EntityId,
+        at: SystemTime,
+    ) -> Result<Option<String>, StorageError> {
+        let row: Option<(Option<String>,)> = sqlx::query_as(
+            "SELECT state FROM state_history
+             WHERE entity_id = ?1 AND recorded_at <= ?2
+             ORDER BY recorded_at DESC, id DESC LIMIT 1",
+        )
+        .bind(entity_id.as_str())
+        .bind(to_micros(at)?)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.and_then(|(state,)| state))
+    }
+
     /// Supprime l'historique enregistré avant `older_than`.
     /// Renvoie le nombre de lignes supprimées.
     pub async fn purge_history(&self, older_than: SystemTime) -> Result<u64, StorageError> {

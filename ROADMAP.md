@@ -103,6 +103,7 @@ Les fonctions de Home Assistant les plus utiles au quotidien, une par une, dans 
 - [x] **55. Un assistant IA branché par MCP** : Claude (ou un autre) lit l'état de la maison et la pilote, comme le serveur MCP de Home Assistant et les agents de Moli OS ; ses ordres dans une pièce protégée attendent un humain, il ne peut jamais ouvrir la maison, 60 appels par minute, tout est audité ([guide](docs/mcp.md))
 - [x] **56. Jours ouvrés et jours fériés** : `binary_sensor.jour_ouvre`, `binary_sensor.demain_jour_ouvre` et `sensor.prochain_jour_ferie`, calculés sur place (Pâques comprise), avec le Vendredi saint et la Saint-Étienne en Alsace-Moselle, comme l'intégration Workday de Home Assistant ([guide](docs/jours-ouvres.md))
 - [x] **57. Les agendas en ligne** : un fichier ICS (collecte des déchets, vacances scolaires, agenda Google partagé) devient un agenda en lecture seule, avec ses répétitions ; le déclencheur `calendar` marche avec lui (« la veille de la collecte »), comme « Remote Calendar » dans Home Assistant ([guide](docs/agendas-en-ligne.md))
+- [x] **58. La simulation de présence** : maison vide, les lumières (et les volets) refont ce qu'elles ont fait il y a une semaine à la même heure ; armée par `switch.simulation_presence`, elle s'arrête au retour du premier ([guide](docs/simulation.md))
 
 En parallèle, dès que tu me donnes les informations : commande du chauffage Somfy (résultat de
 `somfy devices`), puis de l'alarme (avec confirmation et journal).

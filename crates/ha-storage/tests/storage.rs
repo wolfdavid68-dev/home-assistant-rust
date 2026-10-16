@@ -720,3 +720,34 @@ async fn statistics_are_compiled_per_hour_and_grouped_per_local_day() {
 
     assert_eq!(all("sensor.mode", Period::Hour).await, Vec::new());
 }
+
+#[tokio::test]
+async fn the_state_at_a_past_moment() {
+    let store = Store::open_in_memory().await.unwrap();
+    let base = 1_700_000_000;
+    history_row(&store, "light.salon", Some("off"), base).await;
+    history_row(&store, "light.salon", Some("on"), base + 60).await;
+    history_row(&store, "light.salon", None, base + 120).await;
+    history_row(&store, "light.cuisine", Some("on"), base + 30).await;
+    let at = |seconds: u64| std::time::UNIX_EPOCH + Duration::from_secs(seconds);
+    let salon: EntityId = "light.salon".parse().unwrap();
+    assert_eq!(store.state_at(&salon, at(base - 1)).await.unwrap(), None);
+    assert_eq!(
+        store
+            .state_at(&salon, at(base + 30))
+            .await
+            .unwrap()
+            .as_deref(),
+        Some("off")
+    );
+    assert_eq!(
+        store
+            .state_at(&salon, at(base + 60))
+            .await
+            .unwrap()
+            .as_deref(),
+        Some("on")
+    );
+    // Supprimée à base + 120 : plus d'état.
+    assert_eq!(store.state_at(&salon, at(base + 500)).await.unwrap(), None);
+}
