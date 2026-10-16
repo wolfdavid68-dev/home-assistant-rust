@@ -23,7 +23,14 @@ name: CI
 #      coûtaient cinq minutes.
 
 on:
+  # Une PR en brouillon ne lance rien : une session de travail pousse une
+  # dizaine de commits par PR (56 PR en deux jours et demi), et chacun
+  # repayait toute la CI alors que seul le dernier verdict compte. La PR
+  # s'ouvre en brouillon (voir CLAUDE.md) et la CI part au passage en
+  # « prête » (`ready_for_review`), puis à chaque push. Un job sauté ne coûte
+  # rien. Même règle dans windows.yml et docker.yml.
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths-ignore:
       - "docs/**"
       - "**/*.md"
@@ -55,6 +62,7 @@ env:
 jobs:
   check:
     name: vérifications (Linux)
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -89,6 +97,7 @@ jobs:
     # Vérifie que le projet compile avec la version minimale annoncée dans
     # Cargo.toml (`rust-version`), et pas seulement avec la dernière.
     name: version minimale de Rust
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

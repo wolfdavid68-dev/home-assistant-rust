@@ -14,11 +14,12 @@ name: Windows
 #     chemins de fichiers, au port série ou aux permissions ;
 #   - à la main, depuis l'onglet Actions.
 #
-# Sans l'étiquette, le job est sauté, et un job sauté ne coûte rien.
+# Sans l'étiquette, ou tant que la PR est en brouillon, le job est sauté, et
+# un job sauté ne coûte rien.
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled]
+    types: [opened, synchronize, reopened, labeled, ready_for_review]
   schedule:
     - cron: "0 3 * * 1"
   workflow_dispatch:
@@ -37,7 +38,9 @@ env:
 jobs:
   check:
     name: clippy et tests (Windows)
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'windows')
+    if: >-
+      github.event_name != 'pull_request' ||
+      (!github.event.pull_request.draft && contains(github.event.pull_request.labels.*.name, 'windows'))
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
