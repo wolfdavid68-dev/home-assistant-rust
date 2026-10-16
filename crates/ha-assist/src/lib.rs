@@ -636,8 +636,8 @@ pub fn describe(device: &Device) -> String {
         ("binary_sensor", "off") if opening => "fermé",
         ("binary_sensor", "on") if device.device_class() == Some("motion") => "mouvement détecté",
         ("binary_sensor", "off") if device.device_class() == Some("motion") => "calme",
-        ("binary_sensor", "on") => "actif",
-        ("binary_sensor", "off") => "inactif",
+        ("binary_sensor", "on") => "oui",
+        ("binary_sensor", "off") => "non",
         ("climate", mode) => {
             let target = device.attr("temperature").and_then(Value::as_f64);
             let current = device.attr("current_temperature").and_then(Value::as_f64);

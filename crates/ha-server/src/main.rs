@@ -73,6 +73,9 @@
 //! - `HA_VIGILANCE_DEPARTEMENT` (par exemple `67`) et `HA_VIGILANCE_KEY_FILE`
 //!   (fichier contenant la clé de l'API Météo-France, ou `HA_VIGILANCE_KEY`) :
 //!   vigilance météo (orages, canicule…) ;
+//! - `HA_JOURS_FERIES` : `france` ou `alsace-moselle` (par défaut, d'après
+//!   `HA_VIGILANCE_DEPARTEMENT`) ; `HA_JOURS_OUVRES` : `lun,mar,mer,jeu,ven`
+//!   (par défaut) ;
 //! - `HA_SCRIPTS_PATH` et `HA_SCENES_PATH` : scripts et scènes (par défaut
 //!   `scripts.yaml` et `scenes.yaml`) ;
 //! - `HA_NTFY_URL`, `HA_NTFY_TOPIC`, `HA_NTFY_TOKEN_FILE` : notifications sur
@@ -431,6 +434,14 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         Arc::clone(&core),
     );
     let sun = location.map(|location| SunTracker::start(location, Arc::clone(&core)));
+    // Jours ouvrés et fériés (étape 56) : toujours là, calculés sur place.
+    let workday = match workday_settings() {
+        Ok((regime, week)) => Some(ha_workday::Workday::start(regime, week, Arc::clone(&core))),
+        Err(error) => {
+            warn!("jours ouvrés : {error}");
+            None
+        }
+    };
     let inputs = inputs.map(|inputs| inputs.start(Arc::clone(&core)));
     // Après la restauration des états : chaque thermostat reprend sa
     // consigne et son mode d'avant l'arrêt.
@@ -573,6 +584,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     }
     if let Some(notifier) = notifier {
         notifier.stop().await;
+    }
+    if let Some(workday) = workday {
+        workday.stop().await;
     }
     if let Some(sun) = sun {
         sun.stop().await;
@@ -1035,4 +1049,17 @@ fn attributes(value: serde_json::Value) -> Attributes {
         serde_json::Value::Object(map) => map,
         _ => Attributes::new(),
     }
+}
+
+/// `HA_JOURS_FERIES` et `HA_JOURS_OUVRES` (étape 56).
+fn workday_settings() -> Result<(ha_workday::Regime, ha_workday::Week), String> {
+    let regime = ha_workday::Regime::from_settings(
+        std::env::var("HA_JOURS_FERIES").ok().as_deref(),
+        std::env::var("HA_VIGILANCE_DEPARTEMENT").ok().as_deref(),
+    )?;
+    let week = match std::env::var("HA_JOURS_OUVRES") {
+        Ok(days) => ha_workday::Week::parse(&days)?,
+        Err(_) => ha_workday::Week::default(),
+    };
+    Ok((regime, week))
 }

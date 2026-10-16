@@ -1145,9 +1145,14 @@ function waterHeaterTile(state) {
 }
 
 function binaryTile(state) {
-  const labels = lookup(BINARY_LABELS, state.attributes.device_class) ?? ["Actif", "Inactif"];
-  const text = agree(state, state.state === "on" ? labels[0] : state.state === "off" ? labels[1] : statusText(state));
-  const icon = lookup(BINARY_ICONS, state.attributes.device_class) ?? ICONS.door;
+  // Jour ouvré (étape 56) : « Oui », « Non (Ascension) ».
+  const workday = Array.isArray(state.attributes.jours_ouvres);
+  const holiday = workday && typeof state.attributes.jour_ferie === "string" ? ` (${state.attributes.jour_ferie})` : "";
+  const labels = workday ? ["Oui", `Non${holiday}`] : lookup(BINARY_LABELS, state.attributes.device_class) ?? ["Actif", "Inactif"];
+  const text = workday
+    ? (state.state === "on" ? labels[0] : state.state === "off" ? labels[1] : statusText(state))
+    : agree(state, state.state === "on" ? labels[0] : state.state === "off" ? labels[1] : statusText(state));
+  const icon = workday ? ICONS.calendar : lookup(BINARY_ICONS, state.attributes.device_class) ?? ICONS.door;
   return el(
     "div",
     { id: tileId(state.entity_id), class: tileClass(state, "binary") },
@@ -1636,6 +1641,7 @@ function alarmTile(state) {
 
 function sensorTile(state) {
   if (state.attributes.device_class === "timestamp") return timestampTile(state);
+  if (state.attributes.device_class === "date") return dateTile(state);
   const unit = state.attributes.unit_of_measurement;
   // « 22.2 » s'affiche « 22,2 » (à la française).
   const numeric = /^-?\d+(\.\d+)?$/.test(state.state) ? number.format(Number(state.state)) : state.state;
@@ -1646,6 +1652,22 @@ function sensorTile(state) {
     { id: tileId(state.entity_id), class: tileClass(state, "sensor") },
     tileHead(state, lookup(ICONS, state.attributes.device_class) ?? ICONS.gauge, `il y a ${ago(state.last_changed)}`),
     value,
+  );
+}
+
+// Un jour (prochain jour férié, étape 56) : « Toussaint », « dim. 1 nov., dans 16 jours ».
+function dateTile(state) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(state.state);
+  const day = match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : null;
+  const name = typeof state.attributes.nom === "string" ? state.attributes.nom : "";
+  const left = Number(state.attributes.dans_jours);
+  const when = Number.isInteger(left) ? (left === 0 ? "aujourd'hui" : left === 1 ? "demain" : `dans ${left} jours`) : "";
+  const shown = day ? day.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" }) : statusText(state);
+  return el(
+    "div",
+    { id: tileId(state.entity_id), class: tileClass(state, "sensor") },
+    tileHead(state, ICONS.calendar, [shown, when].filter(Boolean).join(", ")),
+    el("div", { class: "value small-value", text: name || shown }),
   );
 }
 

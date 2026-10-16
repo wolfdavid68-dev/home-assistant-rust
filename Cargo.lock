@@ -1121,6 +1121,7 @@ dependencies = [
  "ha-thermostat",
  "ha-tls",
  "ha-weather",
+ "ha-workday",
  "jiff",
  "qrcode",
  "rpassword",
@@ -1234,6 +1235,17 @@ dependencies = [
  "tracing",
  "url",
  "zeroize",
+]
+
+[[package]]
+name = "ha-workday"
+version = "0.1.0"
+dependencies = [
+ "ha-core",
+ "jiff",
+ "serde_json",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
