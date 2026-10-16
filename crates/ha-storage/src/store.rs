@@ -473,6 +473,60 @@ impl Store {
         Ok(HistorySeries { numeric, changes })
     }
 
+    /// Combien de temps (en secondes) `entity_id` a été dans l'un des
+    /// `states` entre `since` et `until`, et combien de fois il y est entré
+    /// pendant cette période (l'état au début ne compte pas comme une
+    /// entrée). Calculé par SQLite, sans limite de lignes (statistiques
+    /// d'historique, étape 59).
+    pub async fn time_in_states(
+        &self,
+        entity_id: &EntityId,
+        states: &[String],
+        since: SystemTime,
+        until: SystemTime,
+    ) -> Result<(f64, u64), StorageError> {
+        let since = to_micros(since)?;
+        let until = to_micros(until)?;
+        if until <= since {
+            return Ok((0.0, 0));
+        }
+        let wanted = serde_json::to_string(states)?;
+        let (micros, entries): (Option<i64>, Option<i64>) = sqlx::query_as(
+            "WITH rows AS (
+                 SELECT ?2 AS at, 0 AS id,
+                        (SELECT state FROM state_history
+                         WHERE entity_id = ?1 AND recorded_at <= ?2
+                         ORDER BY recorded_at DESC, id DESC LIMIT 1) AS state
+                 UNION ALL
+                 SELECT recorded_at, id, state FROM state_history
+                 WHERE entity_id = ?1 AND recorded_at > ?2 AND recorded_at <= ?3
+             ),
+             marked AS (
+                 SELECT at, state,
+                        state IN (SELECT value FROM json_each(?4)) AS inside,
+                        LAG(state IN (SELECT value FROM json_each(?4)), 1, 0)
+                            OVER (ORDER BY at, id) AS was_inside,
+                        LEAD(at, 1, ?3) OVER (ORDER BY at, id) AS next
+                 FROM rows
+             )
+             SELECT SUM(CASE WHEN inside THEN next - at ELSE 0 END),
+                    SUM(CASE WHEN inside AND NOT COALESCE(was_inside, 0) AND at > ?2 THEN 1 ELSE 0 END)
+             FROM marked",
+        )
+        .bind(entity_id.as_str())
+        .bind(since)
+        .bind(until)
+        .bind(wanted)
+        .fetch_one(&self.pool)
+        .await?;
+        #[allow(
+            clippy::cast_precision_loss,
+            reason = "des microsecondes : bien en deçà de 2^52"
+        )]
+        let seconds = micros.unwrap_or(0).max(0) as f64 / 1_000_000.0;
+        Ok((seconds, u64::try_from(entries.unwrap_or(0)).unwrap_or(0)))
+    }
+
     /// L'état de `entity_id` à l'instant `at` : le dernier enregistré avant
     /// (ou à) cet instant. `None` si rien n'était enregistré, ou si l'entité
     /// avait été supprimée. Pour rejouer le passé (simulation de présence).

@@ -434,6 +434,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     let agenda = ha_agenda::Agenda::start(store.clone(), Arc::clone(&core)).await;
     // Les assistants calculés (groupes, moyennes…), avant les automatisations
     // aussi : leur création ne déclenche rien.
+    // Les statistiques d'historique (étape 59) lisent la base : leur tâche.
+    let history_stats =
+        ha_derived::history::HistoryStats::start(&derived_config, store.clone(), Arc::clone(&core));
     let assistants = (!derived_config.is_empty())
         .then(|| ha_derived::Assistants::start(derived_config, Arc::clone(&core)));
 
@@ -620,6 +623,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     agenda.stop().await;
     if let Some(assistants) = assistants {
         assistants.stop().await;
+    }
+    if let Some(history_stats) = history_stats {
+        history_stats.stop().await;
     }
     engine.stop().await;
     notices.stop().await;

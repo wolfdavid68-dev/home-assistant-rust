@@ -59,3 +59,20 @@ utility_meter:
     name: Électricité du mois
     source: sensor.compteur_electricite
     cycle: monthly
+
+# Combien de temps (time, en heures), combien de fois (count) ou quelle part
+# de la période (ratio, en %) une entité a été dans un état. Calculé d'après
+# l'historique, chaque minute. cycle : hourly, daily, weekly, monthly ou yearly.
+history_stats:
+  chauffage_du_jour:
+    name: Chauffage aujourd'hui
+    entity_id: switch.radiateur_salon
+    state: "on"
+    type: time
+    cycle: daily
+  ouvertures_du_garage:
+    name: Ouvertures du garage cette semaine
+    entity_id: cover.garage
+    state: [open, opening]
+    type: count
+    cycle: weekly

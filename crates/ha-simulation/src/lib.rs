@@ -344,6 +344,13 @@ mod tests {
     }
 
     #[test]
+    fn the_example_file_is_understood() {
+        let config = parse_config(include_str!("../../../simulation.example.yaml")).unwrap();
+        assert_eq!(config.devices.len(), 4);
+        assert_eq!(config.days_ago, 7);
+    }
+
+    #[test]
     fn the_past_is_turned_into_orders() {
         assert_eq!(wanted("light", "on"), Some("on"));
         assert_eq!(wanted("cover", "closing"), Some("closed"));

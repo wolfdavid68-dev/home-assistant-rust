@@ -8,6 +8,7 @@ publish.workspace = true
 
 [dependencies]
 ha-core = { path = "../ha-core" }
+ha-storage = { path = "../ha-storage" }
 jiff.workspace = true
 serde.workspace = true
 serde-saphyr.workspace = true

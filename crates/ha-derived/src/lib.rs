@@ -9,10 +9,14 @@
 //! - **seuil** (`binary_sensor.trop_humide`) : au-dessus ou au-dessous d'une
 //!   limite, avec une marge (hystérésis) pour ne pas clignoter ;
 //! - **consommation par période** (`sensor.electricite_du_jour`) : ce qu'un
-//!   compteur a compté depuis minuit, le début de la semaine, du mois…
+//!   compteur a compté depuis minuit, le début de la semaine, du mois… ;
+//! - **statistique d'historique** (`sensor.chauffage_du_jour`) : combien de
+//!   temps, ou combien de fois, une entité a été dans un état depuis le
+//!   début de la période (étape 59, voir [`history`]).
 
 mod compute;
 mod config;
+pub mod history;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -29,7 +33,9 @@ pub use compute::{
     Meter, Position, cover_group, on_off_group, period_start, rounded, schedule, statistic,
     threshold,
 };
-pub use config::{Block, Cycle, Derived, DerivedError, GROUP_TYPES, Kind, Statistic, load, parse};
+pub use config::{
+    Block, Cycle, Derived, DerivedError, GROUP_TYPES, Kind, Measure, Statistic, load, parse,
+};
 
 /// La tâche des assistants calculés.
 #[derive(Debug)]
@@ -40,6 +46,12 @@ impl Assistants {
     /// l'arrêt), puis les tient à jour.
     #[must_use]
     pub fn start(derived: Vec<Derived>, core: Arc<Core>) -> Self {
+        // Les statistiques d'historique lisent la base : leur propre tâche
+        // (`history::HistoryStats`).
+        let derived: Vec<Derived> = derived
+            .into_iter()
+            .filter(|d| !matches!(d.kind, Kind::HistoryStats { .. }))
+            .collect();
         let events = core.bus.subscribe();
         let mut live = Live::new(derived, &core);
         live.refresh_all(&core, local_now());
@@ -119,6 +131,7 @@ impl Live {
         let mut attributes = Attributes::new();
         attributes.insert("friendly_name".into(), json!(item.derived.name));
         let state: String = match &item.derived.kind {
+            Kind::HistoryStats { .. } => return,
             Kind::Group { members, all } => {
                 attributes.insert(
                     "entity_id".into(),

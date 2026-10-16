@@ -921,6 +921,7 @@ name = "ha-derived"
 version = "0.1.0"
 dependencies = [
  "ha-core",
+ "ha-storage",
  "jiff",
  "serde",
  "serde-saphyr",

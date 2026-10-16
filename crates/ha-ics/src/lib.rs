@@ -386,6 +386,16 @@ mod tests {
     }
 
     #[test]
+    fn the_example_file_is_understood() {
+        let calendars = parse_config(include_str!("../../../calendriers.example.yaml")).unwrap();
+        assert_eq!(calendars.len(), 1);
+        assert_eq!(
+            calendars[0].entity_id.as_str(),
+            "calendar.vacances_scolaires"
+        );
+    }
+
+    #[test]
     fn the_state_matches_the_house_agenda() {
         let calendar = parse_config("- nom: Collecte\n  url: https://exemple.fr/c.ics\n")
             .unwrap()
