@@ -1,0 +1,56 @@
+name: Windows
+
+# Le job le plus cher du dépôt : 5,7 min par run, et GitHub compte chaque
+# minute Windows double. 1 282 minutes facturées en deux jours et demi, soit
+# la moitié de toute la CI.
+#
+# Un filtre sur les chemins n'aurait presque rien rendu : le code propre à
+# Windows (`cfg(windows)`) vit dans ha-storage, ha-teleinfo et ha-server, que
+# deux PR sur trois touchent. La vérification passe donc à la demande :
+#
+#   - chaque lundi, sur `main` : une casse Windows se voit en une semaine au
+#     plus, et ce run réchauffe le cache dont les PR héritent ;
+#   - sur une PR qui porte l'étiquette `windows` — à poser quand on touche aux
+#     chemins de fichiers, au port série ou aux permissions ;
+#   - à la main, depuis l'onglet Actions.
+#
+# Sans l'étiquette, le job est sauté, et un job sauté ne coûte rien.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  check:
+    name: clippy et tests (Windows)
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'windows')
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install toolchain
+        run: rustup toolchain install
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --all-features --locked
+
+      - name: Tests
+        run: cargo test --workspace --all-features --locked

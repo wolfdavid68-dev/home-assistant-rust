@@ -1,10 +1,18 @@
 version: 2
+
+# Chaque PR Dependabot déclenche la CI. En hebdomadaire et sans regroupement,
+# trois écosystèmes ouvraient jusqu'à une douzaine de PR par semaine. En
+# mensuel et regroupé, c'est une PR par écosystème et par mois.
+#
+# Les correctifs de sécurité ne suivent pas ce calendrier : quand les mises
+# à jour de sécurité sont activées, Dependabot ouvre la
+# PR de correctif dès qu'une faille est publiée, quel que soit `interval`.
 updates:
   - package-ecosystem: cargo
     directory: /
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 10
+      interval: monthly
+    open-pull-requests-limit: 5
     groups:
       cargo-minor-patch:
         update-types: [minor, patch]
@@ -12,10 +20,16 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
 
   # Images de base du Dockerfile (épinglées par empreinte).
   - package-ecosystem: docker
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
+    groups:
+      images:
+        patterns: ["*"]

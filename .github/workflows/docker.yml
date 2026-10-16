@@ -1,0 +1,63 @@
+name: Docker
+
+# 4,7 min par run (le build recompile tout le serveur en release), 506
+# minutes facturées en deux jours et demi. Ce job vérifie l'emballage — que
+# l'image se construit, démarre en lecture seule et s'arrête proprement — et
+# l'emballage ne change qu'avec le Dockerfile, compose.yaml, .dockerignore,
+# les dépendances ou la toolchain. Le comportement du serveur, lui, est
+# couvert par les tests de la CI.
+#
+# Le filet hebdomadaire rattrape ce que le filtre laisserait passer, par
+# exemple un en-tête de sécurité retiré dans le code du serveur.
+
+on:
+  pull_request:
+    paths:
+      - Dockerfile
+      - compose.yaml
+      - .dockerignore
+      - Cargo.lock
+      - rust-toolchain.toml
+      - .github/workflows/docker.yml
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docker:
+    # Construit l'image, la démarre avec les mêmes protections que
+    # compose.yaml, puis vérifie qu'elle répond et s'arrête proprement.
+    name: image Docker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build
+        run: docker build -t ha-server:ci .
+
+      - name: Smoke test
+        run: |
+          docker run -d --name ha --read-only --tmpfs /tmp \
+            --cap-drop ALL --security-opt no-new-privileges:true \
+            -p 127.0.0.1:8123:8123 ha-server:ci
+          status=starting
+          for _ in $(seq 1 60); do
+            status=$(docker inspect --format '{{.State.Health.Status}}' ha)
+            [ "$status" = healthy ] && break
+            sleep 2
+          done
+          docker logs ha
+          test "$status" = healthy
+          curl -fsS -D - -o /dev/null http://127.0.0.1:8123/ | grep -i '^content-security-policy:'
+          docker stop ha
+          docker logs ha 2>&1 | grep 'SIGTERM'
+          test "$(docker inspect --format '{{.State.ExitCode}}' ha)" = 0
