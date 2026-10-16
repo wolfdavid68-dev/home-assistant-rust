@@ -2015,8 +2015,9 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
      première rangée (pièces | dessin) prend la hauteur que laissent l'en-tête
      et les volets ; le dessin s'y adapte en gardant ses proportions. */
   [data-layout="board"] .layout { grid-template-rows: max(520px, calc(100dvh - 76px - var(--covers-h, 0px) - 24px)) auto auto auto; margin-top: 0; gap: 10px; }
-  [data-layout="board"] .overview { min-height: 0; overflow-y: auto; scrollbar-width: none; align-content: start; gap: 10px; }
-  [data-layout="board"] .overview::-webkit-scrollbar { display: none; }
+  /* La colonne tient dans sa rangée (sinon, plus haute que l'écran, elle
+     passait par-dessus les volets) et défile, avec une barre fine. */
+  [data-layout="board"] .overview { align-self: stretch; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--muted) 45%, transparent) transparent; align-content: start; gap: 10px; }
   [data-layout="board"] .house:not([hidden]) { display: flex; flex-direction: column; min-height: 0; gap: 8px; align-self: stretch; }
   [data-layout="board"] .house-frame { flex: 1; min-height: 0; container-type: size; display: grid; place-items: center; }
   [data-layout="board"] #house-stage { width: min(100cqw, calc(100cqh * var(--ratio, 1.35))); }
