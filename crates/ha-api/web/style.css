@@ -774,6 +774,63 @@ body.tablet .clock {
 }
 .account strong { color: var(--text); }
 
+/* Écran de veille de la tablette murale : la maison en grand, l'heure, la
+   météo. Plus sombre la nuit ; décalé de quelques pixels chaque minute. */
+.saver {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: #07080b;
+  color: #eef1f6;
+  cursor: none;
+  user-select: none;
+  transition: filter 2s ease;
+}
+.saver:not([hidden]) { display: grid; grid-template-rows: 1fr auto; }
+.saver.night { filter: brightness(0.45); }
+/* La nuit, le dessin (souvent clair) s'efface encore plus que le texte. */
+.saver.night .saver-house { filter: brightness(0.45); }
+.saver-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(16rem, 1fr);
+  align-items: center;
+  gap: clamp(1rem, 4vw, 4rem);
+  padding: clamp(1rem, 4vw, 3.5rem);
+  min-height: 0;
+  transform: translate(var(--shift-x, 0), var(--shift-y, 0));
+  transition: transform 1s ease;
+}
+.saver-house { container-type: size; height: 100%; min-height: 0; display: grid; place-items: center; }
+.saver-house:empty { display: none; }
+.saver-house:empty + .saver-side { grid-column: 1 / -1; justify-items: center; text-align: center; }
+.saver-house #house-stage { width: min(100cqw, calc(100cqh * var(--ratio, 1.35))); pointer-events: none; }
+.saver-side { display: grid; gap: 0.6rem; align-content: center; }
+.saver-side p { margin: 0; }
+.saver-clock {
+  font-family: var(--font-display);
+  font-size: clamp(4rem, 13vw, 10rem);
+  font-weight: 600;
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+.saver-date { font-size: clamp(1.1rem, 2.4vw, 1.8rem); color: #aeb6c4; }
+.saver-date::first-letter { text-transform: uppercase; }
+.saver-weather { display: flex; align-items: center; gap: 0.6rem; font-size: clamp(1.1rem, 2.4vw, 1.8rem); color: #d6dbe4; }
+.saver-weather svg { width: 1.6em; height: 1.6em; }
+.saver-weather strong { font-weight: 600; font-variant-numeric: tabular-nums; }
+.saver-side .saver-status { margin-top: 0.8rem; font-size: clamp(1rem, 1.8vw, 1.3rem); color: #8f98a8; }
+.saver-status.alert { color: #ffb86b; }
+.saver-approvals { font-size: clamp(1rem, 1.8vw, 1.3rem); color: #ff7a6b; font-weight: 600; }
+.saver-hint { margin: 0; padding: 0 0 1.2rem; text-align: center; font-size: 0.85rem; color: #5d6575; }
+@media (max-width: 760px), (orientation: portrait) {
+  .saver-inner { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; align-items: stretch; }
+  .saver-side { justify-items: center; text-align: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .saver, .saver-inner { transition: none; }
+}
+
 /* Journal de bord */
 .logbook-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; margin-bottom: 0.75rem; }
 .logbook-filters .periods { margin: 0; }
