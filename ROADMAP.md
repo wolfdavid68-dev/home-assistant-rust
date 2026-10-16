@@ -106,6 +106,7 @@ Les fonctions de Home Assistant les plus utiles au quotidien, une par une, dans 
 - [x] **58. La simulation de présence** : maison vide, les lumières (et les volets) refont ce qu'elles ont fait il y a une semaine à la même heure ; armée par `switch.simulation_presence`, elle s'arrête au retour du premier ([guide](docs/simulation.md))
 - [x] **59. Les statistiques d'historique** : combien de temps le chauffage a tourné aujourd'hui, combien de fois le garage s'est ouvert cette semaine, quelle part de la journée une lumière est restée allumée (`history_stats` de Home Assistant), calculés par la base ([guide](docs/assistants.md#les-statistiques-dhistorique-étape-59))
 - [x] **60. Tempo, la couleur du jour et du lendemain** : lue sur le compteur Linky, sans Internet (`sensor.linky_tempo_aujourdhui`, `sensor.linky_tempo_demain`) ; tuile et panneau Énergie, un jour rouge signalé sur l'accueil ; dans les automatisations (« demain rouge : prévenir », « jour rouge : chauffage en éco ») ([guide](docs/energie.md#étape-60--la-couleur-tempo-du-jour-et-du-lendemain))
+- [x] **61. Les piles faibles** : toutes les piles de la maison surveillées (capteurs Zigbee, détecteurs, serrures) ; alerte à 20 %, le téléphone sonne à 5 %, jusqu'à ce que la pile soit changée ; la liste dans Mon compte, la plus faible d'abord ([guide](docs/piles.md))
 
 En parallèle, dès que tu me donnes les informations : commande du chauffage Somfy (résultat de
 `somfy devices`), puis de l'alarme (avec confirmation et journal).

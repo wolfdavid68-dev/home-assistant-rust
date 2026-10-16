@@ -48,7 +48,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 use ha_core::guard::{APPROVAL_ANSWERED, APPROVAL_EXPIRED};
 use ha_core::{
-    Attributes, Background, CancellationToken, Core, EntityId, Event, Origin, StateMachine,
+    Attributes, Background, CancellationToken, Core, EntityId, Event, Origin, State, StateMachine,
 };
 use ha_storage::{PushTarget, Store};
 use serde_json::{Value, json};
@@ -311,6 +311,14 @@ fn text<'a>(attributes: &'a Attributes, key: &str) -> Option<&'a str> {
     attributes.get(key).and_then(Value::as_str)
 }
 
+/// Une alerte de réparation affichée qui devient grave (une pile faible
+/// presque vide) : elle sonne comme une nouvelle.
+fn worsened(old: &State, new: &State) -> bool {
+    text(new.attributes(), "kind") == Some("repair")
+        && text(new.attributes(), "severity") == Some("error")
+        && text(old.attributes(), "severity") != Some("error")
+}
+
 /// Ce qu'un événement du bus doit envoyer, s'il doit envoyer quelque chose.
 /// `states` donne le nom des appareils (« Volet chambre »).
 #[must_use]
@@ -365,9 +373,9 @@ pub fn outgoing(event: &Event, states: &StateMachine) -> Option<Outgoing> {
             new_state: Some(new_state),
         } if entity_id.domain() == ha_notices::DOMAIN
             && new_state.state() == ha_notices::NOTIFYING
-            && old_state
-                .as_ref()
-                .is_none_or(|old| old.state() != ha_notices::NOTIFYING) =>
+            && old_state.as_ref().is_none_or(|old| {
+                old.state() != ha_notices::NOTIFYING || worsened(old, new_state)
+            }) =>
         {
             let attributes = new_state.attributes();
             let title = clean(text(attributes, "title")?, MAX_TITLE_CHARS);
@@ -1081,6 +1089,31 @@ mod tests {
             json!({"title": "Lessive", "message": "finie", "kind": "notification"}),
         );
         assert_eq!(outgoing(&changed(plain, None)), None);
+    }
+
+    #[test]
+    fn an_alert_that_becomes_serious_rings() {
+        // Une pile à 18 % (avertissement, dans la cloche) tombe à 4 % : la
+        // même alerte devient grave, et le téléphone sonne.
+        let alert = |severity: &str, message: &str| {
+            notice(
+                "persistent_notification.repair_battery_sensor_cave",
+                "notifying",
+                json!({"title": "Pile", "message": message, "kind": "repair", "severity": severity}),
+            )
+        };
+        let out = outgoing(&changed(
+            alert("error", "4 %"),
+            Some(alert("warning", "18 %")),
+        ))
+        .unwrap();
+        assert_eq!(out.category, Category::Alerts);
+        assert!(out.message.urgent);
+        // Elle reste grave (3 %) : pas de nouvelle sonnerie.
+        assert_eq!(
+            outgoing(&changed(alert("error", "3 %"), Some(alert("error", "4 %")))),
+            None
+        );
     }
 
     fn call(data: Value, origin: Origin, entity: &str) -> Event {

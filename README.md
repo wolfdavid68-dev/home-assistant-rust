@@ -68,6 +68,7 @@ Un noyau domotique en Rust, inspiré de Home Assistant.
 - [Étape 58 : la simulation de présence, expliquée](docs/simulation.md)
 - [Étape 59 : les statistiques d'historique](docs/assistants.md#les-statistiques-dhistorique-étape-59)
 - [Étape 60 : la couleur Tempo du jour et du lendemain, expliquée](docs/energie.md#étape-60--la-couleur-tempo-du-jour-et-du-lendemain)
+- [Étape 61 : les piles faibles, expliqué](docs/piles.md)
 - [Étape 5 : les automatisations, expliqué](docs/etape-5-automatisations.md)
 - [Modernisation du code, expliquée](docs/modernisation.md)
 - [Étape 6 : l'interface web, expliquée](docs/etape-6-interface-web.md)

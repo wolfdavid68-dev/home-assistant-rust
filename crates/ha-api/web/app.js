@@ -4228,12 +4228,56 @@ async function loadIntegrations() {
   }));
 }
 
+// ---------------------------------------------------------------- Piles
+// Toutes les piles de la maison, la plus faible d'abord (étape 61). Les mêmes
+// règles que les alertes du serveur (crates/ha-notices) : les garder pareilles.
+const BATTERY_LOW = 20;
+const BATTERY_EMPTY = 5;
+
+/** Le niveau en %, `"low"` / `"ok"` pour un détecteur « pile faible », ou null. */
+function batteryOf(state) {
+  if (["unavailable", "unknown"].includes(state.state)) return null;
+  const domain = domainOf(state);
+  const isBattery = state.attributes.device_class === "battery";
+  const percent = (value) => (Number.isFinite(value) && value >= 0 && value <= 100 ? value : null);
+  if (domain === "sensor" && isBattery) return state.state.trim() === "" ? null : percent(Number(state.state));
+  if (domain === "binary_sensor" && isBattery) return state.state === "on" ? "low" : state.state === "off" ? "ok" : null;
+  if (domain === "vacuum" || domain === "persistent_notification") return null;
+  return typeof state.attributes.battery_level === "number" ? percent(state.attributes.battery_level) : null;
+}
+
+function renderBatteries() {
+  const box = $("#batteries");
+  if (account.permissions.all_devices === false) { box.hidden = true; return; }
+  // Un détecteur « pile faible » compte comme une pile à 20 % (après une
+  // pile presque vide), un « pile bonne » passe après toutes les autres.
+  const rank = (level) => (level === "low" ? BATTERY_LOW : level === "ok" ? 101 : level);
+  const list = [...entities.values()]
+    .map((state) => ({ state, level: batteryOf(state) }))
+    .filter((item) => item.level !== null)
+    .sort((a, b) => rank(a.level) - rank(b.level) || nameOf(a.state).localeCompare(nameOf(b.state), "fr"));
+  box.hidden = list.length === 0;
+  $("#battery-list").replaceChildren(...list.map(({ state, level }) => {
+    const numeric = typeof level === "number";
+    const kind = numeric && level <= BATTERY_EMPTY ? "crashed"
+      : level === "low" || (numeric && level <= BATTERY_LOW) ? "retrying" : "connected";
+    const advice = kind === "crashed" ? "à changer tout de suite" : kind === "retrying" ? "à changer bientôt" : "bonne";
+    return el("li", { class: `integration i-${kind}` },
+      el("span", { class: "integration-dot", "aria-hidden": "true" }),
+      el("span", { class: "integration-text" },
+        el("b", { text: nameOf(state) }),
+        el("span", { text: level === "low" ? "Pile faible : à changer bientôt" : `Pile ${advice}` })),
+      el("span", { class: "integration-count", text: numeric ? `${Math.round(level)}\u202f%` : "" }));
+  }));
+}
+
 function watchIntegrations() {
+  renderBatteries();
   loadIntegrations();
   loadSystem();
   clearInterval(integrationTimer);
   integrationTimer = setInterval(() => {
-    if ($("#account-dialog").open) { loadIntegrations(); loadSystem(); } else clearInterval(integrationTimer);
+    if ($("#account-dialog").open) { renderBatteries(); loadIntegrations(); loadSystem(); } else clearInterval(integrationTimer);
   }, 10_000);
 }
 
