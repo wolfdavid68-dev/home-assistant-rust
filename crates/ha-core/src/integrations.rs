@@ -106,6 +106,8 @@ struct Entry {
 #[derive(Debug, Default)]
 pub struct Integrations {
     entries: Mutex<BTreeMap<&'static str, Entry>>,
+    /// Celles qui répondent à leurs ordres (voir [`crate::commands`]).
+    answering: Mutex<std::collections::BTreeSet<&'static str>>,
 }
 
 impl Integrations {
@@ -115,6 +117,43 @@ impl Integrations {
 }
 
 impl Core {
+    /// L'intégration `id` répond à ses ordres : celui qui en donne un peut
+    /// attendre de savoir s'il a abouti.
+    pub fn answers_commands(&self, id: &'static str) {
+        self.integrations
+            .answering
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(id);
+    }
+
+    /// L'intégration propriétaire de `entity_id`, si elle répond à ses ordres.
+    #[must_use]
+    pub fn answering_owner(&self, entity_id: &crate::EntityId) -> Option<IntegrationStatus> {
+        let owner = self.states.owner_of(entity_id)?;
+        let answers = self
+            .integrations
+            .answering
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .contains(owner.as_str());
+        answers.then(|| {
+            self.integrations()
+                .into_iter()
+                .find(|status| status.id == owner)
+        })?
+    }
+
+    /// L'intégration propriétaire de `entity_id`, si elle est en panne depuis
+    /// assez longtemps pour que ses appareils soient indisponibles.
+    #[must_use]
+    pub fn owner_down(&self, entity_id: &crate::EntityId) -> Option<IntegrationStatus> {
+        let owner = self.states.owner_of(entity_id)?;
+        self.integrations()
+            .into_iter()
+            .find(|status| status.id == owner && status.health.is_down() && status.unavailable)
+    }
+
     /// Toutes les intégrations connues, par identifiant.
     #[must_use]
     pub fn integrations(&self) -> Vec<IntegrationStatus> {

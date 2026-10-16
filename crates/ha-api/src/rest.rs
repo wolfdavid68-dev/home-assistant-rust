@@ -543,16 +543,32 @@ pub(crate) async fn call_service(
     {
         return Err(ApiError::ConfirmationRequired);
     }
-    state
-        .core
-        .call_service_from(
-            ha_core::Origin::User(auth.user.username.clone()),
-            &domain,
-            &service,
-            entity_id.clone(),
-            data,
+    // L'intégration de l'appareil est en panne : l'ordre ne partirait nulle
+    // part (et pourrait s'exécuter bien plus tard). On le dit tout de suite.
+    if let Some(down) = state.core.owner_down(&entity_id) {
+        return Err(ApiError::Unavailable(format!(
+            "{} ne répond plus depuis {} : l'ordre n'a pas été envoyé",
+            down.name,
+            clock(down.since)
+        )));
+    }
+    let origin = ha_core::Origin::User(auth.user.username.clone());
+    // Hue, Somfy : on attend de savoir si l'appareil a accepté.
+    let answering = state.core.answering_owner(&entity_id);
+    let reply = if answering.is_some() {
+        Some(
+            state
+                .core
+                .call_service_tracked(origin, &domain, &service, entity_id.clone(), data)
+                .map_err(|error| ApiError::BadRequest(error.to_string()))?,
         )
-        .map_err(|error| ApiError::BadRequest(error.to_string()))?;
+    } else {
+        state
+            .core
+            .call_service_from(origin, &domain, &service, entity_id.clone(), data)
+            .map_err(|error| ApiError::BadRequest(error.to_string()))?;
+        None
+    };
     tracing::info!(
         "{domain}.{service} sur {entity_id} demandé par {}",
         auth.user.username
@@ -566,7 +582,42 @@ pub(crate) async fn call_service(
         client,
     )
     .await;
-    Ok(Json(json!({})))
+    let (Some((id, reply)), Some(owner)) = (reply, answering) else {
+        // Envoyé ; l'appareil confirmera en changeant d'état.
+        return Ok(Json(json!({"result": "sent"})));
+    };
+    // Un peu plus que la durée de vie de l'ordre : reçu à temps, il a encore
+    // quelques secondes pour arriver jusqu'à l'appareil.
+    match tokio::time::timeout(ha_core::COMMAND_TTL + ANSWER_MARGIN, reply).await {
+        Ok(Ok(Ok(()))) => Ok(Json(json!({"result": "done"}))),
+        Ok(Ok(Err(refused))) => Err(ApiError::DeviceRefused(refused)),
+        Ok(Err(_)) => Err(ApiError::DeviceRefused(format!(
+            "{} n'a pas répondu",
+            owner.name
+        ))),
+        Err(_) => {
+            state.core.forget_command(id);
+            Err(ApiError::DeviceTimeout(format!(
+                "{} n'a pas répondu à temps",
+                owner.name
+            )))
+        }
+    }
+}
+
+/// Le temps laissé à l'appareil, au-delà de la durée de vie de l'ordre.
+const ANSWER_MARGIN: Duration = Duration::from_secs(3);
+
+/// « 10:32 » (heure locale), pour un message.
+fn clock(time: SystemTime) -> String {
+    jiff::Timestamp::try_from(time).map_or_else(
+        |_| "un moment".to_owned(),
+        |t| {
+            t.to_zoned(jiff::tz::TimeZone::system())
+                .strftime("%H:%M")
+                .to_string()
+        },
+    )
 }
 
 /// `GET /api/audit?limit=100` : le journal d'audit, du plus récent au plus ancien.

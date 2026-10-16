@@ -26,6 +26,12 @@ pub enum ApiError {
     TooManyRequests { retry_after: Duration },
     /// 500 : erreur interne. Le détail va dans les logs, jamais dans la réponse.
     Internal(String),
+    /// 502 : l'appareil (ou son pont) a refusé l'ordre.
+    DeviceRefused(String),
+    /// 503 : l'intégration de l'appareil est en panne ; l'ordre n'est pas envoyé.
+    Unavailable(String),
+    /// 504 : l'appareil n'a pas répondu à temps.
+    DeviceTimeout(String),
 }
 
 impl IntoResponse for ApiError {
@@ -49,6 +55,9 @@ impl IntoResponse for ApiError {
                     .into_response();
             }
             Self::NotFound => (StatusCode::NOT_FOUND, "introuvable".into()),
+            Self::DeviceRefused(message) => (StatusCode::BAD_GATEWAY, message),
+            Self::Unavailable(message) => (StatusCode::SERVICE_UNAVAILABLE, message),
+            Self::DeviceTimeout(message) => (StatusCode::GATEWAY_TIMEOUT, message),
             Self::TooManyRequests { retry_after } => {
                 let mut response = (
                     StatusCode::TOO_MANY_REQUESTS,

@@ -108,7 +108,13 @@ async fn run(config: MqttConfig, core: Arc<Core>, token: CancellationToken) {
 
             received = events.recv() => match received {
                 Ok(event) => {
-                    if let Event::CallService { domain, service, entity_id, data, .. } = event.as_ref() {
+                    if let Event::CallService { domain, service, entity_id, data, issued_at, .. } = event.as_ref() {
+                        // Un ordre resté en attente pendant une coupure n'est
+                        // plus voulu : on ne l'envoie pas.
+                        if ha_core::commands::is_stale(*issued_at) {
+                            warn!("MQTT : ordre périmé ignoré pour {entity_id}");
+                            continue;
+                        }
                         for action in bridge.handle_service(domain, service, entity_id, data, &core.states) {
                             apply(&client, &action);
                         }

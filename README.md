@@ -53,6 +53,7 @@ Un noyau domotique en Rust, inspiré de Home Assistant.
 - [Étape 43 : les effets météo animés sur la maquette, expliqués](docs/effets.md)
 - [Étape 44 : faire les images de ta maison avec l'IA, expliqué](docs/images-ia.md)
 - [Étape 45 : la supervision des intégrations, expliquée](docs/supervision.md)
+- [Étape 46 : des ordres avec réponse, expliqués](docs/ordres.md)
 - [Étape 5 : les automatisations, expliqué](docs/etape-5-automatisations.md)
 - [Modernisation du code, expliquée](docs/modernisation.md)
 - [Étape 6 : l'interface web, expliquée](docs/etape-6-interface-web.md)

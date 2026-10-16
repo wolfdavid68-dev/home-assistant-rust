@@ -31,6 +31,8 @@ impl Hue {
     pub fn start(pairing: Pairing, core: Arc<Core>) -> Self {
         // Sous surveillance : si elle plante, elle est relancée.
         let supervisor = Arc::clone(&core);
+        // Hue dit si le pont a accepté chaque ordre.
+        core.answers_commands(crate::ID);
         Self(ha_core::supervise(
             supervisor,
             crate::ID,
@@ -129,18 +131,30 @@ async fn run(pairing: Pairing, core: Arc<Core>, token: CancellationToken) {
 
                 received = events.recv() => match received {
                     Ok(event) => {
-                        if let Event::CallService { domain, service, entity_id, data, .. } = event.as_ref()
+                        if let Event::CallService { domain, service, entity_id, data, command, issued_at, .. } = event.as_ref()
                             && let Some((id, body)) =
                                 lights.command(domain, service, entity_id, data, &core.states)
                         {
+                            // Un ordre resté en attente pendant une coupure n'est
+                            // plus voulu : on ne l'exécute pas.
+                            if ha_core::commands::is_stale(*issued_at) {
+                                warn!("Hue : ordre périmé ignoré pour {entity_id}");
+                                core.command_done(*command, Err("ordre périmé : le pont a mis trop longtemps".into()));
+                                continue;
+                            }
                             // La commande part dans sa propre tâche : un pont lent
                             // ne bloque pas la réception des événements.
                             let api = api.clone();
                             let entity_id = entity_id.clone();
+                            let core = Arc::clone(&core);
+                            let command = *command;
                             tokio::spawn(async move {
-                                if let Err(error) = api.set_light(&id, &body).await {
+                                let result = api.set_light(&id, &body).await;
+                                if let Err(error) = &result {
                                     warn!("Hue : commande refusée pour {entity_id} : {error}");
                                 }
+                                core.command_done(command, // Le détail (qui peut citer l'adresse du pont) reste dans les logs.
+                                    result.map_err(|_| "le pont Hue n'a pas accepté l'ordre".to_owned()));
                             });
                         }
                     }

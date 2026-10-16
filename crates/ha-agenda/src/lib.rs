@@ -106,7 +106,7 @@ async fn run(
             _ = ticker.tick() => live.refresh_calendar(false).await,
             received = events.recv() => match received {
                 Ok(event) => {
-                    if let Event::CallService { domain, service, entity_id, data, origin } = event.as_ref()
+                    if let Event::CallService { domain, service, entity_id, data, origin, .. } = event.as_ref()
                         && domain == entity_id.domain()
                         && DOMAINS.contains(&domain.as_str())
                     {
