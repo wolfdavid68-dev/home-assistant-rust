@@ -106,8 +106,9 @@ function cleanDrawing(config) {
     out.charts.push(entry);
   }
   for (const zone of Array.isArray(config?.zones) ? config.zones : []) {
-    if (!text(zone.entity_id)) continue;
-    const entry = { entity_id: zone.entity_id, x: Number(zone.x) || 0, y: Number(zone.y) || 0, w: Number(zone.w) || 1, h: Number(zone.h) || 1 };
+    const target = text(zone.area) ? { area: zone.area } : text(zone.entity_id) ? { entity_id: zone.entity_id } : null;
+    if (target === null) continue;
+    const entry = { ...target, x: Number(zone.x) || 0, y: Number(zone.y) || 0, w: Number(zone.w) || 1, h: Number(zone.h) || 1 };
     if (text(zone.name)) entry.name = zone.name;
     out.zones.push(entry);
   }
@@ -292,6 +293,15 @@ function updateHouse(view) {
   for (const { layer, img } of view.layers) img.classList.toggle("off", !layerShown(layer, isNight));
   for (const { zone, node } of view.zones) {
     if (node.tagName !== "BUTTON") continue;
+    if (zone.area) {
+      const area = areas.find((a) => a.name === zone.area);
+      const info = area ? roomInfo(area) : null;
+      const temp = info && Number.isFinite(info.temperature) ? ` : ${number.format(info.temperature)} °C` : "";
+      node.setAttribute("aria-label", `${zone.name ?? zone.area}${temp}. Toucher pour ouvrir la pièce.`);
+      node.title = zone.name ?? zone.area;
+      node.classList.toggle("on", (info?.lights ?? 0) > 0);
+      continue;
+    }
     const state = entities.get(zone.entity_id);
     const name = zone.name ?? (state ? nameOf(state) : zone.entity_id);
     const command = state ? actionCommand(state) : null;
@@ -326,6 +336,7 @@ function placeZone(node, zone) {
 const LONG_PRESS = 550;
 
 function zoneHistory(zone) {
+  if (zone.area) return openRoom(zone.area);
   if (account.permissions.history !== false && entities.has(zone.entity_id)) openHistory(zone.entity_id);
 }
 
@@ -346,6 +357,7 @@ function zoneTouch(zone, node) {
   });
   node.addEventListener("click", () => {
     if (long) { long = false; return; }
+    if (zone.area) return openRoom(zone.area);
     const state = entities.get(zone.entity_id);
     if (!state) return;
     const command = actionCommand(state);
@@ -618,6 +630,7 @@ function seriesFor(chart) {
           .map((p) => [Date.parse(p.at), Number(p.mean)])
           .filter(([t, v]) => Number.isFinite(t) && Number.isFinite(v));
         if (isBoard()) renderCharts();
+        if ($("#room").open) renderRoomHead();
       })
       .catch(() => { entry.loading = false; });
   }
@@ -706,6 +719,7 @@ function renderPeople() {
 
 /** Appelé par app.js à chaque changement (au plus une fois par image). */
 function renderHouse() {
+  if ($("#room").open) renderRoomHead();
   const board = isBoard();
   $("#house").hidden = !board;
   $("#title-block").hidden = !isPlan();
@@ -724,6 +738,134 @@ function renderHouse() {
   renderPeople();
   renderCharts();
   if (isPlan()) renderTitleBlock();
+}
+
+// ---------------------------------------------------------------- Une pièce, en fenêtre
+// Toucher une pièce (sa tuile, ou une zone de la maquette) l'ouvre par-dessus
+// le tableau : ses mesures, sa température sur 24 heures, puis tous ses
+// appareils, rangés comme les sections, avec les tuiles habituelles.
+
+const roomView = { name: null };
+// Les groupes de la fenêtre : ceux des sections, plus les scènes.
+const ROOM_GROUPS = [...SECTIONS, { title: "Scènes", domains: ["scene", "script"] }];
+
+function roomArea() {
+  return areas.find((area) => area.name === roomView.name) ?? null;
+}
+
+function roomStates(area) {
+  return area.entities.map((entity) => entities.get(entity.entity_id)).filter((state) => state !== undefined);
+}
+
+/** Le capteur de température de la pièce (pour la courbe), s'il y en a un. */
+function roomThermometer(states) {
+  return states.find((s) => domainOf(s) === "sensor" && s.attributes.device_class === "temperature" && Number.isFinite(Number(s.state))) ?? null;
+}
+
+function openRoom(name) {
+  roomView.name = name;
+  if (!roomArea()) return;
+  renderRoom();
+  const dialog = $("#room");
+  if (!dialog.open) dialog.showModal();
+  $("#room-close").focus();
+}
+
+/** Toute la fenêtre : à l'ouverture seulement. Ensuite, les tuiles sont
+ *  remplacées une à une (app.js) et l'en-tête est redessiné. */
+function renderRoom() {
+  const area = roomArea();
+  if (!area) return;
+  $("#room-title").textContent = area.name;
+  $("#room-icon").replaceChildren(svgIcon(roomIcon(area.name)));
+  const states = roomStates(area);
+  const used = new Set();
+  const groups = ROOM_GROUPS.map(({ title, domains, extra }) => {
+    const items = states.filter((s) => !used.has(s.entity_id) && (domains.includes(domainOf(s)) || extra?.(s)));
+    items.forEach((s) => used.add(s.entity_id));
+    return { title, items };
+  });
+  groups.push({ title: "Autres", items: states.filter((s) => !used.has(s.entity_id)) });
+  const shown = groups.filter((group) => group.items.length > 0);
+  $("#room-body").replaceChildren(...(shown.length > 0
+    ? shown.map(({ title, items }) => el("section", { class: "room-group" }, el("h3", { text: title }), el("div", { class: "grid" }, ...items.map(renderTile))))
+    : [el("p", { class: "auto-meta", text: "Aucun appareil dans cette pièce." })]));
+  renderRoomHead();
+}
+
+/** Les mesures, la courbe et « Éteindre les lumières ». */
+function renderRoomHead() {
+  const area = roomArea();
+  if (!area) return;
+  const states = roomStates(area);
+  const info = roomInfo(area);
+  const parts = [];
+  if (Number.isFinite(info.temperature)) parts.push(`${number.format(info.temperature)} °C`);
+  if (finite(info.humidity)) parts.push(`${number.format(info.humidity)} %`);
+  if (info.alert) parts.push(info.alert);
+  if (info.lights > 0) parts.push(`${info.lights} lumière${info.lights > 1 ? "s" : ""} allumée${info.lights > 1 ? "s" : ""}`);
+  if (info.open > 0) parts.push(`${info.open} ouverture${info.open > 1 ? "s" : ""}`);
+  if (info.heating) parts.push("chauffe");
+  $("#room-measures").textContent = parts.join(" · ") || `${states.length} appareil${states.length > 1 ? "s" : ""}`;
+  $("#room-icon").className = `room-icon${info.alert ? " alert" : info.lights > 0 ? " lit" : info.heating ? " heat" : ""}`;
+
+  // La température sur 24 heures.
+  const box = $("#room-chart");
+  const thermometer = roomThermometer(states);
+  box.hidden = thermometer === null || account.permissions.history === false;
+  if (!box.hidden) {
+    const chart = { entity_id: thermometer.entity_id, hours: 24, color: "orange" };
+    const card = el("button", { type: "button", class: "room-chart-card chart-orange", "aria-label": `${nameOf(thermometer)} : ${labelValue(thermometer)}. Ouvrir l'historique.` },
+      el("span", { class: "room-chart-label" }, el("b", { text: "Température" }), el("span", { text: "24 heures" })),
+      sparkline(chart, seriesFor(chart) ?? []));
+    card.addEventListener("click", () => openHistory(thermometer.entity_id));
+    box.replaceChildren(card);
+  }
+
+  // Éteindre d'un coup les lumières allumées (celles que ce compte commande).
+  const lit = states.filter((s) => domainOf(s) === "light" && s.state === "on" && canControl(s));
+  const actions = $("#room-actions");
+  actions.hidden = lit.length === 0;
+  if (lit.length > 0) {
+    const off = el("button", { type: "button", class: "ghost room-off" }, svgIcon(ICONS.bulb), `Éteindre les lumières (${lit.length})`);
+    off.addEventListener("click", () => {
+      for (const state of lit) {
+        markPending(state.entity_id);
+        callService("light", "turn_off", { entity_id: state.entity_id });
+      }
+    });
+    actions.replaceChildren(off);
+  }
+}
+
+$("#room-close").addEventListener("click", () => $("#room").close());
+// Un toucher à côté de la fenêtre (sur le fond) la ferme.
+$("#room").addEventListener("click", (event) => { if (event.target === $("#room")) $("#room").close(); });
+$("#room").addEventListener("close", () => { roomView.name = null; $("#room-body").replaceChildren(); $(".room-sheet").style.transform = ""; });
+
+// Sur téléphone, la fenêtre monte du bas : on la ferme en la tirant vers le bas
+// par son en-tête.
+{
+  const sheet = $(".room-sheet");
+  let start = null;
+  $(".room-top").addEventListener("pointerdown", (event) => {
+    if (event.pointerType === "mouse" || event.target.closest("button")) return;
+    start = event.clientY;
+    $(".room-top").setPointerCapture(event.pointerId);
+  });
+  $(".room-top").addEventListener("pointermove", (event) => {
+    if (start === null) return;
+    sheet.style.transform = `translateY(${Math.max(0, event.clientY - start)}px)`;
+  });
+  for (const type of ["pointerup", "pointercancel"]) {
+    $(".room-top").addEventListener(type, (event) => {
+      if (start === null) return;
+      const moved = event.clientY - start;
+      start = null;
+      if (type === "pointerup" && moved > 90) $("#room").close();
+      else sheet.style.transform = "";
+    });
+  }
 }
 
 // ---------------------------------------------------------------- Apparence
@@ -1012,9 +1154,24 @@ function renderDrawingEditor() {
 
   // Les zones à toucher sur le dessin.
   const zoneRows = draft.zones.map((zone, index) => {
-    const entity = el("input", { type: "text", list: "entity-list", value: zone.entity_id, placeholder: "light.porche", autocapitalize: "none", spellcheck: "false" });
-    entity.addEventListener("change", () => { zone.entity_id = entity.value.trim(); });
-    const name = el("input", { type: "text", value: zone.name ?? "", placeholder: "(le nom de l'appareil)", maxlength: "60" });
+    // Une zone commande un appareil, ou ouvre une pièce.
+    const kind = el("select", {}, el("option", { value: "entity", text: "Commander un appareil" }), el("option", { value: "area", text: "Ouvrir une pièce" }));
+    kind.value = zone.area !== undefined ? "area" : "entity";
+    kind.disabled = areas.length === 0 && zone.area === undefined;
+    kind.addEventListener("change", () => {
+      if (kind.value === "area") { delete zone.entity_id; zone.area = areas[0]?.name ?? ""; } else { delete zone.area; zone.entity_id = ""; }
+      refresh();
+    });
+    let target;
+    if (zone.area !== undefined) {
+      target = el("select", {}, ...areas.map((area) => el("option", { value: area.name, text: area.name })));
+      target.value = zone.area;
+      target.addEventListener("change", () => { zone.area = target.value; });
+    } else {
+      target = el("input", { type: "text", list: "entity-list", value: zone.entity_id ?? "", placeholder: "light.porche", autocapitalize: "none", spellcheck: "false" });
+      target.addEventListener("change", () => { zone.entity_id = target.value.trim(); });
+    }
+    const name = el("input", { type: "text", value: zone.name ?? "", placeholder: zone.area !== undefined ? "(le nom de la pièce)" : "(le nom de l'appareil)", maxlength: "60" });
     name.addEventListener("change", () => { if (name.value.trim()) zone.name = name.value.trim(); else delete zone.name; });
     const tracing = drawingEdit.tracing === index;
     const trace = el("button", { type: "button", class: tracing ? "primary small" : "ghost small", text: tracing ? "Trace sur le dessin…" : `Tracer (${number.format(zone.w)} × ${number.format(zone.h)} %)` });
@@ -1032,7 +1189,7 @@ function renderDrawingEditor() {
     });
     return el("li", { class: "drawing-item" },
       el("div", { class: "drawing-item-head" }, el("b", { text: `Zone ${index + 1}` }), remove),
-      el("div", { class: "drawing-grid" }, field("Appareil", entity), field("Nom affiché", name)),
+      el("div", { class: "drawing-grid" }, field("Un toucher…", kind), field(zone.area !== undefined ? "Pièce" : "Appareil", target), field("Nom affiché", name)),
       trace);
   });
   const addZone = el("button", { type: "button", class: "ghost small", text: "+ Ajouter une zone" });
@@ -1046,7 +1203,7 @@ function renderDrawingEditor() {
   });
   const zones = drawingFieldset(
     "Zones à toucher",
-    "Le porche, la porte du garage, la piscine… : trace un rectangle sur le dessin. Un toucher allume, éteint, ouvre ou ferme ; un appui long ouvre l'historique (24 au plus).",
+    "Le porche, la porte du garage, le salon… : trace un rectangle sur le dessin. Un toucher allume, éteint, ouvre ou ferme l'appareil, ou ouvre la pièce ; un appui long ouvre l'historique (24 au plus).",
     el("ol", { class: "drawing-items" }, ...zoneRows),
     addZone,
   );
@@ -1222,7 +1379,7 @@ $("#drawing-save").addEventListener("click", async () => {
   for (const page of drawingEdit.pages) {
     page.actions = page.actions.filter((id) => id !== "");
     page.charts = page.charts.filter((chart) => chart.entity_id !== "");
-    page.zones = page.zones.filter((zone) => zone.entity_id !== "");
+    page.zones = page.zones.filter((zone) => (zone.area ?? zone.entity_id ?? "") !== "");
   }
   const button = $("#drawing-save");
   button.disabled = true;

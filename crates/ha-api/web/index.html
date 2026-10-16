@@ -142,6 +142,23 @@
       <ol id="history-changes" class="history-changes"></ol>
       <button id="history-logbook" class="ghost" type="button">Voir dans le journal de bord</button>
     </dialog>
+    <!-- Une pièce, en fenêtre (mise en page « tableau », house.js) -->
+    <dialog id="room" class="history-dialog room-dialog" aria-labelledby="room-title">
+      <div class="room-sheet">
+        <div class="room-top">
+          <span class="room-grab" aria-hidden="true"></span>
+          <span id="room-icon" class="room-icon"></span>
+          <div class="room-heading">
+            <h2 id="room-title">Pièce</h2>
+            <p id="room-measures" class="room-measures"></p>
+          </div>
+          <button id="room-close" class="ghost" type="button">Fermer</button>
+        </div>
+        <div id="room-chart" class="room-chart" hidden></div>
+        <div id="room-actions" class="room-actions" hidden></div>
+        <div id="room-body" class="room-body"></div>
+      </div>
+    </dialog>
     <dialog id="logbook" class="history-dialog" aria-labelledby="logbook-title">
       <div class="history-top">
         <h2 id="logbook-title">Journal de bord</h2>
