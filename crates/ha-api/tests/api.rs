@@ -1716,6 +1716,7 @@ async fn the_house_drawing_is_assembled_from_checked_images() {
         "zones": [
             {"entity_id": "light.porche", "x": 40.04, "y": 55, "w": 8, "h": 10, "name": "Porche"},
             {"entity_id": "person.alice", "x": 0, "y": 0, "w": 5, "h": 5},
+            {"area": "Cuisine", "x": 50, "y": 50, "w": 10, "h": 10},
         ],
     });
     let kitchen = json!({"id": "cuisine", "name": "Cuisine", "areas": ["Cuisine"]});
@@ -1750,6 +1751,7 @@ async fn the_house_drawing_is_assembled_from_checked_images() {
         page(json!({"labels": [{"entity_id": "sensor.a", "x": -1, "y": 0}]})),
         page(json!({"areas": ["Grenier"]})),
         page(json!({"zones": [{"entity_id": "light.porche", "x": 95, "y": 0, "w": 10, "h": 10}]})),
+        page(json!({"zones": [{"area": "Grenier", "x": 0, "y": 0, "w": 10, "h": 10}]})),
         page(json!({"background": "jour", "ambiances": {"jour-tempete": "jour"}})),
         json!({"pages": []}),
         json!({"script": "alert(1)"}),
@@ -1803,8 +1805,9 @@ async fn the_house_drawing_is_assembled_from_checked_images() {
     assert_eq!(home["actions"], json!(["light.porche"]));
     assert_eq!(home["charts"].as_array().unwrap().len(), 1);
     assert_eq!(home["charts"][0]["entity_id"], "sensor.nas");
-    assert_eq!(home["zones"].as_array().unwrap().len(), 1);
+    assert_eq!(home["zones"].as_array().unwrap().len(), 2);
     assert_eq!(home["zones"][0]["entity_id"], "light.porche");
+    assert_eq!(home["zones"][1]["area"], "Cuisine");
 
     // Chaque changement est dans le journal d'audit.
     let (_, body) = app.request("GET", "/api/audit", Some(&token), None).await;

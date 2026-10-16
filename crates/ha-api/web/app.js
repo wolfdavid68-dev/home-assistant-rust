@@ -177,8 +177,10 @@ function onStateChanged({ entity_id, new_state }) {
   if (new_state) entities.set(entity_id, new_state);
   else entities.delete(entity_id);
   scheduleHome();
-  const existing = document.querySelector(`.sections #${CSS.escape(tileId(entity_id))}`);
-  if (existing && new_state) existing.replaceWith(renderTile(new_state));
+  // La tuile est dans les sections, et peut-être aussi dans la fenêtre d'une
+  // pièce (house.js) : on remplace chacune.
+  const existing = document.querySelectorAll(`:is(.sections, .room-body) #${CSS.escape(tileId(entity_id))}`);
+  if (existing.length > 0 && new_state) for (const tile of existing) tile.replaceWith(renderTile(new_state));
   else {
     // Entité ajoutée ou supprimée : on redessine tout.
     renderAll();
@@ -201,20 +203,27 @@ async function callService(domain, service, data) {
     const body = await response.json().catch(() => ({}));
     // Déverrouiller une porte : le serveur redemande le mot de passe.
     if (body.confirm === true) {
-      document.getElementById(tileId(data.entity_id))?.classList.remove("pending");
+      unmarkPending(data.entity_id);
       askConfirmation(() => callService(domain, service, data));
       return;
     }
     flash(typeof body.error === "string" ? `${body.error}.` : "Ton compte ne permet pas cette commande.");
-    document.getElementById(tileId(data.entity_id))?.classList.remove("pending");
+    unmarkPending(data.entity_id);
   }
 }
 
 // La tuile « clignote » jusqu'à ce que l'appareil confirme (ou 5 s au plus).
+// (La même tuile peut être deux fois dans la page : dans les sections et dans
+// la fenêtre d'une pièce.)
+const tilesOf = (entityId) => document.querySelectorAll(`#${CSS.escape(tileId(entityId))}`);
+
 function markPending(entityId) {
-  const tile = document.getElementById(tileId(entityId));
-  tile?.classList.add("pending");
-  setTimeout(() => document.getElementById(tileId(entityId))?.classList.remove("pending"), 5000);
+  for (const tile of tilesOf(entityId)) tile.classList.add("pending");
+  setTimeout(() => unmarkPending(entityId), 5000);
+}
+
+function unmarkPending(entityId) {
+  for (const tile of tilesOf(entityId)) tile.classList.remove("pending");
 }
 
 // ---------------------------------------------------------------- Affichage
@@ -499,7 +508,9 @@ function renderPlan() {
       el("span", { class: "room-text" },
         el("span", { class: "room-line-name", text: area.name }),
         el("span", { class: "room-line-info", text: [measures, detail].filter(Boolean).join(" · ") || "—" }))));
-    room.addEventListener("click", () => showRoom(area.name));
+    // Mise en page « tableau » : la pièce s'ouvre en fenêtre, par-dessus la
+    // maquette (house.js) ; sinon, seule, à la place des sections.
+    room.addEventListener("click", () => (isBoard() ? openRoom(area.name) : showRoom(area.name)));
     return room;
   });
   const legend = el("div", { class: "legend" });

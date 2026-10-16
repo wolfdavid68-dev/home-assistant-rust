@@ -148,11 +148,15 @@ struct Page {
 }
 
 /// Une zone à toucher : un rectangle sur le dessin (en % de sa largeur et de
-/// sa hauteur, depuis le coin en haut à gauche) qui commande un appareil.
+/// sa hauteur, depuis le coin en haut à gauche) qui commande un appareil
+/// (`entity_id`) ou ouvre une pièce (`area`, un nom de `areas.yaml`).
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Zone {
-    entity_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    entity_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    area: Option<String>,
     x: f64,
     y: f64,
     w: f64,
@@ -303,7 +307,8 @@ fn check_drawing(
             )));
         }
         check_text("nom d'onglet", &page.name)?;
-        for area in &page.areas {
+        let zone_areas = page.zones.iter().filter_map(|zone| zone.area.as_ref());
+        for area in page.areas.iter().chain(zone_areas) {
             if !areas.contains(area.as_str()) {
                 return Err(ApiError::BadRequest(format!(
                     "onglet « {} » : pièce « {area} » introuvable dans areas.yaml",
@@ -424,7 +429,17 @@ fn check_page(config: &Page, images: &HashSet<String>) -> Result<(), ApiError> {
     }
     for (index, zone) in config.zones.iter().enumerate() {
         let n = index + 1;
-        check_entity(&zone.entity_id)?;
+        match (&zone.entity_id, &zone.area) {
+            (Some(entity_id), None) => {
+                check_entity(entity_id)?;
+            }
+            (None, Some(_)) => {}
+            _ => {
+                return Err(ApiError::BadRequest(format!(
+                    "zone {n} : un appareil ou une pièce (l'un des deux)"
+                )));
+            }
+        }
         let inside = |v: f64| v.is_finite() && (0.0..=100.0).contains(&v);
         let side = |v: f64| v.is_finite() && (MIN_ZONE_SIDE..=100.0).contains(&v);
         if !inside(zone.x)
@@ -511,7 +526,10 @@ fn visible_to(state: &ApiState, user: &User, mut drawing: Drawing) -> Drawing {
         page.labels.retain(|label| can_see(&label.entity_id));
         page.actions.retain(|entity_id| can_see(entity_id));
         page.charts.retain(|chart| can_see(&chart.entity_id));
-        page.zones.retain(|zone| can_see(&zone.entity_id));
+        // Une zone de pièce reste : la fenêtre de la pièce ne montre, elle
+        // aussi, que ce que le compte peut voir.
+        page.zones
+            .retain(|zone| zone.entity_id.as_deref().is_none_or(can_see));
     }
     drawing
 }
@@ -753,7 +771,8 @@ mod tests {
         assert!(check_page(&charts, &images).is_ok());
         let zones = config(
             r#"{"zones":[{"entity_id":"light.porche","x":40,"y":55.5,"w":8,"h":10,"name":"Porche"},
-                {"entity_id":"cover.garage","x":90,"y":0,"w":10,"h":100}]}"#,
+                {"entity_id":"cover.garage","x":90,"y":0,"w":10,"h":100},
+                {"area":"Salon","x":10,"y":10,"w":20,"h":20}]}"#,
         );
         assert!(check_page(&zones, &images).is_ok());
         let tidied = tidy(Drawing { pages: vec![good] });
@@ -780,6 +799,8 @@ mod tests {
             r#"{"zones":[{"entity_id":"light.porche","x":10,"y":10,"w":0.5,"h":10}]}"#,
             r#"{"zones":[{"entity_id":"light.porche","x":-1,"y":10,"w":5,"h":10}]}"#,
             r#"{"zones":[{"entity_id":"pas un appareil","x":1,"y":1,"w":5,"h":5}]}"#,
+            r#"{"zones":[{"x":1,"y":1,"w":5,"h":5}]}"#,
+            r#"{"zones":[{"entity_id":"light.a","area":"Salon","x":1,"y":1,"w":5,"h":5}]}"#,
         ] {
             assert!(check_page(&config(bad), &images).is_err(), "{bad}");
         }
