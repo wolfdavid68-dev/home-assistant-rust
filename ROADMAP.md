@@ -86,6 +86,7 @@ Les fonctions de Home Assistant les plus utiles au quotidien, une par une, dans 
 - [x] **38. Onglets** : Maison, Garage, Piscine… chacun avec son dessin, ses boutons rapides et les pièces qu'il montre ; l'onglet ouvert est retenu sur chaque écran ([guide](docs/onglets.md))
 - [x] **39. Ambiances météo** : un fond par temps (soleil, éclaircies, nuageux, brouillard, vent, pluie, averses, orage, grêle, neige, pluie et neige), de jour et de nuit, choisi d'après le soleil et la météo, le plus proche s'il en manque un ; une ambiance imposée pour essayer ([guide](docs/ambiances.md))
 - [x] **40. Courbes dans les onglets** : comme l'onglet Garage de domo-blog, des courbes (puissance du NVR, du NAS, du compteur, température…) dans la colonne de gauche, sur 6 h, 24 h ou 7 jours, d'une couleur au choix ; toucher ouvre l'historique ([guide](docs/courbes.md))
+- [x] **41. Toucher la maquette** : des zones tracées sur le dessin (le porche, la porte du garage…) ; un toucher allume, éteint, ouvre ou ferme, un appui long ouvre l'historique ; invisibles au repos, un éclat au toucher ([guide](docs/zones.md))
 
 En parallèle, dès que tu me donnes les informations : commande du chauffage Somfy (résultat de
 `somfy devices`), puis de l'alarme (avec confirmation et journal).

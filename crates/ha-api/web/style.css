@@ -2313,3 +2313,27 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 [data-theme="maquette"] .chart-bleu { --chart: var(--m-blue); }
 [data-theme="maquette"] .chart-violet { --chart: var(--m-purple); }
 [data-theme="maquette"] .chart-rose { --chart: #ec407a; }
+
+/* ---------- Zones à toucher sur le dessin (étape 41) : invisibles au repos,
+   un contour au survol, un éclat au toucher. */
+.house-zone { position: absolute; z-index: 1; margin: 0; padding: 0; border: 0; border-radius: 12px; background: transparent; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation; -webkit-touch-callout: none; }
+.house-zone.readonly { cursor: help; }
+.house-zone:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+@media (hover: hover) {
+  .house-zone:hover { background: rgb(255 255 255 / 0.1); box-shadow: inset 0 0 0 1.5px rgb(255 255 255 / 0.55); }
+  [data-theme="plan"] .house-zone:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); box-shadow: inset 0 0 0 1.5px var(--accent); }
+}
+.house-zone.hit { animation: zone-hit 0.7s ease-out; }
+.house-zone.pending { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--glow) 70%, transparent); }
+@keyframes zone-hit {
+  from { background: color-mix(in srgb, var(--glow) 45%, transparent); box-shadow: 0 0 0 0 color-mix(in srgb, var(--glow) 60%, transparent); }
+  to { background: transparent; box-shadow: 0 0 0 14px transparent; }
+}
+/* Dans l'aperçu du réglage : chaque zone en pointillé, avec son numéro. */
+.house-zone.edit { cursor: inherit; pointer-events: none; display: grid; place-items: start; padding: 4px 6px; border: 1.5px dashed var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); font-size: 0.72rem; font-weight: 700; color: var(--accent); border-radius: 6px; }
+.house-zone.edit.placing { border-style: solid; background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.house-zone.edit.tracing { border-style: solid; }
+.drawing-preview.placing { touch-action: none; }
+@media (prefers-reduced-motion: reduce) {
+  .house-zone.hit { animation: none; background: color-mix(in srgb, var(--glow) 30%, transparent); }
+}

@@ -50,7 +50,7 @@ const CONDITION_WEATHER = {
 // ---------------------------------------------------------------- Chargement
 
 function emptyDrawing() {
-  return { layers: [], labels: [], actions: [], charts: [] };
+  return { layers: [], labels: [], actions: [], charts: [], zones: [] };
 }
 
 function homePage() {
@@ -104,6 +104,12 @@ function cleanDrawing(config) {
     };
     if (text(chart.name)) entry.name = chart.name;
     out.charts.push(entry);
+  }
+  for (const zone of Array.isArray(config?.zones) ? config.zones : []) {
+    if (!text(zone.entity_id)) continue;
+    const entry = { entity_id: zone.entity_id, x: Number(zone.x) || 0, y: Number(zone.y) || 0, w: Number(zone.w) || 1, h: Number(zone.h) || 1 };
+    if (text(zone.name)) entry.name = zone.name;
+    out.zones.push(entry);
   }
   return out;
 }
@@ -235,6 +241,17 @@ function drawHouse(stage, config, { interactive }) {
     parts.push(img);
     return { layer, img };
   });
+  // Les zones à toucher : sous les valeurs, pour que celles-ci restent
+  // cliquables. Dans l'aperçu du réglage, elles sont dessinées en pointillé.
+  const zones = config.zones.map((zone, index) => {
+    const node = interactive
+      ? el("button", { type: "button", class: "house-zone" })
+      : el("span", { class: "house-zone edit", text: String(index + 1) });
+    placeZone(node, zone);
+    if (interactive) zoneTouch(zone, node);
+    parts.push(node);
+    return { zone, node };
+  });
   const labels = config.labels.map((label) => {
     const value = el("strong");
     const name = el("span", { class: "house-label-name" });
@@ -252,7 +269,7 @@ function drawHouse(stage, config, { interactive }) {
     return { label, name, value, node };
   });
   stage.replaceChildren(...parts);
-  const view = { stage, config, ambiance, layers, labels };
+  const view = { stage, config, ambiance, layers, zones, labels };
   // La taille du dessin n'est connue qu'une fois l'image chargée : ses
   // proportions servent à le faire tenir dans la hauteur de l'écran.
   base.addEventListener("load", () => {
@@ -273,6 +290,21 @@ function updateHouse(view) {
     view.ambiance.classList.toggle("off", url === null);
   }
   for (const { layer, img } of view.layers) img.classList.toggle("off", !layerShown(layer, isNight));
+  for (const { zone, node } of view.zones) {
+    if (node.tagName !== "BUTTON") continue;
+    const state = entities.get(zone.entity_id);
+    const name = zone.name ?? (state ? nameOf(state) : zone.entity_id);
+    const command = state ? actionCommand(state) : null;
+    const readonly = command === null || !canControl(state);
+    node.classList.toggle("readonly", readonly);
+    node.classList.toggle("on", Boolean(state) && ["on", "open", "opening", "unlocked"].includes(state.state));
+    const what = readonly ? "" : command[1] === "turn_off" ? " Toucher pour éteindre." : command[1] === "turn_on" ? (["scene", "script"].includes(command[0]) ? " Toucher pour lancer." : " Toucher pour allumer.")
+      : command[1] === "close_cover" ? " Toucher pour fermer." : command[1] === "open_cover" ? " Toucher pour ouvrir." : " Toucher pour appuyer.";
+    node.setAttribute("aria-label", `${name} : ${labelValue(state)}.${what}`);
+    node.title = name;
+    if (node.dataset.state !== state?.state) node.classList.remove("pending");
+    node.dataset.state = state?.state ?? "";
+  }
   for (const { label, name, value, node } of view.labels) {
     const state = entities.get(label.entity_id);
     name.textContent = label.name ?? (state ? nameOf(state) : label.entity_id);
@@ -280,6 +312,52 @@ function updateHouse(view) {
     node.setAttribute("aria-label", `${name.textContent} : ${value.textContent}`);
   }
   fitLabels(view);
+}
+
+function placeZone(node, zone) {
+  node.style.left = `${zone.x}%`;
+  node.style.top = `${zone.y}%`;
+  node.style.width = `${zone.w}%`;
+  node.style.height = `${zone.h}%`;
+}
+
+// Un toucher commande l'appareil (comme les boutons rapides) ; un appui long,
+// ou le clic droit, ouvre son historique.
+const LONG_PRESS = 550;
+
+function zoneHistory(zone) {
+  if (account.permissions.history !== false && entities.has(zone.entity_id)) openHistory(zone.entity_id);
+}
+
+function zoneTouch(zone, node) {
+  let timer = 0;
+  let long = false;
+  node.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    long = false;
+    clearTimeout(timer);
+    timer = setTimeout(() => { long = true; zoneHistory(zone); }, LONG_PRESS);
+  });
+  for (const type of ["pointerup", "pointerleave", "pointercancel"]) node.addEventListener(type, () => clearTimeout(timer));
+  node.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    clearTimeout(timer);
+    if (!long) { long = true; zoneHistory(zone); }
+  });
+  node.addEventListener("click", () => {
+    if (long) { long = false; return; }
+    const state = entities.get(zone.entity_id);
+    if (!state) return;
+    const command = actionCommand(state);
+    // Un capteur, ou un appareil que ce compte ne commande pas : l'historique.
+    if (command === null || !canControl(state)) return zoneHistory(zone);
+    node.classList.remove("hit");
+    void node.offsetWidth; // relance l'animation
+    node.classList.add("hit", "pending");
+    setTimeout(() => node.classList.remove("hit"), 700);
+    setTimeout(() => node.classList.remove("pending"), 5000);
+    callService(command[0], command[1], { entity_id: state.entity_id });
+  });
 }
 
 /** Une étiquette qui dépasserait du dessin passe de l'autre côté de son point. */
@@ -668,7 +746,7 @@ $("#theme").addEventListener("change", (event) => {
 // Rien n'est enregistré avant « Enregistrer », sauf l'envoi d'une image.
 
 // `pages` : la copie de tous les onglets ; `draft` : celui qu'on règle.
-const drawingEdit = { pages: null, draft: null, placing: -1, view: null };
+const drawingEdit = { pages: null, draft: null, placing: -1, tracing: -1, view: null };
 
 async function openDrawingEditor() {
   $("#account-dialog").close();
@@ -677,6 +755,7 @@ async function openDrawingEditor() {
   drawingEdit.pages = structuredClone(house.pages);
   drawingEdit.draft = drawingEdit.pages.find((page) => page.id === house.config?.id) ?? drawingEdit.pages[0];
   drawingEdit.placing = -1;
+  drawingEdit.tracing = -1;
   drawingStatus("");
   renderDrawingEditor();
   $("#drawing").showModal();
@@ -692,13 +771,16 @@ function renderDrawingPreview() {
   drawingEdit.view = drawHouse($("#drawing-preview"), drawingEdit.draft, { interactive: false });
   updateHouse(drawingEdit.view);
   drawingEdit.view.labels[drawingEdit.placing]?.node.classList.add("placing");
-  $("#drawing-place-hint").hidden = drawingEdit.placing < 0;
-  $("#drawing-preview").classList.toggle("placing", drawingEdit.placing >= 0);
+  drawingEdit.view.zones[drawingEdit.tracing]?.node.classList.add("placing");
+  const hint = $("#drawing-place-hint");
+  hint.hidden = drawingEdit.placing < 0 && drawingEdit.tracing < 0;
+  hint.textContent = drawingEdit.tracing >= 0 ? "Fais glisser sur le dessin pour tracer la zone (du coin en haut à gauche au coin opposé)." : "Touche le dessin là où poser la valeur.";
+  $("#drawing-preview").classList.toggle("placing", drawingEdit.placing >= 0 || drawingEdit.tracing >= 0);
 }
 
 /** En mode « placer », l'aperçu remonte en vue pour qu'on puisse le toucher. */
 function showPreview() {
-  if (drawingEdit.placing < 0) return;
+  if (drawingEdit.placing < 0 && drawingEdit.tracing < 0) return;
   const smooth = !matchMedia("(prefers-reduced-motion: reduce)").matches;
   $("#drawing-preview").scrollIntoView({ block: "nearest", behavior: smooth ? "smooth" : "auto" });
 }
@@ -876,6 +958,7 @@ function renderDrawingEditor() {
     const place = el("button", { type: "button", class: drawingEdit.placing === index ? "primary small" : "ghost small", text: drawingEdit.placing === index ? "Touche le dessin…" : `Placer (${number.format(label.x)} %, ${number.format(label.y)} %)` });
     place.addEventListener("click", () => {
       drawingEdit.placing = drawingEdit.placing === index ? -1 : index;
+      drawingEdit.tracing = -1;
       refresh();
       showPreview();
     });
@@ -927,6 +1010,48 @@ function renderDrawingEditor() {
     addAction,
   );
 
+  // Les zones à toucher sur le dessin.
+  const zoneRows = draft.zones.map((zone, index) => {
+    const entity = el("input", { type: "text", list: "entity-list", value: zone.entity_id, placeholder: "light.porche", autocapitalize: "none", spellcheck: "false" });
+    entity.addEventListener("change", () => { zone.entity_id = entity.value.trim(); });
+    const name = el("input", { type: "text", value: zone.name ?? "", placeholder: "(le nom de l'appareil)", maxlength: "60" });
+    name.addEventListener("change", () => { if (name.value.trim()) zone.name = name.value.trim(); else delete zone.name; });
+    const tracing = drawingEdit.tracing === index;
+    const trace = el("button", { type: "button", class: tracing ? "primary small" : "ghost small", text: tracing ? "Trace sur le dessin…" : `Tracer (${number.format(zone.w)} × ${number.format(zone.h)} %)` });
+    trace.addEventListener("click", () => {
+      drawingEdit.tracing = tracing ? -1 : index;
+      drawingEdit.placing = -1;
+      refresh();
+      showPreview();
+    });
+    const remove = el("button", { type: "button", class: "ghost small danger", text: "Retirer" });
+    remove.addEventListener("click", () => {
+      draft.zones.splice(index, 1);
+      drawingEdit.tracing = -1;
+      refresh();
+    });
+    return el("li", { class: "drawing-item" },
+      el("div", { class: "drawing-item-head" }, el("b", { text: `Zone ${index + 1}` }), remove),
+      el("div", { class: "drawing-grid" }, field("Appareil", entity), field("Nom affiché", name)),
+      trace);
+  });
+  const addZone = el("button", { type: "button", class: "ghost small", text: "+ Ajouter une zone" });
+  addZone.disabled = draft.zones.length >= 24;
+  addZone.addEventListener("click", () => {
+    draft.zones.push({ entity_id: "", x: 40, y: 40, w: 20, h: 20 });
+    drawingEdit.tracing = -1;
+    drawingEdit.placing = -1;
+    refresh();
+    $("#drawing-form .drawing-zones .drawing-item:last-child input")?.focus();
+  });
+  const zones = drawingFieldset(
+    "Zones à toucher",
+    "Le porche, la porte du garage, la piscine… : trace un rectangle sur le dessin. Un toucher allume, éteint, ouvre ou ferme ; un appui long ouvre l'historique (24 au plus).",
+    el("ol", { class: "drawing-items" }, ...zoneRows),
+    addZone,
+  );
+  zones.classList.add("drawing-zones");
+
   // Les courbes de la colonne de gauche.
   const chartRows = draft.charts.map((chart, index) => {
     const entity = el("input", { type: "text", list: "entity-list", value: chart.entity_id, placeholder: "sensor.puissance_nas", autocapitalize: "none", spellcheck: "false" });
@@ -959,7 +1084,7 @@ function renderDrawingEditor() {
     addChart,
   );
 
-  $("#drawing-form").replaceChildren(pagesPart(), images, backgrounds, layers, labels, actions, charts);
+  $("#drawing-form").replaceChildren(pagesPart(), images, backgrounds, layers, labels, zones, actions, charts);
 }
 
 /** Un identifiant d'onglet à partir de son nom (« Salle de jeux » → salle-de-jeux). */
@@ -979,6 +1104,7 @@ function pagesPart() {
   choose.addEventListener("change", () => {
     drawingEdit.draft = drawingEdit.pages.find((page) => page.id === choose.value) ?? drawingEdit.pages[0];
     drawingEdit.placing = -1;
+    drawingEdit.tracing = -1;
     refresh();
   });
   const add = el("button", { type: "button", class: "ghost small", text: "+ Nouvel onglet" });
@@ -1043,11 +1169,60 @@ $("#drawing-preview").addEventListener("click", (event) => {
   renderDrawingEditor();
 });
 
+// Tracer une zone : on fait glisser sur l'aperçu, du premier coin à l'autre.
+const zoneDraw = { start: null, rect: null };
+
+function previewPercent(event) {
+  const box = $("#drawing-preview .house-base")?.getBoundingClientRect();
+  if (!box || box.width === 0) return null;
+  const clamp = (value) => Math.min(100, Math.max(0, value));
+  return { x: clamp(((event.clientX - box.left) / box.width) * 100), y: clamp(((event.clientY - box.top) / box.height) * 100) };
+}
+
+function traceBox(a, b) {
+  const round = (value) => Math.round(value * 10) / 10;
+  const x = round(Math.min(a.x, b.x));
+  const y = round(Math.min(a.y, b.y));
+  return { x, y, w: round(Math.min(100 - x, Math.abs(a.x - b.x))), h: round(Math.min(100 - y, Math.abs(a.y - b.y))) };
+}
+
+$("#drawing-preview").addEventListener("pointerdown", (event) => {
+  if (drawingEdit.tracing < 0 || !drawingEdit.draft) return;
+  const start = previewPercent(event);
+  if (!start) return;
+  event.preventDefault();
+  zoneDraw.start = start;
+  zoneDraw.rect = el("span", { class: "house-zone edit tracing" });
+  placeZone(zoneDraw.rect, { ...start, w: 0, h: 0 });
+  $("#drawing-preview").append(zoneDraw.rect);
+  $("#drawing-preview").setPointerCapture(event.pointerId);
+});
+$("#drawing-preview").addEventListener("pointermove", (event) => {
+  if (!zoneDraw.start) return;
+  const point = previewPercent(event);
+  if (point) placeZone(zoneDraw.rect, traceBox(zoneDraw.start, point));
+});
+for (const type of ["pointerup", "pointercancel"]) {
+  $("#drawing-preview").addEventListener(type, (event) => {
+    if (!zoneDraw.start) return;
+    const point = type === "pointerup" ? previewPercent(event) : null;
+    const box = point ? traceBox(zoneDraw.start, point) : null;
+    zoneDraw.start = null;
+    zoneDraw.rect?.remove();
+    zoneDraw.rect = null;
+    if (!box || box.w < 1 || box.h < 1) return; // un simple toucher : on recommence
+    Object.assign(drawingEdit.draft.zones[drawingEdit.tracing], box);
+    drawingEdit.tracing = -1;
+    renderDrawingEditor();
+  });
+}
+
 $("#drawing-save").addEventListener("click", async () => {
   if (!drawingEdit.pages) return;
   for (const page of drawingEdit.pages) {
     page.actions = page.actions.filter((id) => id !== "");
     page.charts = page.charts.filter((chart) => chart.entity_id !== "");
+    page.zones = page.zones.filter((zone) => zone.entity_id !== "");
   }
   const button = $("#drawing-save");
   button.disabled = true;
