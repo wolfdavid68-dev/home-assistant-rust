@@ -84,6 +84,8 @@
 //!   actives par défaut) ; `HA_PUSH_CONTACT` : contact donné aux services de
 //!   notifications (`mailto:toi@exemple.fr`) ;
 //! - `HA_AREAS_PATH` : fichier des pièces (par défaut `areas.yaml`) ;
+//! - `HA_CALENDARS_PATH` : agendas en ligne, fichiers ICS (par défaut
+//!   `calendriers.yaml`) ;
 //! - `HA_AUTOMATIONS_PATH` : fichier d'automatisations (par défaut `automations.yaml`) ;
 //! - `HA_ALEXA_IP` : adresse de cette machine sur le réseau local, pour
 //!   piloter les appareils de `alexa.yaml` à la voix (`HA_ALEXA_PATH`,
@@ -125,6 +127,7 @@ const DEFAULT_HISTORY_DAYS: u32 = 10;
 const DEFAULT_AUDIT_DAYS: u32 = 365;
 const DEFAULT_AUTOMATIONS_PATH: &str = "automations.yaml";
 const DEFAULT_AREAS_PATH: &str = "areas.yaml";
+const DEFAULT_CALENDARS_PATH: &str = "calendriers.yaml";
 const DEFAULT_GUARD_PATH: &str = "guard.yaml";
 
 /// Concept Rust : `#[tokio::main]` démarre le moteur asynchrone de tokio.
@@ -150,6 +153,7 @@ async fn main() -> ExitCode {
         ["freebox", rest @ ..] => cli::freebox_command(rest).await,
         ["automations", rest @ ..] => cli::automations_command(rest).await,
         ["areas", "check"] => cli::check_areas(&areas_path()),
+        ["calendriers", "check"] => cli::check_calendars(&calendars_path()),
         ["guard", "check"] => cli::check_guard(&areas_path(), &guard_path()),
         ["alexa", "check"] => cli::check_alexa(&alexa_path()),
         ["thermostats", "check"] => cli::check_thermostats(&thermostats_path()),
@@ -223,6 +227,12 @@ async fn open_store() -> Result<Store, ha_storage::StorageError> {
 fn areas_path() -> std::path::PathBuf {
     std::env::var("HA_AREAS_PATH")
         .unwrap_or_else(|_| DEFAULT_AREAS_PATH.to_owned())
+        .into()
+}
+
+fn calendars_path() -> std::path::PathBuf {
+    std::env::var("HA_CALENDARS_PATH")
+        .unwrap_or_else(|_| DEFAULT_CALENDARS_PATH.to_owned())
         .into()
 }
 
@@ -434,6 +444,21 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         Arc::clone(&core),
     );
     let sun = location.map(|location| SunTracker::start(location, Arc::clone(&core)));
+    // Agendas en ligne (étape 57) : collecte des déchets, vacances…
+    let calendars = match ha_ics::load(&calendars_path()) {
+        Ok(list) if list.is_empty() => None,
+        Ok(list) => match ha_ics::Calendars::start(list, Arc::clone(&core)) {
+            Ok(calendars) => Some(calendars),
+            Err(error) => {
+                warn!("agendas en ligne : démarrage impossible ({error})");
+                None
+            }
+        },
+        Err(error) => {
+            warn!("agendas en ligne : {error}");
+            None
+        }
+    };
     // Jours ouvrés et fériés (étape 56) : toujours là, calculés sur place.
     let workday = match workday_settings() {
         Ok((regime, week)) => Some(ha_workday::Workday::start(regime, week, Arc::clone(&core))),
@@ -587,6 +612,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     }
     if let Some(workday) = workday {
         workday.stop().await;
+    }
+    if let Some(calendars) = calendars {
+        calendars.stop().await;
     }
     if let Some(sun) = sun {
         sun.stop().await;

@@ -435,7 +435,8 @@ function renderHome() {
   const parts = [];
   if (found.length > 0) parts.push(found.map((a) => `${nameOf(a.state)} : ${a.text}`).join(" · "));
   if (people) parts.push(people.length === 0 ? "Personne à la maison" : `${joinNames(people)} ${people.length > 1 ? "sont" : "est"} à la maison`);
-  const agenda = [...entities.values()].find((s) => domainOf(s) === "calendar");
+  // L'agenda de la maison d'abord (les agendas en ligne sont en plus).
+  const agenda = entities.get("calendar.maison") ?? [...entities.values()].find((s) => domainOf(s) === "calendar");
   if (agenda) {
     const next = calendarEvents(agenda).find((e) => e.endDate > now && !e.all_day);
     if (next && next.startDate <= now) parts.push(`En ce moment : ${next.summary}`);
@@ -1030,11 +1031,16 @@ function calendarEvents(state) {
 
 function calendarTile(state) {
   const now = Date.now();
+  // Un agenda en ligne (étape 57) : en lecture seule.
+  const readOnly = state.attributes.read_only === true;
   const coming = calendarEvents(state).filter((e) => e.endDate.getTime() > now).slice(0, 8);
   const current = state.state === "on";
-  const subtitle = current && typeof state.attributes.message === "string"
-    ? `En ce moment : ${state.attributes.message}`
-    : coming.length === 0 ? "Rien de prévu" : `${coming.length} rendez-vous à venir`;
+  const failure = typeof state.attributes.erreur === "string" ? state.attributes.erreur : "";
+  const subtitle = state.state === "unavailable"
+    ? (failure ? `Injoignable : ${failure}` : "Pas encore chargé")
+    : current && typeof state.attributes.message === "string"
+      ? `En ce moment : ${state.attributes.message}`
+      : coming.length === 0 ? "Rien de prévu" : `${coming.length} rendez-vous à venir`;
   const rows = [];
   let lastDay = "";
   for (const e of coming) {
@@ -1042,15 +1048,28 @@ function calendarTile(state) {
     if (day !== lastDay) rows.push(el("li", { class: "day", text: day }));
     lastDay = day;
     const when = e.all_day ? "Journée" : hourMinute.format(e.startDate);
-    const remove = el("button", { type: "button", class: "item-remove", "aria-label": `Supprimer ${e.summary}`, text: "×" });
-    remove.addEventListener("click", () => {
-      if (window.confirm(`Supprimer « ${e.summary} » ?`)) callService("calendar", "delete_event", { entity_id: state.entity_id, uid: e.uid });
-    });
     const ongoing = e.startDate.getTime() <= now;
-    rows.push(el("li", { class: ongoing ? "event now" : "event" },
+    const row = el("li", { class: ongoing ? "event now" : "event" },
       el("span", { class: "event-time", text: when }),
-      el("span", { class: "event-name", text: e.summary }),
-      remove));
+      el("span", { class: "event-name", text: e.summary }));
+    if (!readOnly) {
+      const remove = el("button", { type: "button", class: "item-remove", "aria-label": `Supprimer ${e.summary}`, text: "×" });
+      remove.addEventListener("click", () => {
+        if (window.confirm(`Supprimer « ${e.summary} » ?`)) callService("calendar", "delete_event", { entity_id: state.entity_id, uid: e.uid });
+      });
+      row.append(remove);
+    }
+    rows.push(row);
+  }
+  if (readOnly) {
+    const source = typeof state.attributes.source === "string" ? state.attributes.source : "";
+    return el(
+      "div",
+      { id: tileId(state.entity_id), class: `tile wide-tile${current ? " on" : ""}` },
+      tileHead(state, ICONS.calendar, subtitle),
+      rows.length > 0 ? el("ol", { class: "agenda-list" }, ...rows) : el("p", { class: "muted", text: "Rien dans les deux mois qui viennent." }),
+      ...(source ? [el("p", { class: "muted agenda-source", text: `Agenda en ligne (${source}), en lecture seule` })] : []),
+    );
   }
   // Nouveau rendez-vous : un titre, un jour, une heure (sans heure : toute la journée).
   const day = el("input", { type: "date", "aria-label": "Jour", required: "" });

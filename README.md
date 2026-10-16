@@ -64,6 +64,7 @@ Un noyau domotique en Rust, inspiré de Home Assistant.
 - [Étape 54 : Assist, expliqué](docs/assist.md)
 - [Étape 55 : brancher un assistant IA (MCP), expliqué](docs/mcp.md)
 - [Étape 56 : jours ouvrés et jours fériés, expliqués](docs/jours-ouvres.md)
+- [Étape 57 : les agendas en ligne, expliqués](docs/agendas-en-ligne.md)
 - [Étape 5 : les automatisations, expliqué](docs/etape-5-automatisations.md)
 - [Modernisation du code, expliquée](docs/modernisation.md)
 - [Étape 6 : l'interface web, expliquée](docs/etape-6-interface-web.md)

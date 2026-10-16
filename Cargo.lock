@@ -990,6 +990,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "ha-ics"
+version = "0.1.0"
+dependencies = [
+ "ha-agenda",
+ "ha-core",
+ "ha-storage",
+ "ha-tls",
+ "jiff",
+ "reqwest",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "ha-input"
 version = "0.1.0"
 dependencies = [
@@ -1107,6 +1126,7 @@ dependencies = [
  "ha-energy",
  "ha-freebox",
  "ha-hue",
+ "ha-ics",
  "ha-input",
  "ha-logbook",
  "ha-mqtt",

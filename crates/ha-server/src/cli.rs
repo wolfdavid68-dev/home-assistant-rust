@@ -41,6 +41,7 @@ utilisation :
   ha-server automations list      liste les automatisations (fichier et éditeur)
   ha-server automations delete <id>  supprime une automatisation de l'éditeur
   ha-server areas check           vérifie le fichier des pièces
+  ha-server calendriers check     vérifie le fichier des agendas en ligne (ICS)
   ha-server guard check           vérifie la garde (pièces protégées, heures calmes)
   ha-server alexa check           vérifie le fichier des appareils pour Alexa
   ha-server thermostats check     vérifie le fichier des thermostats
@@ -802,6 +803,33 @@ pub fn check_areas(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
     println!("{} : {} pièce(s) valide(s)", path.display(), areas.len());
     for area in &areas {
         println!("  - {} ({} appareil(s))", area.name, area.entities.len());
+    }
+    Ok(())
+}
+
+/// `ha-server calendriers check` : vérifie `calendriers.yaml` (sans
+/// télécharger : l'adresse n'est pas affichée, seulement le site).
+pub fn check_calendars(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
+    if !path.exists() {
+        println!(
+            "{} : fichier absent (aucun agenda en ligne)",
+            path.display()
+        );
+        return Ok(());
+    }
+    let calendars = ha_ics::load(path)?;
+    println!(
+        "{} : {} agenda(s) en ligne valide(s)",
+        path.display(),
+        calendars.len()
+    );
+    for calendar in &calendars {
+        println!(
+            "  - {} → {} ({})",
+            calendar.name,
+            calendar.entity_id,
+            calendar.url.host_str().unwrap_or_default()
+        );
     }
     Ok(())
 }

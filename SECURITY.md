@@ -60,6 +60,8 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
 - Assistant IA (MCP) : jeton par assistant (ligne de commande, 1 à 365 jours, révoqué avec le mot de passe) ;
   ses ordres sont retenus par la garde quel que soit son rôle ; jamais serrure ni alarme ; 60 appels par
   minute ; en-tête `Origin` d'un autre site refusé ; chaque appel audité.
+- Agendas en ligne (ICS) : HTTPS seulement, sans redirection, 2 Mio au plus ; l'adresse (qui peut contenir une
+  clé secrète) n'est jamais journalisée ni publiée, seulement le nom du site ; lecture seule.
 - Alexa (faux pont Hue, sans authentification possible) : désactivée par défaut ; seuls les appareils listés
   dans `alexa.yaml` sont exposés, jamais serrure, alarme, portail ni porte de garage ; seules les adresses
   autorisées (les Echo, ou à défaut le réseau local) sont servies ; serveur séparé de l'API ; chaque ordre est
