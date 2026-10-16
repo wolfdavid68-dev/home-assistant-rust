@@ -18,8 +18,10 @@ gh pr ready <numéro>   # uniquement après l'accord de David
 ```
 
 Pour la même raison, ne pas pousser de commit sur une PR déjà « prête » sans
-son accord, sauf s'il ne touche que des fichiers ignorés par la CI
-(`docs/**`, `*.md`).
+son accord, même un commit qui ne touche que de la documentation : sur une PR,
+`paths-ignore` regarde tout le diff de la PR, pas le dernier commit, donc la CI
+repart. Pour continuer le travail dans une PR « prête », la repasser d'abord en
+brouillon (`POST /repos/{owner}/{repo}/pulls/{n}/ccr/convert_to_draft`).
 
 Avant de demander le passage en « prête », lancer en local ce que la CI
 vérifiera :
