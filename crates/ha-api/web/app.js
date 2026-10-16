@@ -4329,6 +4329,23 @@ async function loadSystem() {
     el("div", { class: ok ? "system-row" : "system-row over" },
       el("dt", { text: label }),
       el("dd", {}, el("b", { text: value }), note ? el("span", { text: ok ? note : `au-delà du budget (${note})` }) : ""))));
+  // La rapidité des appareils (étape 63) : du toucher au changement d'état,
+  // intégration par intégration.
+  const slowMs = Number(data.slow_ms) || 3000;
+  for (const device of Array.isArray(data.devices) ? data.devices : []) {
+    const late = device.p95_ms > slowMs;
+    const orders = `${device.samples} ordre${device.samples > 1 ? "s" : ""}`;
+    const slow = device.slow > 0 ? `, dont ${device.slow} au-delà de ${milliseconds(slowMs)}` : "";
+    $("#system-list").append(el("div", { class: late ? "system-row over" : "system-row" },
+      el("dt", { text: `Réponse ${device.name}` }),
+      el("dd", {}, el("b", { text: `${milliseconds(device.p50_ms)} (95 % sous ${milliseconds(device.p95_ms)})` }),
+        el("span", { text: `${orders}${slow}` }))));
+  }
+}
+
+/** « 120 ms », « 1,8 s ». */
+function milliseconds(ms) {
+  return ms < 1000 ? `${Math.round(ms)} ms` : `${number.format(Math.round(ms / 100) / 10)} s`;
 }
 
 // ---------------------------------------------------------------- Mode tablette

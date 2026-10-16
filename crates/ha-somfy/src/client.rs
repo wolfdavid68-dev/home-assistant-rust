@@ -8,7 +8,7 @@ use std::time::SystemTime;
 
 use ha_core::{Background, CancellationToken, Core, Event};
 use tokio::sync::broadcast::error::RecvError;
-use tokio::time::MissedTickBehavior;
+use tokio::time::Instant;
 use tracing::{debug, error, info, warn};
 
 use crate::api::LocalApi;
@@ -18,6 +18,11 @@ use crate::pairing::Pairing;
 
 /// Fréquence de relevé des événements (la box ne les « pousse » pas).
 const FETCH_INTERVAL: Duration = Duration::from_secs(2);
+/// Après un ordre, la box est relevée plus souvent, le temps que l'appareil
+/// réagisse (étape 63) : le volet s'affiche en mouvement presque aussitôt,
+/// sans charger la box le reste du temps.
+const FAST_FETCH: Duration = Duration::from_millis(500);
+const FAST_WINDOW: Duration = Duration::from_secs(20);
 /// Relecture complète de temps en temps, par sécurité.
 const FULL_REFRESH: Duration = Duration::from_mins(10);
 const MAX_BACKOFF: Duration = Duration::from_mins(1);
@@ -108,8 +113,10 @@ async fn run(pairing: Pairing, core: Arc<Core>, token: CancellationToken) {
         info!("Somfy : connecté, {} appareils", devices.len());
         core.report(crate::ID, crate::NAME, Health::Connected);
         backoff = Duration::from_secs(1);
-        let mut fetch = tokio::time::interval(FETCH_INTERVAL);
-        fetch.set_missed_tick_behavior(MissedTickBehavior::Delay);
+        // Le relevé suivant, et jusqu'à quand relever vite (après un ordre).
+        let mut fast_until: Option<Instant> = None;
+        let fetch = tokio::time::sleep(Duration::ZERO);
+        tokio::pin!(fetch);
         let refresh = tokio::time::sleep(FULL_REFRESH);
         tokio::pin!(refresh);
 
@@ -119,18 +126,22 @@ async fn run(pairing: Pairing, core: Arc<Core>, token: CancellationToken) {
 
                 () = &mut refresh => continue 'connection,
 
-                _ = fetch.tick() => match api.fetch_events(&listener).await {
-                    Ok(batch) => {
-                        if devices.apply_events(&batch, &core.states) {
-                            info!("Somfy : appareils ajoutés ou retirés, relecture");
+                () = &mut fetch => {
+                    match api.fetch_events(&listener).await {
+                        Ok(batch) => {
+                            if devices.apply_events(&batch, &core.states) {
+                                info!("Somfy : appareils ajoutés ou retirés, relecture");
+                                continue 'connection;
+                            }
+                        }
+                        Err(error) => {
+                            // Écouteur expiré, box redémarrée… : on recommence tout.
+                            warn!("Somfy : relevé impossible ({error}), reconnexion");
                             continue 'connection;
                         }
                     }
-                    Err(error) => {
-                        // Écouteur expiré, box redémarrée… : on recommence tout.
-                        warn!("Somfy : relevé impossible ({error}), reconnexion");
-                        continue 'connection;
-                    }
+                    let now = Instant::now();
+                    fetch.as_mut().reset(now + fetch_delay(now, fast_until));
                 },
 
                 received = events.recv() => match received {
@@ -145,6 +156,10 @@ async fn run(pairing: Pairing, core: Arc<Core>, token: CancellationToken) {
                                 core.command_done(*order, Err("ordre périmé : la box a mis trop longtemps".into()));
                                 continue;
                             }
+                            // Relever vite pendant que l'appareil réagit.
+                            let now = Instant::now();
+                            fast_until = Some(now + FAST_WINDOW);
+                            fetch.as_mut().reset(now + FAST_FETCH);
                             let api = api.clone();
                             let entity_id = entity_id.clone();
                             let core = Arc::clone(&core);
@@ -169,4 +184,32 @@ async fn run(pairing: Pairing, core: Arc<Core>, token: CancellationToken) {
         }
     }
     info!("Somfy : arrêté");
+}
+
+/// Le temps avant le relevé suivant : vite juste après un ordre, sinon au
+/// rythme normal.
+fn fetch_delay(now: Instant, fast_until: Option<Instant>) -> Duration {
+    if fast_until.is_some_and(|until| now < until) {
+        FAST_FETCH
+    } else {
+        FETCH_INTERVAL
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_box_is_read_faster_right_after_an_order() {
+        let now = Instant::now();
+        assert_eq!(fetch_delay(now, None), FETCH_INTERVAL);
+        let until = Some(now + FAST_WINDOW);
+        assert_eq!(fetch_delay(now, until), FAST_FETCH);
+        assert_eq!(
+            fetch_delay(now + FAST_WINDOW - Duration::from_millis(1), until),
+            FAST_FETCH
+        );
+        assert_eq!(fetch_delay(now + FAST_WINDOW, until), FETCH_INTERVAL);
+    }
 }

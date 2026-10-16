@@ -890,10 +890,49 @@ async fn the_system_page_measures_the_server() {
     assert!(body["database_bytes"].as_u64().unwrap() > 0);
     assert!(body["uptime_seconds"].is_u64());
     assert_eq!(body["budget"]["memory_mib"], 64);
+    assert_eq!(body["devices"], json!([]), "aucun ordre encore");
+    assert_eq!(body["slow_ms"], 3000);
     if cfg!(target_os = "linux") {
         assert!(body["memory"]["resident_bytes"].as_u64().unwrap() > 0);
         assert!(body["cpu_percent"].is_number());
     }
+
+    // Un ordre à une lampe Hue, et sa réponse 150 ms plus tard : la page
+    // donne la rapidité de Hue, sous son nom.
+    let core = &app.state.core;
+    core.report("hue", "Hue", ha_core::Health::Connected);
+    let lamp: ha_core::EntityId = "light.salon".parse().unwrap();
+    core.states
+        .set_by("hue", lamp.clone(), "off", ha_core::Attributes::new())
+        .unwrap();
+    let sent = std::time::Instant::now();
+    core.latencies.observe(
+        &ha_core::Event::CallService {
+            domain: "light".into(),
+            service: "turn_on".into(),
+            entity_id: lamp.clone(),
+            data: ha_core::Attributes::new(),
+            origin: ha_core::Origin::System,
+            command: None,
+            issued_at: sent,
+        },
+        &core.states,
+        sent,
+    );
+    core.latencies.observe(
+        &ha_core::Event::StateChanged {
+            entity_id: lamp.clone(),
+            old_state: None,
+            new_state: core.states.get(&lamp),
+        },
+        &core.states,
+        sent + std::time::Duration::from_millis(150),
+    );
+    let (_, body) = app.request("GET", "/api/system", Some(&token), None).await;
+    assert_eq!(
+        body["devices"],
+        json!([{"integration": "hue", "name": "Hue", "p50_ms": 150.0, "p95_ms": 150.0, "samples": 1, "slow": 0}])
+    );
 
     // Réservé à l'administrateur.
     let family = app.login_as("alice", ha_auth::Role::Family).await;

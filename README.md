@@ -70,6 +70,7 @@ Un noyau domotique en Rust, inspiré de Home Assistant.
 - [Étape 60 : la couleur Tempo du jour et du lendemain, expliquée](docs/energie.md#étape-60--la-couleur-tempo-du-jour-et-du-lendemain)
 - [Étape 61 : les piles faibles, expliqué](docs/piles.md)
 - [Étape 62 : le délestage, expliqué](docs/delestage.md)
+- [Étape 63 : la rapidité des appareils, mesurée de bout en bout, expliqué](docs/rapidite.md)
 - [Étape 5 : les automatisations, expliqué](docs/etape-5-automatisations.md)
 - [Modernisation du code, expliquée](docs/modernisation.md)
 - [Étape 6 : l'interface web, expliquée](docs/etape-6-interface-web.md)

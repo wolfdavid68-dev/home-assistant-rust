@@ -11,6 +11,7 @@ mod error;
 mod event;
 pub mod guard;
 pub mod integrations;
+pub mod latency;
 mod origin;
 mod state;
 mod state_machine;
@@ -69,6 +70,8 @@ pub struct Core {
     pub commands: Commands,
     /// Les pièces protégées et les heures calmes (voir [`guard`]).
     pub guard: Guard,
+    /// La rapidité des appareils (voir [`latency`]).
+    pub latencies: latency::Latencies,
 }
 
 impl Core {
@@ -82,6 +85,7 @@ impl Core {
             integrations: Integrations::default(),
             commands: Commands::default(),
             guard: Guard::default(),
+            latencies: latency::Latencies::default(),
         }
     }
 }

@@ -74,6 +74,8 @@ pub const BATTERY_REPLACED: f64 = 30.0;
 /// Presque vide : l'alerte devient grave (et sonne sur le téléphone).
 pub const BATTERY_EMPTY: f64 = 5.0;
 const BATTERY_PREFIX: &str = "repair_battery_";
+/// Les appareils qui répondent lentement (étape 63).
+const SLOW_PREFIX: &str = "repair_slow_";
 /// Délai avant la première vérification : au démarrage, les appareils
 /// mettent un peu de temps à se reconnecter.
 const FIRST_CHECK: Duration = Duration::from_mins(2);
@@ -326,7 +328,11 @@ async fn run(
         tokio::select! {
             () = token.cancelled() => break,
             received = events.recv() => match received {
-                Ok(event) => match event.as_ref() {
+                Ok(event) => {
+                    // La rapidité des appareils (étape 63) : chaque ordre,
+                    // puis le changement d'état qui y répond.
+                    core.latencies.observe(&event, &core.states, std::time::Instant::now());
+                    match event.as_ref() {
                     Event::CallService { domain, service, entity_id, data, .. }
                         if domain == DOMAIN =>
                     {
@@ -336,7 +342,8 @@ async fn run(
                         approvals(&core);
                     }
                     _ => {}
-                },
+                    }
+                }
                 Err(RecvError::Lagged(missed)) => warn!("notifications : {missed} événements manqués"),
                 Err(RecvError::Closed) => break,
             },
@@ -351,6 +358,7 @@ async fn run(
                 reconcile(&core.states, INTEGRATION_PREFIX, &integration_issues(&core, now));
                 reconcile(&core.states, UNAVAILABLE_PREFIX, &unavailable(&core, now));
                 reconcile(&core.states, BATTERY_PREFIX, &low_batteries(&core.states));
+                reconcile(&core.states, SLOW_PREFIX, &slow_devices(&core));
             }
         }
     }
@@ -682,6 +690,34 @@ pub fn low_batteries(states: &StateMachine) -> Vec<Issue> {
         .collect()
 }
 
+/// Les appareils dont les 3 derniers ordres ont mis plus de 3 secondes à
+/// aboutir (voir [`ha_core::latency`]). Souvent une pile qui faiblit, un
+/// appareil Zigbee trop loin, ou un réseau Wi-Fi saturé.
+#[must_use]
+pub fn slow_devices(core: &Core) -> Vec<Issue> {
+    core.latencies
+        .slow_devices()
+        .into_iter()
+        .filter_map(|(entity_id, fastest)| {
+            let state = core.states.get(&entity_id)?;
+            let name = text(state.attributes(), "friendly_name").unwrap_or(entity_id.as_str());
+            // « 3,5 s », à la française.
+            let seconds = format!("{:.1}", fastest.as_secs_f64()).replace('.', ",");
+            Some(Issue {
+                key: entity_id.as_str().replace('.', "_"),
+                title: format!("{name} répond lentement"),
+                message: format!(
+                    "Les {} derniers ordres envoyés à {name} ({entity_id}) ont tous mis plus de \
+                     {seconds} s à aboutir. Vérifie sa pile, sa distance au relais le plus \
+                     proche (Zigbee) ou au point d'accès (Wi-Fi).",
+                    ha_core::latency::DEVICE_SAMPLES
+                ),
+                severity: Severity::Warning,
+            })
+        })
+        .collect()
+}
+
 /// Les alertes affichées (non ignorées), pour un résumé.
 #[must_use]
 pub fn active_count(states: &StateMachine) -> usize {
@@ -930,6 +966,47 @@ mod tests {
                 ))
                 .is_none()
         );
+    }
+
+    #[test]
+    fn a_device_that_answers_slowly_gets_an_alert() {
+        let core = Core::new();
+        let mut attributes = Attributes::new();
+        attributes.insert("friendly_name".into(), "Prise de la cave".into());
+        core.states
+            .set_by("mqtt", id("switch.cave"), "off", attributes)
+            .unwrap();
+        let start = std::time::Instant::now();
+        for (n, took_ms) in [(0_u64, 4_200_u64), (1, 3_600), (2, 5_000)] {
+            let sent = start + Duration::from_secs(n * 10);
+            let order = Event::CallService {
+                domain: "switch".into(),
+                service: "toggle".into(),
+                entity_id: id("switch.cave"),
+                data: Attributes::new(),
+                origin: ha_core::Origin::System,
+                command: None,
+                issued_at: sent,
+            };
+            core.latencies.observe(&order, &core.states, sent);
+            let answer = Event::StateChanged {
+                entity_id: id("switch.cave"),
+                old_state: None,
+                new_state: core.states.get(&id("switch.cave")),
+            };
+            core.latencies
+                .observe(&answer, &core.states, sent + Duration::from_millis(took_ms));
+        }
+        let issues = slow_devices(&core);
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].key, "switch_cave");
+        assert_eq!(issues[0].title, "Prise de la cave répond lentement");
+        assert!(
+            issues[0].message.contains("plus de 3,6 s"),
+            "{}",
+            issues[0].message
+        );
+        assert!(issues[0].message.contains("(switch.cave)"));
     }
 
     #[test]
