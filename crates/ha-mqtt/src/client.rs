@@ -57,6 +57,8 @@ async fn run(config: MqttConfig, core: Arc<Core>, token: CancellationToken) {
 
     let (client, mut eventloop) = AsyncClient::new(options, 100);
     let mut bridge = Bridge::new(&config.discovery_prefix);
+    // Les Shelly récents, sans découverte (étape 66).
+    let mut shellies = crate::shelly::Shellies::default();
     let mut events = core.bus.subscribe();
     let mut backoff = Duration::from_secs(1);
     info!("MQTT : connexion à {}:{}", config.host, config.port);
@@ -74,12 +76,21 @@ async fn run(config: MqttConfig, core: Arc<Core>, token: CancellationToken) {
                     let topics = bridge
                         .discovery_filters()
                         .into_iter()
+                        .chain(crate::shelly::FILTERS.iter().map(|f| (*f).to_owned()))
                         .chain(bridge.state_topics().cloned());
                     for topic in topics {
                         apply(&client, &Action::Subscribe(topic));
                     }
                 }
                 Ok(MqttEvent::Incoming(Packet::Publish(message))) => {
+                    // Un Shelly d'abord ; le pont de découverte voit quand
+                    // même le message (il ignore ce qu'il ne suit pas).
+                    let shelly = shellies
+                        .handle_message(&message.topic, &message.payload, &core.states)
+                        .unwrap_or_default();
+                    for action in &shelly {
+                        apply(&client, action);
+                    }
                     for action in bridge.handle_message(&message.topic, &message.payload, &core.states) {
                         if let Action::Fire { event_type, data } = action {
                             if let Err(error) = core.fire(&event_type, data) {
@@ -116,6 +127,9 @@ async fn run(config: MqttConfig, core: Arc<Core>, token: CancellationToken) {
                             continue;
                         }
                         for action in bridge.handle_service(domain, service, entity_id, data, &core.states) {
+                            apply(&client, &action);
+                        }
+                        for action in shellies.handle_service(domain, service, entity_id) {
                             apply(&client, &action);
                         }
                     }

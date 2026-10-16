@@ -177,7 +177,8 @@ subscription: 15.47      # € par mois, affiché à part
 ```
 
 N'importe quel compteur en kWh peut y figurer : une prise qui mesure sa consommation, un compteur
-MQTT, un `utility_meter` (étape 30)… Une prise qui ne donne que sa puissance (W) passe par une
+MQTT, un `utility_meter` (étape 30)… Une prise Shelly récente donne directement ses kWh ([étape 66](shelly.md)). Une prise qui ne
+donne que sa puissance (W) passe par une
 **intégrale** (`integration`, [étape 65](assistants.md#lintégrale-et-la-dérivée-étape-65)), qui
 la change en kWh. Vérifier le fichier : `ha-server energy check`.
 

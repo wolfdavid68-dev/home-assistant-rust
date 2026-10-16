@@ -116,7 +116,9 @@ puis créer le compte : `mosquitto_passwd -c C:\mosquitto\passwd ha`.
 - **Zigbee2MQTT** : dans `configuration.yaml`, `homeassistant: enabled: true` ;
 - **Tasmota** : dans la console, `SetOption19 1` ;
 - **ESPHome** : composant `mqtt:` (la découverte est active par défaut) ;
-- **Shelly** : selon le modèle et le micrologiciel (souvent via un script de découverte).
+- **Shelly** récents (Gen2 et plus) : rien à faire, ils sont reconnus tout seuls depuis
+  l'[étape 66](shelly.md) (coche « Generic status update over MQTT ») ; les anciens Shelly (Gen1)
+  passent par un script de découverte.
 
 **3. Lancer le serveur** (PowerShell) :
 
