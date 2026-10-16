@@ -2,20 +2,27 @@
 
 ## Pull requests
 
-**Toujours ouvrir une PR en brouillon**, puis la passer en « prête » une fois
-le travail terminé et vérifié en local :
+**Toujours ouvrir une PR en brouillon.** La CI ne tourne pas sur un brouillon
+(voir l'en-tête de `.github/workflows/ci.yml`) : elle part au passage en
+« prête », puis à chaque commit poussé. Le quota de minutes du dépôt privé est
+la contrainte.
+
+**Ne jamais passer une PR en « prête » sans l'accord explicite de David** :
+c'est lui qui décide quand la CI tourne. Une fois le travail terminé et vérifié
+en local, laisser la PR en brouillon et lui demander. Seulement après son
+accord :
 
 ```bash
 gh pr create --draft …
-gh pr ready <numéro>
+gh pr ready <numéro>   # uniquement après l'accord de David
 ```
 
-La CI ne tourne pas sur un brouillon (voir l'en-tête de `.github/workflows/ci.yml`).
-Une PR ouverte directement en « prête » relance toute la CI à chaque commit
-poussé, alors que seul le dernier verdict compte. Le quota de minutes du dépôt
-privé est la contrainte.
+Pour la même raison, ne pas pousser de commit sur une PR déjà « prête » sans
+son accord, sauf s'il ne touche que des fichiers ignorés par la CI
+(`docs/**`, `*.md`).
 
-Avant de passer en « prête », lancer en local ce que la CI vérifiera :
+Avant de demander le passage en « prête », lancer en local ce que la CI
+vérifiera :
 
 ```bash
 cargo fmt --all --check
