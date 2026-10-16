@@ -1700,6 +1700,8 @@ async fn the_house_drawing_is_assembled_from_checked_images() {
         "background": "jour",
         "ambiances": {"jour-pluie": "garage_ouvert"},
         "forced": "jour-pluie",
+        "effects": "neige",
+        "effects_level": "discret",
         "layers": [
             {"image": "garage_ouvert", "entity_id": "cover.garage", "states": ["open", "opening"]},
             {"image": "jour", "entity_id": "person.alice", "states": ["home"], "when": "night"},
@@ -1737,6 +1739,8 @@ async fn the_house_drawing_is_assembled_from_checked_images() {
         json!({"jour-pluie": "garage_ouvert"})
     );
     assert_eq!(body["config"]["pages"][0]["forced"], "jour-pluie");
+    assert_eq!(body["config"]["pages"][0]["effects"], "neige");
+    assert_eq!(body["config"]["pages"][0]["effects_level"], "discret");
     assert_eq!(body["config"]["pages"][0]["zones"][0]["x"], 40.0);
     let page = |extra: Value| {
         let mut page = json!({"id": "maison", "name": "Maison"});
@@ -1752,6 +1756,7 @@ async fn the_house_drawing_is_assembled_from_checked_images() {
         page(json!({"areas": ["Grenier"]})),
         page(json!({"zones": [{"entity_id": "light.porche", "x": 95, "y": 0, "w": 10, "h": 10}]})),
         page(json!({"zones": [{"area": "Grenier", "x": 0, "y": 0, "w": 10, "h": 10}]})),
+        page(json!({"effects": "tornade"})),
         page(json!({"background": "jour", "ambiances": {"jour-tempete": "jour"}})),
         json!({"pages": []}),
         json!({"script": "alert(1)"}),
