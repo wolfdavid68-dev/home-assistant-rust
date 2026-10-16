@@ -206,3 +206,6 @@ Dans **Mon compte**, coche **Mode tablette murale** sur la tablette accrochée a
 C'est un réglage **de cet appareil seulement** (gardé dans le navigateur), rien n'est envoyé au
 serveur. Le navigateur n'accepte de garder l'écran allumé que sur une page sécurisée : en HTTPS
 (étape 7), ou à l'adresse `localhost`.
+
+Après **5 minutes** sans contact, l'**écran de veille** prend le relais (étape 49, voir
+[veille.md](veille.md)).

@@ -123,6 +123,8 @@
       <div class="tablet-option">
         <label class="check"><input id="tablet-mode" type="checkbox"> Mode tablette murale</label>
         <p class="account">Sur cet appareil seulement : l'écran reste allumé, en plein écran, et revient à l'accueil après 2 minutes sans contact.</p>
+        <label class="check"><input id="saver-mode" type="checkbox" checked> Écran de veille après 5 minutes</label>
+        <p class="account">L'heure, la météo et la maison en grand, plus sombre la nuit. Un contact pour revenir.</p>
       </div>
       <!-- La santé des intégrations (étape 45) : réservée à ceux qui voient tout. -->
       <section id="integrations" class="integrations" aria-labelledby="integrations-title" hidden>
@@ -351,6 +353,22 @@
     </dialog>
     <datalist id="entity-list"></datalist>
     <p id="flash" class="flash" role="status" hidden></p>
+    <!-- L'écran de veille de la tablette murale (étape 49) : le dessin de la
+         maison en grand, l'heure, la météo, ce qui demande de l'attention.
+         Un contact le fait disparaître, sans rien commander. -->
+    <div id="saver" class="saver" hidden>
+      <div id="saver-inner" class="saver-inner">
+        <div id="saver-house" class="saver-house"></div>
+        <div class="saver-side">
+          <p id="saver-clock" class="saver-clock"></p>
+          <p id="saver-date" class="saver-date"></p>
+          <p id="saver-weather" class="saver-weather" hidden></p>
+          <p id="saver-status" class="saver-status"></p>
+          <p id="saver-approvals" class="saver-approvals" hidden></p>
+        </div>
+      </div>
+      <p class="saver-hint">Touche l'écran pour revenir</p>
+    </div>
     <details id="journal" class="journal">
       <summary>Journal d'activité</summary>
       <p class="journal-hint">Qui a fait quoi, et d'où : les 50 dernières actions.</p>
