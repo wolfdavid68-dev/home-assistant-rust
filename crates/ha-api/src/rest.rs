@@ -706,6 +706,7 @@ pub(crate) async fn decide(
     state.push_tickets.forget_approval(order.id);
     let call = format!("{}.{}", order.domain, order.service);
     let by = order.origin.describe().unwrap_or_default();
+    let answered = order.clone();
     if approve {
         // L'ordre garde son origine (« à la voix ») : le journal de bord dira
         // qui l'a donné ; le journal d'audit, qui l'a validé.
@@ -720,6 +721,8 @@ pub(crate) async fn decide(
             )
             .map_err(|error| ApiError::BadRequest(error.to_string()))?;
     }
+    // Les téléphones remplacent leur « Ordre à valider » par la réponse.
+    state.core.approval_answered(&answered, approve, username);
     let verdict = if approve { "validé" } else { "refusé" };
     tracing::info!("{call} sur {} {verdict} par {username}", order.entity_id);
     audit(

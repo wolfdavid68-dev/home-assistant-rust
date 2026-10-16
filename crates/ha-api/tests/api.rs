@@ -1930,6 +1930,7 @@ async fn a_held_order_is_answered_from_the_notification() {
     .await;
     let id = core.held_orders()[0].id;
     let ticket = button_ticket(&app, "david", ha_push::Purpose::Approval(id), &buttons).await;
+    let mut events = core.bus.subscribe();
     let (_, body) = app
         .request(
             "POST",
@@ -1939,6 +1940,20 @@ async fn a_held_order_is_answered_from_the_notification() {
         )
         .await;
     assert_eq!(body["result"], "refused");
+    // Les téléphones apprennent la réponse, et qui l'a donnée.
+    let answered = std::iter::from_fn(|| events.try_recv().ok())
+        .find_map(|event| match event.as_ref() {
+            ha_core::Event::Fired { event_type, data }
+                if event_type == ha_core::guard::APPROVAL_ANSWERED =>
+            {
+                Some(data.clone())
+            }
+            _ => None,
+        })
+        .expect("la réponse est annoncée");
+    assert_eq!(answered["id"], id);
+    assert_eq!(answered["approved"], false);
+    assert_eq!(answered["by"], "david");
     assert_eq!(body["message"], "Refusé : éteindre light.salon.");
     assert_eq!(core.held_orders().len(), 0);
 

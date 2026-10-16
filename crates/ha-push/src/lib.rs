@@ -27,6 +27,10 @@
 //! d'automatisation annonce l'événement `notification_action` (voir
 //! [`tickets`]).
 //!
+//! Les notifications se rangent toutes seules (étape 52) : un ordre validé,
+//! refusé ou oublié remplace « Ordre à valider » sur tous les téléphones, et
+//! une alerte grave qui disparaît devient « Résolu », sans faire sonner.
+//!
 //! Seuls les comptes famille et administrateur reçoivent des notifications.
 //!
 //! Sécurité : le serveur n'envoie qu'aux **services de notifications des
@@ -42,7 +46,10 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
-use ha_core::{Attributes, Background, CancellationToken, Core, EntityId, Event, Origin};
+use ha_core::guard::{APPROVAL_ANSWERED, APPROVAL_EXPIRED};
+use ha_core::{
+    Attributes, Background, CancellationToken, Core, EntityId, Event, Origin, StateMachine,
+};
 use ha_storage::{PushTarget, Store};
 use serde_json::{Value, json};
 use tokio::sync::broadcast::error::RecvError;
@@ -255,6 +262,9 @@ pub struct Message {
     pub urgent: bool,
     /// Les boutons (montrés seulement avec un ticket, voir [`tickets`]).
     pub buttons: Vec<Button>,
+    /// Remplace la notification du même `tag` sans faire sonner : une
+    /// réponse, pas une nouvelle.
+    pub silent: bool,
 }
 
 impl Message {
@@ -267,6 +277,9 @@ impl Message {
             "tag": self.tag,
             "url": self.url,
         });
+        if self.silent {
+            payload["silent"] = true.into();
+        }
         if let Some(ticket) = ticket
             && !self.buttons.is_empty()
         {
@@ -299,9 +312,43 @@ fn text<'a>(attributes: &'a Attributes, key: &str) -> Option<&'a str> {
 }
 
 /// Ce qu'un événement du bus doit envoyer, s'il doit envoyer quelque chose.
+/// `states` donne le nom des appareils (« Volet chambre »).
 #[must_use]
-pub fn outgoing(event: &Event) -> Option<Outgoing> {
+pub fn outgoing(event: &Event, states: &StateMachine) -> Option<Outgoing> {
     match event {
+        Event::Fired { event_type, data }
+            if event_type == APPROVAL_ANSWERED || event_type == APPROVAL_EXPIRED =>
+        {
+            approval_closed(event_type, data, states)
+        }
+        // Une alerte grave qui disparaît : le problème est réglé.
+        Event::StateChanged {
+            entity_id,
+            old_state: Some(old_state),
+            new_state: None,
+        } if entity_id.domain() == ha_notices::DOMAIN
+            && old_state.state() == ha_notices::NOTIFYING
+            && text(old_state.attributes(), "kind") == Some("repair")
+            && text(old_state.attributes(), "severity") == Some("error") =>
+        {
+            let title = clean(text(old_state.attributes(), "title")?, MAX_TITLE_CHARS);
+            Some(Outgoing {
+                category: Category::Alerts,
+                message: Message {
+                    title: "Résolu".into(),
+                    body: format!("{title} : c'est réglé."),
+                    tag: entity_id.as_str().to_owned(),
+                    url: "/",
+                    ttl: Duration::from_hours(24),
+                    urgent: false,
+                    buttons: Vec::new(),
+                    silent: true,
+                },
+                users: None,
+                test: false,
+                purpose: None,
+            })
+        }
         Event::CallService {
             domain,
             service,
@@ -352,6 +399,7 @@ pub fn outgoing(event: &Event) -> Option<Outgoing> {
                             } else {
                                 Vec::new()
                             },
+                            silent: false,
                         },
                         users: None,
                         test: false,
@@ -368,6 +416,7 @@ pub fn outgoing(event: &Event) -> Option<Outgoing> {
                         ttl: Duration::from_hours(24),
                         urgent: true,
                         buttons: Vec::new(),
+                        silent: false,
                     },
                     users: None,
                     test: false,
@@ -378,6 +427,48 @@ pub fn outgoing(event: &Event) -> Option<Outgoing> {
         }
         _ => None,
     }
+}
+
+/// Un ordre retenu validé, refusé ou oublié : la réponse remplace « Ordre à
+/// valider » (même `tag`) sur tous les téléphones, sans sonner.
+fn approval_closed(event_type: &str, data: &Attributes, states: &StateMachine) -> Option<Outgoing> {
+    let id = data.get("id").and_then(Value::as_u64)?;
+    let entity_id: EntityId = text(data, "entity_id")?.parse().ok()?;
+    let summary = ha_notices::describe_order(
+        states,
+        text(data, "domain")?,
+        text(data, "service")?,
+        &entity_id,
+    );
+    let (title, body) = if event_type == APPROVAL_EXPIRED {
+        (
+            "Ordre oublié",
+            format!("Personne n'a répondu à temps : rien n'a été fait ({summary})."),
+        )
+    } else {
+        let by = clean(text(data, "by")?, MAX_NAME_CHARS);
+        if data.get("approved") == Some(&Value::Bool(true)) {
+            ("Ordre validé", format!("{by} a validé : {summary}."))
+        } else {
+            ("Ordre refusé", format!("{by} a refusé : {summary}."))
+        }
+    };
+    Some(Outgoing {
+        category: Category::Approvals,
+        message: Message {
+            title: title.into(),
+            body: clean(&body, MAX_BODY_CHARS),
+            tag: format!("{}.{}{id}", ha_notices::DOMAIN, ha_notices::APPROVAL_PREFIX),
+            url: "/",
+            ttl: ha_core::guard::HELD_TTL,
+            urgent: false,
+            buttons: Vec::new(),
+            silent: true,
+        },
+        users: None,
+        test: false,
+        purpose: None,
+    })
 }
 
 /// `notify.send_message` sur `notify.appli`.
@@ -446,6 +537,7 @@ fn from_automation(data: &Attributes, origin: &Origin) -> Option<Outgoing> {
             ttl: Duration::from_hours(24),
             urgent: priority >= 4,
             buttons,
+            silent: false,
         },
         users,
         test,
@@ -664,7 +756,7 @@ async fn run(
                 Err(RecvError::Closed) => break,
             },
         };
-        let Some(outgoing) = outgoing(&event) else {
+        let Some(outgoing) = outgoing(&event, &core.states) else {
             continue;
         };
         let now = Instant::now();
@@ -807,6 +899,11 @@ mod tests {
     use super::*;
     use ha_core::State;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    /// Sans appareils nommés : l'identifiant sert de nom.
+    fn outgoing(event: &Event) -> Option<Outgoing> {
+        super::outgoing(event, &Core::new().states)
+    }
 
     fn attributes(value: Value) -> Attributes {
         match value {
@@ -1101,6 +1198,7 @@ mod tests {
             ttl: Duration::from_mins(10),
             urgent: true,
             buttons: Vec::new(),
+            silent: false,
         }
     }
 
@@ -1313,5 +1411,95 @@ mod tests {
             None
         );
         assert_eq!(tickets.len(), 1, "seul le ticket du téléphone reste");
+    }
+
+    fn fired(event_type: &str, data: Value) -> Event {
+        Event::Fired {
+            event_type: event_type.into(),
+            data: attributes(data),
+        }
+    }
+
+    #[test]
+    fn an_answered_or_forgotten_order_replaces_its_notification_quietly() {
+        let core = Core::new();
+        let volet: EntityId = "cover.chambre".parse().unwrap();
+        core.states
+            .set(
+                volet,
+                "open",
+                attributes(json!({"friendly_name": "Volet chambre"})),
+            )
+            .unwrap();
+        let order = json!({"id": 4, "domain": "cover", "service": "close_cover", "entity_id": "cover.chambre"});
+        let mut answered = order.clone();
+        answered["approved"] = true.into();
+        answered["by"] = "alice".into();
+        let out =
+            super::outgoing(&fired(APPROVAL_ANSWERED, answered.clone()), &core.states).unwrap();
+        assert_eq!(out.category, Category::Approvals);
+        assert_eq!(out.message.title, "Ordre validé");
+        assert_eq!(out.message.body, "alice a validé : fermer Volet chambre.");
+        assert_eq!(
+            out.message.tag, "persistent_notification.approval_4",
+            "le même sujet que « Ordre à valider » : il le remplace"
+        );
+        assert!(out.message.silent);
+        assert!(!out.message.urgent);
+        assert_eq!(out.purpose, None, "plus de boutons");
+        answered["approved"] = false.into();
+        let out = super::outgoing(&fired(APPROVAL_ANSWERED, answered), &core.states).unwrap();
+        assert_eq!(out.message.body, "alice a refusé : fermer Volet chambre.");
+        let out = super::outgoing(&fired(APPROVAL_EXPIRED, order), &core.states).unwrap();
+        assert_eq!(out.message.title, "Ordre oublié");
+        assert_eq!(
+            out.message.body,
+            "Personne n'a répondu à temps : rien n'a été fait (fermer Volet chambre)."
+        );
+        // Incomplet, ou un autre événement : rien.
+        assert_eq!(outgoing(&fired(APPROVAL_EXPIRED, json!({"id": 4}))), None);
+        assert_eq!(
+            outgoing(&fired("timer.finished", json!({"entity_id": "timer.x"}))),
+            None
+        );
+        let payload: Value = serde_json::from_slice(&out.message.payload(None)).unwrap();
+        assert_eq!(payload["silent"], true);
+    }
+
+    #[test]
+    fn a_serious_alert_that_goes_away_is_resolved() {
+        let gone = |state: State| Event::StateChanged {
+            entity_id: state.entity_id().clone(),
+            old_state: Some(state),
+            new_state: None,
+        };
+        let error = notice(
+            "persistent_notification.repair_integration_mqtt",
+            "notifying",
+            json!({"title": "MQTT en panne", "message": "…", "kind": "repair", "severity": "error"}),
+        );
+        let out = outgoing(&gone(error)).unwrap();
+        assert_eq!(out.category, Category::Alerts);
+        assert_eq!(out.message.title, "Résolu");
+        assert_eq!(out.message.body, "MQTT en panne : c'est réglé.");
+        assert_eq!(
+            out.message.tag,
+            "persistent_notification.repair_integration_mqtt"
+        );
+        assert!(out.message.silent);
+        // Un avertissement, une alerte déjà ignorée, une notification : rien.
+        for (state, kind, severity) in [
+            ("notifying", "repair", "warning"),
+            ("ignored", "repair", "error"),
+            ("notifying", "notification", "error"),
+            ("notifying", "approval", "error"),
+        ] {
+            let old = notice(
+                "persistent_notification.x",
+                state,
+                json!({"title": "x", "message": "x", "kind": kind, "severity": severity}),
+            );
+            assert_eq!(outgoing(&gone(old)), None, "{state} {kind} {severity}");
+        }
     }
 }

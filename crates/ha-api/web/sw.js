@@ -34,11 +34,14 @@ self.addEventListener("push", (event) => {
       .slice(0, 2)
       .map((a) => ({ action: a.action, title: a.title }))
     : [];
+  // Une réponse (« Ordre validé », « Résolu ») remplace la notification du
+  // même sujet sans faire sonner ; une nouvelle notification, elle, sonne.
+  const silent = data.silent === true;
   event.waitUntil(show(text(data.title, "Maison"), {
     body: text(data.body, ""),
     tag: text(data.tag, "maison"),
-    // Une nouvelle notification du même sujet refait sonner le téléphone.
-    renotify: true,
+    renotify: !silent,
+    silent,
     actions,
     data: { url, token: actions.length > 0 ? token : null },
   }));

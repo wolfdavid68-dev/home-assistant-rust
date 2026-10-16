@@ -433,11 +433,22 @@ fn approvals(core: &Core) {
 /// Ce que fait un ordre retenu : « fermer Volet chambre ».
 #[must_use]
 pub fn order_summary(states: &StateMachine, order: &ha_core::guard::HeldOrder) -> String {
+    describe_order(states, &order.domain, &order.service, &order.entity_id)
+}
+
+/// « fermer Volet chambre », d'après le service et l'appareil.
+#[must_use]
+pub fn describe_order(
+    states: &StateMachine,
+    domain: &str,
+    service: &str,
+    entity_id: &EntityId,
+) -> String {
     let device = states
-        .get(&order.entity_id)
+        .get(entity_id)
         .and_then(|state| text(state.attributes(), "friendly_name").map(str::to_owned))
-        .unwrap_or_else(|| order.entity_id.to_string());
-    format!("{} {device}", action(&order.domain, &order.service))
+        .unwrap_or_else(|| entity_id.to_string());
+    format!("{} {device}", action(domain, service))
 }
 
 /// « allumer », « fermer »… ou le nom du service.

@@ -145,6 +145,27 @@ d'Android → Notifications → « Notifications sensibles » ou « Sur l'écran
 masquer le contenu. Les ordres que la garde retient sont ceux d'un invité ou de la voix
 (lumières, prises, volets) : jamais une serrure, l'alarme, un portail ni la porte du garage.
 
+## Étape 52 : les notifications se rangent toutes seules
+
+Une notification qui ne sert plus est **remplacée sur tous les téléphones**, sans les faire
+sonner :
+
+| Avant | Après | Quand |
+|-------|-------|-------|
+| Ordre à valider | **Ordre validé** : « alice a validé : fermer Volet chambre. » | quelqu'un valide, depuis son téléphone ou la cloche |
+| Ordre à valider | **Ordre refusé** : « alice a refusé : … » | quelqu'un refuse |
+| Ordre à valider | **Ordre oublié** : « Personne n'a répondu à temps : rien n'a été fait (…). » | 10 minutes sans réponse |
+| MQTT en panne | **Résolu** : « MQTT en panne : c'est réglé. » | le problème disparaît tout seul |
+
+Plus de bouton « Valider » sur un ordre déjà traité par quelqu'un d'autre, et plus d'alerte en
+panne sur l'écran verrouillé une heure après que tout est rentré dans l'ordre. Une alerte que tu
+as fermée dans la cloche ne donne pas de « Résolu ».
+
+Les réponses sont aussi des événements que les automatisations peuvent écouter :
+`guard.approval_answered` (`id`, `entity_id`, `approved`, `by`) et `guard.approval_expired`.
+Seul le serveur les publie : ni l'API, ni MQTT, ni une automatisation ne peuvent en fabriquer un
+faux.
+
 ### Réglages (facultatifs)
 
 | Variable | Rôle |
@@ -194,7 +215,8 @@ masquer le contenu. Les ordres que la garde retient sont ceux d'un invité ou de
 | [ha-push/src/lib.rs](../crates/ha-push/src/lib.rs) (nouveau) | Vérification des abonnements, quels événements notifient, envoi, limites |
 | [ha-storage/src/push.rs](../crates/ha-storage/src/push.rs) (nouveau) | La clé du serveur et les abonnements (migration `0018_push.sql`) |
 | [ha-api/src/push.rs](../crates/ha-api/src/push.rs) (nouveau) | `GET /api/push`, `POST /api/push/subscriptions`, `PATCH` et `DELETE /api/push/subscriptions/{id}`, `POST /api/push/test` |
-| [web/sw.js](../crates/ha-api/web/sw.js) (nouveau) | Le service worker : affiche la notification et ses boutons, ouvre la cloche au toucher |
+| [web/sw.js](../crates/ha-api/web/sw.js) (nouveau) | Le service worker : affiche la notification et ses boutons, ouvre la cloche au toucher, remplace sans sonner (étape 52) |
+| [ha-core/src/guard.rs](../crates/ha-core/src/guard.rs) (étape 52) | Annonce les ordres validés, refusés et oubliés |
 | [ha-push/src/tickets.rs](../crates/ha-push/src/tickets.rs) (étape 51) | Les tickets des boutons : émis, servis une fois, oubliés |
 | [ha-api/src/push.rs](../crates/ha-api/src/push.rs) (étape 51) | `POST /api/push/action` : le bouton touché, revérifié, puis la même validation que la cloche |
 | [web/app.js](../crates/ha-api/web/app.js) | La section « Notifications sur cet appareil » de Mon compte |

@@ -30,6 +30,12 @@ pub const HELD_TTL: Duration = Duration::from_mins(10);
 pub const MAX_HELD: usize = 20;
 /// L'événement publié quand la liste des ordres retenus change.
 pub const HELD_CHANGED: &str = "guard.held_changed";
+/// Un ordre retenu a été validé ou refusé : `{id, domain, service,
+/// entity_id, approved, by}`. Seul le serveur le publie.
+pub const APPROVAL_ANSWERED: &str = "guard.approval_answered";
+/// Un ordre retenu a été oublié sans réponse : `{id, domain, service,
+/// entity_id}`.
+pub const APPROVAL_EXPIRED: &str = "guard.approval_expired";
 
 /// Les heures calmes, en minutes depuis minuit (heure locale). `from` peut
 /// être après `to` : 22:00 – 07:00 passe minuit.
@@ -203,11 +209,13 @@ impl Core {
     ) -> Result<u64, CoreError> {
         check_service_names(domain, service)?;
         let id = self.guard.next.fetch_add(1, Ordering::Relaxed) + 1;
-        {
+        let dropped = {
             let mut held = self.guard.held();
-            if held.len() >= MAX_HELD {
-                held.pop_front();
-            }
+            let dropped = if held.len() >= MAX_HELD {
+                held.pop_front()
+            } else {
+                None
+            };
             held.push_back(HeldOrder {
                 id,
                 domain: domain.to_owned(),
@@ -219,6 +227,10 @@ impl Core {
                 held_since: SystemTime::now(),
                 held_at: Instant::now(),
             });
+            dropped
+        };
+        if let Some(order) = dropped {
+            self.announce(APPROVAL_EXPIRED, &order, Attributes::new());
         }
         self.held_changed();
         Ok(id)
@@ -245,17 +257,40 @@ impl Core {
     /// Oublie les ordres qui attendent depuis plus de [`HELD_TTL`]. Renvoie
     /// combien.
     pub fn expire_held(&self) -> usize {
-        let expired = {
+        let expired: Vec<HeldOrder> = {
             let mut held = self.guard.held();
-            let before = held.len();
-            held.retain(|order| order.held_at.elapsed() < HELD_TTL);
-            before - held.len()
+            let (kept, expired): (VecDeque<HeldOrder>, VecDeque<HeldOrder>) = held
+                .drain(..)
+                .partition(|order| order.held_at.elapsed() < HELD_TTL);
+            *held = kept;
+            expired.into_iter().collect()
         };
-        if expired > 0 {
-            tracing::info!("garde : {expired} ordre(s) non validé(s) oublié(s)");
+        for order in &expired {
+            self.announce(APPROVAL_EXPIRED, order, Attributes::new());
+        }
+        if !expired.is_empty() {
+            tracing::info!("garde : {} ordre(s) non validé(s) oublié(s)", expired.len());
             self.held_changed();
         }
-        expired
+        expired.len()
+    }
+
+    /// Annonce qu'un ordre retenu a été validé ou refusé, et par qui (les
+    /// téléphones remplacent alors leur notification « Ordre à valider »).
+    pub fn approval_answered(&self, order: &HeldOrder, approved: bool, by: &str) {
+        let mut extra = Attributes::new();
+        extra.insert("approved".into(), approved.into());
+        extra.insert("by".into(), by.into());
+        self.announce(APPROVAL_ANSWERED, order, extra);
+    }
+
+    fn announce(&self, event_type: &str, order: &HeldOrder, mut data: Attributes) {
+        data.insert("id".into(), order.id.into());
+        data.insert("domain".into(), order.domain.clone().into());
+        data.insert("service".into(), order.service.clone().into());
+        data.insert("entity_id".into(), order.entity_id.as_str().into());
+        // Les noms sont valides : l'erreur est impossible.
+        let _ = self.fire(event_type, data);
     }
 
     fn held_changed(&self) {
@@ -407,5 +442,50 @@ mod tests {
         assert_eq!(held.len(), MAX_HELD);
         assert_eq!(held.first().unwrap().id, 2);
         assert_eq!(core.expire_held(), 0);
+    }
+
+    #[test]
+    fn answered_and_forgotten_orders_are_announced() {
+        let core = Core::new();
+        let mut events = core.bus.subscribe();
+        let announced = |event: &Event| match event {
+            Event::Fired { event_type, data } if event_type != HELD_CHANGED => {
+                Some((event_type.clone(), data.clone()))
+            }
+            _ => None,
+        };
+        // Le premier ordre est poussé dehors par le 21e : oublié.
+        for _ in 0..=MAX_HELD {
+            core.hold(
+                Origin::Voice,
+                "cover",
+                "close_cover",
+                id("cover.chambre"),
+                Attributes::new(),
+                String::new(),
+            )
+            .unwrap();
+        }
+        let mut forgotten = None;
+        while let Ok(event) = events.try_recv() {
+            if let Some(found) = announced(&event) {
+                forgotten = Some(found);
+            }
+        }
+        let (event_type, data) = forgotten.unwrap();
+        assert_eq!(event_type, APPROVAL_EXPIRED);
+        assert_eq!(data["id"], 1);
+        assert_eq!(data["service"], "close_cover");
+        assert_eq!(data["entity_id"], "cover.chambre");
+
+        let order = core.release(2).unwrap();
+        core.approval_answered(&order, true, "alice");
+        let (event_type, data) = std::iter::from_fn(|| events.try_recv().ok())
+            .find_map(|event| announced(&event))
+            .unwrap();
+        assert_eq!(event_type, APPROVAL_ANSWERED);
+        assert_eq!(data["id"], 2);
+        assert_eq!(data["approved"], true);
+        assert_eq!(data["by"], "alice");
     }
 }
