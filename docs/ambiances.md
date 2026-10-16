@@ -45,6 +45,9 @@ les valeurs restent posés par-dessus.
 
 ### Faire les images
 
+Toutes les demandes, ambiance par ambiance, sont dans le réglage du dessin (« Faire les images
+avec l'IA ») et dans le guide de l'[étape 44](images-ia.md). En bref :
+
 Toujours à partir de l'image de jour validée (jamais d'une variante, sinon le dessin dérive), en
 demandant à l'IA de garder **exactement** le cadrage :
 

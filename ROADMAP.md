@@ -89,6 +89,7 @@ Les fonctions de Home Assistant les plus utiles au quotidien, une par une, dans 
 - [x] **41. Toucher la maquette** : des zones tracées sur le dessin (le porche, la porte du garage…) ; un toucher allume, éteint, ouvre ou ferme, un appui long ouvre l'historique ; invisibles au repos, un éclat au toucher ([guide](docs/zones.md))
 - [x] **42. Une fenêtre par pièce** : toucher une pièce (sa tuile ou une zone de la maquette) ouvre ses mesures, sa température sur 24 h et tous ses appareils, avec « Éteindre les lumières » ; montée du bas sur téléphone, à tirer vers le bas pour fermer ([guide](docs/piece.md))
 - [x] **43. Effets météo animés** : sur la maquette, la pluie, les averses, l'orage et ses éclairs, la grêle, la neige, le brouillard, le vent, les étoiles par nuit claire ; selon la météo locale, imposés ou désactivés, trois intensités ; image fixe si l'appareil demande moins de mouvements ([guide](docs/effets.md))
+- [x] **44. Faire les images avec l'IA** : dans le réglage du dessin, la demande à copier pour chaque image (description de la maison, fond de jour en diorama ou en plan, nuit, les 20 ambiances, les calques des lumières et des portes, les corrections), avec l'image à joindre et le nom à donner ; la méthode de domo-blog ([guide](docs/images-ia.md))
 
 En parallèle, dès que tu me donnes les informations : commande du chauffage Somfy (résultat de
 `somfy devices`), puis de l'alarme (avec confirmation et journal).

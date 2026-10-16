@@ -2392,3 +2392,10 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
    La couleur des particules suit le style (--fx-ink, en « r g b »). */
 .house-fx { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; --fx-ink: 225 235 255; }
 [data-theme="plan"] .house-fx { --fx-ink: 38 67 196; }
+
+/* ---------- Les demandes pour l'IA (étape 44), dans le réglage du dessin. */
+.ai-prompt { width: 100%; min-height: 9rem; resize: vertical; font-family: var(--font-mono); font-size: 0.78rem; line-height: 1.45; padding: 0.6rem 0.7rem; border-radius: 12px; border: 1px solid var(--line); background: var(--card-2); color: var(--text); }
+.ai-steps { display: grid; grid-template-columns: auto 1fr; gap: 0.25rem 0.8rem; margin: 0; font-size: 0.84rem; }
+.ai-steps dt { color: var(--muted); }
+.ai-steps dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.drawing-part > .primary.small { justify-self: start; }
