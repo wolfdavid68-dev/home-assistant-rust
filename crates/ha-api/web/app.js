@@ -334,8 +334,8 @@ function renderAll() {
   // … puis, par type, les appareils qui ne sont dans aucune pièce. Les scènes
   // et les scripts sont déjà en haut, en boutons.
   // Les notifications ont leur cloche, en haut.
-  // Demain est dans la tuile de la vigilance du jour.
-  const loose = sorted.filter((s) => !used.has(s.entity_id) && s.entity_id !== VIGILANCE_TOMORROW
+  // Demain est dans la tuile de la vigilance (ou de Tempo) du jour.
+  const loose = sorted.filter((s) => !used.has(s.entity_id) && s.entity_id !== VIGILANCE_TOMORROW && s.entity_id !== TEMPO_TOMORROW
     && !["scene", "script", "persistent_notification"].includes(domainOf(s)));
   const groups = SECTIONS.map(({ title, domains, extra }) => {
     const items = loose.filter((s) => !used.has(s.entity_id) && (domains.includes(domainOf(s)) || extra?.(s)));
@@ -390,6 +390,8 @@ function alertText(state) {
   if (domain === "siren" && state.state === "on") return "sonne";
   if (domain === "alarm_control_panel" && state.state === "triggered") return "intrusion";
   if (state.entity_id === VIGILANCE_TODAY && vigilanceRank(state.state) >= 2) return vigilanceSummary(state);
+  // Un jour rouge Tempo : l'électricité coûte bien plus cher en heures pleines.
+  if ((state.entity_id === TEMPO_TODAY || state.entity_id === TEMPO_TOMORROW) && state.state === "Rouge") return "jour rouge";
   return null;
 }
 
@@ -419,7 +421,8 @@ function renderHome() {
   if (found.length === 0) {
     greeting.replaceChildren(`${hello}${who}. Tout est calme.`);
   } else if (found.length === 1) {
-    const target = found[0].state.entity_id;
+    // Demain est dans la tuile de Tempo aujourd'hui.
+    const target = found[0].state.entity_id === TEMPO_TOMORROW ? TEMPO_TODAY : found[0].state.entity_id;
     const link = el("a", { href: `#${tileId(target)}`, text: nameOf(found[0].state) });
     link.addEventListener("click", (event) => {
       event.preventDefault();
@@ -623,6 +626,7 @@ function makeReadOnly(tile) {
 
 function renderTileContent(state) {
   if (state.entity_id === VIGILANCE_TODAY) return vigilanceTile(state);
+  if (state.entity_id === TEMPO_TODAY) return tempoTile(state);
   switch (domainOf(state)) {
     case "light": return lightTile(state);
     case "cover": return coverTile(state);
@@ -1411,6 +1415,42 @@ function vigilanceTile(state) {
   return el("div", { id: tileId(state.entity_id), class: `${tileClass(state, "vigilance")} wide level-${level}` }, ...parts);
 }
 
+// Tempo (étape 60) : la couleur du jour et du lendemain, lue sur le Linky.
+const TEMPO_TODAY = "sensor.linky_tempo_aujourdhui";
+const TEMPO_TOMORROW = "sensor.linky_tempo_demain";
+// La couleur, sa classe CSS et l'adjectif (« jour rouge »).
+const TEMPO_COLORS = { Bleu: ["blue", "bleu"], Blanc: ["white", "blanc"], Rouge: ["red", "rouge"] };
+
+function tempoBadge(color) {
+  const [css, adjective] = lookup(TEMPO_COLORS, color) ?? ["unknown", ""];
+  // Comme pour la vigilance, la couleur est toujours écrite.
+  return el("span", { class: `tempo-badge tempo-${css}`, text: `Jour ${adjective}` });
+}
+
+/** « Demain : jour rouge », ou pas encore annoncé. */
+function tempoTomorrowText(tomorrow) {
+  if (lookup(TEMPO_COLORS, tomorrow.state)) return `Demain : jour ${TEMPO_COLORS[tomorrow.state][1]}`;
+  if (tomorrow.state === "unknown") return "Demain : pas encore annoncé";
+  return `Demain : ${statusText(tomorrow)}`;
+}
+
+function tempoTile(state) {
+  const color = lookup(TEMPO_COLORS, state.state);
+  const parts = [
+    tileHead(state, ICONS.bolt, "D'après le compteur"),
+    el("div", { class: "value small-value" }, color ? tempoBadge(state.state) : statusText(state)),
+  ];
+  const tomorrow = entities.get(TEMPO_TOMORROW);
+  if (tomorrow) {
+    // Demain annoncé : sa couleur aussi, pour la voir d'un coup d'œil.
+    const line = lookup(TEMPO_COLORS, tomorrow.state) ? ["Demain : ", tempoBadge(tomorrow.state)] : [tempoTomorrowText(tomorrow)];
+    parts.push(el("p", { class: "vigilance-tomorrow" }, ...line));
+  }
+  // Le jour Tempo commence à 6 h : à 3 h du matin, c'est encore celui de la veille.
+  parts.push(el("p", { class: "sub", text: "Un jour Tempo va de 6 h à 6 h." }));
+  return el("div", { id: tileId(state.entity_id), class: `${tileClass(state, "tempo")} tempo-${color?.[0] ?? "unknown"}` }, ...parts);
+}
+
 // Le thermostat : consigne (− / +), marche / arrêt, préréglages.
 // ---------------------------------------------------------------- Entrées
 // Interrupteurs, nombres, listes, boutons et minuteurs virtuels (inputs.yaml).
@@ -1925,6 +1965,7 @@ Object.assign(ICONS, {
   arrowUp: ["M12 19V5", "M6 11l6-6 6 6"],
   arrowDown: ["M12 5v14", "M18 13l-6 6-6-6"],
   square: ["M8 8h8v8H8z"],
+  bolt: ["M13 2L4 14h7l-1 8 9-12h-7z"],
 });
 const BINARY_ICONS = { motion: ICONS.motion, connectivity: ICONS.globe };
 
@@ -2562,6 +2603,10 @@ function renderEnergyNow() {
     parts.push(el("span", { class: "energy-power" }, el("strong", { text: kwhFormat.format(Number(power.state)) }), " VA en ce moment"));
   }
   if (period && period.state !== "unavailable") parts.push(el("span", { class: "badge", text: period.state }));
+  const tempo = entities.get(TEMPO_TODAY);
+  if (tempo && lookup(TEMPO_COLORS, tempo.state)) parts.push(tempoBadge(tempo.state));
+  const tomorrow = entities.get(TEMPO_TOMORROW);
+  if (tempo && tomorrow) parts.push(el("span", { class: "sub", text: tempoTomorrowText(tomorrow) }));
   box.hidden = parts.length === 0;
   box.replaceChildren(...parts);
 }

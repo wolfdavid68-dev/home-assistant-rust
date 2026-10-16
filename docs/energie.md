@@ -69,6 +69,80 @@ servent dans les automatisations comme les autres :
 Si le module se tait (câble débranché), les capteurs passent « indisponible » au bout d'une minute,
 et une **alerte de réparation** apparaît au bout d'une heure (étape 31).
 
+## Étape 60 : la couleur Tempo du jour et du lendemain
+
+Avec un contrat **Tempo**, le prix du kWh dépend de la couleur du jour : bleu (le moins cher),
+blanc, ou rouge (22 jours par an, l'hiver, très cher en heures pleines). La couleur du lendemain est
+annoncée la veille. Le compteur la reçoit, et l'envoie dans la TIC : le serveur la lit **sur le
+compteur**, sans Internet, sans compte et sans service extérieur.
+
+| Entité                          | Valeurs                                | D'où elle vient                                   |
+| ------------------------------- | -------------------------------------- | ------------------------------------------------- |
+| `sensor.linky_tempo_aujourdhui` | `Bleu`, `Blanc`, `Rouge`               | historique : la période (`PTEC` = `HPJR`…) ; standard : le registre d'état `STGE` (bits 24-25) |
+| `sensor.linky_tempo_demain`     | `Bleu`, `Blanc`, `Rouge`, ou `unknown` | historique : `DEMAIN` ; standard : `STGE` (bits 26-27) |
+
+- **Un jour Tempo va de 6 h à 6 h** le lendemain : à 3 h du matin, « aujourd'hui » est encore la
+  couleur de la veille. Les heures creuses vont de 22 h à 6 h.
+- Demain vaut `unknown` tant que le compteur n'a pas reçu la couleur : elle arrive dans la journée,
+  à une heure qui dépend du compteur.
+- Ces deux capteurs n'existent qu'avec un contrat Tempo : hors Tempo, le compteur n'annonce aucune
+  couleur, et rien n'est publié.
+- Un module qui publie sur MQTT (ZLinky, ESPHome…) a ses propres capteurs : ceux-ci viennent
+  seulement de `HA_TELEINFO`.
+
+Sur le tableau de bord, la tuile **Tempo aujourd'hui** montre la couleur du jour et celle de demain,
+et le panneau **Énergie** les rappelle à côté de la puissance. Un **jour rouge**, aujourd'hui ou
+demain, apparaît dans « ce qui demande ton attention » (et sur l'écran de veille). La couleur est
+toujours écrite en toutes lettres, pas seulement dessinée.
+
+Les capteurs servent dans les automatisations, comme dans Home Assistant avec l'intégration
+« RTE Tempo » (ici sans Internet) :
+
+```yaml
+# La veille d'un jour rouge, prévenir sur le téléphone (étape 50).
+- id: tempo_demain_rouge
+  alias: Demain, jour rouge
+  triggers:
+    - trigger: state
+      entity_id: sensor.linky_tempo_demain
+      to: Rouge
+  actions:
+    - action: notify.send_message
+      target: {entity_id: notify.appli}
+      data:
+        title: Demain, jour rouge
+        message: L'électricité coûtera bien plus cher de 6 h à 22 h. Lance les machines cette nuit.
+        tag: tempo
+
+# Un jour rouge, le chauffage passe en éco (étape 16) ; il revient au confort après.
+- id: tempo_chauffage
+  alias: Chauffage selon Tempo
+  triggers:
+    - trigger: state
+      entity_id: sensor.linky_tempo_aujourdhui
+      to: [Bleu, Blanc, Rouge]
+  actions:
+    - if:
+        - condition: state
+          entity_id: sensor.linky_tempo_aujourdhui
+          state: Rouge
+      then:
+        - action: climate.set_preset_mode
+          target: {entity_id: climate.salon}
+          data: {preset_mode: eco}
+      else:
+        - action: climate.set_preset_mode
+          target: {entity_id: climate.salon}
+          data: {preset_mode: confort}
+```
+
+La liste `to: [Bleu, Blanc, Rouge]` ignore `unavailable` (module débranché) : le chauffage ne
+change pas pour une coupure du module.
+
+Pour le coût dans le bilan, mets dans `energy.yaml` les six index Tempo
+(`sensor.linky_tempo_bleu_creuses`, `sensor.linky_tempo_bleu_pleines`… jusqu'à
+`sensor.linky_tempo_rouge_pleines`), chacun avec le prix de ta facture.
+
 ## Le bilan énergétique
 
 Le bouton **Énergie** (en haut, ou dans la barre du bas sur téléphone) montre :
@@ -122,7 +196,7 @@ L'API : `GET /api/energy?days=30` (il faut le droit de lire l'historique : pas u
 ## Comment c'est construit
 
 - `crates/ha-teleinfo` (nouveau) : `frame.rs` décode les trames, `meter.rs` les traduit en index,
-  puissance et période, `lib.rs` lit la source et publie les capteurs ;
+  puissance, période et couleurs Tempo (étape 60), `lib.rs` lit la source et publie les capteurs ;
 - `crates/ha-energy` (nouveau) : `energy.yaml` et le calcul du bilan à partir des statistiques ;
 - `crates/ha-api` : la route `/api/energy` ; `web/app.js` : le panneau Énergie.
 
