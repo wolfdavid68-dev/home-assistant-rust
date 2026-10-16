@@ -58,7 +58,7 @@ pub(crate) struct ProcessBody {
 }
 
 /// Les appareils visibles par ce compte, avec leur nom et leur pièce.
-fn devices(state: &ApiState, auth: &Authenticated) -> Vec<Device> {
+pub(crate) fn devices(state: &ApiState, auth: &Authenticated) -> Vec<Device> {
     state
         .core
         .states
@@ -90,10 +90,6 @@ fn devices(state: &ApiState, auth: &Authenticated) -> Vec<Device> {
 }
 
 fn reply(kind: &str, speech: &str) -> Json<Value> {
-    let mut speech = speech.to_owned();
-    if let Some(first) = speech.chars().next() {
-        speech.replace_range(..first.len_utf8(), &first.to_uppercase().to_string());
-    }
     Json(json!({
         "response": {
             "response_type": kind,
@@ -111,19 +107,33 @@ pub(crate) async fn process(
     body: Bytes,
 ) -> Result<Json<Value>, ApiError> {
     let ProcessBody { text, .. } = parse_json(&body)?;
-    let devices = devices(&state, &auth);
-    let understood = match ha_assist::understand(&text, &devices) {
+    let (kind, speech) = converse(&state, &auth, client, &text, false).await;
+    Ok(reply(kind, &speech))
+}
+
+/// Comprend `text` et donne les ordres. Renvoie le type de réponse
+/// (`action_done`, `query_answer`, `error`) et la phrase. `agent` : la
+/// phrase vient d'un assistant IA (voir `rest::execute`).
+pub(crate) async fn converse(
+    state: &ApiState,
+    auth: &Authenticated,
+    client: SocketAddr,
+    text: &str,
+    agent: bool,
+) -> (&'static str, String) {
+    let devices = devices(state, auth);
+    let understood = match ha_assist::understand(text, &devices) {
         Ok(understood) => understood,
         Err(not_understood) => {
             tracing::info!(
                 "assist : phrase de {} non comprise ({not_understood:?})",
                 auth.user.username
             );
-            return Ok(reply("error", &not_understood.message()));
+            return ("error", not_understood.message());
         }
     };
     let orders = match understood {
-        Understood::Answer(answer) => return Ok(reply("query_answer", &answer)),
+        Understood::Answer(answer) => return ("query_answer", capitalized(&answer)),
         Understood::Orders(orders) => orders,
     };
     let mut done = Vec::new();
@@ -140,13 +150,14 @@ pub(crate) async fn process(
             summary = format!("{summary} {amount}");
         }
         match execute(
-            &state,
-            &auth,
+            state,
+            auth,
             client,
             &order.domain,
             &order.service,
             order.entity_id,
             order.data,
+            agent,
         )
         .await
         {
@@ -173,12 +184,20 @@ pub(crate) async fn process(
     } else {
         "error"
     };
-    Ok(reply(kind, &parts.join(" ")))
+    (kind, parts.join(" "))
+}
+
+/// Une majuscule au début.
+fn capitalized(text: &str) -> String {
+    let mut chars = text.chars();
+    chars.next().map_or_else(String::new, |first| {
+        first.to_uppercase().chain(chars).collect()
+    })
 }
 
 /// Ce qu'une erreur veut dire, pour la personne (jamais le détail d'une
 /// erreur interne).
-fn explain(error: ApiError) -> String {
+pub(crate) fn explain(error: ApiError) -> String {
     match error {
         ApiError::BadRequest(message)
         | ApiError::Forbidden(message)

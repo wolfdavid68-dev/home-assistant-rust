@@ -527,7 +527,11 @@ pub(crate) async fn call_service(
         Some(Value::String(entity_id)) => parse_entity_id(&entity_id)?,
         _ => return Err(ApiError::BadRequest("champ « entity_id » attendu".into())),
     };
-    match execute(&state, &auth, client, &domain, &service, entity_id, data).await? {
+    match execute(
+        &state, &auth, client, &domain, &service, entity_id, data, false,
+    )
+    .await?
+    {
         Outcome::Held(reason) => Ok((
             StatusCode::ACCEPTED,
             Json(json!({
@@ -554,7 +558,15 @@ pub(crate) enum Outcome {
 /// Donne un ordre au nom de `auth`, avec toutes les vérifications : droits
 /// du compte, mot de passe redemandé pour ouvrir la maison, garde,
 /// intégration en panne, réponse de l'appareil. Le chemin de
-/// `POST /api/services` et d'Assist.
+/// `POST /api/services`, d'Assist et des assistants IA (MCP).
+///
+/// `agent` : l'ordre vient d'un assistant IA (étape 55). Il ne peut jamais
+/// ouvrir la maison, et la garde le retient quel que soit le rôle de son
+/// compte, comme un ordre à la voix.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "le chemin commun de tous les ordres"
+)]
 pub(crate) async fn execute(
     state: &ApiState,
     auth: &Authenticated,
@@ -563,6 +575,7 @@ pub(crate) async fn execute(
     service: &str,
     entity_id: EntityId,
     data: Attributes,
+    agent: bool,
 ) -> Result<Outcome, ApiError> {
     if !roles::can_control_with_members(&auth.user, &entity_id, &state.core.states) {
         tracing::warn!(
@@ -575,15 +588,24 @@ pub(crate) async fn execute(
             auth.user.role.label()
         )));
     }
-    if roles::needs_confirmation(domain, service)
-        && crate::automations::confirmation_left(state, &auth.token).is_none()
-    {
-        return Err(ApiError::ConfirmationRequired);
+    if roles::needs_confirmation(domain, service) {
+        if agent {
+            return Err(ApiError::Forbidden(
+                "un assistant IA ne peut pas ouvrir la maison (serrure, alarme)".into(),
+            ));
+        }
+        if crate::automations::confirmation_left(state, &auth.token).is_none() {
+            return Err(ApiError::ConfirmationRequired);
+        }
     }
-    let origin = ha_core::Origin::User(auth.user.username.clone());
-    // Un invité, dans une pièce protégée (ou pendant les heures calmes) :
-    // l'ordre attend qu'un membre de la famille le valide.
-    if !auth.user.can(Permission::AllDevices)
+    let origin = if agent {
+        ha_core::Origin::Agent(auth.user.username.clone())
+    } else {
+        ha_core::Origin::User(auth.user.username.clone())
+    };
+    // Un invité ou un assistant IA, dans une pièce protégée (ou pendant les
+    // heures calmes) : l'ordre attend qu'un membre de la famille le valide.
+    if (agent || !auth.user.can(Permission::AllDevices))
         && let Some(reason) = state.core.guard_reason(&entity_id)
     {
         state

@@ -354,27 +354,33 @@ fn find<'a>(
         .max_by_key(|area| keywords(&normalize(area)).len());
     let area_words: Vec<String> = area.map(|a| keywords(&normalize(a))).unwrap_or_default();
 
-    // 1. Par le nom : tous ses mots sont dans la phrase. Un nom qui n'est
-    //    que celui de la pièce (« Salon ») ne compte que si le type est dit.
-    let named: Vec<&Device> = devices
+    // 1. Par le nom, ou par l'identifiant (« salon » dans `cover.salon`) :
+    //    tous ses mots sont dans la phrase. Un nom qui n'est que celui de la
+    //    pièce (« Salon ») ne compte que si le type est dit.
+    let matched = |device: &Device| -> Option<Vec<String>> {
+        let object = device.state.entity_id().object_id().replace('_', " ");
+        [
+            keywords(&normalize(&device.name)),
+            keywords(&normalize(&object)),
+        ]
+        .into_iter()
+        .filter(|wanted| {
+            !wanted.is_empty() && wanted.iter().all(|word| present.contains(word.as_str()))
+        })
+        .max_by_key(Vec::len)
+    };
+    let named: Vec<(&Device, usize)> = devices
         .iter()
         .filter(allowed)
-        .filter(|device| all_present(&device.name))
-        .filter(|device| {
-            hint.is_some() || {
-                let name = keywords(&normalize(&device.name));
-                !name.iter().all(|word| area_words.contains(word))
-            }
-        })
+        .filter_map(|device| matched(device).map(|words| (device, words)))
+        .filter(|(_, words)| hint.is_some() || !words.iter().all(|word| area_words.contains(word)))
+        .map(|(device, words)| (device, words.len()))
         .collect();
-    if let Some(longest) = named
-        .iter()
-        .map(|device| keywords(&normalize(&device.name)).len())
-        .max()
-    {
+    if let Some(longest) = named.iter().map(|(_, len)| *len).max() {
         let devices: Vec<&Device> = named
             .into_iter()
-            .filter(|device| keywords(&normalize(&device.name)).len() == longest)
+            .filter(|(_, len)| *len == longest)
+            .map(|(device, _)| device)
             .collect();
         return Ok(Target { devices });
     }
@@ -1000,6 +1006,28 @@ mod tests {
             panic!()
         };
         assert_eq!(amount(&orders[0]), None);
+    }
+
+    #[test]
+    fn a_device_without_a_name_is_found_by_its_identifier() {
+        let core = Core::new();
+        let devices = vec![
+            device(&core, "cover.salon", "open", "cover.salon", None, json!({})),
+            device(
+                &core,
+                "cover.garage",
+                "open",
+                "cover.garage",
+                None,
+                json!({}),
+            ),
+        ];
+        let Understood::Orders(orders) = understand("ferme le volet du salon", &devices).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(orders.len(), 1);
+        assert_eq!(orders[0].entity_id.as_str(), "cover.salon");
     }
 
     #[test]

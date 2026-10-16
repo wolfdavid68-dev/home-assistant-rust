@@ -100,6 +100,7 @@ Les fonctions de Home Assistant les plus utiles au quotidien, une par une, dans 
 - [x] **52. Les notifications se rangent toutes seules** : un ordre validé, refusé ou oublié remplace « Ordre à valider » sur tous les téléphones (« alice a validé : fermer Volet chambre ») ; une alerte grave réglée devient « Résolu » ; sans faire sonner ([guide](docs/notifications-navigateur.md#étape-52--les-notifications-se-rangent-toutes-seules))
 - [x] **53. Des ordres vérifiés avant l'envoi** : position, consigne, luminosité, choix d'une liste… dans la plage que l'appareil annonce, sinon refusés tout de suite avec la raison (« consigne entre 7 et 25 (reçu 40) ») ; vaut aussi pour les automatisations, Alexa et la garde ([guide](docs/ordres.md#étape-53--vérifié-avant-lenvoi))
 - [x] **54. Assist** : commander avec une phrase en français (« ferme le volet de la chambre », « mets le chauffage à 21 degrés », « qui est à la maison ? »), comprise sur le serveur sans cloud ; mêmes règles qu'un toucher (droits, garde, mot de passe, valeurs vérifiées) ([guide](docs/assist.md))
+- [x] **55. Un assistant IA branché par MCP** : Claude (ou un autre) lit l'état de la maison et la pilote, comme le serveur MCP de Home Assistant et les agents de Moli OS ; ses ordres dans une pièce protégée attendent un humain, il ne peut jamais ouvrir la maison, 60 appels par minute, tout est audité ([guide](docs/mcp.md))
 
 En parallèle, dès que tu me donnes les informations : commande du chauffage Somfy (résultat de
 `somfy devices`), puis de l'alarme (avec confirmation et journal).

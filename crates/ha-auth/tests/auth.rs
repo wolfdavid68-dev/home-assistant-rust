@@ -386,3 +386,48 @@ async fn an_unknown_role_in_the_database_gives_the_fewest_rights() {
         ha_auth::Role::Admin
     );
 }
+
+#[tokio::test]
+async fn a_program_token_works_without_a_password_and_dies_with_it() {
+    let auth = setup().await;
+    let issued = auth
+        .issue_program_token("david", Duration::from_hours(90 * 24))
+        .await
+        .unwrap()
+        .unwrap();
+    let left = issued
+        .expires_at
+        .duration_since(std::time::SystemTime::now())
+        .unwrap();
+    assert!(left > Duration::from_hours(89 * 24) && left <= Duration::from_hours(90 * 24));
+    assert_eq!(
+        auth.authenticate(&issued.token)
+            .await
+            .unwrap()
+            .unwrap()
+            .username,
+        "david"
+    );
+    // Bornée à un an.
+    let long = auth
+        .issue_program_token("david", Duration::from_hours(5000 * 24))
+        .await
+        .unwrap()
+        .unwrap();
+    let left = long
+        .expires_at
+        .duration_since(std::time::SystemTime::now())
+        .unwrap();
+    assert!(left <= Duration::from_hours(365 * 24));
+    assert!(
+        auth.issue_program_token("inconnu", Duration::from_hours(24))
+            .await
+            .unwrap()
+            .is_none()
+    );
+    // Changer le mot de passe révoque le jeton.
+    auth.set_password("david", "un tout autre mot de passe long")
+        .await
+        .unwrap();
+    assert!(auth.authenticate(&issued.token).await.unwrap().is_none());
+}

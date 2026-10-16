@@ -26,6 +26,7 @@
 //! | PATCH / DELETE | `/api/push/subscriptions/{id}` | Change ce qu'il reçoit / le retire |
 //! | POST | `/api/push/test` | Envoie un essai à ses appareils |
 //! | POST | `/api/conversation/process` | Assist : une phrase en français (« ferme le volet de la chambre ») |
+//! | POST | `/api/mcp` | Un assistant IA branché par MCP (étape 55) |
 //! | POST | `/api/push/action` | Un bouton touché sur une notification (sans connexion : le ticket en tient lieu) |
 //! | GET | `/api/websocket` | API WebSocket (authentification dans le 1er message) |
 //! | GET | `/` | Tableau de bord web (page publique ; les données demandent un jeton) |
@@ -36,6 +37,7 @@ mod automations;
 mod drawing;
 mod error;
 mod json;
+mod mcp;
 mod push;
 mod rest;
 mod roles;
@@ -87,6 +89,8 @@ pub struct ApiState {
     /// Les boutons des notifications du navigateur (étape 51) : partagés
     /// avec le service qui les envoie.
     pub push_tickets: ha_push::Tickets,
+    /// Les appels des assistants IA (MCP, étape 55), pour les limiter.
+    mcp_limiter: mcp::Limiter,
     shutdown: CancellationToken,
 }
 
@@ -110,6 +114,7 @@ impl ApiState {
             confirmations: Mutex::default(),
             metrics: system::Metrics::default(),
             push_tickets: ha_push::Tickets::default(),
+            mcp_limiter: mcp::Limiter::default(),
             shutdown,
         })
     }
@@ -171,6 +176,7 @@ pub fn router(state: Arc<ApiState>) -> Router {
         .route("/api/push/test", post(push::test))
         .route("/api/push/action", post(push::action))
         .route("/api/conversation/process", post(assist::process))
+        .route("/api/mcp", post(mcp::handle).get(mcp::no_stream))
         .route("/api/home/drawing", get(drawing::get).put(drawing::put))
         .route(
             "/api/home/images/{name}",

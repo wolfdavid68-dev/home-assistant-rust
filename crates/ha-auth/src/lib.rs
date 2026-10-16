@@ -246,7 +246,26 @@ impl Auth {
         ip: IpAddr,
     ) -> Result<IssuedToken, AuthError> {
         let user_id = self.check_credentials(username, password, code, ip).await?;
-        self.issue_token(user_id).await
+        self.issue_token(user_id, self.token_lifetime).await
+    }
+
+    /// Un jeton pour un programme (un assistant IA branché par MCP, étape
+    /// 55), sans mot de passe : seule la ligne de commande du serveur en
+    /// crée. `lifetime` : 1 à 365 jours. `None` si le compte n'existe pas.
+    pub async fn issue_program_token(
+        &self,
+        username: &str,
+        lifetime: Duration,
+    ) -> Result<Option<IssuedToken>, AuthError> {
+        let lifetime = lifetime.clamp(Duration::from_hours(24), Duration::from_hours(365 * 24));
+        let user_id: Option<i64> = sqlx::query_scalar("SELECT id FROM users WHERE username = ?1")
+            .bind(username)
+            .fetch_optional(&self.pool)
+            .await?;
+        match user_id {
+            Some(user_id) => Ok(Some(self.issue_token(user_id, lifetime).await?)),
+            None => Ok(None),
+        }
     }
 
     /// Confirme l'identité d'un utilisateur **déjà connecté**, avant une
@@ -476,10 +495,14 @@ impl Auth {
         Ok(deleted)
     }
 
-    async fn issue_token(&self, user_id: i64) -> Result<IssuedToken, AuthError> {
+    async fn issue_token(
+        &self,
+        user_id: i64,
+        lifetime: Duration,
+    ) -> Result<IssuedToken, AuthError> {
         let token = token::generate_token()?;
         let now = SystemTime::now();
-        let expires_at = now + self.token_lifetime;
+        let expires_at = now + lifetime;
         sqlx::query(
             "INSERT INTO access_tokens (user_id, token_hash, created_at, expires_at)
              VALUES (?1, ?2, ?3, ?4)",
