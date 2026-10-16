@@ -366,6 +366,37 @@ async fn set_state(
 
     let (calls, promised) = hue::service_calls(entity_id, command);
     let source = client.ip().to_string();
+    // Pièce protégée, heures calmes : la voix ne suffit pas, l'ordre attend
+    // qu'un membre de la famille le valide (voir `ha_core::guard`). Alexa
+    // répond que l'appareil ne répond pas.
+    if let Some(reason) = bridge.core.guard_reason(entity_id) {
+        for (domain, service, data) in calls {
+            if let Err(error) = bridge.core.hold(
+                ha_core::Origin::Voice,
+                domain,
+                service,
+                entity_id.clone(),
+                data,
+                reason.clone(),
+            ) {
+                tracing::warn!("Alexa : ordre refusé : {error}");
+                continue;
+            }
+            tracing::info!("Alexa : {domain}.{service} sur {entity_id} retenu : {reason}");
+            let detail = format!("{domain}.{service}");
+            let record = AuditRecord {
+                actor: "alexa",
+                action: "held",
+                target: Some(entity_id.as_str()),
+                detail: Some(&detail),
+                source: &source,
+            };
+            if let Err(error) = bridge.store.audit(record).await {
+                tracing::error!("journal d'audit : écriture impossible ({error})");
+            }
+        }
+        return hue_json(&hue::error_response(901, &address, "held for approval"));
+    }
     for (domain, service, data) in calls {
         if let Err(error) = bridge.core.call_service_from(
             ha_core::Origin::Voice,

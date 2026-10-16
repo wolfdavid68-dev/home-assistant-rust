@@ -40,6 +40,7 @@ utilisation :
   ha-server automations list      liste les automatisations (fichier et éditeur)
   ha-server automations delete <id>  supprime une automatisation de l'éditeur
   ha-server areas check           vérifie le fichier des pièces
+  ha-server guard check           vérifie la garde (pièces protégées, heures calmes)
   ha-server alexa check           vérifie le fichier des appareils pour Alexa
   ha-server thermostats check     vérifie le fichier des thermostats
   ha-server persons check         vérifie le fichier des personnes
@@ -771,6 +772,36 @@ pub fn check_areas(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
     println!("{} : {} pièce(s) valide(s)", path.display(), areas.len());
     for area in &areas {
         println!("  - {} ({} appareil(s))", area.name, area.entities.len());
+    }
+    Ok(())
+}
+
+/// `ha-server guard check` : vérifie la garde (`guard.yaml`).
+pub fn check_guard(areas: &std::path::Path, guard: &std::path::Path) -> Result<(), Box<dyn Error>> {
+    let areas = ha_areas::load(areas)?;
+    let policy = ha_areas::guard::load(guard, &areas)?;
+    if policy.is_off() {
+        println!(
+            "{} : absent ou vide (la garde ne retient rien)",
+            guard.display()
+        );
+        return Ok(());
+    }
+    println!("{} : valide", guard.display());
+    let mut protected: Vec<_> = policy.protected.iter().collect();
+    protected.sort();
+    for (entity_id, room) in protected {
+        println!("  - {entity_id} ({room}) protégé");
+    }
+    match policy.quiet_hours {
+        Some(hours) if policy.protected.is_empty() => {
+            println!("  heures calmes {} : toute la maison", hours.describe());
+        }
+        Some(hours) => println!(
+            "  heures calmes {} : la protection ne vaut que pendant ces heures",
+            hours.describe()
+        ),
+        None => println!("  pas d'heures calmes : la protection vaut toute la journée"),
     }
     Ok(())
 }

@@ -8,6 +8,7 @@ pub mod commands;
 mod entity_id;
 mod error;
 mod event;
+pub mod guard;
 pub mod integrations;
 mod origin;
 mod state;
@@ -18,6 +19,7 @@ pub use commands::{COMMAND_TTL, CommandResult, Commands};
 pub use entity_id::{EntityId, MAX_ENTITY_ID_LEN, slugify};
 pub use error::CoreError;
 pub use event::{DEFAULT_BUS_CAPACITY, Event, EventBus};
+pub use guard::{Guard, HeldOrder, Policy, QuietHours};
 pub use integrations::{Health, IntegrationStatus, Integrations, supervise};
 pub use origin::Origin;
 pub use state::{Attributes, MAX_STATE_LEN, State};
@@ -64,6 +66,8 @@ pub struct Core {
     pub integrations: Integrations,
     /// Les ordres en attente de réponse (voir [`commands`]).
     pub commands: Commands,
+    /// Les pièces protégées et les heures calmes (voir [`guard`]).
+    pub guard: Guard,
 }
 
 impl Core {
@@ -76,6 +80,7 @@ impl Core {
             states,
             integrations: Integrations::default(),
             commands: Commands::default(),
+            guard: Guard::default(),
         }
     }
 }

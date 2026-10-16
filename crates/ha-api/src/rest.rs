@@ -521,7 +521,7 @@ pub(crate) async fn call_service(
     auth: Authenticated,
     Path((domain, service)): Path<(String, String)>,
     body: Bytes,
-) -> Result<Json<Value>, ApiError> {
+) -> Result<Response, ApiError> {
     let mut data: Attributes = parse_json(&body)?;
     let entity_id = match data.remove("entity_id") {
         Some(Value::String(entity_id)) => parse_entity_id(&entity_id)?,
@@ -543,6 +543,45 @@ pub(crate) async fn call_service(
     {
         return Err(ApiError::ConfirmationRequired);
     }
+    let origin = ha_core::Origin::User(auth.user.username.clone());
+    // Un invité, dans une pièce protégée (ou pendant les heures calmes) :
+    // l'ordre attend qu'un membre de la famille le valide.
+    if !auth.user.can(Permission::AllDevices)
+        && let Some(reason) = state.core.guard_reason(&entity_id)
+    {
+        state
+            .core
+            .hold(
+                origin,
+                &domain,
+                &service,
+                entity_id.clone(),
+                data,
+                reason.clone(),
+            )
+            .map_err(|error| ApiError::BadRequest(error.to_string()))?;
+        tracing::info!(
+            "{domain}.{service} sur {entity_id} retenu ({}) : {reason}",
+            auth.user.username
+        );
+        audit(
+            &state,
+            &auth.user.username,
+            "held",
+            Some(entity_id.as_str()),
+            Some(&format!("{domain}.{service}")),
+            client,
+        )
+        .await;
+        return Ok((
+            StatusCode::ACCEPTED,
+            Json(json!({
+                "result": "held",
+                "message": format!("ordre en attente de validation : {reason}"),
+            })),
+        )
+            .into_response());
+    }
     // L'intégration de l'appareil est en panne : l'ordre ne partirait nulle
     // part (et pourrait s'exécuter bien plus tard). On le dit tout de suite.
     if let Some(down) = state.core.owner_down(&entity_id) {
@@ -552,7 +591,6 @@ pub(crate) async fn call_service(
             clock(down.since)
         )));
     }
-    let origin = ha_core::Origin::User(auth.user.username.clone());
     // Hue, Somfy : on attend de savoir si l'appareil a accepté.
     let answering = state.core.answering_owner(&entity_id);
     let reply = if answering.is_some() {
@@ -584,12 +622,12 @@ pub(crate) async fn call_service(
     .await;
     let (Some((id, reply)), Some(owner)) = (reply, answering) else {
         // Envoyé ; l'appareil confirmera en changeant d'état.
-        return Ok(Json(json!({"result": "sent"})));
+        return Ok(Json(json!({"result": "sent"})).into_response());
     };
     // Un peu plus que la durée de vie de l'ordre : reçu à temps, il a encore
     // quelques secondes pour arriver jusqu'à l'appareil.
     match tokio::time::timeout(ha_core::COMMAND_TTL + ANSWER_MARGIN, reply).await {
-        Ok(Ok(Ok(()))) => Ok(Json(json!({"result": "done"}))),
+        Ok(Ok(Ok(()))) => Ok(Json(json!({"result": "done"})).into_response()),
         Ok(Ok(Err(refused))) => Err(ApiError::DeviceRefused(refused)),
         Ok(Err(_)) => Err(ApiError::DeviceRefused(format!(
             "{} n'a pas répondu",
@@ -603,6 +641,86 @@ pub(crate) async fn call_service(
             )))
         }
     }
+}
+
+/// `GET /api/approvals` : les ordres retenus par la garde, qui attendent
+/// d'être validés.
+pub(crate) async fn approvals(
+    State(state): State<Arc<ApiState>>,
+    auth: Authenticated,
+) -> Result<Json<Value>, ApiError> {
+    roles::require(&auth.user, Permission::AllDevices)?;
+    let list: Vec<Value> = state
+        .core
+        .held_orders()
+        .into_iter()
+        .map(|order| {
+            json!({
+                "id": order.id,
+                "domain": order.domain,
+                "service": order.service,
+                "entity_id": order.entity_id.as_str(),
+                "by": order.origin.describe(),
+                "reason": order.reason,
+                "held_since": format_timestamp(order.held_since),
+            })
+        })
+        .collect();
+    Ok(Json(json!({ "approvals": list })))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ApprovalBody {
+    approve: bool,
+}
+
+/// `POST /api/approvals/{id}` avec `{"approve": true}` : valide un ordre
+/// retenu (il part, comme s'il venait d'être donné) ou le refuse.
+pub(crate) async fn answer_approval(
+    State(state): State<Arc<ApiState>>,
+    ConnectInfo(client): ConnectInfo<SocketAddr>,
+    auth: Authenticated,
+    Path(id): Path<u64>,
+    body: Bytes,
+) -> Result<Json<Value>, ApiError> {
+    roles::require(&auth.user, Permission::AllDevices)?;
+    let ApprovalBody { approve } = parse_json(&body)?;
+    let order = state.core.release(id).ok_or(ApiError::NotFound)?;
+    let call = format!("{}.{}", order.domain, order.service);
+    let by = order.origin.describe().unwrap_or_default();
+    if approve {
+        // L'ordre garde son origine (« à la voix ») : le journal de bord dira
+        // qui l'a donné ; le journal d'audit, qui l'a validé.
+        state
+            .core
+            .call_service_from(
+                order.origin,
+                &order.domain,
+                &order.service,
+                order.entity_id.clone(),
+                order.data,
+            )
+            .map_err(|error| ApiError::BadRequest(error.to_string()))?;
+    }
+    let verdict = if approve { "validé" } else { "refusé" };
+    tracing::info!(
+        "{call} sur {} {verdict} par {}",
+        order.entity_id,
+        auth.user.username
+    );
+    audit(
+        &state,
+        &auth.user.username,
+        if approve { "approve" } else { "deny" },
+        Some(order.entity_id.as_str()),
+        Some(format!("{call} {by}").trim_end()),
+        client,
+    )
+    .await;
+    Ok(Json(
+        json!({ "result": if approve { "sent" } else { "refused" } }),
+    ))
 }
 
 /// Le temps laissé à l'appareil, au-delà de la durée de vie de l'ordre.

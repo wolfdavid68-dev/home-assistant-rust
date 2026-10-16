@@ -209,6 +209,12 @@ async function callService(domain, service, data) {
     }
     flash(typeof body.error === "string" ? `${body.error}.` : "Ton compte ne permet pas cette commande.");
     unmarkPending(data.entity_id);
+  } else if (response.status === 202) {
+    // Pièce protégée, heures calmes : l'ordre attend qu'un membre de la
+    // famille le valide.
+    const body = await response.json().catch(() => ({}));
+    flash(typeof body.message === "string" ? `${body.message}.` : "Ordre en attente de validation.");
+    unmarkPending(data.entity_id);
   } else if ([502, 503, 504].includes(response.status)) {
     // L'appareil a refusé, son intégration est en panne, ou il n'a pas
     // répondu : on le dit, plutôt que de laisser la tuile clignoter.
@@ -2372,8 +2378,9 @@ async function api(method, url, body) {
 }
 
 // ---------------------------------------------------------------- Notifications
-// Les entités persistent_notification.* : celles des automatisations, et les
-// alertes de réparation du serveur (kind = "repair").
+// Les entités persistent_notification.* : celles des automatisations, les
+// alertes de réparation du serveur (kind = "repair"), et les ordres retenus
+// par la garde, à valider (kind = "approval").
 
 function noticeStates() {
   return [...entities.values()].filter((state) => domainOf(state) === "persistent_notification");
@@ -2384,12 +2391,15 @@ function renderNotices() {
   const active = all
     .filter((state) => state.state === "notifying")
     .sort((a, b) => {
-      const rank = (s) => (s.attributes.kind === "repair" ? lookup({ error: 0, warning: 1 }, s.attributes.severity) ?? 2 : 3);
+      const rank = (s) => {
+        if (s.attributes.kind === "approval") return 0;
+        return s.attributes.kind === "repair" ? (lookup({ error: 1, warning: 2 }, s.attributes.severity) ?? 3) : 4;
+      };
       return rank(a) - rank(b) || String(b.attributes.created_at).localeCompare(String(a.attributes.created_at));
     });
   const bell = $("#open-notices");
   bell.hidden = active.length === 0;
-  bell.classList.toggle("urgent", active.some((s) => s.attributes.kind === "repair" && s.attributes.severity === "error"));
+  bell.classList.toggle("urgent", active.some((s) => s.attributes.kind === "approval" || (s.attributes.kind === "repair" && s.attributes.severity === "error")));
   $("#notice-count").textContent = active.length > 9 ? "9+" : String(active.length);
   bell.setAttribute("aria-label", `Notifications (${active.length})`);
   if (!$("#notices").open) return;
@@ -2405,7 +2415,8 @@ function renderNotices() {
 
 function noticeItem(state) {
   const repair = state.attributes.kind === "repair";
-  const severity = repair ? String(state.attributes.severity ?? "warning") : "info";
+  const approval = state.attributes.kind === "approval";
+  const severity = repair ? String(state.attributes.severity ?? "warning") : approval ? "approval" : "info";
   const head = el("div", { class: "notice-head" }, el("strong", { text: String(state.attributes.title ?? "Notification") }));
   if (repair) head.append(el("span", { class: `badge ${severity === "error" ? "bad" : ""}`, text: "à réparer" }));
   const item = el("li", { class: `notice-item sev-${severity}` }, head, el("p", { class: "notice-message", text: String(state.attributes.message ?? "") }));
@@ -2413,7 +2424,9 @@ function noticeItem(state) {
   if (typeof state.attributes.created_at === "string") {
     meta.append(el("small", { text: `il y a ${ago(state.attributes.created_at)}` }));
   }
-  if (canControl(state)) {
+  if (approval && Number.isSafeInteger(state.attributes.approval_id)) {
+    meta.append(approvalButtons(state.attributes.approval_id));
+  } else if (canControl(state)) {
     const dismiss = el("button", { type: "button", class: "ghost small", text: repair ? "Ignorer" : "Retirer" });
     dismiss.addEventListener("click", () => {
       dismiss.disabled = true;
@@ -2423,6 +2436,23 @@ function noticeItem(state) {
   }
   item.append(meta);
   return item;
+}
+
+/** « Valider » / « Refuser » un ordre retenu par la garde. */
+function approvalButtons(id) {
+  const approve = el("button", { type: "button", class: "primary small", text: "Valider" });
+  const deny = el("button", { type: "button", class: "ghost small", text: "Refuser" });
+  const answer = async (yes) => {
+    approve.disabled = true;
+    deny.disabled = true;
+    const { status, data } = await api("POST", `/api/approvals/${id}`, { approve: yes });
+    if (status === 404) flash("Cet ordre n'attend plus : déjà traité, ou oublié.");
+    else if (status !== 200) flash(typeof data.error === "string" ? `${data.error}.` : "Réponse impossible.");
+    else flash(yes ? "Ordre validé : il est parti." : "Ordre refusé.");
+  };
+  approve.addEventListener("click", () => answer(true));
+  deny.addEventListener("click", () => answer(false));
+  return el("span", { class: "approval-actions" }, deny, approve);
 }
 
 $("#open-notices").addEventListener("click", () => {

@@ -24,3 +24,9 @@
   entities:
     - entity: binary_sensor.porte_entree
       name: Porte d'entrée
+
+- area: Chambre
+  entities:
+    - entity: light.chambre
+      name: Lampe de chevet
+    - cover.volet_chambre

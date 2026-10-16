@@ -20,6 +20,10 @@
 //! `persistent_notification.dismiss` la ferme. Une alerte de réparation
 //! fermée est seulement **ignorée** : elle disparaît pour de bon quand le
 //! problème est réglé.
+//!
+//! Les ordres retenus par la garde (voir `ha_core::guard`) s'affichent aussi
+//! ici, en notifications « à valider » (`approval_<numéro>`) : les fermer
+//! revient à refuser l'ordre.
 
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
@@ -37,6 +41,8 @@ use tracing::{info, warn};
 pub const DOMAIN: &str = "persistent_notification";
 /// Le début de l'identifiant des alertes de réparation : réservé au serveur.
 pub const REPAIR_PREFIX: &str = "repair_";
+/// Le début de l'identifiant des ordres à valider : réservé au serveur.
+pub const APPROVAL_PREFIX: &str = "approval_";
 /// Notifications (hors réparations) gardées au plus : une automatisation qui
 /// boucle ne doit pas remplir le tableau de bord.
 pub const MAX_NOTIFICATIONS: usize = 50;
@@ -66,7 +72,7 @@ const CHECK_EVERY: Duration = Duration::from_mins(1);
 pub enum NoticeError {
     #[error("{0} n'est pas une notification (domaine persistent_notification attendu)")]
     WrongDomain(String),
-    #[error("les identifiants « repair_… » sont réservés aux alertes du serveur")]
+    #[error("les identifiants « repair_… » et « approval_… » sont réservés au serveur")]
     Reserved,
     #[error("le message est obligatoire")]
     NoMessage,
@@ -163,7 +169,8 @@ pub fn notify(
     if entity_id.domain() != DOMAIN {
         return Err(NoticeError::WrongDomain(entity_id.to_string()));
     }
-    if object_id(entity_id).starts_with(REPAIR_PREFIX) {
+    let object = object_id(entity_id);
+    if object.starts_with(REPAIR_PREFIX) || object.starts_with(APPROVAL_PREFIX) {
         return Err(NoticeError::Reserved);
     }
     let message = clean(message, MAX_MESSAGE_CHARS);
@@ -301,17 +308,24 @@ async fn run(
     let mut checks =
         tokio::time::interval_at(tokio::time::Instant::now() + FIRST_CHECK, CHECK_EVERY);
     checks.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    // Les ordres à valider d'avant un redémarrage sont perdus : leurs
+    // notifications aussi.
+    approvals(&core);
     loop {
         tokio::select! {
             () = token.cancelled() => break,
             received = events.recv() => match received {
-                Ok(event) => {
-                    if let Event::CallService { domain, service, entity_id, data, .. } = event.as_ref()
-                        && domain == DOMAIN
+                Ok(event) => match event.as_ref() {
+                    Event::CallService { domain, service, entity_id, data, .. }
+                        if domain == DOMAIN =>
                     {
-                        on_call(&core.states, service, entity_id, data);
+                        on_call(&core, service, entity_id, data);
                     }
-                }
+                    Event::Fired { event_type, .. } if event_type == ha_core::guard::HELD_CHANGED => {
+                        approvals(&core);
+                    }
+                    _ => {}
+                },
                 Err(RecvError::Lagged(missed)) => warn!("notifications : {missed} événements manqués"),
                 Err(RecvError::Closed) => break,
             },
@@ -320,6 +334,9 @@ async fn run(
                 // D'abord les intégrations en panne (leurs appareils passent
                 // « indisponibles »), puis les alertes.
                 core.check_integrations(now);
+                // Les ordres jamais validés sont oubliés (leur notification
+                // disparaît avec l'événement publié).
+                core.expire_held();
                 reconcile(&core.states, INTEGRATION_PREFIX, &integration_issues(&core, now));
                 reconcile(&core.states, UNAVAILABLE_PREFIX, &unavailable(&core, now));
             }
@@ -327,7 +344,22 @@ async fn run(
     }
 }
 
-fn on_call(states: &StateMachine, service: &str, entity_id: &EntityId, data: &Attributes) {
+fn on_call(core: &Core, service: &str, entity_id: &EntityId, data: &Attributes) {
+    let states = &core.states;
+    // Fermer un ordre à valider, c'est le refuser.
+    if service == "dismiss"
+        && let Some(id) = object_id(entity_id)
+            .strip_prefix(APPROVAL_PREFIX)
+            .and_then(|id| id.parse().ok())
+    {
+        if let Some(order) = core.release(id) {
+            info!(
+                "garde : {}.{} sur {} refusé (notification fermée)",
+                order.domain, order.service, order.entity_id
+            );
+        }
+        return;
+    }
     let result = match service {
         "create" => notify(
             states,
@@ -343,6 +375,77 @@ fn on_call(states: &StateMachine, service: &str, entity_id: &EntityId, data: &At
     };
     if let Err(error) = result {
         warn!("notification refusée ({entity_id}) : {error}");
+    }
+}
+
+/// Met les notifications « à valider » d'accord avec les ordres retenus.
+fn approvals(core: &Core) {
+    let held = core.held_orders();
+    let states = &core.states;
+    for state in all_notices(states) {
+        let still_held = object_id(state.entity_id())
+            .strip_prefix(APPROVAL_PREFIX)
+            .map(|id| held.iter().any(|order| order.id.to_string() == id));
+        if still_held == Some(false) {
+            states.remove(state.entity_id());
+        }
+    }
+    let zone = jiff::tz::TimeZone::system();
+    for order in held {
+        let Ok(entity_id) = format!("{DOMAIN}.{APPROVAL_PREFIX}{}", order.id).parse::<EntityId>()
+        else {
+            continue;
+        };
+        if states.get(&entity_id).is_some() {
+            continue;
+        }
+        let device = states
+            .get(&order.entity_id)
+            .and_then(|state| text(state.attributes(), "friendly_name").map(str::to_owned))
+            .unwrap_or_else(|| order.entity_id.to_string());
+        let who = order.origin.describe().map_or_else(
+            || "Un ordre".to_owned(),
+            |by| format!("Un ordre donné {by}"),
+        );
+        let message = format!(
+            "{who} attend ta validation : {} {device}. Il est retenu parce que {}. \
+             Sans réponse, il sera oublié à {}.",
+            action(&order.domain, &order.service),
+            order.reason,
+            Timestamp::try_from(order.held_since + ha_core::guard::HELD_TTL).map_or_else(
+                |_| "un moment".to_owned(),
+                |t| t.to_zoned(zone.clone()).strftime("%H:%M").to_string()
+            )
+        );
+        let created_at = Timestamp::try_from(order.held_since)
+            .unwrap_or_else(|_| Timestamp::now())
+            .to_string();
+        let mut attributes = attributes(
+            "Ordre à valider",
+            &clean(&message, MAX_MESSAGE_CHARS),
+            "approval",
+            &created_at,
+        );
+        attributes.insert("approval_id".into(), order.id.into());
+        info!("garde : {}", order.reason);
+        if let Err(error) = states.set(entity_id, NOTIFYING, attributes) {
+            warn!("ordre à valider : notification refusée ({error})");
+        }
+    }
+}
+
+/// « allumer », « fermer »… ou le nom du service.
+fn action(domain: &str, service: &str) -> String {
+    match service {
+        "turn_on" => "allumer".into(),
+        "turn_off" => "éteindre".into(),
+        "toggle" => "basculer".into(),
+        "open_cover" => "ouvrir".into(),
+        "close_cover" => "fermer".into(),
+        "stop_cover" => "arrêter".into(),
+        "set_cover_position" => "régler la position de".into(),
+        "set_temperature" => "changer la consigne de".into(),
+        _ => format!("{domain}.{service} sur"),
     }
 }
 
@@ -686,6 +789,64 @@ mod tests {
             .unwrap();
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert!(core.states.get(&hello).is_none());
+        notices.stop().await;
+    }
+
+    #[tokio::test]
+    async fn held_orders_are_shown_until_answered() {
+        let core = Arc::new(Core::new());
+        // Une notification « à valider » d'avant un redémarrage disparaît.
+        let leftover = id("persistent_notification.approval_99");
+        core.states
+            .set(leftover.clone(), NOTIFYING, Attributes::new())
+            .unwrap();
+        let mut lamp = Attributes::new();
+        lamp.insert("friendly_name".into(), "Lampe de chevet".into());
+        core.states.set(id("light.chambre"), "off", lamp).unwrap();
+        let notices = Notices::start(Arc::clone(&core));
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(core.states.get(&leftover).is_none());
+
+        let held = core
+            .hold(
+                ha_core::Origin::Voice,
+                "light",
+                "turn_on",
+                id("light.chambre"),
+                Attributes::new(),
+                "« Chambre » est une pièce protégée".into(),
+            )
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        let notice = id(&format!("persistent_notification.approval_{held}"));
+        let state = core.states.get(&notice).unwrap();
+        assert_eq!(text(state.attributes(), "kind"), Some("approval"));
+        assert_eq!(state.attributes()["approval_id"], held);
+        let message = text(state.attributes(), "message").unwrap();
+        assert!(
+            message.starts_with(
+                "Un ordre donné à la voix (Alexa) attend ta validation : allumer \
+                 Lampe de chevet. Il est retenu parce que « Chambre » est une pièce protégée."
+            ),
+            "{message}"
+        );
+        // Personne ne peut fabriquer une fausse demande de validation.
+        assert_eq!(
+            notify(
+                &core.states,
+                &id("persistent_notification.approval_7"),
+                None,
+                "x"
+            ),
+            Err(NoticeError::Reserved)
+        );
+
+        // Fermer la notification refuse l'ordre.
+        core.call_service(DOMAIN, "dismiss", notice.clone(), Attributes::new())
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert_eq!(core.held_orders().len(), 0);
+        assert!(core.states.get(&notice).is_none());
         notices.stop().await;
     }
 }

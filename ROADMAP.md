@@ -93,6 +93,7 @@ Les fonctions de Home Assistant les plus utiles au quotidien, une par une, dans 
 - [x] **45. Supervision des intégrations** : une intégration qui plante est relancée toute seule (attente croissante) ; en panne plus d'une minute, ses appareils passent « indisponibles », puis retrouvent leur valeur ; une seule alerte par intégration ; leur état dans « Mon compte » ([guide](docs/supervision.md))
 - [x] **46. Des ordres avec réponse** : Hue et Somfy disent si l'ordre a abouti (refus et silence affichés) ; une intégration en panne refuse l'ordre d'office ; un ordre de plus de 5 s n'est jamais exécuté, même après une reconnexion ([guide](docs/ordres.md))
 - [x] **47. La performance, mesurée** : Mon compte → Système (mémoire, processeur, temps de réponse, base) et un budget vérifié par la CI (image ≤ 80 Mo, mémoire ≤ 64 Mio, 95 % des réponses ≤ 25 ms) ; 40 Mio et 0,2 % de processeur sur la démo ([guide](docs/performance.md))
+- [x] **48. Pièces protégées et heures calmes** : un ordre à la voix ou d'un invité sur une pièce protégée (la chambre, éventuellement la nuit seulement) attend qu'un membre de la famille le valide, depuis la cloche ; oublié après 10 minutes ; un clic de la famille est toujours obéi ([guide](docs/garde.md))
 
 En parallèle, dès que tu me donnes les informations : commande du chauffage Somfy (résultat de
 `somfy devices`), puis de l'alarme (avec confirmation et journal).
