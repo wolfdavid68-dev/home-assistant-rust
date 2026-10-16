@@ -21,10 +21,12 @@
 pub mod frame;
 pub mod meter;
 
+use ha_core::Health;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::SystemTime;
 
 use ha_core::{Attributes, Background, CancellationToken, Core, EntityId};
 use tokio::sync::mpsc;
@@ -120,8 +122,10 @@ pub struct Teleinfo(Background);
 
 impl Teleinfo {
     pub fn start(config: Config, core: Arc<Core>) -> Self {
-        Self(Background::spawn("le compteur Linky", |token| {
-            run(config, core, token)
+        // Sous surveillance : si la lecture plante, elle est relancée.
+        let supervisor = Arc::clone(&core);
+        Self(ha_core::supervise(supervisor, ID, NAME, move |token| {
+            run(config.clone(), Arc::clone(&core), token)
         }))
     }
 
@@ -190,6 +194,7 @@ async fn run(config: Config, core: Arc<Core>, token: CancellationToken) {
             Ok(receiver) => receiver,
             Err(error) => {
                 warn!("Linky : {error}");
+                core_report_retry(&publisher, &error);
                 tokio::select! {
                     () = token.cancelled() => break 'sources,
                     () = tokio::time::sleep(RETRY_AFTER) => continue 'sources,
@@ -204,6 +209,7 @@ async fn run(config: Config, core: Arc<Core>, token: CancellationToken) {
                 () = token.cancelled() => break 'sources,
                 received = bytes.recv() => {
                     let Some(chunk) = received else {
+                        core_report_retry(&publisher, "liaison perdue");
                         // Source perdue : on réessaie un peu plus tard.
                         tokio::select! {
                             () = token.cancelled() => break 'sources,
@@ -213,6 +219,7 @@ async fn run(config: Config, core: Arc<Core>, token: CancellationToken) {
                     for frame in decoder.feed(&chunk) {
                         if frames_here == 0 {
                             info!("Linky : trames reçues (mode {})", frame.mode.name());
+                            publisher.core.report(ID, NAME, Health::Connected);
                         }
                         frames_here += 1;
                         publisher.publish(&Reading::from_frame(&frame), Instant::now());
@@ -236,6 +243,22 @@ async fn run(config: Config, core: Arc<Core>, token: CancellationToken) {
         }
     }
     info!("Linky : lecture arrêtée");
+}
+
+/// L'identifiant et le nom de l'intégration (pour sa santé).
+const ID: &str = "teleinfo";
+const NAME: &str = "Linky";
+
+/// Le compteur ne répond plus : la lecture réessaie toute seule.
+fn core_report_retry(publisher: &Publisher, error: &str) {
+    publisher.core.report(
+        ID,
+        NAME,
+        Health::Retrying {
+            error: error.to_owned(),
+            retry_at: SystemTime::now() + RETRY_AFTER,
+        },
+    );
 }
 
 /// Publie les capteurs, sans noyer l'historique.
@@ -399,7 +422,11 @@ impl Publisher {
         if let Some(class) = sensor.state_class {
             attributes.insert("state_class".into(), class.into());
         }
-        if let Err(error) = self.core.states.set(entity_id, value.clone(), attributes) {
+        if let Err(error) = self
+            .core
+            .states
+            .set_by(ID, entity_id, value.clone(), attributes)
+        {
             warn!("Linky : état refusé ({error})");
             return;
         }
@@ -418,6 +445,7 @@ impl Publisher {
         }
         self.silent = true;
         warn!("Linky : plus aucune trame depuis une minute");
+        core_report_retry(self, "plus aucune trame depuis une minute");
         for key in self.last.keys() {
             let Ok(entity_id) = format!("sensor.linky_{key}").parse::<EntityId>() else {
                 continue;

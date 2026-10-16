@@ -163,7 +163,7 @@ impl Bridge {
                 && (config.state_topic.is_none() || command.optimistic == Optimistic::Now)
             {
                 let attributes = current_attributes(config, entity_id, states);
-                let _ = states.set(entity_id.clone(), state, attributes);
+                let _ = states.set_by(crate::ID, entity_id.clone(), state, attributes);
             }
             debug!("{entity_id} : envoi de {payload:?} sur {}", command.topic);
             return vec![Action::Publish {
@@ -215,7 +215,7 @@ impl Bridge {
         if config.state_topic.is_none() {
             let value = if turn_on { "on" } else { "off" };
             let attributes = current_attributes(config, entity_id, states);
-            let _ = states.set(entity_id.clone(), value, attributes);
+            let _ = states.set_by(crate::ID, entity_id.clone(), value, attributes);
         }
         debug!("{entity_id} : envoi de {payload:?} sur {command_topic}");
         vec![Action::Publish {
@@ -269,7 +269,12 @@ impl Bridge {
         // Un état restauré depuis la base (même entité avant redémarrage) est
         // conservé ; sinon l'entité démarre en « unknown » comme dans Home Assistant.
         if states.get(&entity_id).is_none() {
-            let _ = states.set(entity_id.clone(), "unknown", base_attributes(&config));
+            let _ = states.set_by(
+                crate::ID,
+                entity_id.clone(),
+                "unknown",
+                base_attributes(&config),
+            );
         }
         info!("entité MQTT découverte : {entity_id}");
         for topic in listened_topics(&config) {
@@ -363,7 +368,7 @@ impl Bridge {
                 && let Some((value, mut attributes)) = interpret(config, payload)
             {
                 keep_profile_attributes(config, id, states, &mut attributes);
-                if let Err(error) = states.set(id.clone(), value, attributes) {
+                if let Err(error) = states.set_by(crate::ID, id.clone(), value, attributes) {
                     warn!("état refusé pour {id} : {error}");
                 }
             }
@@ -389,7 +394,7 @@ impl Bridge {
                 }
                 let mut attributes = current_attributes(config, id, states);
                 attributes.insert(attribute.name.into(), value);
-                if let Err(error) = states.set(id.clone(), state, attributes) {
+                if let Err(error) = states.set_by(crate::ID, id.clone(), state, attributes) {
                     warn!("attribut refusé pour {id} : {error}");
                 }
             }
@@ -476,7 +481,12 @@ fn event_received(
     }
     let mut attributes = base_attributes(config);
     attributes.insert("event_type".into(), json!(event_type));
-    if let Err(error) = states.set(id.clone(), jiff::Timestamp::now().to_string(), attributes) {
+    if let Err(error) = states.set_by(
+        crate::ID,
+        id.clone(),
+        jiff::Timestamp::now().to_string(),
+        attributes,
+    ) {
         warn!("état refusé pour {id} : {error}");
     }
     let mut data = Attributes::new();

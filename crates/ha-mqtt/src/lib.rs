@@ -15,9 +15,16 @@ pub mod template;
 use zeroize::Zeroizing;
 
 pub use bridge::Bridge;
+
+/// L'identifiant de l'intégration, propriétaire de ses entités (voir
+/// [`ha_core::integrations`]).
+pub const ID: &str = "mqtt";
+/// Son nom affiché.
+pub const NAME: &str = "MQTT";
 pub use client::Mqtt;
 
 /// Paramètres de connexion au broker.
+#[derive(Clone)]
 pub struct MqttConfig {
     pub host: String,
     pub port: u16,

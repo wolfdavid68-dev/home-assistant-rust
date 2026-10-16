@@ -16,8 +16,10 @@ pub mod carte;
 pub mod openmeteo;
 pub mod vigilance;
 
+use ha_core::Health;
 use std::net::IpAddr;
 use std::sync::Arc;
+use std::time::SystemTime;
 use std::time::{Duration, Instant};
 
 use ha_core::{Attributes, Background, CancellationToken, Core, EntityId};
@@ -148,6 +150,10 @@ fn is_local(url: &url::Url) -> bool {
     }
 }
 
+/// L'identifiant et le nom de l'intégration (pour sa santé).
+const ID: &str = "weather";
+const NAME: &str = "Météo";
+
 /// Le service météo, en marche.
 #[derive(Debug)]
 pub struct Weather(Background);
@@ -155,9 +161,14 @@ pub struct Weather(Background);
 impl Weather {
     pub fn start(config: Config, core: Arc<Core>) -> Result<Self, ha_tls::TlsError> {
         let http = ha_tls::web_client(config.url.scheme() == "https")?;
-        Ok(Self(Background::spawn("la météo", move |token| {
-            run(config, http, core, token)
-        })))
+        // Sous surveillance : si elle plante, elle est relancée.
+        let supervisor = Arc::clone(&core);
+        Ok(Self(ha_core::supervise(
+            supervisor,
+            ID,
+            NAME,
+            move |token| run(config.clone(), http.clone(), Arc::clone(&core), token),
+        )))
     }
 
     pub async fn stop(self) {
@@ -182,6 +193,7 @@ async fn run(config: Config, http: reqwest::Client, core: Arc<Core>, token: Canc
                 }
                 failing = false;
                 last_success = Some(Instant::now());
+                core.report(ID, NAME, Health::Connected);
                 publish(&core, &report);
                 config.interval
             }
@@ -191,6 +203,14 @@ async fn run(config: Config, http: reqwest::Client, core: Arc<Core>, token: Canc
                     warn!("météo : {error} (nouvel essai dans quelques minutes)");
                 }
                 failing = true;
+                core.report(
+                    ID,
+                    NAME,
+                    Health::Retrying {
+                        error: error.clone(),
+                        retry_at: SystemTime::now() + RETRY_DELAY.min(config.interval),
+                    },
+                );
                 let since = last_success.unwrap_or(started);
                 if since.elapsed() >= config.stale_after {
                     mark_unavailable(&core);
@@ -307,7 +327,7 @@ pub(crate) fn set(core: &Core, entity: &str, state: &str, attributes: Attributes
     {
         return;
     }
-    if let Err(error) = core.states.set(entity_id, state, attributes) {
+    if let Err(error) = core.states.set_by(ID, entity_id, state, attributes) {
         warn!("météo : état refusé ({error})");
     }
 }

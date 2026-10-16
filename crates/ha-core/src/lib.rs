@@ -7,6 +7,7 @@
 mod entity_id;
 mod error;
 mod event;
+pub mod integrations;
 mod origin;
 mod state;
 mod state_machine;
@@ -15,6 +16,7 @@ pub mod task;
 pub use entity_id::{EntityId, MAX_ENTITY_ID_LEN, slugify};
 pub use error::CoreError;
 pub use event::{DEFAULT_BUS_CAPACITY, Event, EventBus};
+pub use integrations::{Health, IntegrationStatus, Integrations, supervise};
 pub use origin::Origin;
 pub use state::{Attributes, MAX_STATE_LEN, State};
 pub use state_machine::StateMachine;
@@ -56,6 +58,8 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub struct Core {
     pub bus: EventBus,
     pub states: StateMachine,
+    /// La santé des intégrations (voir [`integrations`]).
+    pub integrations: Integrations,
 }
 
 impl Core {
@@ -63,7 +67,11 @@ impl Core {
     pub fn new() -> Self {
         let bus = EventBus::default();
         let states = StateMachine::new(bus.clone());
-        Self { bus, states }
+        Self {
+            bus,
+            states,
+            integrations: Integrations::default(),
+        }
     }
 }
 

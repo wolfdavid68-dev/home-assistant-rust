@@ -1,8 +1,10 @@
 //! La boucle principale : lecture des lampes, flux d'événements en direct,
 //! envoi des commandes, et reconnexion automatique.
 
+use ha_core::Health;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::SystemTime;
 
 use futures_util::StreamExt;
 use ha_core::{Background, CancellationToken, Core, Event};
@@ -27,9 +29,14 @@ pub struct Hue(Background);
 
 impl Hue {
     pub fn start(pairing: Pairing, core: Arc<Core>) -> Self {
-        Self(Background::spawn("l'intégration Hue", |token| {
-            run(pairing, core, token)
-        }))
+        // Sous surveillance : si elle plante, elle est relancée.
+        let supervisor = Arc::clone(&core);
+        Self(ha_core::supervise(
+            supervisor,
+            crate::ID,
+            crate::NAME,
+            move |token| run(pairing.clone(), Arc::clone(&core), token),
+        ))
     }
 
     pub async fn stop(self) {
@@ -70,6 +77,14 @@ async fn run(pairing: Pairing, core: Arc<Core>, token: CancellationToken) {
                     "Hue : pont injoignable ({error}), nouvel essai dans {} s",
                     backoff.as_secs()
                 );
+                core.report(
+                    crate::ID,
+                    crate::NAME,
+                    Health::Retrying {
+                        error: format!("pont injoignable ({error})"),
+                        retry_at: SystemTime::now() + backoff,
+                    },
+                );
                 tokio::select! {
                     () = tokio::time::sleep(backoff) => {}
                     () = token.cancelled() => break 'connection,
@@ -79,6 +94,7 @@ async fn run(pairing: Pairing, core: Arc<Core>, token: CancellationToken) {
             }
         };
         info!("Hue : connecté, {} lampes", lights.len());
+        core.report(crate::ID, crate::NAME, Health::Connected);
         backoff = Duration::from_secs(1);
         let mut stream = response.bytes_stream();
         let mut parser = SseParser::default();

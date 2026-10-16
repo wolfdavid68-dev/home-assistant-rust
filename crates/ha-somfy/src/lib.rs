@@ -15,5 +15,11 @@ mod error;
 pub mod pairing;
 
 pub use client::Somfy;
+
+/// L'identifiant de l'intégration, propriétaire de ses entités (voir
+/// [`ha_core::integrations`]).
+pub const ID: &str = "somfy";
+/// Son nom affiché.
+pub const NAME: &str = "Somfy";
 pub use error::SomfyError;
 pub use pairing::Pairing;

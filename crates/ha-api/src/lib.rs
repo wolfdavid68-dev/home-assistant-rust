@@ -142,6 +142,7 @@ pub fn router(state: Arc<ApiState>) -> Router {
         .route("/api/energy", get(rest::energy))
         .route("/api/audit", get(rest::audit_log))
         .route("/api/areas", get(rest::areas))
+        .route("/api/integrations", get(rest::integrations))
         .route("/api/home/drawing", get(drawing::get).put(drawing::put))
         .route(
             "/api/home/images/{name}",

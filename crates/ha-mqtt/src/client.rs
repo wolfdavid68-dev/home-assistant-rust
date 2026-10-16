@@ -1,8 +1,10 @@
 //! La boucle réseau : connexion au broker, reconnexion automatique, et
 //! exécution des [`Action`]s du pont.
 
+use ha_core::Health;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::SystemTime;
 
 use ha_core::{Background, CancellationToken, Core, Event};
 use rumqttc::{AsyncClient, Event as MqttEvent, MqttOptions, Packet, QoS};
@@ -26,9 +28,14 @@ impl Mqtt {
     /// Démarre l'intégration. Elle se connecte, se reconnecte toute seule en
     /// cas de coupure, et tourne jusqu'à [`Mqtt::stop`].
     pub fn start(config: MqttConfig, core: Arc<Core>) -> Self {
-        Self(Background::spawn("l'intégration MQTT", |token| {
-            run(config, core, token)
-        }))
+        // Sous surveillance : si elle plante, elle est relancée.
+        let supervisor = Arc::clone(&core);
+        Self(ha_core::supervise(
+            supervisor,
+            crate::ID,
+            crate::NAME,
+            move |token| run(config.clone(), Arc::clone(&core), token),
+        ))
     }
 
     /// Se déconnecte proprement du broker.
@@ -61,6 +68,7 @@ async fn run(config: MqttConfig, core: Arc<Core>, token: CancellationToken) {
             polled = eventloop.poll() => match polled {
                 Ok(MqttEvent::Incoming(Packet::ConnAck(_))) => {
                     info!("MQTT : connecté à {}:{}", config.host, config.port);
+                    core.report(crate::ID, crate::NAME, Health::Connected);
                     backoff = Duration::from_secs(1);
                     // Session neuve à chaque connexion : on se réabonne à tout.
                     let topics = bridge
@@ -85,6 +93,10 @@ async fn run(config: MqttConfig, core: Arc<Core>, token: CancellationToken) {
                 Ok(_) => {}
                 Err(error) => {
                     warn!("MQTT : connexion perdue ({error}), nouvel essai dans {} s", backoff.as_secs());
+                    core.report(crate::ID, crate::NAME, Health::Retrying {
+                        error: format!("broker injoignable ({error})"),
+                        retry_at: SystemTime::now() + backoff,
+                    });
                     // On attend avant de réessayer, sans ignorer une demande d'arrêt.
                     tokio::select! {
                         () = tokio::time::sleep(backoff) => {}

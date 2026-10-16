@@ -2400,3 +2400,21 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .ai-steps dt { color: var(--muted); }
 .ai-steps dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .drawing-part > .primary.small { justify-self: start; }
+
+/* ---------- La santé des intégrations (étape 45), dans « Mon compte ». */
+.integrations { display: grid; gap: 0.5rem; margin: 0.4rem 0 1rem; }
+.integrations h3 { margin: 0; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.integration-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.4rem; }
+.integration { display: flex; align-items: center; gap: 0.7rem; padding: 0.55rem 0.75rem; border-radius: 12px; background: var(--card-2); }
+.integration-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+.i-connected .integration-dot { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
+.i-retrying .integration-dot, .i-starting .integration-dot { background: var(--glow-bar, #d9a00d); }
+.i-crashed .integration-dot { background: var(--alert); }
+.integration-text { flex: 1; display: grid; min-width: 0; line-height: 1.3; }
+.integration-text b { font-size: 0.9rem; }
+.integration-text span { font-size: 0.78rem; color: var(--muted); overflow-wrap: anywhere; }
+.i-crashed .integration-text span, .i-retrying .integration-text span { color: var(--text-2); }
+.integration-count { flex: none; font-size: 0.76rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: no-preference) {
+  .i-starting .integration-dot { animation: pulse 1s ease-in-out infinite; }
+}

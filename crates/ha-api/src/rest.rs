@@ -597,6 +597,42 @@ pub(crate) async fn audit_log(
     Ok(Json(json!({ "entries": entries })))
 }
 
+/// `GET /api/integrations` : la santé de chaque intégration (Hue, Somfy,
+/// MQTT…). Réservé à ceux qui voient tous les appareils : les erreurs peuvent
+/// citer une adresse du réseau.
+pub(crate) async fn integrations(
+    State(state): State<Arc<ApiState>>,
+    auth: Authenticated,
+) -> Result<Json<Value>, ApiError> {
+    roles::require(&auth.user, Permission::AllDevices)?;
+    let list: Vec<Value> = state
+        .core
+        .integrations()
+        .into_iter()
+        .map(|status| {
+            let (error, retry_at) = match &status.health {
+                ha_core::Health::Retrying { error, retry_at }
+                | ha_core::Health::Crashed { error, retry_at } => {
+                    (Some(error.clone()), Some(format_timestamp(*retry_at)))
+                }
+                _ => (None, None),
+            };
+            json!({
+                "id": status.id,
+                "name": status.name,
+                "status": status.health.name(),
+                "since": format_timestamp(status.since),
+                "error": error,
+                "retry_at": retry_at,
+                "restarts": status.restarts,
+                "unavailable": status.unavailable,
+                "entities": status.entities,
+            })
+        })
+        .collect();
+    Ok(Json(json!({ "integrations": list })))
+}
+
 /// `GET /api/areas` : les pièces de la maison et leurs appareils.
 pub(crate) async fn areas(State(state): State<Arc<ApiState>>, auth: Authenticated) -> Json<Value> {
     let areas: Vec<Value> = state

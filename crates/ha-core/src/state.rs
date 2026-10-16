@@ -1,5 +1,6 @@
 //! État d'une entité à un instant donné.
 
+use std::sync::Arc;
 use std::time::SystemTime;
 
 use crate::entity_id::EntityId;
@@ -29,6 +30,8 @@ pub struct State {
     attributes: Attributes,
     last_changed: SystemTime,
     last_updated: SystemTime,
+    /// L'intégration qui publie l'entité (`hue`, `mqtt`…), si on la connaît.
+    pub(crate) owner: Option<Arc<str>>,
 }
 
 impl State {
@@ -39,6 +42,7 @@ impl State {
         attributes: Attributes,
         last_changed: SystemTime,
         last_updated: SystemTime,
+        owner: Option<Arc<str>>,
     ) -> Self {
         Self {
             entity_id,
@@ -46,7 +50,14 @@ impl State {
             attributes,
             last_changed,
             last_updated,
+            owner,
         }
+    }
+
+    /// L'intégration qui publie l'entité (`hue`, `mqtt`…), si on la connaît.
+    #[must_use]
+    pub fn owner(&self) -> Option<&str> {
+        self.owner.as_deref()
     }
 
     #[must_use]

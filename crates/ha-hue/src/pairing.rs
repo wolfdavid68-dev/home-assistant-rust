@@ -18,6 +18,7 @@ const APP_KEY_CONTEXT: &str = "hue_bridge.app_key";
 pub const LINK_BUTTON_TIMEOUT: Duration = Duration::from_mins(1);
 
 /// Ce qu'il faut savoir pour se reconnecter au pont.
+#[derive(Clone)]
 pub struct Pairing {
     pub host: String,
     pub bridge_id: String,

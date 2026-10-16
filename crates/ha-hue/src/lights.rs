@@ -223,7 +223,7 @@ impl Lights {
 
 fn set(states: &StateMachine, entity_id: &EntityId, on: bool, attributes: Attributes) {
     let value = if on { "on" } else { "off" };
-    if let Err(error) = states.set(entity_id.clone(), value, attributes) {
+    if let Err(error) = states.set_by(crate::ID, entity_id.clone(), value, attributes) {
         warn!("état refusé pour {entity_id} : {error}");
     }
 }

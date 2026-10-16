@@ -730,6 +730,49 @@ async fn areas_are_served() {
 }
 
 #[tokio::test]
+async fn integrations_report_their_health() {
+    let app = TestApp::new().await;
+    let token = app.login().await;
+    let core = &app.state.core;
+    core.report("hue", "Hue", ha_core::Health::Connected);
+    core.states
+        .set_by(
+            "hue",
+            "light.salon".parse().unwrap(),
+            "on",
+            ha_core::Attributes::new(),
+        )
+        .unwrap();
+    core.report(
+        "somfy",
+        "Somfy",
+        ha_core::Health::Retrying {
+            error: "box injoignable".into(),
+            retry_at: std::time::SystemTime::now(),
+        },
+    );
+    let (status, body) = app
+        .request("GET", "/api/integrations", Some(&token), None)
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let list = body["integrations"].as_array().unwrap();
+    assert_eq!(list.len(), 2);
+    assert_eq!(list[0]["id"], "hue");
+    assert_eq!(list[0]["status"], "connected");
+    assert_eq!(list[0]["entities"], 1);
+    assert_eq!(list[1]["status"], "retrying");
+    assert_eq!(list[1]["error"], "box injoignable");
+    assert!(list[1]["retry_at"].is_string());
+
+    // Un invité ne voit pas l'état des intégrations (les erreurs citent le réseau).
+    let guest = app.login_as("invite", ha_auth::Role::Guest).await;
+    let (status, _) = app
+        .request("GET", "/api/integrations", Some(&guest), None)
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
 async fn history_series_for_a_chart() {
     let mut app = TestApp::new().await;
     let token = app.login().await;

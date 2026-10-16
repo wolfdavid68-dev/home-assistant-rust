@@ -3786,9 +3786,59 @@ $("#dock-logbook").addEventListener("click", () => openLogbook());
 $("#dock-automations").addEventListener("click", () => $("#open-automations").click());
 $("#dock-energy").addEventListener("click", () => openEnergy());
 for (const opener of ["#dock-account", "#open-account"]) {
-  $(opener).addEventListener("click", () => $("#account-dialog").showModal());
+  $(opener).addEventListener("click", () => {
+    $("#account-dialog").showModal();
+    watchIntegrations();
+  });
 }
 $("#account-close").addEventListener("click", () => $("#account-dialog").close());
+
+// ---------------------------------------------------------------- Intégrations
+// Dans « Mon compte » : Hue, Somfy, MQTT… connectées, ou en panne, et quand
+// le serveur réessaie. Relu toutes les 10 s tant que la fenêtre est ouverte.
+
+const INTEGRATION_LABELS = { connected: "Connectée", starting: "Démarrage…", retrying: "Ne répond pas", crashed: "Plantée, relancée", stopped: "Arrêtée" };
+let integrationTimer = 0;
+
+/** « 10:32 » aujourd'hui, « 15/10 à 10:32 » sinon. */
+function shortWhen(text) {
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return "";
+  const today = new Date().toDateString() === date.toDateString();
+  return today ? hourMinute.format(date) : `${date.toLocaleDateString("fr", { day: "2-digit", month: "2-digit" })} à ${hourMinute.format(date)}`;
+}
+
+async function loadIntegrations() {
+  const box = $("#integrations");
+  if (account.permissions.all_devices === false) { box.hidden = true; return; }
+  const { status, data } = await api("GET", "/api/integrations").catch(() => ({ status: 0, data: {} }));
+  const list = status === 200 && Array.isArray(data.integrations) ? data.integrations : [];
+  box.hidden = list.length === 0;
+  $("#integration-list").replaceChildren(...list.map((item) => {
+    const kind = typeof item.status === "string" ? item.status : "stopped";
+    const lines = [];
+    if (kind !== "stopped") lines.push(`depuis ${shortWhen(item.since)}`);
+    if (item.error) lines.push(item.error);
+    if (item.retry_at && kind !== "connected") lines.push(`nouvel essai à ${shortWhen(item.retry_at)}`);
+    if (item.restarts > 0) lines.push(`relancée ${item.restarts} fois`);
+    const plural = item.entities > 1 ? "s" : "";
+    const devices = `${item.entities} appareil${plural}${item.unavailable && item.entities > 0 ? ` indisponible${plural}` : ""}`;
+    return el("li", { class: `integration i-${kind}` },
+      el("span", { class: "integration-dot", "aria-hidden": "true" }),
+      el("span", { class: "integration-text" },
+        el("b", { text: String(item.name ?? item.id) }),
+        el("span", { text: `${lookup(INTEGRATION_LABELS, kind) ?? kind} ${lines.length > 0 ? "· " : ""}${lines.join(" · ")}` })),
+      el("span", { class: "integration-count", text: devices }));
+  }));
+}
+
+function watchIntegrations() {
+  loadIntegrations();
+  clearInterval(integrationTimer);
+  integrationTimer = setInterval(() => {
+    if ($("#account-dialog").open) loadIntegrations(); else clearInterval(integrationTimer);
+  }, 10_000);
+}
 
 // ---------------------------------------------------------------- Mode tablette
 // Une tablette accrochée au mur : l'écran reste allumé (Wake Lock), en plein

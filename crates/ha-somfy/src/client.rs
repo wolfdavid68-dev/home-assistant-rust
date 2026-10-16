@@ -1,8 +1,10 @@
 //! La boucle principale : lecture des appareils, relevé des événements,
 //! envoi des commandes, reconnexion automatique.
 
+use ha_core::Health;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::SystemTime;
 
 use ha_core::{Background, CancellationToken, Core, Event};
 use tokio::sync::broadcast::error::RecvError;
@@ -29,9 +31,14 @@ pub struct Somfy(Background);
 impl Somfy {
     #[must_use]
     pub fn start(pairing: Pairing, core: Arc<Core>) -> Self {
-        Self(Background::spawn("l'intégration Somfy", |token| {
-            run(pairing, core, token)
-        }))
+        // Sous surveillance : si elle plante, elle est relancée.
+        let supervisor = Arc::clone(&core);
+        Self(ha_core::supervise(
+            supervisor,
+            crate::ID,
+            crate::NAME,
+            move |token| run(pairing.clone(), Arc::clone(&core), token),
+        ))
     }
 
     pub async fn stop(self) {
@@ -76,6 +83,18 @@ async fn run(pairing: Pairing, core: Arc<Core>, token: CancellationToken) {
                     );
                     backoff
                 };
+                core.report(
+                    crate::ID,
+                    crate::NAME,
+                    Health::Retrying {
+                        error: if matches!(error, SomfyError::Unauthorized) {
+                            "jeton refusé : refais « ha-server somfy pair »".to_owned()
+                        } else {
+                            format!("box injoignable ({error})")
+                        },
+                        retry_at: SystemTime::now() + wait,
+                    },
+                );
                 tokio::select! {
                     () = tokio::time::sleep(wait) => {}
                     () = token.cancelled() => break 'connection,
@@ -85,6 +104,7 @@ async fn run(pairing: Pairing, core: Arc<Core>, token: CancellationToken) {
             }
         };
         info!("Somfy : connecté, {} appareils", devices.len());
+        core.report(crate::ID, crate::NAME, Health::Connected);
         backoff = Duration::from_secs(1);
         let mut fetch = tokio::time::interval(FETCH_INTERVAL);
         fetch.set_missed_tick_behavior(MissedTickBehavior::Delay);
