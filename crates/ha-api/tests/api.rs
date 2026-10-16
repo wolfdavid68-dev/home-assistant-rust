@@ -193,6 +193,8 @@ async fn every_route_requires_a_token() {
         ("GET", "/api/home/images/jour"),
         ("PUT", "/api/home/images/jour"),
         ("DELETE", "/api/home/images/jour"),
+        ("GET", "/api/approvals"),
+        ("POST", "/api/approvals/1"),
     ] {
         let (status, _) = app.request(method, uri, None, None).await;
         assert_eq!(status, StatusCode::UNAUTHORIZED, "{method} {uri}");
@@ -1418,6 +1420,151 @@ async fn a_guest_sees_and_controls_only_safe_devices() {
         )
         .await;
     assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn a_guest_order_in_a_protected_room_waits_for_the_family() {
+    let app = TestApp::new().await;
+    furnish(&app);
+    let core = &app.state.core;
+    core.guard.configure(
+        ha_core::Policy {
+            protected: [("light.salon".parse().unwrap(), "Salon".to_owned())].into(),
+            quiet_hours: None,
+        },
+        || 0,
+    );
+    let guest = app.login_as("visiteur", ha_auth::Role::Guest).await;
+    let family = app.login_as("alice", ha_auth::Role::Family).await;
+    let mut events = core.bus.subscribe();
+    let lamp = json!({"entity_id": "light.salon"});
+
+    // L'invité : l'ordre attend.
+    let (status, body) = app
+        .request(
+            "POST",
+            "/api/services/light/turn_on",
+            Some(&guest),
+            Some(lamp.clone()),
+        )
+        .await;
+    assert_eq!(status, StatusCode::ACCEPTED, "{body}");
+    assert_eq!(body["result"], "held");
+    assert!(
+        body["message"]
+            .as_str()
+            .unwrap()
+            .contains("«\u{a0}Salon\u{a0}» est une pièce protégée")
+    );
+    let (status, _) = app
+        .request("GET", "/api/approvals", Some(&guest), None)
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/approvals/1",
+            Some(&guest),
+            Some(json!({"approve": true})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "un invité ne se valide pas");
+    let (_, listed) = app
+        .request("GET", "/api/approvals", Some(&family), None)
+        .await;
+    let held = &listed["approvals"][0];
+    assert_eq!(held["entity_id"], "light.salon");
+    assert_eq!(held["by"], "par visiteur");
+    let id = held["id"].as_u64().unwrap();
+
+    // La famille valide : l'ordre part, avec son origine.
+    let (status, body) = app
+        .request(
+            "POST",
+            &format!("/api/approvals/{id}"),
+            Some(&family),
+            Some(json!({"approve": true})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["result"], "sent");
+    loop {
+        let event = events.recv().await.unwrap();
+        if let ha_core::Event::CallService {
+            service, origin, ..
+        } = event.as_ref()
+        {
+            assert_eq!(service, "turn_on");
+            assert_eq!(*origin, ha_core::Origin::User("visiteur".into()));
+            break;
+        }
+    }
+    // Déjà traité.
+    let (status, _) = app
+        .request(
+            "POST",
+            &format!("/api/approvals/{id}"),
+            Some(&family),
+            Some(json!({"approve": false})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // Refusé : rien ne part.
+    app.request(
+        "POST",
+        "/api/services/light/turn_off",
+        Some(&guest),
+        Some(lamp.clone()),
+    )
+    .await;
+    let id = core.held_orders()[0].id;
+    let (_, body) = app
+        .request(
+            "POST",
+            &format!("/api/approvals/{id}"),
+            Some(&family),
+            Some(json!({"approve": false})),
+        )
+        .await;
+    assert_eq!(body["result"], "refused");
+    assert_eq!(core.held_orders().len(), 0);
+
+    // La famille n'est jamais retenue, et le volet n'est pas protégé.
+    let (status, body) = app
+        .request(
+            "POST",
+            "/api/services/light/turn_on",
+            Some(&family),
+            Some(lamp),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/services/cover/close_cover",
+            Some(&guest),
+            Some(json!({"entity_id": "cover.salon"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let journal = app.state.store.audit_log(20).await.unwrap();
+    let actions: Vec<(&str, &str)> = journal
+        .iter()
+        .filter(|e| ["held", "approve", "deny"].contains(&e.action.as_str()))
+        .map(|e| (e.actor.as_str(), e.action.as_str()))
+        .collect();
+    assert_eq!(
+        actions,
+        [
+            ("alice", "deny"),
+            ("visiteur", "held"),
+            ("alice", "approve"),
+            ("visiteur", "held"),
+        ]
+    );
 }
 
 #[tokio::test]

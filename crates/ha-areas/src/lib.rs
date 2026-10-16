@@ -18,6 +18,8 @@
 //! fichier. Les appareils qui ne sont dans aucune pièce restent rangés par
 //! type, en dessous.
 
+pub mod guard;
+
 use std::collections::HashSet;
 use std::path::Path;
 

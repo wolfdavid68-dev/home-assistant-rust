@@ -1,0 +1,20 @@
+# Exemple de garde. Copie ce fichier en `guard.yaml` (avec Docker :
+# `config/guard.yaml`), puis vérifie-le avec :
+#   cargo run -p ha-server -- guard check
+#
+# Un ordre donné à la voix (Alexa) ou par un invité sur un appareil protégé
+# attend qu'un membre de la famille le valide (notification « Ordre à
+# valider » dans la cloche). Un clic dans le tableau de bord d'un membre de
+# la famille, une automatisation ou un script passent toujours.
+
+# Des pièces de areas.yaml : tous leurs appareils sont protégés.
+protected_areas: [Chambre]
+
+# Et/ou des appareils un par un.
+protected_entities: [climate.bureau]
+
+# Facultatif : la protection ne vaut que pendant ces heures (heure locale).
+# Sans pièce ni appareil protégés, elles valent pour toute la maison.
+quiet_hours:
+  from: "22:00"
+  to: "07:00"

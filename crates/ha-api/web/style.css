@@ -951,6 +951,9 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 }
 .notice-item.sev-warning { border-left-color: var(--glow-bar); }
 .notice-item.sev-error { border-left-color: var(--alert); }
+.notice-item.sev-approval { border-left-color: var(--alert); }
+.approval-actions { display: flex; gap: 0.5rem; }
+.primary.small { min-height: 32px; padding: 0.2rem 0.9rem; font-size: 0.85rem; border-radius: 10px; }
 .notice-head { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; justify-content: space-between; }
 .notice-head strong { overflow-wrap: anywhere; }
 .notice-message { margin: 0; white-space: pre-line; overflow-wrap: anywhere; color: var(--text-2); }

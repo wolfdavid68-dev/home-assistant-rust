@@ -147,6 +147,8 @@ pub fn router(state: Arc<ApiState>) -> Router {
         .route("/api/audit", get(rest::audit_log))
         .route("/api/areas", get(rest::areas))
         .route("/api/integrations", get(rest::integrations))
+        .route("/api/approvals", get(rest::approvals))
+        .route("/api/approvals/{id}", post(rest::answer_approval))
         .route("/api/system", get(system::system))
         .route("/api/home/drawing", get(drawing::get).put(drawing::put))
         .route(

@@ -243,6 +243,55 @@ async fn an_echo_discovers_and_controls_the_devices() {
 }
 
 #[tokio::test]
+async fn orders_for_a_protected_room_wait_for_approval() {
+    let echo = Echo::new([192, 168, 1, 40]).await;
+    echo.core.guard.configure(
+        ha_core::Policy {
+            protected: [("light.salon".parse().unwrap(), "Salon".to_owned())].into(),
+            quiet_hours: None,
+        },
+        || 0,
+    );
+    let mut rx = echo.core.bus.subscribe();
+    let user = echo
+        .json("POST", "/api", Some(json!({"devicetype": "Echo"})))
+        .await;
+    let user = user[0]["success"]["username"].as_str().unwrap().to_owned();
+    // « Alexa, éteins la lampe du salon » : retenu.
+    let held = echo
+        .json(
+            "PUT",
+            &format!("/api/{user}/lights/3/state"),
+            Some(json!({"on": false})),
+        )
+        .await;
+    assert_eq!(held[0]["error"]["type"], 901);
+    let orders = echo.core.held_orders();
+    assert_eq!(orders.len(), 1);
+    assert_eq!(orders[0].service, "turn_off");
+    assert_eq!(orders[0].origin, ha_core::Origin::Voice);
+    while let Ok(event) = rx.try_recv() {
+        assert!(
+            !matches!(event.as_ref(), Event::CallService { .. }),
+            "rien n'est parti"
+        );
+    }
+    // La cafetière n'est pas protégée.
+    echo.json(
+        "PUT",
+        &format!("/api/{user}/lights/1/state"),
+        Some(json!({"on": true})),
+    )
+    .await;
+    assert_eq!(
+        next_call(&mut rx).await,
+        "switch.turn_on switch.prise_cafe {}"
+    );
+    let journal = echo.store.audit_log(10).await.unwrap();
+    assert_eq!(journal[1].action, "held");
+}
+
+#[tokio::test]
 async fn addresses_outside_the_local_network_are_refused() {
     let echo = Echo::new([8, 8, 8, 8]).await;
     for (method, uri) in [

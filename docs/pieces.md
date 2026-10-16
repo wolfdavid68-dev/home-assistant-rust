@@ -42,10 +42,11 @@ cargo run -p ha-server -- areas check
 ```
 
 ```
-areas.yaml : 3 pièce(s) valide(s)
+areas.yaml : 4 pièce(s) valide(s)
   - Salon (3 appareil(s))
   - Cuisine (1 appareil(s))
   - Entrée (1 appareil(s))
+  - Chambre (2 appareil(s))
 ```
 
 Le tableau de bord affiche une section par pièce, **dans l'ordre du fichier**. Les appareils qui

@@ -26,6 +26,7 @@
 //! ha-server automations list      liste les automatisations (fichier et éditeur)
 //! ha-server automations delete <id>  supprime une automatisation de l'éditeur
 //! ha-server areas check           vérifie le fichier des pièces
+//! ha-server guard check           vérifie la garde (pièces protégées, heures calmes)
 //! ha-server alexa check           vérifie le fichier des appareils pour Alexa
 //! ha-server thermostats check     vérifie le fichier des thermostats
 //! ha-server persons check         vérifie le fichier des personnes
@@ -118,6 +119,7 @@ const DEFAULT_HISTORY_DAYS: u32 = 10;
 const DEFAULT_AUDIT_DAYS: u32 = 365;
 const DEFAULT_AUTOMATIONS_PATH: &str = "automations.yaml";
 const DEFAULT_AREAS_PATH: &str = "areas.yaml";
+const DEFAULT_GUARD_PATH: &str = "guard.yaml";
 
 /// Concept Rust : `#[tokio::main]` démarre le moteur asynchrone de tokio.
 /// Une fonction `async` peut attendre (`.await`) sans bloquer le fil
@@ -142,6 +144,7 @@ async fn main() -> ExitCode {
         ["freebox", rest @ ..] => cli::freebox_command(rest).await,
         ["automations", rest @ ..] => cli::automations_command(rest).await,
         ["areas", "check"] => cli::check_areas(&areas_path()),
+        ["guard", "check"] => cli::check_guard(&areas_path(), &guard_path()),
         ["alexa", "check"] => cli::check_alexa(&alexa_path()),
         ["thermostats", "check"] => cli::check_thermostats(&thermostats_path()),
         ["persons", "check"] => cli::check_persons(&persons_path()),
@@ -217,6 +220,18 @@ fn areas_path() -> std::path::PathBuf {
         .into()
 }
 
+fn guard_path() -> std::path::PathBuf {
+    std::env::var("HA_GUARD_PATH")
+        .unwrap_or_else(|_| DEFAULT_GUARD_PATH.to_owned())
+        .into()
+}
+
+/// La minute de la journée, en heure locale, pour les heures calmes.
+fn local_minute() -> u16 {
+    let now = jiff::Zoned::now();
+    u16::try_from(i32::from(now.hour()) * 60 + i32::from(now.minute())).unwrap_or(0)
+}
+
 pub(crate) fn db_path() -> String {
     std::env::var("HA_DB_PATH").unwrap_or_else(|_| DEFAULT_DB_PATH.to_owned())
 }
@@ -239,6 +254,8 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     let areas = ha_areas::load(&areas_path())
         .map_err(|error| format!("{} : {error}", areas_path().display()))?;
     info!("{} pièce(s) chargée(s)", areas.len());
+    let guard = ha_areas::guard::load(&guard_path(), &areas)
+        .map_err(|error| format!("{} : {error}", guard_path().display()))?;
     let location = location()?;
     let ntfy = ntfy_config()?;
     let alexa_settings = alexa_settings()?;
@@ -294,6 +311,17 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
 
     // On recharge les états d'avant l'arrêt, AVANT de démarrer quoi que ce soit.
     let core = Arc::new(Core::new());
+    if !guard.is_off() {
+        info!(
+            "garde : {} appareil(s) protégé(s){}",
+            guard.protected.len(),
+            guard
+                .quiet_hours
+                .map(|hours| format!(", heures calmes {}", hours.describe()))
+                .unwrap_or_default()
+        );
+    }
+    core.guard.configure(guard, local_minute);
     let restored = store.restore_into(&core.states).await?;
     info!("{restored} états restaurés depuis la base");
     for state in core.states.all() {
