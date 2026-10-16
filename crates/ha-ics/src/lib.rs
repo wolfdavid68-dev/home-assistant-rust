@@ -172,10 +172,10 @@ fn occurrence_id(occurrence: &ics::Occurrence) -> i64 {
 
 /// Les événements à publier, au format de l'agenda de la maison.
 #[must_use]
-pub fn window(events: &[ics::Event], now: DateTime) -> Vec<CalendarEvent> {
+pub fn window(events: &[ics::Event], now: DateTime, local: &TimeZone) -> Vec<CalendarEvent> {
     let from = now.checked_sub(PAST_DAYS.days()).unwrap_or(now);
     let to = now.checked_add(FUTURE_DAYS.days()).unwrap_or(now);
-    ics::expand(events, from, to)
+    ics::expand(events, from, to, local)
         .into_iter()
         .take(MAX_PUBLISHED)
         .map(|occurrence| CalendarEvent {
@@ -197,6 +197,7 @@ pub fn calendar_state(
     events: Option<&[ics::Event]>,
     error: Option<&str>,
     now: DateTime,
+    local: &TimeZone,
 ) -> (String, Attributes) {
     let Some(events) = events else {
         let mut attributes = Attributes::new();
@@ -208,7 +209,7 @@ pub fn calendar_state(
         return ("unavailable".into(), attributes);
     };
     let (state, mut attributes) =
-        ha_agenda::calendar_state(&calendar.name, &window(events, now), now);
+        ha_agenda::calendar_state(&calendar.name, &window(events, now, local), now);
     attributes.insert("read_only".into(), json!(true));
     attributes.insert("source".into(), json!(calendar.url.host_str()));
     if let Some(error) = error {
@@ -337,6 +338,7 @@ async fn run(
                 slot.events.as_deref(),
                 slot.error.as_deref(),
                 now,
+                &local,
             );
             if let Err(error) = core
                 .states
@@ -408,6 +410,7 @@ mod tests {
             Some(&parsed.events),
             None,
             date(2026, 10, 20).at(9, 0, 0, 0),
+            &TimeZone::UTC,
         );
         assert_eq!(state, "on", "un mardi de collecte");
         assert_eq!(attributes["message"], "Ordures ménagères");
@@ -421,7 +424,11 @@ mod tests {
         assert_eq!(events.len(), 10);
         assert_eq!(events[0]["all_day"], true);
         // Les identifiants restent les mêmes d'une relecture à l'autre.
-        let again = window(&parsed.events, date(2026, 10, 20).at(9, 0, 0, 0));
+        let again = window(
+            &parsed.events,
+            date(2026, 10, 20).at(9, 0, 0, 0),
+            &TimeZone::UTC,
+        );
         assert_eq!(again[0].id.to_string(), events[0]["uid"]);
 
         let (state, attributes) = calendar_state(
@@ -429,6 +436,7 @@ mod tests {
             None,
             Some("site injoignable"),
             date(2026, 10, 20).at(9, 0, 0, 0),
+            &TimeZone::UTC,
         );
         assert_eq!(state, "unavailable");
         assert_eq!(attributes["erreur"], "site injoignable");

@@ -41,6 +41,13 @@ pub struct Event {
     pub start: DateTime,
     pub end: DateTime,
     pub all_day: bool,
+    /// Le début et la fin dans le fuseau du fichier (UTC, `TZID`…) : les
+    /// répétitions se calculent là, puis passent en heure locale (sinon une
+    /// répétition en UTC prendrait une heure de travers à l'heure d'été).
+    pub source_start: DateTime,
+    pub source_end: DateTime,
+    /// `None` : heure « flottante » ou journée entière, déjà locale.
+    pub zone: Option<TimeZone>,
     pub rule: Option<Rule>,
     pub exdates: Vec<DateTime>,
     /// L'occurrence d'un événement répété que celui-ci remplace.
@@ -158,7 +165,36 @@ fn number<T: std::str::FromStr>(text: &str, range: std::ops::Range<usize>) -> Op
 
 /// Une date ou une date et heure, en heure locale. Le booléen dit si c'est
 /// une journée entière.
+/// Une date lue dans le fichier, dans son fuseau.
+struct Moment {
+    civil: DateTime,
+    all_day: bool,
+    zone: Option<TimeZone>,
+}
+
+/// `civil` (dans `zone`) en heure locale.
+fn localize(civil: DateTime, zone: Option<&TimeZone>, local: &TimeZone) -> Option<DateTime> {
+    match zone {
+        Some(zone) => {
+            let instant: Timestamp = civil.to_zoned(zone.clone()).ok()?.timestamp();
+            Some(instant.to_zoned(local.clone()).datetime())
+        }
+        // « Heure flottante » : déjà locale.
+        None => Some(civil),
+    }
+}
+
+/// Une date ou une date et heure, en heure locale. Le booléen dit si c'est
+/// une journée entière.
 fn moment(value: &str, params: &[(String, String)], local: &TimeZone) -> Option<(DateTime, bool)> {
+    let read = read_moment(value, params)?;
+    Some((
+        localize(read.civil, read.zone.as_ref(), local)?,
+        read.all_day,
+    ))
+}
+
+fn read_moment(value: &str, params: &[(String, String)]) -> Option<Moment> {
     let value = value.trim();
     let date = Date::new(
         number(value, 0..4)?,
@@ -167,7 +203,11 @@ fn moment(value: &str, params: &[(String, String)], local: &TimeZone) -> Option<
     )
     .ok()?;
     if value.len() == 8 || param(params, "VALUE") == Some("DATE") {
-        return Some((date.to_datetime(jiff::civil::Time::midnight()), true));
+        return Some(Moment {
+            civil: date.to_datetime(jiff::civil::Time::midnight()),
+            all_day: true,
+            zone: None,
+        });
     }
     if value.as_bytes().get(8) != Some(&b'T') {
         return None;
@@ -179,21 +219,16 @@ fn moment(value: &str, params: &[(String, String)], local: &TimeZone) -> Option<
         0,
     )
     .ok()?;
-    let civil = date.to_datetime(time);
     let zone = if value.ends_with('Z') {
         Some(TimeZone::UTC)
     } else {
         param(params, "TZID").and_then(|name| TimeZone::get(name).ok())
     };
-    match zone {
-        // Converti en heure locale.
-        Some(zone) => {
-            let instant: Timestamp = civil.to_zoned(zone).ok()?.timestamp();
-            Some((instant.to_zoned(local.clone()).datetime(), false))
-        }
-        // « Heure flottante » : déjà locale.
-        None => Some((civil, false)),
-    }
+    Some(Moment {
+        civil: date.to_datetime(time),
+        all_day: false,
+        zone,
+    })
 }
 
 /// `PT1H30M`, `P1D`, `P2W`.
@@ -287,6 +322,12 @@ fn rule(text: &str, local: &TimeZone) -> Option<Rule> {
             "BYDAY" => {
                 for day in value.split(',') {
                     let day = day.trim();
+                    // Un fichier venu d'Internet : rien que de l'ASCII, sinon
+                    // la règle est refusée (jamais de coupure au milieu d'un
+                    // caractère).
+                    if !day.is_ascii() {
+                        return None;
+                    }
                     let split = day.len().checked_sub(2)?;
                     let ordinal = match &day[..split] {
                         "" => None,
@@ -352,17 +393,32 @@ fn event(properties: &[Property], local: &TimeZone, simplified: &mut usize) -> O
         return Some(Read::Cancelled);
     }
     let (_, params, value) = get("DTSTART")?;
-    let (start, all_day) = moment(value, params, local)?;
-    let end = if let Some((_, params, value)) = get("DTEND") {
-        moment(value, params, local)?.0
+    let begin = read_moment(value, params)?;
+    let all_day = begin.all_day;
+    let zone = begin.zone;
+    let source_start = begin.civil;
+    // La fin, dans le fuseau du début.
+    let source_end = if let Some((_, params, value)) = get("DTEND") {
+        let end = read_moment(value, params)?;
+        match (&end.zone, &zone) {
+            (Some(end_zone), Some(zone)) => end
+                .civil
+                .to_zoned(end_zone.clone())
+                .ok()?
+                .with_time_zone(zone.clone())
+                .datetime(),
+            _ => end.civil,
+        }
     } else if let Some((_, _, value)) = get("DURATION") {
-        start.checked_add(duration(value)?).ok()?
+        source_start.checked_add(duration(value)?).ok()?
     } else if all_day {
-        start.checked_add(1.day()).ok()?
+        source_start.checked_add(1.day()).ok()?
     } else {
-        start
+        source_start
     };
-    let end = end.max(start);
+    let source_end = source_end.max(source_start);
+    let start = localize(source_start, zone.as_ref(), local)?;
+    let end = localize(source_end, zone.as_ref(), local)?.max(start);
     let rule = match get("RRULE") {
         Some((_, _, text)) => {
             let parsed = rule(text, local);
@@ -404,6 +460,9 @@ fn event(properties: &[Property], local: &TimeZone, simplified: &mut usize) -> O
         start,
         end,
         all_day,
+        source_start,
+        source_end,
+        zone,
         rule,
         exdates,
         recurrence_id,
@@ -421,10 +480,14 @@ fn nth_weekday(year: i16, month: i8, weekday: Weekday, n: i8) -> Option<Date> {
 /// Les dates candidates d'une période (une semaine, un mois…), dans l'ordre.
 fn period_dates(rule: &Rule, start: Date, period: i64) -> Vec<Date> {
     let mut dates: Vec<Date> = match rule.freq {
+        // BYDAY avec FREQ=DAILY : seulement ces jours-là (« en semaine »).
         Freq::Daily => start
             .checked_add((period * i64::from(rule.interval)).days())
             .ok()
             .into_iter()
+            .filter(|day| {
+                rule.by_day.is_empty() || rule.by_day.iter().any(|(_, w)| *w == day.weekday())
+            })
             .collect(),
         Freq::Weekly => {
             let monday = start
@@ -498,9 +561,28 @@ fn period_dates(rule: &Rule, start: Date, period: i64) -> Vec<Date> {
     dates
 }
 
-/// Les occurrences de `events` qui touchent `[from, to]`, triées.
+/// La première période utile : sans `COUNT`, inutile de compter depuis un
+/// début vieux de plusieurs années.
+fn first_period(rule: &Rule, start: Date, from: Date) -> i64 {
+    if rule.count.is_some() || from <= start {
+        return 0;
+    }
+    let days = (from - start).get_days();
+    let per = match rule.freq {
+        Freq::Daily => 1,
+        Freq::Weekly => 7,
+        // Un peu moins qu'un mois ou qu'une année : on part avant, jamais après.
+        Freq::Monthly => 31,
+        Freq::Yearly => 366,
+    } * i64::from(rule.interval);
+    (i64::from(days) / per - 1).max(0)
+}
+
+/// Les occurrences de `events` qui touchent `[from, to]` (heure locale),
+/// triées. Les répétitions se calculent dans le fuseau du fichier, puis
+/// passent en heure locale (`local`).
 #[must_use]
-pub fn expand(events: &[Event], from: DateTime, to: DateTime) -> Vec<Occurrence> {
+pub fn expand(events: &[Event], from: DateTime, to: DateTime, local: &TimeZone) -> Vec<Occurrence> {
     // Les occurrences remplacées par une version modifiée.
     let replaced: HashSet<(&str, DateTime)> = events
         .iter()
@@ -508,9 +590,19 @@ pub fn expand(events: &[Event], from: DateTime, to: DateTime) -> Vec<Occurrence>
         .collect();
     let mut out = Vec::new();
     for event in events {
-        let length = event.start.until(event.end).unwrap_or_default();
-        let mut push = |start: DateTime| {
-            let Ok(end) = start.checked_add(length) else {
+        let length = event
+            .source_start
+            .until(event.source_end)
+            .unwrap_or_default();
+        // Une occurrence (dans le fuseau du fichier) : en heure locale.
+        let mut push = |source_start: DateTime| {
+            let Ok(source_end) = source_start.checked_add(length) else {
+                return;
+            };
+            let (Some(start), Some(end)) = (
+                localize(source_start, event.zone.as_ref(), local),
+                localize(source_end, event.zone.as_ref(), local),
+            ) else {
                 return;
             };
             if end > from && start <= to {
@@ -519,7 +611,7 @@ pub fn expand(events: &[Event], from: DateTime, to: DateTime) -> Vec<Occurrence>
                     summary: event.summary.clone(),
                     description: event.description.clone(),
                     start,
-                    end,
+                    end: end.max(start),
                     all_day: event.all_day,
                 });
             }
@@ -529,21 +621,21 @@ pub fn expand(events: &[Event], from: DateTime, to: DateTime) -> Vec<Occurrence>
             .as_ref()
             .filter(|_| event.recurrence_id.is_none())
         else {
-            push(event.start);
+            push(event.source_start);
             continue;
         };
-        let time = event.start.time();
+        let time = event.source_start.time();
+        let begin = first_period(rule, event.source_start.date(), from.date());
         let mut produced = 0usize;
-        'periods: for period in 0..MAX_STEPS {
-            let dates = period_dates(rule, event.start.date(), period);
-            if dates.is_empty() && rule.freq != Freq::Monthly && rule.freq != Freq::Yearly {
-                break;
-            }
-            for date in dates {
-                let start = date.to_datetime(time);
-                if start < event.start {
+        'periods: for period in begin..begin + MAX_STEPS {
+            for date in period_dates(rule, event.source_start.date(), period) {
+                let source = date.to_datetime(time);
+                if source < event.source_start {
                     continue;
                 }
+                let Some(start) = localize(source, event.zone.as_ref(), local) else {
+                    continue;
+                };
                 if rule.until.is_some_and(|until| start > until) || start > to {
                     break 'periods;
                 }
@@ -555,7 +647,7 @@ pub fn expand(events: &[Event], from: DateTime, to: DateTime) -> Vec<Occurrence>
                 {
                     continue;
                 }
-                push(start);
+                push(source);
             }
         }
     }
@@ -636,6 +728,7 @@ mod tests {
             &parsed.events,
             date(2026, 10, 16).at(0, 0, 0, 0),
             date(2026, 11, 13).at(0, 0, 0, 0),
+            &paris(),
         );
         assert_eq!(
             summaries(&found),
@@ -667,6 +760,7 @@ mod tests {
             &parsed.events,
             date(2026, 10, 1).at(0, 0, 0, 0),
             date(2027, 1, 31).at(0, 0, 0, 0),
+            &paris(),
         );
         assert_eq!(
             summaries(&found),
@@ -681,6 +775,125 @@ mod tests {
                 "2026-12-08 20:00 Conseil",
             ]
         );
+    }
+
+    #[test]
+    fn weekdays_only_with_a_daily_rule() {
+        // Revue de la PR #60 : FREQ=DAILY;BYDAY=MO..FR donnait aussi le
+        // samedi et le dimanche.
+        let text = calendar(
+            "BEGIN:VEVENT\r\nUID:car\r\nSUMMARY:Covoiturage\r\nDTSTART:20261019T073000\r\n\
+             DURATION:PT30M\r\nRRULE:FREQ=DAILY;BYDAY=MO,TU,WE,TH,FR\r\nEND:VEVENT\r\n",
+        );
+        let parsed = parse(&text, &paris());
+        let found = expand(
+            &parsed.events,
+            date(2026, 10, 19).at(0, 0, 0, 0),
+            date(2026, 10, 25).at(23, 0, 0, 0),
+            &paris(),
+        );
+        let days: Vec<String> = found
+            .iter()
+            .map(|o| o.start.strftime("%a").to_string())
+            .collect();
+        assert_eq!(days, ["Mon", "Tue", "Wed", "Thu", "Fri"]);
+    }
+
+    #[test]
+    fn repeats_keep_their_real_time_across_the_clock_change() {
+        // Revue de la PR #60 : une répétition en heure universelle gardait
+        // l'heure locale de la première date, une heure de travers l'été.
+        let text = calendar(
+            "BEGIN:VEVENT\r\nUID:utc\r\nSUMMARY:En UTC\r\nDTSTART:20260301T080000Z\r\n\
+             DTEND:20260301T090000Z\r\nRRULE:FREQ=WEEKLY;COUNT=6\r\nEND:VEVENT\r\n\
+             BEGIN:VEVENT\r\nUID:paris\r\nSUMMARY:À Paris\r\nDTSTART;TZID=Europe/Paris:20260301T090000\r\n\
+             RRULE:FREQ=WEEKLY;COUNT=6\r\nEND:VEVENT\r\n",
+        );
+        let parsed = parse(&text, &paris());
+        let found = expand(
+            &parsed.events,
+            date(2026, 3, 1).at(0, 0, 0, 0),
+            date(2026, 4, 30).at(0, 0, 0, 0),
+            &paris(),
+        );
+        let at = |summary: &str| -> Vec<String> {
+            found
+                .iter()
+                .filter(|o| o.summary == summary)
+                .map(|o| o.start.strftime("%d/%m %H:%M").to_string())
+                .collect()
+        };
+        // 8 h UTC : 9 h l'hiver, 10 h l'été (passage le 29 mars).
+        assert_eq!(
+            at("En UTC"),
+            [
+                "01/03 09:00",
+                "08/03 09:00",
+                "15/03 09:00",
+                "22/03 09:00",
+                "29/03 10:00",
+                "05/04 10:00"
+            ]
+        );
+        // 9 h à Paris : toujours 9 h.
+        assert_eq!(
+            at("À Paris"),
+            [
+                "01/03 09:00",
+                "08/03 09:00",
+                "15/03 09:00",
+                "22/03 09:00",
+                "29/03 09:00",
+                "05/04 09:00"
+            ]
+        );
+        let first_summer = found
+            .iter()
+            .find(|o| o.summary == "En UTC" && o.start.month() == 4)
+            .unwrap();
+        assert_eq!(
+            first_summer.end.strftime("%H:%M").to_string(),
+            "11:00",
+            "une heure de durée"
+        );
+    }
+
+    #[test]
+    fn strange_files_never_panic() {
+        // Revue de la PR #60 : un caractère non ASCII dans BYDAY coupait une
+        // chaîne au milieu d'un caractère.
+        for rule in [
+            "BYDAY=€",
+            "BYDAY=1€",
+            "BYDAY=é",
+            "BYDAY=",
+            "BYDAY=X",
+            "BYMONTHDAY=€",
+            "INTERVAL=€",
+        ] {
+            let text = calendar(&format!(
+                "BEGIN:VEVENT\r\nUID:x\r\nSUMMARY:x\r\nDTSTART;VALUE=DATE:20261006\r\n\
+                 RRULE:FREQ=WEEKLY;{rule}\r\nEND:VEVENT\r\n"
+            ));
+            let parsed = parse(&text, &paris());
+            assert_eq!(parsed.events.len(), 1, "{rule}");
+            assert_eq!(
+                parsed.simplified, 1,
+                "{rule} : règle refusée, première date gardée"
+            );
+        }
+        for broken in [
+            "DTSTART:2026é1006",
+            "DTSTART:€€€€€€€€T€€€€€€",
+            "DTSTART;VALUE=DATE:2026100",
+        ] {
+            let text = calendar(&format!(
+                "BEGIN:VEVENT\r\nUID:x\r\n{broken}\r\nEND:VEVENT\r\n"
+            ));
+            assert_eq!(parse(&text, &paris()).skipped, 1, "{broken}");
+        }
+        assert!(duration("Pé").is_none());
+        assert!(duration("PT€H").is_none());
     }
 
     #[test]

@@ -22,7 +22,8 @@ Un assistant IA n'est **jamais** traité comme une personne, même si son compte
 | Règle | Pourquoi |
 |-------|----------|
 | Dans une **pièce protégée** ou aux **heures calmes**, son ordre attend qu'un membre de la famille le valide (cloche, ou bouton « Valider » sur le téléphone) | comme un ordre à la voix : un humain décide |
-| Il ne peut **jamais** déverrouiller une porte ni désarmer l'alarme | ouvrir la maison demande un mot de passe, qu'un assistant n'a pas |
+| Il ne commande **jamais** une serrure, l'alarme, une sirène, une porte de garage, un portail ou une porte, même pour fermer | ce qui ferme la maison reste entre des mains humaines |
+| Son jeton ne marche **que** pour MCP : le tableau de bord, l'API et le WebSocket le refusent | il ne peut pas se faire passer pour une personne et contourner la garde |
 | Il ne voit et ne commande que ce que **son compte** permet | un compte « invité » ne voit ni la présence ni la serrure |
 | Ses valeurs sont **vérifiées** ([étape 53](ordres.md#étape-53--vérifié-avant-lenvoi)) | « consigne entre 15 et 25 (reçu 30) » |
 | **60 appels** par minute au plus | un assistant qui boucle ne fait pas claquer les volets |
@@ -86,6 +87,7 @@ ne peut pas s'en servir.
 | Fichier | Rôle |
 |---------|------|
 | [ha-api/src/mcp.rs](../crates/ha-api/src/mcp.rs) (nouveau) | Le protocole, les trois outils, la limite d'appels |
-| [ha-api/src/rest.rs](../crates/ha-api/src/rest.rs) | `execute` : un ordre d'assistant IA est retenu par la garde quel que soit son rôle, et ne peut pas ouvrir la maison |
+| [ha-api/src/rest.rs](../crates/ha-api/src/rest.rs) | `execute` : un ordre d'assistant IA est retenu par la garde quel que soit son rôle, et ne touche jamais à ce qui ferme la maison |
+| [ha-auth/src/lib.rs](../crates/ha-auth/src/lib.rs) | Les jetons d'assistant (`program`, migration `0019`) : refusés par `authenticate`, acceptés par `authenticate_program` (MCP seulement) |
 | [ha-core/src/origin.rs](../crates/ha-core/src/origin.rs) | `Origin::Agent` : « par l'assistant IA « claude » » |
 | [ha-auth/src/lib.rs](../crates/ha-auth/src/lib.rs) | `issue_program_token` : un jeton sans mot de passe, créé en ligne de commande |

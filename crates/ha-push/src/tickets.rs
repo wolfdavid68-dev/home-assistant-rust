@@ -112,12 +112,17 @@ impl Tickets {
         let now = Instant::now();
         let mut map = self.map();
         map.retain(|_, kept| kept.expires > now);
+        // Plein : les tickets d'automatisation partent d'abord (le plus
+        // proche de sa fin) ; ceux d'un ordre à valider sont protégés, sinon
+        // un flot de messages chasserait les boutons « Valider ».
         while map.len() >= MAX_TICKETS {
-            let oldest = map
+            let victim = map
                 .iter()
+                .filter(|(_, kept)| kept.purpose == Purpose::Automation)
                 .min_by_key(|(_, kept)| kept.expires)
+                .or_else(|| map.iter().min_by_key(|(_, kept)| kept.expires))
                 .map(|(key, _)| *key)?;
-            map.remove(&oldest);
+            map.remove(&victim);
         }
         map.insert(fingerprint(&token), ticket);
         Some(token)
@@ -209,6 +214,31 @@ mod tests {
             let _ = tickets.issue(ticket(Purpose::Automation, Duration::from_hours(1)));
         }
         assert_eq!(tickets.len(), MAX_TICKETS);
+    }
+
+    #[test]
+    fn approval_tickets_survive_a_flood_of_automation_tickets() {
+        // Revue de la PR #60 : la réserve pleine de tickets d'automatisation
+        // (24 h), les tickets d'un ordre à valider (10 min) se chassaient
+        // l'un l'autre.
+        let tickets = Tickets::default();
+        for _ in 0..MAX_TICKETS {
+            let _ = tickets.issue(ticket(Purpose::Automation, Duration::from_hours(24)));
+        }
+        let phones: Vec<String> = (0..4)
+            .map(|_| {
+                tickets
+                    .issue(ticket(Purpose::Approval(9), Duration::from_mins(10)))
+                    .unwrap()
+            })
+            .collect();
+        assert_eq!(tickets.len(), MAX_TICKETS);
+        for phone in &phones {
+            assert!(
+                tickets.redeem(phone, "approve").is_ok(),
+                "chaque téléphone garde son bouton"
+            );
+        }
     }
 
     #[test]

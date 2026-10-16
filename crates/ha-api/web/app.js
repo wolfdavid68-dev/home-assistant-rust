@@ -93,6 +93,10 @@ $("#login-form").addEventListener("submit", async (event) => {
 $("#logout").addEventListener("click", async () => {
   $("#account-dialog").close();
   const current = token.get();
+  // Se déconnecter retire aussi cet appareil des notifications : sans ça,
+  // la tablette partagée recevrait encore les « Ordre à valider » (et leurs
+  // boutons) du compte qui vient de partir.
+  if (current) await forgetPushHere(current).catch(() => {});
   token.clear();
   live.close();
   if (current) {
@@ -3940,6 +3944,11 @@ const pushView = { info: null, registration: null, subscription: null, busy: fal
 
 /** Ce qui empêche ce navigateur de recevoir des notifications, ou null. */
 function pushBlocker() {
+  // Une tablette murale est partagée : pas de notifications (leurs boutons
+  // valideraient au nom de celui qui les a activées).
+  if (document.body.classList.contains("tablet")) {
+    return "Pas de notifications en mode tablette murale : l'écran est partagé. Active-les sur ton téléphone.";
+  }
   if (!window.isSecureContext) {
     return "Il faut ouvrir le tableau de bord en HTTPS (voir l'étape 7) : sans connexion sécurisée, le navigateur refuse les notifications.";
   }
@@ -3967,17 +3976,49 @@ function keyBytes(base64url) {
   return Uint8Array.from(atob(base64 + "=".repeat((4 - (base64.length % 4)) % 4)), (c) => c.charCodeAt(0));
 }
 
+/** L'abonnement de ce navigateur, s'il y en a un. */
+async function browserSubscription() {
+  const registration = await navigator.serviceWorker?.getRegistration("/").catch(() => null);
+  const subscription = await registration?.pushManager.getSubscription().catch(() => null);
+  return { registration, subscription: subscription ?? null };
+}
+
+/** Retire ce navigateur des notifications : côté serveur (avec le jeton
+ *  `bearer`, s'il est donné) et côté navigateur, et ferme celles qui sont
+ *  affichées (leurs boutons ne doivent plus servir). */
+async function forgetPushHere(bearer = null) {
+  const { registration, subscription } = await browserSubscription();
+  if (subscription && bearer) {
+    const headers = { Authorization: `Bearer ${bearer}` };
+    const response = await fetch("/api/push", { headers }).catch(() => null);
+    const info = response?.ok ? await response.json().catch(() => null) : null;
+    const mine = Array.isArray(info?.devices) ? info.devices.find((d) => d.endpoint === subscription.endpoint) : null;
+    if (mine) await fetch(`/api/push/subscriptions/${mine.id}`, { method: "DELETE", headers }).catch(() => {});
+  }
+  await subscription?.unsubscribe().catch(() => {});
+  for (const shown of (await registration?.getNotifications().catch(() => [])) ?? []) shown.close();
+  pushView.subscription = null;
+}
+
 async function loadPush() {
   const section = $("#push");
-  // Un invité ne reçoit pas de notifications.
+  // Un invité ne reçoit pas de notifications ; sur cet appareil, celles du
+  // compte précédent s'arrêtent.
   section.hidden = account.permissions.controls != null;
-  if (section.hidden) return;
+  if (section.hidden) {
+    if ((await browserSubscription()).subscription) await forgetPushHere();
+    return;
+  }
   const { status, data } = await api("GET", "/api/push");
   if (status !== 200) {
     section.hidden = true;
     return;
   }
   pushView.info = data;
+  // Un autre compte s'était abonné sur ce navigateur : ses notifications
+  // n'ont plus rien à faire ici.
+  const here = (await browserSubscription()).subscription;
+  if (here && !data.devices.some((d) => d.endpoint === here.endpoint)) await forgetPushHere();
   const blocker = data.available ? pushBlocker() : "Les notifications du navigateur sont coupées sur le serveur (HA_PUSH=off).";
   if (blocker === null && pushView.registration === null) {
     try {
@@ -4226,6 +4267,9 @@ function setTablet(on, byHand) {
     // Stockage bloqué : le mode ne durera que le temps de la page.
   }
   if (on) {
+    // Écran partagé : il ne reçoit plus les notifications de personne.
+    const bearer = token.get();
+    forgetPushHere(bearer).then(() => (bearer ? loadPush() : undefined)).catch(() => {});
     keepAwake();
     // Le plein écran n'est permis qu'en réponse à un geste (ce clic).
     if (byHand && document.fullscreenElement === null) document.documentElement.requestFullscreen?.().catch(() => {});

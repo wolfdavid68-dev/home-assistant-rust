@@ -52,6 +52,8 @@ notifications répond qu'il n'existe plus.
     message: La machine a fini.
     users: [david]        # facultatif : sinon, toute la famille
     priority: 4           # 4 ou 5 : réveille le téléphone même en économie d'énergie
+    tag: lessive          # facultatif : le message suivant du même sujet remplace celui-ci
+                          # (sans « tag », chaque message reste affiché à côté des autres)
 ```
 
 La vigilance météo orange ou rouge, par exemple (voir l'[étape 33](vigilance.md)) :
@@ -195,6 +197,10 @@ faux.
   `notify.windows.com` (ou un de leurs sous-domaines), sur le port standard. Une page piégée ne
   peut donc pas faire appeler par ton serveur une adresse de ton réseau (`https://192.168.1.1/…`).
   L'adresse est revérifiée à chaque envoi, et les redirections ne sont jamais suivies.
+- **Un appareil partagé ne garde pas tes notifications** : te déconnecter retire cet appareil (côté
+  serveur et dans le navigateur) et ferme les notifications affichées ; si quelqu'un d'autre se
+  connecte sur ce navigateur, tes notifications s'y arrêtent ; en **mode tablette murale**, aucune
+  notification (leurs boutons valideraient en ton nom). Active-les sur ton téléphone.
 - **Famille et administrateur seulement** : un invité ne peut pas s'abonner, et un compte devenu
   invité ne reçoit plus rien. Chacun ne voit et ne retire que ses propres appareils.
 - **Des limites** : 10 appareils par compte, 50 pour la maison ; 10 messages d'automatisation en

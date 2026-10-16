@@ -471,6 +471,24 @@ fn approval_closed(event_type: &str, data: &Attributes, states: &StateMachine) -
     })
 }
 
+/// Le sujet d'un message d'automatisation : celui qu'elle choisit (`tag` :
+/// le message suivant du même sujet remplace le précédent, comme dans Home
+/// Assistant), sinon un sujet propre à ce message (il n'efface pas les
+/// autres).
+fn automation_tag(data: &Attributes) -> String {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    let chosen = text(data, "tag").filter(|tag| {
+        (1..=40).contains(&tag.chars().count()) && !tag.chars().any(char::is_control)
+    });
+    match chosen {
+        Some(tag) => format!("automatisation.{tag}"),
+        None => format!(
+            "automatisation.{}",
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ),
+    }
+}
+
 /// `notify.send_message` sur `notify.appli`.
 fn from_automation(data: &Attributes, origin: &Origin) -> Option<Outgoing> {
     let body = clean(text(data, "message")?, MAX_BODY_CHARS);
@@ -531,7 +549,7 @@ fn from_automation(data: &Attributes, origin: &Origin) -> Option<Outgoing> {
             tag: if test {
                 "essai".into()
             } else {
-                "automatisation".into()
+                automation_tag(data)
             },
             url: "/",
             ttl: Duration::from_hours(24),
@@ -1284,6 +1302,35 @@ mod tests {
         assert_eq!(
             store.push_public_key().await.unwrap().as_deref(),
             Some(first.public_key())
+        );
+    }
+
+    #[test]
+    fn each_automation_message_keeps_its_own_notification() {
+        // Revue de la PR #60 : tous les messages portaient le même sujet et
+        // chacun effaçait le précédent sur le téléphone.
+        let message = |data: Value| {
+            outgoing(&call(data, Origin::Automation("a".into()), ENTITY))
+                .unwrap()
+                .message
+                .tag
+        };
+        let first = message(json!({"message": "La machine a fini."}));
+        let second = message(json!({"message": "Porte du garage ouverte."}));
+        assert_ne!(first, second);
+        // Un sujet choisi (« tag ») remplace le message précédent du même sujet.
+        assert_eq!(
+            message(json!({"message": "x", "tag": "lessive"})),
+            message(json!({"message": "y", "tag": "lessive"}))
+        );
+        assert_eq!(
+            message(json!({"message": "x", "tag": "lessive"})),
+            "automatisation.lessive"
+        );
+        // Un sujet bizarre est ignoré (pas de caractères de contrôle, 40 au plus).
+        assert_ne!(
+            message(json!({"message": "x", "tag": "a\u{7}b"})),
+            message(json!({"message": "y", "tag": "a\u{7}b"}))
         );
     }
 

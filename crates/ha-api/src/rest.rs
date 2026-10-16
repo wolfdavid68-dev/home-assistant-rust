@@ -588,15 +588,18 @@ pub(crate) async fn execute(
             auth.user.role.label()
         )));
     }
-    if roles::needs_confirmation(domain, service) {
-        if agent {
-            return Err(ApiError::Forbidden(
-                "un assistant IA ne peut pas ouvrir la maison (serrure, alarme)".into(),
-            ));
-        }
-        if crate::automations::confirmation_left(state, &auth.token).is_none() {
-            return Err(ApiError::ConfirmationRequired);
-        }
+    // Un assistant IA ne touche jamais à ce qui ferme la maison : serrure,
+    // alarme, sirène, porte de garage, portail, porte (même pour fermer).
+    if agent && roles::guards_the_house(&entity_id, &state.core.states) {
+        return Err(ApiError::Forbidden(
+            "un assistant IA ne commande ni serrure, ni alarme, ni porte de garage, portail ou porte"
+                .into(),
+        ));
+    }
+    if roles::needs_confirmation(domain, service)
+        && crate::automations::confirmation_left(state, &auth.token).is_none()
+    {
+        return Err(ApiError::ConfirmationRequired);
     }
     let origin = if agent {
         ha_core::Origin::Agent(auth.user.username.clone())

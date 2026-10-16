@@ -263,7 +263,7 @@ impl Auth {
             .fetch_optional(&self.pool)
             .await?;
         match user_id {
-            Some(user_id) => Ok(Some(self.issue_token(user_id, lifetime).await?)),
+            Some(user_id) => Ok(Some(self.insert_token(user_id, lifetime, true).await?)),
             None => Ok(None),
         }
     }
@@ -449,9 +449,20 @@ impl Auth {
         Ok(row.map(|(secret,)| secret.is_some()))
     }
 
-    /// Retrouve l'utilisateur d'un jeton. `None` si le jeton est inconnu,
-    /// révoqué ou expiré.
+    /// Retrouve l'utilisateur d'un jeton de **session** (connexion par mot
+    /// de passe). `None` si le jeton est inconnu, révoqué, expiré, ou si
+    /// c'est un jeton d'assistant IA : ceux-là ne servent qu'à MCP.
     pub async fn authenticate(&self, token: &str) -> Result<Option<User>, AuthError> {
+        self.lookup(token, false).await
+    }
+
+    /// Retrouve l'utilisateur d'un jeton d'**assistant IA** (`ha-server user
+    /// token`), pour MCP seulement.
+    pub async fn authenticate_program(&self, token: &str) -> Result<Option<User>, AuthError> {
+        self.lookup(token, true).await
+    }
+
+    async fn lookup(&self, token: &str, program: bool) -> Result<Option<User>, AuthError> {
         if !looks_like_token(token) {
             return Ok(None);
         }
@@ -462,10 +473,12 @@ impl Auth {
         let row: Option<(i64, String, String)> = sqlx::query_as(
             "SELECT users.id, users.username, users.role
              FROM access_tokens JOIN users ON users.id = access_tokens.user_id
-             WHERE access_tokens.token_hash = ?1 AND access_tokens.expires_at > ?2",
+             WHERE access_tokens.token_hash = ?1 AND access_tokens.expires_at > ?2
+               AND access_tokens.program = ?3",
         )
         .bind(token::hash_token(token).as_slice())
         .bind(to_micros(SystemTime::now())?)
+        .bind(i64::from(program))
         .fetch_optional(&self.pool)
         .await?;
         Ok(row.map(|(id, username, role)| User {
@@ -500,17 +513,29 @@ impl Auth {
         user_id: i64,
         lifetime: Duration,
     ) -> Result<IssuedToken, AuthError> {
+        self.insert_token(user_id, lifetime, false).await
+    }
+
+    /// `program` : un jeton d'assistant IA, accepté seulement par
+    /// [`Auth::authenticate_program`].
+    async fn insert_token(
+        &self,
+        user_id: i64,
+        lifetime: Duration,
+        program: bool,
+    ) -> Result<IssuedToken, AuthError> {
         let token = token::generate_token()?;
         let now = SystemTime::now();
         let expires_at = now + lifetime;
         sqlx::query(
-            "INSERT INTO access_tokens (user_id, token_hash, created_at, expires_at)
-             VALUES (?1, ?2, ?3, ?4)",
+            "INSERT INTO access_tokens (user_id, token_hash, created_at, expires_at, program)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
         )
         .bind(user_id)
         .bind(token::hash_token(&token).as_slice())
         .bind(to_micros(now)?)
         .bind(to_micros(expires_at)?)
+        .bind(i64::from(program))
         .execute(&self.pool)
         .await?;
         Ok(IssuedToken { token, expires_at })

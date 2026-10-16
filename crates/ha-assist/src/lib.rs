@@ -226,19 +226,21 @@ enum Unit {
     None,
 }
 
-/// « à 50 % », « à 21,5 degrés », « à 30 ».
+/// « à 50 % », « à 21,5 degrés », « à 30 ». Un nombre ne compte que
+/// derrière « à », ou suivi d'une unité : celui d'un nom (« la chambre 2 »,
+/// « la lampe 2 ») n'est pas une valeur.
 fn value(words: &[&str]) -> Option<(f64, Unit)> {
-    let index = words
-        .iter()
-        .position(|word| word.parse::<f64>().is_ok_and(f64::is_finite))?;
-    let number = words[index].parse::<f64>().ok()?;
-    let unit = match words.get(index + 1).copied() {
-        Some("pourcent") => Unit::Percent,
-        Some("pour") if words.get(index + 2) == Some(&"cent") => Unit::Percent,
-        Some("degre" | "degres") => Unit::Degrees,
-        _ => Unit::None,
-    };
-    Some((number, unit))
+    words.iter().enumerate().find_map(|(index, word)| {
+        let number = word.parse::<f64>().ok().filter(|n| n.is_finite())?;
+        let unit = match words.get(index + 1).copied() {
+            Some("pourcent") => Unit::Percent,
+            Some("pour") if words.get(index + 2) == Some(&"cent") => Unit::Percent,
+            Some("degre" | "degres") => Unit::Degrees,
+            _ => Unit::None,
+        };
+        let after_a = index > 0 && words[index - 1] == "a";
+        (after_a || unit != Unit::None).then_some((number, unit))
+    })
 }
 
 fn data(pairs: &[(&str, Value)]) -> Attributes {
@@ -377,11 +379,23 @@ fn find<'a>(
         .map(|(device, words)| (device, words.len()))
         .collect();
     if let Some(longest) = named.iter().map(|(_, len)| *len).max() {
-        let devices: Vec<&Device> = named
+        let mut devices: Vec<&Device> = named
             .into_iter()
             .filter(|(_, len)| *len == longest)
             .map(|(device, _)| device)
             .collect();
+        // La pièce dite dans la phrase départage les appareils du même nom.
+        if let Some(area) = area
+            && devices.iter().any(|d| d.area.as_deref() == Some(area))
+        {
+            devices.retain(|d| d.area.as_deref() == Some(area));
+        }
+        // Plusieurs appareils, au singulier : lequel ?
+        if devices.len() > 1 && !plural {
+            return Err(NotUnderstood::Ambiguous(
+                devices.iter().take(6).map(|device| label(device)).collect(),
+            ));
+        }
         return Ok(Target { devices });
     }
 
@@ -1006,6 +1020,74 @@ mod tests {
             panic!()
         };
         assert_eq!(amount(&orders[0]), None);
+    }
+
+    #[test]
+    fn numbers_in_names_are_not_values() {
+        // Revue de la PR #60 : « chambre 2 » donnait une position de 2 %.
+        let core = Core::new();
+        let devices = vec![
+            device(
+                &core,
+                "cover.ch2",
+                "closed",
+                "Volet",
+                Some("Chambre 2"),
+                json!({}),
+            ),
+            device(&core, "light.l2", "off", "Lampe 2", None, json!({})),
+        ];
+        let one = |text: &str| match understand(text, &devices).unwrap() {
+            Understood::Orders(mut orders) => {
+                assert_eq!(orders.len(), 1, "{text}");
+                let order = orders.remove(0);
+                (order.service, Value::Object(order.data))
+            }
+            Understood::Answer(answer) => panic!("{answer}"),
+        };
+        assert_eq!(
+            one("ouvre le volet de la chambre 2"),
+            ("open_cover".into(), json!({}))
+        );
+        assert_eq!(one("allume la lampe 2"), ("turn_on".into(), json!({})));
+        assert_eq!(
+            one("mets la lampe 2 à 40 %"),
+            ("turn_on".into(), json!({"brightness_pct": 40}))
+        );
+        assert_eq!(
+            one("ouvre le volet de la chambre 2 à 30"),
+            ("set_cover_position".into(), json!({"position": 30}))
+        );
+    }
+
+    #[test]
+    fn the_room_said_chooses_between_devices_of_the_same_name() {
+        // Revue de la PR #60 : deux « Lampe » ; « la lampe du salon »
+        // allumait aussi celle de la chambre.
+        let core = Core::new();
+        let devices = vec![
+            device(&core, "light.a", "off", "Lampe", Some("Salon"), json!({})),
+            device(&core, "light.b", "off", "Lampe", Some("Chambre"), json!({})),
+        ];
+        let Understood::Orders(orders) = understand("allume la lampe du salon", &devices).unwrap()
+        else {
+            panic!()
+        };
+        let ids: Vec<&str> = orders.iter().map(|o| o.entity_id.as_str()).collect();
+        assert_eq!(ids, ["light.a"]);
+        // Sans pièce, au singulier : laquelle ?
+        assert_eq!(
+            understand("allume la lampe", &devices),
+            Err(NotUnderstood::Ambiguous(vec![
+                "Lampe (Salon)".into(),
+                "Lampe (Chambre)".into()
+            ]))
+        );
+        // Au pluriel : les deux.
+        let Understood::Orders(orders) = understand("allume les lampes", &devices).unwrap() else {
+            panic!()
+        };
+        assert_eq!(orders.len(), 2);
     }
 
     #[test]

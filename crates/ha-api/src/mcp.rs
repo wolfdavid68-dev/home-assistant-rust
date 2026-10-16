@@ -13,11 +13,13 @@
 //!
 //! Sécurité :
 //! - un **jeton** par assistant (`ha-server user token <nom>`), avec les
-//!   droits de son compte ;
+//!   droits de son compte ; il ne marche que sur cette route (le tableau de
+//!   bord, l'API et le WebSocket le refusent) ;
 //! - chaque ordre suit le chemin d'un toucher (`rest::execute`), en
 //!   **assistant IA** : la garde le retient dans une pièce protégée ou aux
-//!   heures calmes quel que soit le rôle du compte, et il ne peut jamais
-//!   ouvrir la maison (serrure, alarme) ;
+//!   heures calmes quel que soit le rôle du compte, et il ne touche jamais
+//!   à ce qui ferme la maison (serrure, alarme, sirène, garage, portail,
+//!   porte) ;
 //! - 60 appels d'outils par minute et par compte ;
 //! - une page web ne peut pas s'en servir : une requête qui annonce une
 //!   autre origine (`Origin`) est refusée (protection contre le « DNS
@@ -39,7 +41,7 @@ use serde_json::{Value, json};
 
 use crate::ApiState;
 use crate::assist::{converse, devices, explain};
-use crate::auth::Authenticated;
+use crate::auth::{AgentAuthenticated, Authenticated};
 use crate::rest::{Outcome, audit, execute};
 
 /// Les versions du protocole connues, de la plus récente à la plus ancienne.
@@ -137,7 +139,7 @@ fn tools() -> Value {
             "description": "Appelle un service sur un appareil, comme Home Assistant : par exemple \
                 domain « cover », service « set_cover_position », entity_id « cover.chambre », \
                 data {\"position\": 40}. Les valeurs sont vérifiées par la maison. Un assistant IA \
-                ne peut jamais déverrouiller une porte ni désarmer l'alarme.",
+                ne commande jamais une serrure, l'alarme, une sirène, une porte de garage, un portail ou une porte.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -158,7 +160,7 @@ pub(crate) async fn handle(
     State(state): State<Arc<ApiState>>,
     ConnectInfo(client): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
-    auth: Authenticated,
+    AgentAuthenticated(auth): AgentAuthenticated,
     body: Bytes,
 ) -> Response {
     if !same_origin(&headers) {

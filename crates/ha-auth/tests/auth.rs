@@ -401,12 +401,21 @@ async fn a_program_token_works_without_a_password_and_dies_with_it() {
         .unwrap();
     assert!(left > Duration::from_hours(89 * 24) && left <= Duration::from_hours(90 * 24));
     assert_eq!(
-        auth.authenticate(&issued.token)
+        auth.authenticate_program(&issued.token)
             .await
             .unwrap()
             .unwrap()
             .username,
         "david"
+    );
+    // Un jeton d'assistant n'est pas un jeton de session, et l'inverse.
+    assert!(auth.authenticate(&issued.token).await.unwrap().is_none());
+    let session = auth.login("david", PASSWORD, None, IP).await.unwrap();
+    assert!(
+        auth.authenticate_program(&session.token)
+            .await
+            .unwrap()
+            .is_none()
     );
     // Bornée à un an.
     let long = auth
@@ -429,5 +438,10 @@ async fn a_program_token_works_without_a_password_and_dies_with_it() {
     auth.set_password("david", "un tout autre mot de passe long")
         .await
         .unwrap();
-    assert!(auth.authenticate(&issued.token).await.unwrap().is_none());
+    assert!(
+        auth.authenticate_program(&issued.token)
+            .await
+            .unwrap()
+            .is_none()
+    );
 }

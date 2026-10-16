@@ -58,8 +58,9 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
 - Assist (phrases en français) : compris sur le serveur, sans cloud ; seulement les appareils visibles du
   compte ; chaque ordre suit le chemin d'un toucher (droits, garde, mot de passe, valeurs) ; phrase jamais journalisée.
 - Assistant IA (MCP) : jeton par assistant (ligne de commande, 1 à 365 jours, révoqué avec le mot de passe) ;
-  ses ordres sont retenus par la garde quel que soit son rôle ; jamais serrure ni alarme ; 60 appels par
-  minute ; en-tête `Origin` d'un autre site refusé ; chaque appel audité.
+  ce jeton ne marche que pour MCP (refusé par le tableau de bord, l'API et le WebSocket) ; ses ordres sont
+  retenus par la garde quel que soit son rôle ; jamais serrure, alarme, sirène, garage, portail ni porte ;
+  60 appels par minute ; en-tête `Origin` d'un autre site refusé ; chaque appel audité.
 - Agendas en ligne (ICS) : HTTPS seulement, sans redirection, 2 Mio au plus ; l'adresse (qui peut contenir une
   clé secrète) n'est jamais journalisée ni publiée, seulement le nom du site ; lecture seule.
 - Alexa (faux pont Hue, sans authentification possible) : désactivée par défaut ; seuls les appareils listés

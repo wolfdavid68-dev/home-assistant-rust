@@ -2135,7 +2135,21 @@ async fn an_ai_assistant_plugs_in_through_mcp_under_the_guard() {
     .await;
     let (text, error) = tool_text(&body);
     assert!(error);
-    assert!(text.contains("ne peut pas ouvrir la maison"), "{text}");
+    assert!(text.contains("ne commande ni serrure"), "{text}");
+    // Ni la porte du garage, même hors pièce protégée (revue de la PR #60).
+    let (_, body) = mcp(
+        &app,
+        Some(&claude),
+        &[],
+        tool(
+            "call_service",
+            json!({"domain": "cover", "service": "open_cover", "entity_id": "cover.garage"}),
+        ),
+    )
+    .await;
+    let (text, error) = tool_text(&body);
+    assert!(error, "{text}");
+    assert!(text.contains("porte de garage"), "{text}");
     // Une valeur hors plage.
     let (_, body) = mcp(
         &app,
@@ -2180,6 +2194,47 @@ async fn an_ai_assistant_plugs_in_through_mcp_under_the_guard() {
             .iter()
             .any(|e| e.action == "mcp" && e.detail.as_deref() == Some("call_service"))
     );
+}
+
+#[tokio::test]
+async fn an_assistant_token_only_opens_mcp() {
+    let app = TestApp::new().await;
+    furnish(&app);
+    let _ = app.login().await;
+    let issued = app
+        .state
+        .auth
+        .issue_program_token("david", std::time::Duration::from_hours(24))
+        .await
+        .unwrap()
+        .unwrap();
+    let agent = issued.token.as_str();
+    // Partout ailleurs que MCP, un jeton d'assistant n'existe pas : il ne
+    // peut pas se faire passer pour une personne (garde contournée).
+    for (method, uri, body) in [
+        ("GET", "/api/states", None),
+        (
+            "POST",
+            "/api/services/cover/open_cover",
+            Some(json!({"entity_id": "cover.salon"})),
+        ),
+        (
+            "POST",
+            "/api/conversation/process",
+            Some(json!({"text": "ouvre le volet du salon"})),
+        ),
+    ] {
+        let (status, _) = app.request(method, uri, Some(agent), body).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED, "{uri}");
+    }
+    let (status, body) = mcp(
+        &app,
+        Some(agent),
+        &[],
+        json!({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
 }
 
 /// Un ticket de bouton, comme le service des notifications en émet un.

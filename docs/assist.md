@@ -40,7 +40,11 @@ micro du clavier permet de la dicter.
 3. **par son type seul** : « toutes les lumières », « tous les volets » ; ou le seul appareil de
    ce type. S'il y en a plusieurs, Assist demande lequel.
 
-Les pièces sont celles de `areas.yaml` ([étape 9](pieces.md)).
+Les pièces sont celles de `areas.yaml` ([étape 9](pieces.md)). La pièce dite départage deux
+appareils du même nom (« la lampe du salon », pas celle de la chambre).
+
+**Une valeur** compte derrière « à », ou avec son unité : « à 40 % », « à 21 degrés », « 50 % ».
+Le nombre d'un nom (« la chambre 2 », « la lampe 2 ») n'est jamais pris pour une valeur.
 
 ## Les mêmes règles qu'un toucher
 

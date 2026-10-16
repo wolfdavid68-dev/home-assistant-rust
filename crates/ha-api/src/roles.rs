@@ -122,6 +122,33 @@ pub(crate) fn can_control_with_members(
     })
 }
 
+/// Ce qu'un assistant IA ne commande **jamais**, même en fermant (étape
+/// 55) : ce qui ferme ou ouvre la maison. Les serrures, l'alarme, les
+/// sirènes, et les portes de garage, portails et portes ; pour un groupe,
+/// chacun de ses membres aussi.
+pub(crate) fn guards_the_house(entity_id: &EntityId, states: &ha_core::StateMachine) -> bool {
+    let sensitive = |id: &EntityId, state: Option<&State>| {
+        matches!(id.domain(), "lock" | "alarm_control_panel" | "siren")
+            || (id.domain() == "cover"
+                && device_class(state).is_some_and(|c| FORBIDDEN_COVER_CLASSES.contains(&c)))
+    };
+    let state = states.get(entity_id);
+    if sensitive(entity_id, state.as_ref()) {
+        return true;
+    }
+    state
+        .as_ref()
+        .and_then(|s| s.attributes().get("entity_id"))
+        .and_then(Value::as_array)
+        .is_some_and(|members| {
+            members
+                .iter()
+                .filter_map(Value::as_str)
+                .filter_map(|id| id.parse::<EntityId>().ok())
+                .any(|id| sensitive(&id, states.get(&id).as_ref()))
+        })
+}
+
 /// Les droits du compte, pour que le tableau de bord cache ce qui ne sert à
 /// rien (le serveur vérifie de toute façon chaque demande).
 pub(crate) fn permissions_json(user: &User) -> Value {
