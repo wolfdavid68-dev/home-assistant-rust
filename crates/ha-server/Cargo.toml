@@ -15,8 +15,10 @@ ha-auth = { path = "../ha-auth" }
 ha-core = { path = "../ha-core" }
 ha-freebox = { path = "../ha-freebox" }
 ha-hue = { path = "../ha-hue" }
+ha-ics = { path = "../ha-ics" }
 ha-mqtt = { path = "../ha-mqtt" }
 ha-notify = { path = "../ha-notify" }
+ha-push = { path = "../ha-push" }
 ha-person = { path = "../ha-person" }
 ha-agenda = { path = "../ha-agenda" }
 ha-derived = { path = "../ha-derived" }
@@ -25,10 +27,12 @@ ha-notices = { path = "../ha-notices" }
 ha-teleinfo = { path = "../ha-teleinfo" }
 ha-input = { path = "../ha-input" }
 ha-logbook = { path = "../ha-logbook" }
+ha-simulation = { path = "../ha-simulation" }
 ha-somfy = { path = "../ha-somfy" }
 ha-thermostat = { path = "../ha-thermostat" }
 ha-tls = { path = "../ha-tls" }
 ha-weather = { path = "../ha-weather" }
+ha-workday = { path = "../ha-workday" }
 jiff.workspace = true
 ha-storage = { path = "../ha-storage" }
 ha-sun = { path = "../ha-sun" }

@@ -143,12 +143,28 @@ async fn the_thermostat_heats_only_when_needed() {
     set(&core, "sensor.temperature", "18.0");
     wait_heater(&core, "on").await;
 
-    // Une consigne absurde est ramenée dans les bornes, et efface le préréglage.
-    call(&core, "set_temperature", json!({"temperature": 40}));
+    // Une consigne absurde est refusée avant l'envoi (étape 53) : rien ne
+    // change.
+    let (_, before) = climate(&core);
+    let Value::Object(data) = json!({"temperature": 40}) else {
+        panic!()
+    };
+    let refused = core
+        .call_service(
+            "climate",
+            "set_temperature",
+            "climate.salon".parse().unwrap(),
+            data,
+        )
+        .unwrap_err();
+    assert_eq!(
+        refused.to_string(),
+        "Chauffage du salon : consigne entre 7 et 25 (reçu 40)"
+    );
     settle().await;
     let (_, attributes) = climate(&core);
-    assert_eq!(attributes["temperature"], 25.0);
-    assert_eq!(attributes["preset_mode"], "none");
+    assert_eq!(attributes["temperature"], before["temperature"]);
+    assert_eq!(attributes["preset_mode"], before["preset_mode"]);
 
     // Arrêt : coupé.
     call(&core, "turn_off", json!({}));

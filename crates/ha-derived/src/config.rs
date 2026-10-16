@@ -13,6 +13,8 @@
 //!   trop_humide: {entity_id: sensor.humidite_sdb, upper: 70, hysteresis: 2}
 //! utility_meter:
 //!   electricite_du_jour: {source: sensor.compteur, cycle: daily}
+//! history_stats:
+//!   chauffage_du_jour: {entity_id: switch.radiateur, state: "on", type: time, cycle: daily}
 //! ```
 //!
 //! Sécurité : le fichier est écrit par toi, mais on le vérifie comme s'il
@@ -59,6 +61,8 @@ struct FileConfig {
     threshold: Option<BTreeMap<String, ThresholdConfig>>,
     #[serde(default)]
     utility_meter: Option<BTreeMap<String, MeterConfig>>,
+    #[serde(default)]
+    history_stats: Option<BTreeMap<String, HistoryStatsConfig>>,
 }
 
 #[derive(Deserialize)]
@@ -137,6 +141,26 @@ struct MeterConfig {
     cycle: String,
 }
 
+/// Un état, ou une liste d'états (`state: [heat, on]`).
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum OneOrMany {
+    One(String),
+    Many(Vec<String>),
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct HistoryStatsConfig {
+    #[serde(default)]
+    name: Option<String>,
+    entity_id: String,
+    state: OneOrMany,
+    #[serde(rename = "type")]
+    measure: String,
+    cycle: String,
+}
+
 // ─────────────────────────── Ce qu'on obtient ───────────────────────────
 
 /// Les sortes de groupes (le domaine de l'entité créée).
@@ -211,6 +235,25 @@ pub enum Kind {
         source: EntityId,
         cycle: Cycle,
     },
+    /// Combien de temps (ou de fois) une entité a été dans un état, depuis
+    /// le début de la période (étape 59).
+    HistoryStats {
+        source: EntityId,
+        states: Vec<String>,
+        measure: Measure,
+        cycle: Cycle,
+    },
+}
+
+/// Ce que mesure une statistique d'historique.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Measure {
+    /// Des heures.
+    Time,
+    /// Combien de fois l'entité est entrée dans l'état.
+    Count,
+    /// La part de la période, en %.
+    Ratio,
 }
 
 /// Un assistant vérifié.
@@ -228,7 +271,9 @@ impl Derived {
         match &self.kind {
             Kind::Group { members, .. } => members.iter().collect(),
             Kind::MinMax { sources, .. } => sources.iter().collect(),
-            Kind::Threshold { source, .. } | Kind::Meter { source, .. } => vec![source],
+            Kind::Threshold { source, .. }
+            | Kind::Meter { source, .. }
+            | Kind::HistoryStats { source, .. } => vec![source],
             Kind::Schedule { .. } => Vec::new(),
         }
     }
@@ -374,22 +419,41 @@ pub fn parse(yaml: &str) -> Result<Vec<Derived>, DerivedError> {
 
     for (id, config) in section("utility_meter", file.utility_meter)? {
         let place = format!("utility_meter.{id}");
-        let cycle = match config.cycle.as_str() {
-            "hourly" => Cycle::Hourly,
-            "daily" => Cycle::Daily,
-            "weekly" => Cycle::Weekly,
-            "monthly" => Cycle::Monthly,
-            "yearly" => Cycle::Yearly,
-            _ => {
-                return Err(invalid(
-                    &place,
-                    "cycle : hourly, daily, weekly, monthly ou yearly",
-                ));
-            }
-        };
         let kind = Kind::Meter {
             source: entity(&place, &config.source)?,
-            cycle,
+            cycle: cycle(&place, &config.cycle)?,
+        };
+        all.push(derived("sensor", &id, config.name, kind)?);
+    }
+
+    for (id, config) in section("history_stats", file.history_stats)? {
+        let place = format!("history_stats.{id}");
+        let measure = match config.measure.as_str() {
+            "time" => Measure::Time,
+            "count" => Measure::Count,
+            "ratio" => Measure::Ratio,
+            _ => return Err(invalid(&place, "type : time, count ou ratio")),
+        };
+        let states = match config.state {
+            OneOrMany::One(state) => vec![state],
+            OneOrMany::Many(states) => states,
+        };
+        if states.is_empty()
+            || states.len() > 10
+            || states
+                .iter()
+                .any(|s| s.is_empty() || s.len() > 64 || s.chars().any(char::is_control))
+        {
+            return Err(invalid(
+                &place,
+                "state : 1 à 10 états de 64 caractères au plus",
+            ));
+        }
+        let kind = Kind::HistoryStats {
+            source: entity(&place, &config.entity_id)?,
+            states,
+            measure,
+            cycle: cycle(&place, &config.cycle)?,
         };
         all.push(derived("sensor", &id, config.name, kind)?);
     }
@@ -414,6 +478,22 @@ pub fn parse(yaml: &str) -> Result<Vec<Derived>, DerivedError> {
         }
     }
     Ok(all)
+}
+
+fn cycle(place: &str, text: &str) -> Result<Cycle, DerivedError> {
+    Ok(match text {
+        "hourly" => Cycle::Hourly,
+        "daily" => Cycle::Daily,
+        "weekly" => Cycle::Weekly,
+        "monthly" => Cycle::Monthly,
+        "yearly" => Cycle::Yearly,
+        _ => {
+            return Err(invalid(
+                place,
+                "cycle : hourly, daily, weekly, monthly ou yearly",
+            ));
+        }
+    })
 }
 
 fn section<T>(
@@ -600,6 +680,36 @@ mod tests {
             "utility_meter:\n  a: {source: sensor.a, cycle: daily}\n  b: {source: sensor.a, cycle: chaque_jour}",
             // Un assistant calculé à partir d'un autre.
             "min_max:\n  a: {entities: [sensor.b]}\nutility_meter:\n  b: {source: sensor.c, cycle: daily}",
+        ] {
+            assert!(parse(bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn history_stats_are_checked() {
+        let all = parse(
+            "history_stats:\n  chauffage: {entity_id: climate.salon, state: [heat], type: time, cycle: daily}\n  \
+             portes: {name: Portes, entity_id: binary_sensor.porte, state: \"on\", type: count, cycle: weekly}\n",
+        )
+        .unwrap();
+        assert_eq!(all[0].entity_id.as_str(), "sensor.chauffage");
+        let Kind::HistoryStats {
+            states,
+            measure,
+            cycle,
+            ..
+        } = &all[1].kind
+        else {
+            panic!()
+        };
+        assert_eq!(
+            (states.as_slice(), *measure, *cycle),
+            (&["on".to_owned()][..], Measure::Count, Cycle::Weekly)
+        );
+        for bad in [
+            "history_stats:\n  a: {entity_id: switch.a, state: \"on\", type: duree, cycle: daily}",
+            "history_stats:\n  a: {entity_id: switch.a, state: [], type: time, cycle: daily}",
+            "history_stats:\n  a: {entity_id: switch.a, state: \"on\", type: time, cycle: toujours}",
         ] {
             assert!(parse(bad).is_err(), "{bad}");
         }

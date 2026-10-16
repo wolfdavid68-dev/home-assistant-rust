@@ -23,6 +23,7 @@ utilisation :
   ha-server user list             liste les comptes
   ha-server user totp <nom>       active la double authentification
   ha-server user totp-off <nom>   la désactive
+  ha-server user token <nom> [jours]  jeton pour un assistant IA (MCP), 90 jours par défaut
   ha-server hue pair <adresse>    associe le pont Philips Hue
   ha-server hue status            affiche le pont associé
   ha-server hue forget            oublie le pont
@@ -40,6 +41,8 @@ utilisation :
   ha-server automations list      liste les automatisations (fichier et éditeur)
   ha-server automations delete <id>  supprime une automatisation de l'éditeur
   ha-server areas check           vérifie le fichier des pièces
+  ha-server calendriers check     vérifie le fichier des agendas en ligne (ICS)
+  ha-server simulation check      vérifie la simulation de présence
   ha-server guard check           vérifie la garde (pièces protégées, heures calmes)
   ha-server alexa check           vérifie le fichier des appareils pour Alexa
   ha-server thermostats check     vérifie le fichier des thermostats
@@ -126,6 +129,8 @@ pub async fn user_command(args: &[&str]) -> Result<(), Box<dyn Error>> {
             Ok(())
         }
         ["totp", name] => enable_totp(&auth, name).await,
+        ["token", name] => program_token(&auth, name, None).await,
+        ["token", name, days] => program_token(&auth, name, Some(days)).await,
         ["totp-off", name] => {
             if auth.disable_totp(name).await? {
                 println!("double authentification désactivée pour « {name} »");
@@ -141,6 +146,32 @@ pub async fn user_command(args: &[&str]) -> Result<(), Box<dyn Error>> {
     }
     store.close().await;
     result
+}
+
+/// `user token <nom> [jours]` : un jeton pour un assistant IA branché par
+/// MCP (étape 55). Affiché une seule fois ; 90 jours par défaut, 365 au plus.
+async fn program_token(auth: &Auth, name: &str, days: Option<&str>) -> Result<(), Box<dyn Error>> {
+    let days: u64 = match days {
+        None => 90,
+        Some(days) => days
+            .parse()
+            .ok()
+            .filter(|days| (1..=365).contains(days))
+            .ok_or("durée invalide : de 1 à 365 jours")?,
+    };
+    let issued = auth
+        .issue_program_token(name, std::time::Duration::from_hours(days * 24))
+        .await?
+        .ok_or_else(|| format!("le compte « {name} » n'existe pas"))?;
+    println!("Jeton de « {name} », valable {days} jours (affiché une seule fois) :");
+    println!();
+    println!("{}", issued.token.as_str());
+    println!();
+    println!(
+        "À donner à l'assistant IA comme en-tête « Authorization: Bearer <jeton> » (docs/mcp.md)."
+    );
+    println!("Pour le révoquer : ha-server user passwd {name} (ferme toutes ses sessions).");
+    Ok(())
 }
 
 /// Active la double authentification : affiche un QR code à scanner avec
@@ -487,8 +518,9 @@ async fn audit_cli(store: &Store, domain: &str, args: &[&str]) {
         (
             "user",
             [
-                command @ ("add" | "passwd" | "delete" | "totp" | "totp-off"),
+                command @ ("add" | "passwd" | "delete" | "totp" | "totp-off" | "token"),
                 name,
+                ..,
             ],
         ) => (format!("user_{}", command.replace('-', "_")), Some(*name)),
         ("hue" | "somfy", ["pair", host, ..]) => (format!("{domain}_pair"), Some(*host)),
@@ -772,6 +804,54 @@ pub fn check_areas(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
     println!("{} : {} pièce(s) valide(s)", path.display(), areas.len());
     for area in &areas {
         println!("  - {} ({} appareil(s))", area.name, area.entities.len());
+    }
+    Ok(())
+}
+
+/// `ha-server calendriers check` : vérifie `calendriers.yaml` (sans
+/// télécharger : l'adresse n'est pas affichée, seulement le site).
+pub fn check_calendars(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
+    if !path.exists() {
+        println!(
+            "{} : fichier absent (aucun agenda en ligne)",
+            path.display()
+        );
+        return Ok(());
+    }
+    let calendars = ha_ics::load(path)?;
+    println!(
+        "{} : {} agenda(s) en ligne valide(s)",
+        path.display(),
+        calendars.len()
+    );
+    for calendar in &calendars {
+        println!(
+            "  - {} → {} ({})",
+            calendar.name,
+            calendar.entity_id,
+            calendar.url.host_str().unwrap_or_default()
+        );
+    }
+    Ok(())
+}
+
+/// `ha-server simulation check` : vérifie `simulation.yaml`.
+pub fn check_simulation(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
+    match ha_simulation::load(path)? {
+        None => println!(
+            "{} : fichier absent (pas de simulation de présence)",
+            path.display()
+        ),
+        Some(config) => {
+            println!(
+                "{} : simulation valide, rejoue il y a {} jours :",
+                path.display(),
+                config.days_ago
+            );
+            for device in &config.devices {
+                println!("  - {device}");
+            }
+        }
     }
     Ok(())
 }

@@ -16,6 +16,10 @@ pub enum CoreError {
     #[error("nom d'événement invalide : {0:?} (1 à 64 caractères parmi a-z, 0-9, « _ » et « . »)")]
     InvalidEventType(String),
 
+    /// L'ordre ne convient pas à l'appareil (voir [`crate::checks`]).
+    #[error("{device} : {reason}")]
+    Refused { device: String, reason: String },
+
     #[error("état trop long pour {entity_id} : {len} caractères (maximum {max})")]
     StateTooLong {
         entity_id: String,

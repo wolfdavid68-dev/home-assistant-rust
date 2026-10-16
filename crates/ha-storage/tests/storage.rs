@@ -720,3 +720,92 @@ async fn statistics_are_compiled_per_hour_and_grouped_per_local_day() {
 
     assert_eq!(all("sensor.mode", Period::Hour).await, Vec::new());
 }
+
+#[tokio::test]
+async fn the_state_at_a_past_moment() {
+    let store = Store::open_in_memory().await.unwrap();
+    let base = 1_700_000_000;
+    history_row(&store, "light.salon", Some("off"), base).await;
+    history_row(&store, "light.salon", Some("on"), base + 60).await;
+    history_row(&store, "light.salon", None, base + 120).await;
+    history_row(&store, "light.cuisine", Some("on"), base + 30).await;
+    let at = |seconds: u64| std::time::UNIX_EPOCH + Duration::from_secs(seconds);
+    let salon: EntityId = "light.salon".parse().unwrap();
+    assert_eq!(store.state_at(&salon, at(base - 1)).await.unwrap(), None);
+    assert_eq!(
+        store
+            .state_at(&salon, at(base + 30))
+            .await
+            .unwrap()
+            .as_deref(),
+        Some("off")
+    );
+    assert_eq!(
+        store
+            .state_at(&salon, at(base + 60))
+            .await
+            .unwrap()
+            .as_deref(),
+        Some("on")
+    );
+    // Supprimée à base + 120 : plus d'état.
+    assert_eq!(store.state_at(&salon, at(base + 500)).await.unwrap(), None);
+}
+
+#[tokio::test]
+async fn time_in_states_counts_without_limit() {
+    let store = Store::open_in_memory().await.unwrap();
+    let base = 1_700_000_000;
+    // Avant la période : allumée.
+    history_row(&store, "light.salon", Some("on"), base - 600).await;
+    // Pendant : éteinte à +30 min, rallumée à +60, éteinte à +90,
+    // une mise à jour d'attribut (« off » encore) à +100, rallumée à +120.
+    for (minutes, state) in [
+        (30, "off"),
+        (60, "on"),
+        (90, "off"),
+        (100, "off"),
+        (120, "on"),
+    ] {
+        history_row(&store, "light.salon", Some(state), base + minutes * 60).await;
+    }
+    let at = |seconds: u64| std::time::UNIX_EPOCH + Duration::from_secs(seconds);
+    let salon: EntityId = "light.salon".parse().unwrap();
+    let on = ["on".to_owned()];
+    let (seconds, entries) = store
+        .time_in_states(&salon, &on, at(base), at(base + 180 * 60))
+        .await
+        .unwrap();
+    // 0-30, 60-90, 120-180 : 2 heures ; deux entrées (l'état du début ne compte pas).
+    assert!((seconds - 7200.0).abs() < 1e-6, "{seconds}");
+    assert_eq!(entries, 2);
+    // Plusieurs états.
+    let any = ["on".to_owned(), "off".to_owned()];
+    let (seconds, _) = store
+        .time_in_states(&salon, &any, at(base), at(base + 180 * 60))
+        .await
+        .unwrap();
+    assert!((seconds - 10_800.0).abs() < 1e-6);
+    // Beaucoup de changements : pas de limite (2 500 allumages).
+    for i in 0..5000u64 {
+        let state = if i % 2 == 0 { "on" } else { "off" };
+        history_row(&store, "light.cuisine", Some(state), base + i).await;
+    }
+    let cuisine: EntityId = "light.cuisine".parse().unwrap();
+    let (_, entries) = store
+        .time_in_states(&cuisine, &on, at(base - 1), at(base + 6000))
+        .await
+        .unwrap();
+    assert_eq!(entries, 2500);
+    // Rien d'enregistré.
+    let (seconds, entries) = store
+        .time_in_states(
+            &"light.inconnue".parse().unwrap(),
+            &on,
+            at(base),
+            at(base + 60),
+        )
+        .await
+        .unwrap();
+    assert_eq!((seconds, entries), (0.0, 0));
+}

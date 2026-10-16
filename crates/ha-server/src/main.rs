@@ -73,11 +73,21 @@
 //! - `HA_VIGILANCE_DEPARTEMENT` (par exemple `67`) et `HA_VIGILANCE_KEY_FILE`
 //!   (fichier contenant la clé de l'API Météo-France, ou `HA_VIGILANCE_KEY`) :
 //!   vigilance météo (orages, canicule…) ;
+//! - `HA_JOURS_FERIES` : `france` ou `alsace-moselle` (par défaut, d'après
+//!   `HA_VIGILANCE_DEPARTEMENT`) ; `HA_JOURS_OUVRES` : `lun,mar,mer,jeu,ven`
+//!   (par défaut) ;
 //! - `HA_SCRIPTS_PATH` et `HA_SCENES_PATH` : scripts et scènes (par défaut
 //!   `scripts.yaml` et `scenes.yaml`) ;
 //! - `HA_NTFY_URL`, `HA_NTFY_TOPIC`, `HA_NTFY_TOKEN_FILE` : notifications sur
 //!   le téléphone avec ntfy (entité `notify.telephone`) ;
+//! - `HA_PUSH` : `off` pour couper les notifications du navigateur (Web Push,
+//!   actives par défaut) ; `HA_PUSH_CONTACT` : contact donné aux services de
+//!   notifications (`mailto:toi@exemple.fr`) ;
 //! - `HA_AREAS_PATH` : fichier des pièces (par défaut `areas.yaml`) ;
+//! - `HA_CALENDARS_PATH` : agendas en ligne, fichiers ICS (par défaut
+//!   `calendriers.yaml`) ;
+//! - `HA_SIMULATION_PATH` : simulation de présence (par défaut
+//!   `simulation.yaml`) ;
 //! - `HA_AUTOMATIONS_PATH` : fichier d'automatisations (par défaut `automations.yaml`) ;
 //! - `HA_ALEXA_IP` : adresse de cette machine sur le réseau local, pour
 //!   piloter les appareils de `alexa.yaml` à la voix (`HA_ALEXA_PATH`,
@@ -119,6 +129,8 @@ const DEFAULT_HISTORY_DAYS: u32 = 10;
 const DEFAULT_AUDIT_DAYS: u32 = 365;
 const DEFAULT_AUTOMATIONS_PATH: &str = "automations.yaml";
 const DEFAULT_AREAS_PATH: &str = "areas.yaml";
+const DEFAULT_CALENDARS_PATH: &str = "calendriers.yaml";
+const DEFAULT_SIMULATION_PATH: &str = "simulation.yaml";
 const DEFAULT_GUARD_PATH: &str = "guard.yaml";
 
 /// Concept Rust : `#[tokio::main]` démarre le moteur asynchrone de tokio.
@@ -144,6 +156,8 @@ async fn main() -> ExitCode {
         ["freebox", rest @ ..] => cli::freebox_command(rest).await,
         ["automations", rest @ ..] => cli::automations_command(rest).await,
         ["areas", "check"] => cli::check_areas(&areas_path()),
+        ["calendriers", "check"] => cli::check_calendars(&calendars_path()),
+        ["simulation", "check"] => cli::check_simulation(&simulation_path()),
         ["guard", "check"] => cli::check_guard(&areas_path(), &guard_path()),
         ["alexa", "check"] => cli::check_alexa(&alexa_path()),
         ["thermostats", "check"] => cli::check_thermostats(&thermostats_path()),
@@ -217,6 +231,18 @@ async fn open_store() -> Result<Store, ha_storage::StorageError> {
 fn areas_path() -> std::path::PathBuf {
     std::env::var("HA_AREAS_PATH")
         .unwrap_or_else(|_| DEFAULT_AREAS_PATH.to_owned())
+        .into()
+}
+
+fn calendars_path() -> std::path::PathBuf {
+    std::env::var("HA_CALENDARS_PATH")
+        .unwrap_or_else(|_| DEFAULT_CALENDARS_PATH.to_owned())
+        .into()
+}
+
+fn simulation_path() -> std::path::PathBuf {
+    std::env::var("HA_SIMULATION_PATH")
+        .unwrap_or_else(|_| DEFAULT_SIMULATION_PATH.to_owned())
         .into()
 }
 
@@ -381,6 +407,23 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     // Les notifications du tableau de bord et les alertes de réparation,
     // avant les automatisations (qui peuvent en créer).
     let notices = ha_notices::Notices::start(Arc::clone(&core));
+    // Les notifications du navigateur (Web Push), juste après : un ordre
+    // retenu par la garde doit arriver sur le téléphone.
+    let push = if std::env::var("HA_PUSH").is_ok_and(|value| value == "off") {
+        info!("notifications du navigateur désactivées (HA_PUSH=off)");
+        None
+    } else {
+        let contact = std::env::var("HA_PUSH_CONTACT")
+            .unwrap_or_else(|_| ha_push::DEFAULT_CONTACT.to_owned());
+        let tickets = api_state.push_tickets.clone();
+        match ha_push::Push::start(store.clone(), Arc::clone(&core), contact, tickets).await {
+            Ok(push) => Some(push),
+            Err(error) => {
+                warn!("notifications du navigateur : démarrage impossible ({error})");
+                None
+            }
+        }
+    };
 
     // Les entrées sont créées AVANT les automatisations (leur création n'est
     // pas un changement qui déclenche), et démarrées APRÈS (un minuteur qui a
@@ -391,6 +434,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     let agenda = ha_agenda::Agenda::start(store.clone(), Arc::clone(&core)).await;
     // Les assistants calculés (groupes, moyennes…), avant les automatisations
     // aussi : leur création ne déclenche rien.
+    // Les statistiques d'historique (étape 59) lisent la base : leur tâche.
+    let history_stats =
+        ha_derived::history::HistoryStats::start(&derived_config, store.clone(), Arc::clone(&core));
     let assistants = (!derived_config.is_empty())
         .then(|| ha_derived::Assistants::start(derived_config, Arc::clone(&core)));
 
@@ -411,11 +457,48 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         Arc::clone(&core),
     );
     let sun = location.map(|location| SunTracker::start(location, Arc::clone(&core)));
+    // Agendas en ligne (étape 57) : collecte des déchets, vacances…
+    let calendars = match ha_ics::load(&calendars_path()) {
+        Ok(list) if list.is_empty() => None,
+        Ok(list) => match ha_ics::Calendars::start(list, Arc::clone(&core)) {
+            Ok(calendars) => Some(calendars),
+            Err(error) => {
+                warn!("agendas en ligne : démarrage impossible ({error})");
+                None
+            }
+        },
+        Err(error) => {
+            warn!("agendas en ligne : {error}");
+            None
+        }
+    };
+    // Jours ouvrés et fériés (étape 56) : toujours là, calculés sur place.
+    let workday = match workday_settings() {
+        Ok((regime, week)) => Some(ha_workday::Workday::start(regime, week, Arc::clone(&core))),
+        Err(error) => {
+            warn!("jours ouvrés : {error}");
+            None
+        }
+    };
     let inputs = inputs.map(|inputs| inputs.start(Arc::clone(&core)));
     // Après la restauration des états : chaque thermostat reprend sa
     // consigne et son mode d'avant l'arrêt.
     let persons = (!person_configs.is_empty())
         .then(|| ha_person::Persons::start(person_configs, Arc::clone(&core)));
+    // Simulation de présence (étape 58) : après la restauration des états,
+    // pour qu'elle reste armée après un redémarrage.
+    let presence_simulation = match ha_simulation::load(&simulation_path()) {
+        Ok(Some(config)) => Some(ha_simulation::Simulation::start(
+            config,
+            store.clone(),
+            Arc::clone(&core),
+        )),
+        Ok(None) => None,
+        Err(error) => {
+            warn!("simulation de présence : {error}");
+            None
+        }
+    };
     let thermostats = (!thermostat_configs.is_empty())
         .then(|| ha_thermostat::Thermostats::start(thermostat_configs, Arc::clone(&core)));
     let backups = if let Some(settings) = backup_settings {
@@ -541,8 +624,14 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     if let Some(assistants) = assistants {
         assistants.stop().await;
     }
+    if let Some(history_stats) = history_stats {
+        history_stats.stop().await;
+    }
     engine.stop().await;
     notices.stop().await;
+    if let Some(push) = push {
+        push.stop().await;
+    }
     logbook.stop().await;
     statistics.stop().await;
     if let Some(teleinfo) = teleinfo {
@@ -550,6 +639,15 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     }
     if let Some(notifier) = notifier {
         notifier.stop().await;
+    }
+    if let Some(workday) = workday {
+        workday.stop().await;
+    }
+    if let Some(calendars) = calendars {
+        calendars.stop().await;
+    }
+    if let Some(presence_simulation) = presence_simulation {
+        presence_simulation.stop().await;
     }
     if let Some(sun) = sun {
         sun.stop().await;
@@ -1012,4 +1110,17 @@ fn attributes(value: serde_json::Value) -> Attributes {
         serde_json::Value::Object(map) => map,
         _ => Attributes::new(),
     }
+}
+
+/// `HA_JOURS_FERIES` et `HA_JOURS_OUVRES` (étape 56).
+fn workday_settings() -> Result<(ha_workday::Regime, ha_workday::Week), String> {
+    let regime = ha_workday::Regime::from_settings(
+        std::env::var("HA_JOURS_FERIES").ok().as_deref(),
+        std::env::var("HA_VIGILANCE_DEPARTEMENT").ok().as_deref(),
+    )?;
+    let week = match std::env::var("HA_JOURS_OUVRES") {
+        Ok(days) => ha_workday::Week::parse(&days)?,
+        Err(_) => ha_workday::Week::default(),
+    };
+    Ok((regime, week))
 }

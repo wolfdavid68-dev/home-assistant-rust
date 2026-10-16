@@ -194,6 +194,11 @@ async fn every_route_requires_a_token() {
         ("PUT", "/api/home/images/jour"),
         ("DELETE", "/api/home/images/jour"),
         ("GET", "/api/approvals"),
+        ("GET", "/api/push"),
+        ("POST", "/api/push/subscriptions"),
+        ("PATCH", "/api/push/subscriptions/1"),
+        ("DELETE", "/api/push/subscriptions/1"),
+        ("POST", "/api/push/test"),
         ("POST", "/api/approvals/1"),
     ] {
         let (status, _) = app.request(method, uri, None, None).await;
@@ -606,6 +611,10 @@ async fn dashboard_files_are_served_with_security_headers() {
         ("/fonts/geist.woff2", "font/woff2"),
         ("/fonts/geist-mono.woff2", "font/woff2"),
         ("/fonts/bricolage-grotesque.woff2", "font/woff2"),
+        ("/sw.js", "text/javascript; charset=utf-8"),
+        ("/icon-192.png", "image/png"),
+        ("/icon-512.png", "image/png"),
+        ("/apple-touch-icon.png", "image/png"),
     ] {
         let response = app
             .router()
@@ -624,6 +633,14 @@ async fn dashboard_files_are_served_with_security_headers() {
         );
         assert_eq!(headers[header::X_CONTENT_TYPE_OPTIONS], "nosniff");
         assert_eq!(headers[header::X_FRAME_OPTIONS], "DENY");
+        // Le service worker des notifications, et rien d'autre.
+        assert!(
+            headers[header::CONTENT_SECURITY_POLICY]
+                .to_str()
+                .unwrap()
+                .contains("worker-src 'self';"),
+            "{uri}"
+        );
     }
 }
 
@@ -1565,6 +1582,965 @@ async fn a_guest_order_in_a_protected_room_waits_for_the_family() {
             ("visiteur", "held"),
         ]
     );
+}
+
+/// Un abonnement comme celui d'un navigateur (clés de l'exemple de la RFC 8291).
+fn browser_subscription(endpoint: &str) -> Value {
+    json!({
+        "endpoint": endpoint,
+        "expirationTime": null,
+        "keys": {
+            "p256dh": "BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4",
+            "auth": "BTBZMqHH6r4Tts7J_aSIgg",
+        },
+        "name": "Pixel de David",
+    })
+}
+
+#[tokio::test]
+async fn phones_subscribe_to_notifications() {
+    let app = TestApp::new().await;
+    let guest = app.login_as("visiteur", ha_auth::Role::Guest).await;
+    let alice = app.login_as("alice", ha_auth::Role::Family).await;
+    let david = app.login().await;
+    let fcm = "https://fcm.googleapis.com/fcm/send/abc:def";
+
+    // Un invité ne reçoit pas de notifications.
+    for (method, uri) in [("GET", "/api/push"), ("POST", "/api/push/test")] {
+        let (status, _) = app.request(method, uri, Some(&guest), None).await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{uri}");
+    }
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/push/subscriptions",
+            Some(&guest),
+            Some(browser_subscription(fcm)),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    // Le service n'est pas démarré : pas de clé.
+    let (_, body) = app.request("GET", "/api/push", Some(&david), None).await;
+    assert_eq!(body["available"], false);
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/push/subscriptions",
+            Some(&david),
+            Some(browser_subscription(fcm)),
+        )
+        .await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+
+    let vapid = ha_push::load_or_create_vapid(&app.state.store)
+        .await
+        .unwrap();
+    let (_, body) = app.request("GET", "/api/push", Some(&david), None).await;
+    assert_eq!(body["available"], true);
+    assert_eq!(body["public_key"], vapid.public_key());
+    assert_eq!(body["devices"], json!([]));
+
+    let (status, body) = app
+        .request(
+            "POST",
+            "/api/push/subscriptions",
+            Some(&david),
+            Some(browser_subscription(fcm)),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+    let id = body["id"].as_i64().unwrap();
+    let (_, body) = app.request("GET", "/api/push", Some(&david), None).await;
+    let device = &body["devices"][0];
+    assert_eq!(device["name"], "Pixel de David");
+    assert_eq!(device["endpoint"], fcm);
+    assert_eq!(device["categories"], 7);
+    assert!(
+        device.get("auth").is_none() && device.get("p256dh").is_none(),
+        "jamais les clés"
+    );
+
+    // Une adresse qui n'est pas un service de notifications est refusée :
+    // le serveur ne doit pas appeler une adresse choisie par la page.
+    for endpoint in [
+        "http://fcm.googleapis.com/fcm/send/x",
+        "https://192.168.1.1/admin",
+        "https://exemple.fr/push",
+    ] {
+        let (status, _) = app
+            .request(
+                "POST",
+                "/api/push/subscriptions",
+                Some(&david),
+                Some(browser_subscription(endpoint)),
+            )
+            .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{endpoint}");
+    }
+    let mut bad_keys = browser_subscription("https://fcm.googleapis.com/fcm/send/y");
+    bad_keys["keys"]["auth"] = json!("court");
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/push/subscriptions",
+            Some(&david),
+            Some(bad_keys),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    // Ce qu'il reçoit ; personne d'autre ne touche à ses appareils.
+    let uri = format!("/api/push/subscriptions/{id}");
+    let (status, _) = app
+        .request("PATCH", &uri, Some(&alice), Some(json!({"categories": 1})))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _) = app
+        .request("PATCH", &uri, Some(&david), Some(json!({"categories": 9})))
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let (status, body) = app
+        .request("PATCH", &uri, Some(&david), Some(json!({"categories": 1})))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let (status, _) = app.request("DELETE", &uri, Some(&alice), None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // Un essai : vers ses propres appareils seulement.
+    let mut events = app.state.core.bus.subscribe();
+    let (status, _) = app
+        .request("POST", "/api/push/test", Some(&david), None)
+        .await;
+    assert_eq!(status, StatusCode::ACCEPTED);
+    let event = events.recv().await.unwrap();
+    let ha_core::Event::CallService {
+        entity_id,
+        data,
+        origin,
+        ..
+    } = event.as_ref()
+    else {
+        panic!("un appel de service est attendu");
+    };
+    assert_eq!(entity_id.as_str(), "notify.appli");
+    assert_eq!(data["test"], true);
+    assert_eq!(*origin, ha_core::Origin::User("david".into()));
+
+    // Dix appareils au plus par compte.
+    for n in 0..9 {
+        let endpoint = format!("https://updates.push.services.mozilla.com/wpush/v2/{n}");
+        let (status, _) = app
+            .request(
+                "POST",
+                "/api/push/subscriptions",
+                Some(&alice),
+                Some(browser_subscription(&endpoint)),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED);
+    }
+    let last = "https://web.push.apple.com/dixieme";
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/push/subscriptions",
+            Some(&alice),
+            Some(browser_subscription(last)),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, body) = app
+        .request(
+            "POST",
+            "/api/push/subscriptions",
+            Some(&alice),
+            Some(browser_subscription("https://web.push.apple.com/onze")),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+    // Le même navigateur qui se réabonne ne compte pas deux fois.
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/push/subscriptions",
+            Some(&alice),
+            Some(browser_subscription(last)),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+
+    let (status, _) = app.request("DELETE", &uri, Some(&david), None).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, _) = app.request("DELETE", &uri, Some(&david), None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let journal = app.state.store.audit_log(50).await.unwrap();
+    assert!(
+        journal
+            .iter()
+            .any(|e| e.action == "push_subscribe" && e.actor == "david")
+    );
+    assert!(journal.iter().any(|e| e.action == "push_unsubscribe"));
+}
+
+#[tokio::test]
+async fn an_order_the_device_cannot_follow_is_refused_before_it_leaves() {
+    let app = TestApp::new().await;
+    furnish(&app);
+    let core = &app.state.core;
+    core.guard.configure(
+        ha_core::Policy {
+            protected: [("cover.salon".parse().unwrap(), "Salon".to_owned())].into(),
+            quiet_hours: None,
+        },
+        || 0,
+    );
+    let david = app.login().await;
+    let guest = app.login_as("visiteur", ha_auth::Role::Guest).await;
+    let mut events = core.bus.subscribe();
+    for (token, data) in [
+        (&david, json!({"entity_id": "cover.salon", "position": 150})),
+        (&david, json!({"entity_id": "cover.salon"})),
+        // Un invité dans une pièce protégée : refusé tout de suite, pas
+        // retenu pour être validé puis refusé.
+        (&guest, json!({"entity_id": "cover.salon", "position": -5})),
+    ] {
+        let (status, body) = app
+            .request(
+                "POST",
+                "/api/services/cover/set_cover_position",
+                Some(token),
+                Some(data),
+            )
+            .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+        assert!(
+            body["error"]
+                .as_str()
+                .unwrap()
+                .starts_with("cover.salon : position"),
+            "{body}"
+        );
+    }
+    assert_eq!(core.held_orders().len(), 0);
+    assert!(
+        events.try_recv().is_err(),
+        "aucun ordre n'est parti sur le bus"
+    );
+    let (status, body) = app
+        .request(
+            "POST",
+            "/api/services/cover/set_cover_position",
+            Some(&david),
+            Some(json!({"entity_id": "cover.salon", "position": 40})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+}
+
+#[tokio::test]
+async fn assist_understands_french_and_obeys_the_same_rules() {
+    let app = TestApp::new().await;
+    furnish(&app);
+    let core = &app.state.core;
+    for (id, name) in [
+        ("cover.salon", "Volet salon"),
+        ("light.salon", "Lampe salon"),
+        ("lock.entree", "Porte d'entrée"),
+        ("person.david", "David"),
+    ] {
+        let state = core.states.get(&id.parse().unwrap()).unwrap();
+        let mut attributes = state.attributes().clone();
+        attributes.insert("friendly_name".into(), name.into());
+        core.states
+            .set(id.parse().unwrap(), state.state(), attributes)
+            .unwrap();
+    }
+    core.guard.configure(
+        ha_core::Policy {
+            protected: [("light.salon".parse().unwrap(), "Salon".to_owned())].into(),
+            quiet_hours: None,
+        },
+        || 0,
+    );
+    let david = app.login().await;
+    let guest = app.login_as("visiteur", ha_auth::Role::Guest).await;
+    let say = |token: &String, text: &str| {
+        let token = token.clone();
+        let text = text.to_owned();
+        let app = &app;
+        async move {
+            let (status, body) = app
+                .request(
+                    "POST",
+                    "/api/conversation/process",
+                    Some(&token),
+                    Some(json!({"text": text, "language": "fr"})),
+                )
+                .await;
+            assert_eq!(status, StatusCode::OK, "{body}");
+            (
+                body["response"]["response_type"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned(),
+                body["response"]["speech"]["plain"]["speech"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned(),
+            )
+        }
+    };
+
+    let mut events = core.bus.subscribe();
+    let (kind, speech) = say(&david, "Ferme le volet du salon").await;
+    assert_eq!(kind, "action_done");
+    assert_eq!(speech, "C'est fait : fermer Volet salon.");
+    let event = events.recv().await.unwrap();
+    let ha_core::Event::CallService {
+        service, origin, ..
+    } = event.as_ref()
+    else {
+        panic!("un ordre est attendu");
+    };
+    assert_eq!(service, "close_cover");
+    assert_eq!(*origin, ha_core::Origin::User("david".into()));
+
+    // Les valeurs sont vérifiées comme ailleurs.
+    let (kind, speech) = say(&david, "ouvre le volet du salon à 150 %").await;
+    assert_eq!(kind, "error");
+    assert!(
+        speech.contains("position entre 0 et 100 (reçu 150)"),
+        "{speech}"
+    );
+    // Ouvrir la maison redemande le mot de passe.
+    let (kind, speech) = say(&david, "déverrouille la porte d'entrée").await;
+    assert_eq!(kind, "error");
+    assert!(speech.contains("redonne ton mot de passe"), "{speech}");
+    // Une question.
+    let (kind, speech) = say(&david, "Qui est à la maison ?").await;
+    assert_eq!(
+        (kind.as_str(), speech.as_str()),
+        ("query_answer", "À la maison : David.")
+    );
+    // Pas compris.
+    let (kind, _) = say(&david, "fais-moi un café").await;
+    assert_eq!(kind, "error");
+
+    // L'invité : la pièce protégée attend une validation ; la présence et la
+    // serrure lui restent invisibles.
+    let (kind, speech) = say(&guest, "allume la lampe du salon").await;
+    assert_eq!(kind, "action_done");
+    assert!(
+        speech.starts_with("En attente de validation : allumer Lampe salon"),
+        "{speech}"
+    );
+    assert_eq!(core.held_orders().len(), 1);
+    let (_, speech) = say(&guest, "qui est à la maison ?").await;
+    assert_eq!(speech, "Je ne peux pas te le dire.");
+    let (kind, _) = say(&guest, "verrouille la porte d'entrée").await;
+    assert_eq!(kind, "error", "la serrure n'existe pas pour lui");
+
+    // Sans connexion : refusé.
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/conversation/process",
+            None,
+            Some(json!({"text": "ferme le volet du salon"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+/// Une requête MCP (JSON-RPC), avec des en-têtes en plus.
+async fn mcp(
+    app: &TestApp,
+    token: Option<&str>,
+    headers: &[(&str, &str)],
+    body: Value,
+) -> (StatusCode, Value) {
+    let mut request = Request::builder()
+        .method("POST")
+        .uri("/api/mcp")
+        .header(header::CONTENT_TYPE, "application/json")
+        .header(header::ACCEPT, "application/json, text/event-stream");
+    if let Some(token) = token {
+        request = request.header(header::AUTHORIZATION, format!("Bearer {token}"));
+    }
+    for (name, value) in headers {
+        request = request.header(*name, *value);
+    }
+    let response = app
+        .router()
+        .oneshot(request.body(Body::from(body.to_string())).unwrap())
+        .await
+        .unwrap();
+    let status = response.status();
+    let bytes = axum::body::to_bytes(response.into_body(), 1 << 20)
+        .await
+        .unwrap();
+    (
+        status,
+        serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+    )
+}
+
+fn tool(name: &str, arguments: Value) -> Value {
+    let mut call = json!({"jsonrpc": "2.0", "id": 7, "method": "tools/call",
+                          "params": {"name": name}});
+    call["params"]["arguments"] = arguments;
+    call
+}
+
+fn tool_text(body: &Value) -> (&str, bool) {
+    (
+        body["result"]["content"][0]["text"].as_str().unwrap(),
+        body["result"]["isError"].as_bool().unwrap(),
+    )
+}
+
+#[tokio::test]
+async fn an_ai_assistant_plugs_in_through_mcp_under_the_guard() {
+    let app = TestApp::new().await;
+    furnish(&app);
+    let core = &app.state.core;
+    core.guard.configure(
+        ha_core::Policy {
+            protected: [("cover.salon".parse().unwrap(), "Salon".to_owned())].into(),
+            quiet_hours: None,
+        },
+        || 0,
+    );
+    // Même avec un compte administrateur, un assistant IA reste un assistant.
+    let claude = app.login().await;
+
+    // Sans jeton : refusé. Depuis la page d'un autre site : refusé.
+    let hello = json!({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+        "params": {"protocolVersion": "2025-03-26", "capabilities": {},
+                   "clientInfo": {"name": "essai", "version": "1"}}});
+    let (status, _) = mcp(&app, None, &[], hello.clone()).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    let (status, _) = mcp(
+        &app,
+        Some(&claude),
+        &[
+            ("origin", "https://pirate.example"),
+            ("host", "maison.local"),
+        ],
+        hello.clone(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, body) = mcp(
+        &app,
+        Some(&claude),
+        &[("origin", "https://maison.local"), ("host", "maison.local")],
+        hello.clone(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    // La négociation de version.
+    let (_, body) = mcp(&app, Some(&claude), &[], hello).await;
+    assert_eq!(body["id"], 1);
+    assert_eq!(body["result"]["protocolVersion"], "2025-03-26");
+    assert_eq!(body["result"]["serverInfo"]["name"], "maison");
+    let (_, body) = mcp(
+        &app,
+        Some(&claude),
+        &[],
+        json!({"jsonrpc": "2.0", "id": 2, "method": "initialize",
+               "params": {"protocolVersion": "1999-01-01"}}),
+    )
+    .await;
+    assert_eq!(body["result"]["protocolVersion"], "2025-06-18");
+    // Une notification : rien à répondre.
+    let (status, _) = mcp(
+        &app,
+        Some(&claude),
+        &[],
+        json!({"jsonrpc": "2.0", "method": "notifications/initialized"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::ACCEPTED);
+
+    let (_, body) = mcp(
+        &app,
+        Some(&claude),
+        &[],
+        json!({"jsonrpc": "2.0", "id": 3, "method": "tools/list"}),
+    )
+    .await;
+    let names: Vec<&str> = body["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["get_house_state", "assist", "call_service"]);
+
+    let (_, body) = mcp(&app, Some(&claude), &[], tool("get_house_state", json!({}))).await;
+    let (text, error) = tool_text(&body);
+    assert!(!error);
+    assert!(text.contains("(cover.salon) : ouvert"), "{text}");
+
+    // Un ordre précis : passe, au nom de l'assistant.
+    let mut events = core.bus.subscribe();
+    let (_, body) = mcp(
+        &app,
+        Some(&claude),
+        &[],
+        tool(
+            "call_service",
+            json!({"domain": "light", "service": "turn_on", "entity_id": "light.salon"}),
+        ),
+    )
+    .await;
+    assert_eq!(
+        tool_text(&body),
+        ("C'est fait : allumer light.salon.", false)
+    );
+    let event = events.recv().await.unwrap();
+    let ha_core::Event::CallService { origin, .. } = event.as_ref() else {
+        panic!("un ordre est attendu");
+    };
+    assert_eq!(*origin, ha_core::Origin::Agent("david".into()));
+
+    // Pièce protégée : retenu, même pour un compte administrateur.
+    let (_, body) = mcp(
+        &app,
+        Some(&claude),
+        &[],
+        tool("assist", json!({"text": "ferme le volet du salon"})),
+    )
+    .await;
+    let (text, error) = tool_text(&body);
+    assert!(!error, "{text}");
+    assert!(text.starts_with("En attente de validation"), "{text}");
+    assert_eq!(
+        core.held_orders()[0].origin,
+        ha_core::Origin::Agent("david".into())
+    );
+    // Jamais ouvrir la maison.
+    let (_, body) = mcp(
+        &app,
+        Some(&claude),
+        &[],
+        tool(
+            "call_service",
+            json!({"domain": "lock", "service": "unlock", "entity_id": "lock.entree"}),
+        ),
+    )
+    .await;
+    let (text, error) = tool_text(&body);
+    assert!(error);
+    assert!(text.contains("ne commande ni serrure"), "{text}");
+    // Ni la porte du garage, même hors pièce protégée (revue de la PR #60).
+    let (_, body) = mcp(
+        &app,
+        Some(&claude),
+        &[],
+        tool(
+            "call_service",
+            json!({"domain": "cover", "service": "open_cover", "entity_id": "cover.garage"}),
+        ),
+    )
+    .await;
+    let (text, error) = tool_text(&body);
+    assert!(error, "{text}");
+    assert!(text.contains("porte de garage"), "{text}");
+    // Une valeur hors plage.
+    let (_, body) = mcp(
+        &app,
+        Some(&claude),
+        &[],
+        tool(
+            "call_service",
+            json!({"domain": "cover", "service": "set_cover_position",
+                   "entity_id": "cover.garage", "data": {"position": 300}}),
+        ),
+    )
+    .await;
+    assert!(tool_text(&body).1);
+
+    // Erreurs du protocole.
+    let (_, body) = mcp(
+        &app,
+        Some(&claude),
+        &[],
+        json!({"jsonrpc": "2.0", "id": 9, "method": "resources/list"}),
+    )
+    .await;
+    assert_eq!(body["error"]["code"], -32601);
+    let (_, body) = mcp(&app, Some(&claude), &[], tool("rm_rf", json!({}))).await;
+    assert_eq!(body["error"]["code"], -32602);
+    let (_, body) = mcp(&app, Some(&claude), &[], json!([1, 2])).await;
+    assert_eq!(body["error"]["code"], -32600);
+
+    // 60 appels d'outils par minute au plus.
+    let mut limited = false;
+    for _ in 0..60 {
+        let (_, body) = mcp(&app, Some(&claude), &[], tool("get_house_state", json!({}))).await;
+        if tool_text(&body).0.starts_with("Trop de demandes") {
+            limited = true;
+            break;
+        }
+    }
+    assert!(limited);
+    let journal = app.state.store.audit_log(200).await.unwrap();
+    assert!(
+        journal
+            .iter()
+            .any(|e| e.action == "mcp" && e.detail.as_deref() == Some("call_service"))
+    );
+}
+
+#[tokio::test]
+async fn an_assistant_token_only_opens_mcp() {
+    let app = TestApp::new().await;
+    furnish(&app);
+    let _ = app.login().await;
+    let issued = app
+        .state
+        .auth
+        .issue_program_token("david", std::time::Duration::from_hours(24))
+        .await
+        .unwrap()
+        .unwrap();
+    let agent = issued.token.as_str();
+    // Partout ailleurs que MCP, un jeton d'assistant n'existe pas : il ne
+    // peut pas se faire passer pour une personne (garde contournée).
+    for (method, uri, body) in [
+        ("GET", "/api/states", None),
+        (
+            "POST",
+            "/api/services/cover/open_cover",
+            Some(json!({"entity_id": "cover.salon"})),
+        ),
+        (
+            "POST",
+            "/api/conversation/process",
+            Some(json!({"text": "ouvre le volet du salon"})),
+        ),
+    ] {
+        let (status, _) = app.request(method, uri, Some(agent), body).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED, "{uri}");
+    }
+    let (status, body) = mcp(
+        &app,
+        Some(agent),
+        &[],
+        json!({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+}
+
+/// Un ticket de bouton, comme le service des notifications en émet un.
+async fn button_ticket(
+    app: &TestApp,
+    username: &str,
+    purpose: ha_push::Purpose,
+    actions: &[&str],
+) -> String {
+    let target = app
+        .state
+        .store
+        .push_targets(ha_push::Category::ALL, None)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|target| target.username == username)
+        .expect("un appareil abonné");
+    app.state
+        .push_tickets
+        .issue(ha_push::Ticket::new(
+            target.id,
+            target.user_id,
+            target.username,
+            purpose,
+            actions.iter().map(|a| (*a).to_owned()).collect(),
+            "Ordre à valider".into(),
+            std::time::Duration::from_mins(10),
+        ))
+        .unwrap()
+}
+
+#[tokio::test]
+async fn a_held_order_is_answered_from_the_notification() {
+    let app = TestApp::new().await;
+    furnish(&app);
+    let core = &app.state.core;
+    core.guard.configure(
+        ha_core::Policy {
+            protected: [("light.salon".parse().unwrap(), "Salon".to_owned())].into(),
+            quiet_hours: None,
+        },
+        || 0,
+    );
+    ha_push::load_or_create_vapid(&app.state.store)
+        .await
+        .unwrap();
+    let guest = app.login_as("visiteur", ha_auth::Role::Guest).await;
+    let alice = app.login_as("alice", ha_auth::Role::Family).await;
+    let david = app.login().await;
+    for (token, endpoint) in [
+        (&alice, "https://fcm.googleapis.com/fcm/send/alice"),
+        (&david, "https://fcm.googleapis.com/fcm/send/david"),
+    ] {
+        let (status, _) = app
+            .request(
+                "POST",
+                "/api/push/subscriptions",
+                Some(token),
+                Some(browser_subscription(endpoint)),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED);
+    }
+    let lamp = json!({"entity_id": "light.salon"});
+    app.request(
+        "POST",
+        "/api/services/light/turn_on",
+        Some(&guest),
+        Some(lamp.clone()),
+    )
+    .await;
+    let id = core.held_orders()[0].id;
+    let approval = ha_push::Purpose::Approval(id);
+    let buttons = [ha_push::APPROVE, ha_push::DENY];
+    let for_alice = button_ticket(&app, "alice", approval.clone(), &buttons).await;
+    let for_david = button_ticket(&app, "david", approval.clone(), &buttons).await;
+    let press = |token: &str, action: &str| json!({"token": token, "action": action});
+
+    // Sans connexion, mais pas sans ticket.
+    let (status, body) = app
+        .request(
+            "POST",
+            "/api/push/action",
+            None,
+            Some(press("inventé", "approve")),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+    // Un bouton qui n'est pas sur la notification : refusé, ticket gardé.
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/push/action",
+            None,
+            Some(press(&for_alice, "LESSIVE")),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    // Alice valide depuis son téléphone : l'ordre part, avec son origine.
+    let mut events = core.bus.subscribe();
+    let (status, body) = app
+        .request(
+            "POST",
+            "/api/push/action",
+            None,
+            Some(press(&for_alice, "approve")),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["result"], "sent");
+    assert_eq!(body["message"], "Validé : allumer light.salon.");
+    loop {
+        let event = events.recv().await.unwrap();
+        if let ha_core::Event::CallService {
+            service, origin, ..
+        } = event.as_ref()
+        {
+            assert_eq!(service, "turn_on");
+            assert_eq!(*origin, ha_core::Origin::User("visiteur".into()));
+            break;
+        }
+    }
+    assert_eq!(core.held_orders().len(), 0);
+    let journal = app.state.store.audit_log(20).await.unwrap();
+    assert!(
+        journal
+            .iter()
+            .any(|e| e.action == "approve" && e.actor == "alice")
+    );
+    // Le même bouton une deuxième fois, ou celui de David : plus rien.
+    for token in [&for_alice, &for_david] {
+        let (status, _) = app
+            .request("POST", "/api/push/action", None, Some(press(token, "deny")))
+            .await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+    }
+
+    // Refusé depuis la notification : rien ne part.
+    app.request(
+        "POST",
+        "/api/services/light/turn_off",
+        Some(&guest),
+        Some(lamp.clone()),
+    )
+    .await;
+    let id = core.held_orders()[0].id;
+    let ticket = button_ticket(&app, "david", ha_push::Purpose::Approval(id), &buttons).await;
+    let mut events = core.bus.subscribe();
+    let (_, body) = app
+        .request(
+            "POST",
+            "/api/push/action",
+            None,
+            Some(press(&ticket, "deny")),
+        )
+        .await;
+    assert_eq!(body["result"], "refused");
+    // Les téléphones apprennent la réponse, et qui l'a donnée.
+    let answered = std::iter::from_fn(|| events.try_recv().ok())
+        .find_map(|event| match event.as_ref() {
+            ha_core::Event::Fired { event_type, data }
+                if event_type == ha_core::guard::APPROVAL_ANSWERED =>
+            {
+                Some(data.clone())
+            }
+            _ => None,
+        })
+        .expect("la réponse est annoncée");
+    assert_eq!(answered["id"], id);
+    assert_eq!(answered["approved"], false);
+    assert_eq!(answered["by"], "david");
+    assert_eq!(body["message"], "Refusé : éteindre light.salon.");
+    assert_eq!(core.held_orders().len(), 0);
+
+    // Traité depuis la cloche : le bouton du téléphone ne sert plus.
+    app.request(
+        "POST",
+        "/api/services/light/turn_on",
+        Some(&guest),
+        Some(lamp.clone()),
+    )
+    .await;
+    let id = core.held_orders()[0].id;
+    let ticket = button_ticket(&app, "alice", ha_push::Purpose::Approval(id), &buttons).await;
+    let (status, _) = app
+        .request(
+            "POST",
+            &format!("/api/approvals/{id}"),
+            Some(&david),
+            Some(json!({"approve": false})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/push/action",
+            None,
+            Some(press(&ticket, "approve")),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    // Alice devient invitée : ses boutons ne valent plus rien.
+    app.request(
+        "POST",
+        "/api/services/light/turn_on",
+        Some(&guest),
+        Some(lamp),
+    )
+    .await;
+    let id = core.held_orders()[0].id;
+    let ticket = button_ticket(&app, "alice", ha_push::Purpose::Approval(id), &buttons).await;
+    app.state
+        .auth
+        .set_role("alice", ha_auth::Role::Guest)
+        .await
+        .unwrap();
+    let (status, body) = app
+        .request(
+            "POST",
+            "/api/push/action",
+            None,
+            Some(press(&ticket, "approve")),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+    assert_eq!(core.held_orders().len(), 1, "toujours en attente");
+}
+
+#[tokio::test]
+async fn an_automation_button_fires_an_event() {
+    let app = TestApp::new().await;
+    ha_push::load_or_create_vapid(&app.state.store)
+        .await
+        .unwrap();
+    let david = app.login().await;
+    let (_, body) = app
+        .request(
+            "POST",
+            "/api/push/subscriptions",
+            Some(&david),
+            Some(browser_subscription(
+                "https://fcm.googleapis.com/fcm/send/d",
+            )),
+        )
+        .await;
+    let device = body["id"].as_i64().unwrap();
+    let ticket = button_ticket(
+        &app,
+        "david",
+        ha_push::Purpose::Automation,
+        &["LESSIVE_VUE", "PLUS_TARD"],
+    )
+    .await;
+    let mut events = app.state.core.bus.subscribe();
+    let (status, body) = app
+        .request(
+            "POST",
+            "/api/push/action",
+            None,
+            Some(json!({"token": ticket, "action": "LESSIVE_VUE"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["result"], "fired");
+    let event = events.recv().await.unwrap();
+    let ha_core::Event::Fired { event_type, data } = event.as_ref() else {
+        panic!("un événement est attendu");
+    };
+    assert_eq!(event_type, "notification_action");
+    assert_eq!(data["action"], "LESSIVE_VUE");
+    assert_eq!(data["user"], "david");
+
+    // Un appareil retiré (téléphone perdu) : ses boutons ne valent plus rien.
+    let ticket = button_ticket(&app, "david", ha_push::Purpose::Automation, &["A"]).await;
+    let (status, _) = app
+        .request(
+            "DELETE",
+            &format!("/api/push/subscriptions/{device}"),
+            Some(&david),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/push/action",
+            None,
+            Some(json!({"token": ticket, "action": "A"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    // Un champ de trop : refusé.
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/push/action",
+            None,
+            Some(json!({"token": "x", "action": "A", "user": "david"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]

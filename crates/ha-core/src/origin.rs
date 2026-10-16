@@ -21,6 +21,8 @@ pub enum Origin {
     Scene(String),
     /// La voix, avec Alexa.
     Voice,
+    /// Un assistant IA branché par MCP (étape 55), par le nom de son compte.
+    Agent(String),
 }
 
 impl Origin {
@@ -35,6 +37,7 @@ impl Origin {
             Self::Script(name) => Some(format!("par le script « {name} »")),
             Self::Scene(name) => Some(format!("par la scène « {name} »")),
             Self::Voice => Some("à la voix (Alexa)".to_owned()),
+            Self::Agent(name) => Some(format!("par l'assistant IA « {name} »")),
         }
     }
 }

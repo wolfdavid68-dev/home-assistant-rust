@@ -25,6 +25,7 @@ sortes.
 | `min_max`        | `sensor.temperature_moyenne`          | min, max, moyenne, médiane, somme, écart, dernier      |
 | `threshold`      | `binary_sensor.salle_de_bain_humide`  | au-dessus / au-dessous d'un seuil, avec une marge       |
 | `utility_meter`  | `sensor.electricite_du_jour`          | consommation depuis minuit, lundi, le 1er du mois…      |
+| `history_stats`  | `sensor.chauffage_du_jour`            | combien de temps, ou de fois, une entité a été dans un état (étape 59) |
 
 Les exemples commentés sont dans `inputs.example.yaml` et `derived.example.yaml`. Pour vérifier un
 fichier avant de redémarrer :
@@ -118,6 +119,40 @@ température ou une puissance instantanée.
 Après un redémarrage, il reprend là où il en était (la valeur et le dernier index lu sont gardés avec
 l'état). Si le serveur était arrêté au moment du changement de période, la nouvelle période commence
 au démarrage.
+
+## Les statistiques d'historique (étape 59)
+
+Combien de temps le chauffage a tourné aujourd'hui, combien de fois la porte du garage s'est
+ouverte cette semaine, quelle part de la journée la lumière du salon est restée allumée : comme
+`history_stats` dans Home Assistant.
+
+```yaml
+history_stats:
+  chauffage_du_jour:
+    name: Chauffage aujourd'hui
+    entity_id: switch.radiateur_salon
+    state: "on"              # un état, ou une liste : [heat, on]
+    type: time               # time (heures), count (nombre de fois), ratio (% de la période)
+    cycle: daily             # hourly, daily, weekly, monthly ou yearly
+  ouvertures_du_garage:
+    name: Ouvertures du garage cette semaine
+    entity_id: cover.garage
+    state: [open, opening]
+    type: count
+    cycle: weekly
+```
+
+- `time` donne des heures (« 2,35 h ») ; `count`, le nombre de fois où l'entité est **entrée**
+  dans l'état pendant la période (l'état à minuit ne compte pas) ; `ratio`, la part de la période
+  écoulée, en %.
+- Le calcul part de l'**historique enregistré** : il survit à un redémarrage. Il est refait
+  chaque minute, par la base (sans limite de lignes).
+- La période recommence à minuit, le lundi, le 1er du mois… comme la consommation par période.
+- L'historique est gardé 10 jours par défaut (`HA_HISTORY_DAYS`) : pour `monthly` ou `yearly`,
+  augmente-le, sinon le début de la période est oublié.
+
+Dans une automatisation : « si le chauffage a déjà tourné 6 heures aujourd'hui, baisse la
+consigne » (`numeric_state` sur `sensor.chauffage_du_jour`, `above: 6`).
 
 ## Comment c'est construit
 

@@ -1,0 +1,10 @@
+# Simulation de présence (étape 58) : maison vide, ces appareils refont ce
+# qu'ils ont fait il y a « il_y_a » jours, à la même heure. On l'arme avec
+# switch.simulation_presence. Copie ce fichier en simulation.yaml.
+# Seulement des lumières, prises, ventilateurs, interrupteurs virtuels et volets.
+appareils:
+  - light.salon
+  - light.cuisine
+  - light.chambre
+  - cover.salon
+il_y_a: 7    # de 1 à 9 jours (l'historique est gardé 10 jours)

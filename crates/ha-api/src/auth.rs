@@ -47,3 +47,34 @@ impl FromRequestParts<Arc<ApiState>> for Authenticated {
         Ok(Self { user, token })
     }
 }
+
+/// Un assistant IA branché par MCP (étape 55) : son jeton d'assistant
+/// (`ha-server user token`), ou à défaut un jeton de session. Seule la route
+/// MCP l'utilise ; partout ailleurs, un jeton d'assistant est refusé.
+pub struct AgentAuthenticated(pub Authenticated);
+
+impl FromRequestParts<Arc<ApiState>> for AgentAuthenticated {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &Arc<ApiState>,
+    ) -> Result<Self, Self::Rejection> {
+        let token = parts
+            .headers
+            .get(header::AUTHORIZATION)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.strip_prefix("Bearer "))
+            .ok_or(ApiError::Unauthorized)?;
+        let token = Zeroizing::new(token.trim().to_owned());
+        let user = match state.auth.authenticate_program(&token).await? {
+            Some(user) => user,
+            None => state
+                .auth
+                .authenticate(&token)
+                .await?
+                .ok_or(ApiError::Unauthorized)?,
+        };
+        Ok(Self(Authenticated { user, token }))
+    }
+}

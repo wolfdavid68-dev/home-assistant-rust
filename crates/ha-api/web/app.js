@@ -93,6 +93,10 @@ $("#login-form").addEventListener("submit", async (event) => {
 $("#logout").addEventListener("click", async () => {
   $("#account-dialog").close();
   const current = token.get();
+  // Se déconnecter retire aussi cet appareil des notifications : sans ça,
+  // la tablette partagée recevrait encore les « Ordre à valider » (et leurs
+  // boutons) du compte qui vient de partir.
+  if (current) await forgetPushHere(current).catch(() => {});
   token.clear();
   live.close();
   if (current) {
@@ -214,6 +218,12 @@ async function callService(domain, service, data) {
     // famille le valide.
     const body = await response.json().catch(() => ({}));
     flash(typeof body.message === "string" ? `${body.message}.` : "Ordre en attente de validation.");
+    unmarkPending(data.entity_id);
+  } else if (response.status === 400) {
+    // L'ordre ne convient pas à l'appareil (« consigne entre 7 et 30 ») :
+    // le serveur l'a refusé avant de l'envoyer.
+    const body = await response.json().catch(() => ({}));
+    flash(typeof body.error === "string" ? `${body.error}.` : "Commande refusée.");
     unmarkPending(data.entity_id);
   } else if ([502, 503, 504].includes(response.status)) {
     // L'appareil a refusé, son intégration est en panne, ou il n'a pas
@@ -429,7 +439,8 @@ function renderHome() {
   const parts = [];
   if (found.length > 0) parts.push(found.map((a) => `${nameOf(a.state)} : ${a.text}`).join(" · "));
   if (people) parts.push(people.length === 0 ? "Personne à la maison" : `${joinNames(people)} ${people.length > 1 ? "sont" : "est"} à la maison`);
-  const agenda = [...entities.values()].find((s) => domainOf(s) === "calendar");
+  // L'agenda de la maison d'abord (les agendas en ligne sont en plus).
+  const agenda = entities.get("calendar.maison") ?? [...entities.values()].find((s) => domainOf(s) === "calendar");
   if (agenda) {
     const next = calendarEvents(agenda).find((e) => e.endDate > now && !e.all_day);
     if (next && next.startDate <= now) parts.push(`En ce moment : ${next.summary}`);
@@ -1024,11 +1035,16 @@ function calendarEvents(state) {
 
 function calendarTile(state) {
   const now = Date.now();
+  // Un agenda en ligne (étape 57) : en lecture seule.
+  const readOnly = state.attributes.read_only === true;
   const coming = calendarEvents(state).filter((e) => e.endDate.getTime() > now).slice(0, 8);
   const current = state.state === "on";
-  const subtitle = current && typeof state.attributes.message === "string"
-    ? `En ce moment : ${state.attributes.message}`
-    : coming.length === 0 ? "Rien de prévu" : `${coming.length} rendez-vous à venir`;
+  const failure = typeof state.attributes.erreur === "string" ? state.attributes.erreur : "";
+  const subtitle = state.state === "unavailable"
+    ? (failure ? `Injoignable : ${failure}` : "Pas encore chargé")
+    : current && typeof state.attributes.message === "string"
+      ? `En ce moment : ${state.attributes.message}`
+      : coming.length === 0 ? "Rien de prévu" : `${coming.length} rendez-vous à venir`;
   const rows = [];
   let lastDay = "";
   for (const e of coming) {
@@ -1036,15 +1052,28 @@ function calendarTile(state) {
     if (day !== lastDay) rows.push(el("li", { class: "day", text: day }));
     lastDay = day;
     const when = e.all_day ? "Journée" : hourMinute.format(e.startDate);
-    const remove = el("button", { type: "button", class: "item-remove", "aria-label": `Supprimer ${e.summary}`, text: "×" });
-    remove.addEventListener("click", () => {
-      if (window.confirm(`Supprimer « ${e.summary} » ?`)) callService("calendar", "delete_event", { entity_id: state.entity_id, uid: e.uid });
-    });
     const ongoing = e.startDate.getTime() <= now;
-    rows.push(el("li", { class: ongoing ? "event now" : "event" },
+    const row = el("li", { class: ongoing ? "event now" : "event" },
       el("span", { class: "event-time", text: when }),
-      el("span", { class: "event-name", text: e.summary }),
-      remove));
+      el("span", { class: "event-name", text: e.summary }));
+    if (!readOnly) {
+      const remove = el("button", { type: "button", class: "item-remove", "aria-label": `Supprimer ${e.summary}`, text: "×" });
+      remove.addEventListener("click", () => {
+        if (window.confirm(`Supprimer « ${e.summary} » ?`)) callService("calendar", "delete_event", { entity_id: state.entity_id, uid: e.uid });
+      });
+      row.append(remove);
+    }
+    rows.push(row);
+  }
+  if (readOnly) {
+    const source = typeof state.attributes.source === "string" ? state.attributes.source : "";
+    return el(
+      "div",
+      { id: tileId(state.entity_id), class: `tile wide-tile${current ? " on" : ""}` },
+      tileHead(state, ICONS.calendar, subtitle),
+      rows.length > 0 ? el("ol", { class: "agenda-list" }, ...rows) : el("p", { class: "muted", text: "Rien dans les deux mois qui viennent." }),
+      ...(source ? [el("p", { class: "muted agenda-source", text: `Agenda en ligne (${source}), en lecture seule` })] : []),
+    );
   }
   // Nouveau rendez-vous : un titre, un jour, une heure (sans heure : toute la journée).
   const day = el("input", { type: "date", "aria-label": "Jour", required: "" });
@@ -1139,9 +1168,14 @@ function waterHeaterTile(state) {
 }
 
 function binaryTile(state) {
-  const labels = lookup(BINARY_LABELS, state.attributes.device_class) ?? ["Actif", "Inactif"];
-  const text = agree(state, state.state === "on" ? labels[0] : state.state === "off" ? labels[1] : statusText(state));
-  const icon = lookup(BINARY_ICONS, state.attributes.device_class) ?? ICONS.door;
+  // Jour ouvré (étape 56) : « Oui », « Non (Ascension) ».
+  const workday = Array.isArray(state.attributes.jours_ouvres);
+  const holiday = workday && typeof state.attributes.jour_ferie === "string" ? ` (${state.attributes.jour_ferie})` : "";
+  const labels = workday ? ["Oui", `Non${holiday}`] : lookup(BINARY_LABELS, state.attributes.device_class) ?? ["Actif", "Inactif"];
+  const text = workday
+    ? (state.state === "on" ? labels[0] : state.state === "off" ? labels[1] : statusText(state))
+    : agree(state, state.state === "on" ? labels[0] : state.state === "off" ? labels[1] : statusText(state));
+  const icon = workday ? ICONS.calendar : lookup(BINARY_ICONS, state.attributes.device_class) ?? ICONS.door;
   return el(
     "div",
     { id: tileId(state.entity_id), class: tileClass(state, "binary") },
@@ -1630,6 +1664,7 @@ function alarmTile(state) {
 
 function sensorTile(state) {
   if (state.attributes.device_class === "timestamp") return timestampTile(state);
+  if (state.attributes.device_class === "date") return dateTile(state);
   const unit = state.attributes.unit_of_measurement;
   // « 22.2 » s'affiche « 22,2 » (à la française).
   const numeric = /^-?\d+(\.\d+)?$/.test(state.state) ? number.format(Number(state.state)) : state.state;
@@ -1640,6 +1675,22 @@ function sensorTile(state) {
     { id: tileId(state.entity_id), class: tileClass(state, "sensor") },
     tileHead(state, lookup(ICONS, state.attributes.device_class) ?? ICONS.gauge, `il y a ${ago(state.last_changed)}`),
     value,
+  );
+}
+
+// Un jour (prochain jour férié, étape 56) : « Toussaint », « dim. 1 nov., dans 16 jours ».
+function dateTile(state) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(state.state);
+  const day = match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : null;
+  const name = typeof state.attributes.nom === "string" ? state.attributes.nom : "";
+  const left = Number(state.attributes.dans_jours);
+  const when = Number.isInteger(left) ? (left === 0 ? "aujourd'hui" : left === 1 ? "demain" : `dans ${left} jours`) : "";
+  const shown = day ? day.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" }) : statusText(state);
+  return el(
+    "div",
+    { id: tileId(state.entity_id), class: tileClass(state, "sensor") },
+    tileHead(state, ICONS.calendar, [shown, when].filter(Boolean).join(", ")),
+    el("div", { class: "value small-value", text: name || shown }),
   );
 }
 
@@ -3801,6 +3852,9 @@ async function loadAccount() {
   $("#open-drawing").hidden = account.permissions.edit_dashboard !== true;
   $(".dock").style.gridTemplateColumns = `repeat(${$(".dock").querySelectorAll(":scope > :not([hidden])").length}, minmax(0, 1fr))`;
   renderAll();
+  // Le service worker est (ré)enregistré à chaque ouverture : il prend la
+  // version du serveur.
+  loadPush().catch(() => {});
 }
 
 /** Un message bref en bas de l'écran (une commande refusée…). */
@@ -3825,9 +3879,270 @@ for (const opener of ["#dock-account", "#open-account"]) {
   $(opener).addEventListener("click", () => {
     $("#account-dialog").showModal();
     watchIntegrations();
+    loadPush().catch(() => {});
   });
 }
 $("#account-close").addEventListener("click", () => $("#account-dialog").close());
+
+// ---------------------------------------------------------------- Assist
+// « Ferme le volet de la chambre » : la phrase est comprise sur le serveur
+// (étape 54), qui donne les ordres avec les mêmes vérifications qu'un
+// toucher. La conversation n'est gardée que tant que la page est ouverte.
+
+const ASSIST_KEEP = 20;
+
+function assistSay(from, text, kind = "") {
+  const log = $("#assist-log");
+  log.append(el("li", { class: `assist-line from-${from}${kind ? ` ${kind}` : ""}` }, el("p", { text })));
+  while (log.children.length > ASSIST_KEEP) log.firstElementChild.remove();
+  log.lastElementChild.scrollIntoView({ block: "end" });
+}
+
+async function assistAsk(text) {
+  const asked = text.trim();
+  if (!asked) return;
+  assistSay("me", asked);
+  $("#assist-text").value = "";
+  const submit = $("#assist-form button[type=submit]");
+  submit.disabled = true;
+  try {
+    const { status, data } = await api("POST", "/api/conversation/process", { text: asked, language: "fr" });
+    const response = data?.response;
+    const speech = response?.speech?.plain?.speech;
+    if (status === 200 && typeof speech === "string") {
+      assistSay("home", speech, response.response_type === "error" ? "is-error" : "");
+    } else {
+      assistSay("home", typeof data?.error === "string" ? `${data.error}.` : "La maison n'a pas répondu.", "is-error");
+    }
+  } catch {
+    assistSay("home", "La maison n'a pas répondu.", "is-error");
+  } finally {
+    submit.disabled = false;
+    $("#assist-text").focus();
+  }
+}
+
+$("#open-assist").addEventListener("click", () => {
+  $("#assist").showModal();
+  $("#assist-text").focus();
+});
+$("#assist-close").addEventListener("click", () => $("#assist").close());
+$("#assist-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  assistAsk($("#assist-text").value);
+});
+for (const example of document.querySelectorAll("#assist-examples button")) {
+  example.addEventListener("click", () => assistAsk(example.textContent));
+}
+
+// ---------------------------------------------------------------- Notifications du navigateur
+// Dans « Mon compte » : recevoir les notifications sur ce téléphone, même
+// page fermée (Web Push, étape 50). Le navigateur s'abonne avec la clé
+// publique du serveur ; le service worker (sw.js) affiche ce qui arrive.
+
+const pushView = { info: null, registration: null, subscription: null, busy: false };
+
+/** Ce qui empêche ce navigateur de recevoir des notifications, ou null. */
+function pushBlocker() {
+  // Une tablette murale est partagée : pas de notifications (leurs boutons
+  // valideraient au nom de celui qui les a activées).
+  if (document.body.classList.contains("tablet")) {
+    return "Pas de notifications en mode tablette murale : l'écran est partagé. Active-les sur ton téléphone.";
+  }
+  if (!window.isSecureContext) {
+    return "Il faut ouvrir le tableau de bord en HTTPS (voir l'étape 7) : sans connexion sécurisée, le navigateur refuse les notifications.";
+  }
+  if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+    return /iPhone|iPad/.test(navigator.userAgent)
+      ? "Sur iPhone : touche Partager, puis « Sur l'écran d'accueil », et ouvre Maison depuis l'écran d'accueil (iOS 16.4 ou plus récent)."
+      : "Ce navigateur ne sait pas recevoir de notifications.";
+  }
+  return null;
+}
+
+/** « Pixel (Chrome) », « iPhone (Safari) »… pour reconnaître ses appareils. */
+function deviceName() {
+  const ua = navigator.userAgent;
+  const device = /iPhone/.test(ua) ? "iPhone" : /iPad/.test(ua) ? "iPad" : /Android/.test(ua) ? "Android"
+    : /Windows/.test(ua) ? "Windows" : /Macintosh/.test(ua) ? "Mac" : /Linux/.test(ua) ? "Linux" : "Appareil";
+  const browser = /Edg\//.test(ua) ? "Edge" : /Firefox\//.test(ua) ? "Firefox" : /Chrome\//.test(ua) ? "Chrome"
+    : /Safari\//.test(ua) ? "Safari" : "";
+  return browser ? `${device} (${browser})` : device;
+}
+
+/** La clé du serveur (base64url) au format attendu par `subscribe`. */
+function keyBytes(base64url) {
+  const base64 = base64url.replace(/-/g, "+").replace(/_/g, "/");
+  return Uint8Array.from(atob(base64 + "=".repeat((4 - (base64.length % 4)) % 4)), (c) => c.charCodeAt(0));
+}
+
+/** L'abonnement de ce navigateur, s'il y en a un. */
+async function browserSubscription() {
+  const registration = await navigator.serviceWorker?.getRegistration("/").catch(() => null);
+  const subscription = await registration?.pushManager.getSubscription().catch(() => null);
+  return { registration, subscription: subscription ?? null };
+}
+
+/** Retire ce navigateur des notifications : côté serveur (avec le jeton
+ *  `bearer`, s'il est donné) et côté navigateur, et ferme celles qui sont
+ *  affichées (leurs boutons ne doivent plus servir). */
+async function forgetPushHere(bearer = null) {
+  const { registration, subscription } = await browserSubscription();
+  if (subscription && bearer) {
+    const headers = { Authorization: `Bearer ${bearer}` };
+    const response = await fetch("/api/push", { headers }).catch(() => null);
+    const info = response?.ok ? await response.json().catch(() => null) : null;
+    const mine = Array.isArray(info?.devices) ? info.devices.find((d) => d.endpoint === subscription.endpoint) : null;
+    if (mine) await fetch(`/api/push/subscriptions/${mine.id}`, { method: "DELETE", headers }).catch(() => {});
+  }
+  await subscription?.unsubscribe().catch(() => {});
+  for (const shown of (await registration?.getNotifications().catch(() => [])) ?? []) shown.close();
+  pushView.subscription = null;
+}
+
+async function loadPush() {
+  const section = $("#push");
+  // Un invité ne reçoit pas de notifications ; sur cet appareil, celles du
+  // compte précédent s'arrêtent.
+  section.hidden = account.permissions.controls != null;
+  if (section.hidden) {
+    if ((await browserSubscription()).subscription) await forgetPushHere();
+    return;
+  }
+  const { status, data } = await api("GET", "/api/push");
+  if (status !== 200) {
+    section.hidden = true;
+    return;
+  }
+  pushView.info = data;
+  // Un autre compte s'était abonné sur ce navigateur : ses notifications
+  // n'ont plus rien à faire ici.
+  const here = (await browserSubscription()).subscription;
+  if (here && !data.devices.some((d) => d.endpoint === here.endpoint)) await forgetPushHere();
+  const blocker = data.available ? pushBlocker() : "Les notifications du navigateur sont coupées sur le serveur (HA_PUSH=off).";
+  if (blocker === null && pushView.registration === null) {
+    try {
+      pushView.registration = await navigator.serviceWorker.register("/sw.js");
+      await navigator.serviceWorker.ready;
+    } catch {
+      pushView.registration = null;
+    }
+  }
+  pushView.subscription = (await pushView.registration?.pushManager.getSubscription().catch(() => null)) ?? null;
+  renderPush(blocker);
+}
+
+function renderPush(blocker) {
+  const info = pushView.info;
+  if (!info) return;
+  const mine = info.devices.find((d) => d.endpoint === pushView.subscription?.endpoint) ?? null;
+  const denied = "Notification" in window && Notification.permission === "denied";
+  const on = mine !== null && !denied;
+  let status;
+  if (blocker) status = blocker;
+  else if (denied) status = "Notifications bloquées pour ce site : autorise-les dans les réglages du navigateur, puis reviens ici.";
+  else if (pushView.registration === null) status = "Le navigateur n'a pas pu préparer les notifications. Recharge la page.";
+  else if (on) status = "Activées : cet appareil est prévenu même quand la page est fermée.";
+  else status = "Reçois les ordres à valider, les alertes et les messages des automatisations, même page fermée.";
+  $("#push-status").textContent = status;
+  const usable = !blocker && !denied && pushView.registration !== null;
+  $("#push-enable").hidden = !usable || on;
+  $("#push-test").hidden = !on;
+  $("#push-disable").hidden = !on;
+  $("#push-categories").hidden = !on;
+  // Pendant une action, les cases gardent ce que la personne vient de cocher.
+  if (!pushView.busy) {
+    for (const box of document.querySelectorAll("#push-categories input")) {
+      box.checked = on && (mine.categories & Number(box.dataset.bit)) !== 0;
+    }
+  }
+  for (const box of document.querySelectorAll("#push-categories input")) box.disabled = pushView.busy;
+  for (const button of document.querySelectorAll("#push button")) button.disabled = pushView.busy;
+  const others = info.devices.filter((d) => d !== mine);
+  $("#push-devices").replaceChildren(...others.map((device) => {
+    const remove = el("button", { type: "button", class: "ghost small", text: "Retirer" });
+    remove.addEventListener("click", () => pushAction(async () => {
+      await api("DELETE", `/api/push/subscriptions/${device.id}`);
+    }));
+    const seen = device.last_success ? `prévenu il y a ${ago(device.last_success)}` : "jamais prévenu";
+    return el("li", { class: "push-device" },
+      el("span", {}, el("strong", { text: device.name }), el("small", { text: device.failures > 0 ? `${seen} · ${device.failures} échec(s)` : seen })),
+      remove);
+  }));
+}
+
+/** Une action à la fois ; la section est relue après. */
+async function pushAction(action) {
+  if (pushView.busy) return;
+  pushView.busy = true;
+  renderPush(null);
+  try {
+    await action();
+  } catch (error) {
+    flash(error instanceof Error && error.message ? error.message : "Action impossible.");
+  } finally {
+    pushView.busy = false;
+    await loadPush().catch(() => {});
+  }
+}
+
+$("#push-enable").addEventListener("click", () => pushAction(async () => {
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") throw new Error("Notifications refusées : rien ne sera envoyé à cet appareil.");
+  const manager = pushView.registration.pushManager;
+  const options = { userVisibleOnly: true, applicationServerKey: keyBytes(pushView.info.public_key) };
+  let subscription;
+  try {
+    subscription = await manager.subscribe(options);
+  } catch {
+    // Un ancien abonnement (autre clé du serveur) : on le remplace.
+    await (await manager.getSubscription())?.unsubscribe();
+    subscription = await manager.subscribe(options);
+  }
+  const { status, data } = await api("POST", "/api/push/subscriptions", { ...subscription.toJSON(), name: deviceName(), categories: 7 });
+  if (status !== 201) {
+    await subscription.unsubscribe().catch(() => {});
+    throw new Error(typeof data.error === "string" ? `${data.error}.` : "Abonnement refusé par le serveur.");
+  }
+  flash("Notifications activées sur cet appareil.");
+}));
+
+$("#push-disable").addEventListener("click", () => pushAction(async () => {
+  const mine = pushView.info.devices.find((d) => d.endpoint === pushView.subscription?.endpoint);
+  if (mine) await api("DELETE", `/api/push/subscriptions/${mine.id}`);
+  await pushView.subscription?.unsubscribe();
+  flash("Notifications désactivées sur cet appareil.");
+}));
+
+$("#push-test").addEventListener("click", () => pushAction(async () => {
+  const { status } = await api("POST", "/api/push/test");
+  if (status !== 202) throw new Error("Essai impossible.");
+  flash("Essai envoyé : la notification arrive dans quelques secondes.");
+}));
+
+for (const box of document.querySelectorAll("#push-categories input")) {
+  box.addEventListener("change", () => {
+    let categories = 0;
+    for (const input of document.querySelectorAll("#push-categories input")) {
+      if (input.checked) categories |= Number(input.dataset.bit);
+    }
+    pushAction(async () => {
+      const mine = pushView.info.devices.find((d) => d.endpoint === pushView.subscription?.endpoint);
+      if (mine) await api("PATCH", `/api/push/subscriptions/${mine.id}`, { categories });
+    });
+  });
+}
+
+/** Toucher une notification « ordre à valider » ouvre la cloche. */
+function openFromNotification(url) {
+  if (typeof url === "string" && url.endsWith("#notifications") && !$("#dashboard-view").hidden) {
+    $("#notices").showModal();
+    renderNotices();
+  }
+}
+navigator.serviceWorker?.addEventListener("message", (event) => {
+  if (event.data?.type === "open") openFromNotification(event.data.url);
+});
 
 // ---------------------------------------------------------------- Intégrations
 // Dans « Mon compte » : Hue, Somfy, MQTT… connectées, ou en panne, et quand
@@ -3952,6 +4267,9 @@ function setTablet(on, byHand) {
     // Stockage bloqué : le mode ne durera que le temps de la page.
   }
   if (on) {
+    // Écran partagé : il ne reçoit plus les notifications de personne.
+    const bearer = token.get();
+    forgetPushHere(bearer).then(() => (bearer ? loadPush() : undefined)).catch(() => {});
     keepAwake();
     // Le plein écran n'est permis qu'en réponse à un geste (ce clic).
     if (byHand && document.fullscreenElement === null) document.documentElement.requestFullscreen?.().catch(() => {});
@@ -4098,6 +4416,11 @@ function showDashboard() {
   live.open();
   loadAccount().catch(() => {});
   loadAreas().catch(() => {});
+  // Ouvert depuis une notification : la cloche directement.
+  if (location.hash === "#notifications") {
+    history.replaceState(null, "", "/");
+    openFromNotification("/#notifications");
+  }
 }
 
 // Rafraîchit les « il y a … » chaque minute.

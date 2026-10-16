@@ -1,0 +1,25 @@
+[package]
+name = "ha-ics"
+description = "Agendas en ligne (fichiers ICS) : collecte des déchets, vacances scolaires…, en lecture seule"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ha-agenda = { path = "../ha-agenda" }
+ha-core = { path = "../ha-core" }
+ha-storage = { path = "../ha-storage" }
+ha-tls = { path = "../ha-tls" }
+jiff.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde-saphyr.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["sync", "rt", "macros", "time"] }
+tracing.workspace = true
+url.workspace = true
+
+[lints]
+workspace = true

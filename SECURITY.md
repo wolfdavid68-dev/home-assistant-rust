@@ -50,6 +50,19 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
   jamais de vérification TLS désactivée.
 - Notifications (ntfy) : HTTPS obligatoire hors réseau local, aucune redirection suivie, jeton lu dans un
   fichier et jamais journalisé, contenu jamais journalisé, au plus 10 notifications en 10 minutes.
+- Notifications du navigateur (Web Push) : envoi uniquement aux services de notifications des
+  navigateurs (liste fermée, HTTPS, port standard, sans redirection), contenu chiffré de bout en bout
+  (RFC 8291), clé VAPID et secrets des appareils chiffrés dans la base ; famille et administrateur seulement.
+  Boutons des notifications : ticket aléatoire de 256 bits, à usage unique, pour un seul message, un seul
+  appareil et un seul compte, gardé en empreinte et en mémoire ; abonnement et rôle revérifiés au toucher.
+- Assist (phrases en français) : compris sur le serveur, sans cloud ; seulement les appareils visibles du
+  compte ; chaque ordre suit le chemin d'un toucher (droits, garde, mot de passe, valeurs) ; phrase jamais journalisée.
+- Assistant IA (MCP) : jeton par assistant (ligne de commande, 1 à 365 jours, révoqué avec le mot de passe) ;
+  ce jeton ne marche que pour MCP (refusé par le tableau de bord, l'API et le WebSocket) ; ses ordres sont
+  retenus par la garde quel que soit son rôle ; jamais serrure, alarme, sirène, garage, portail ni porte ;
+  60 appels par minute ; en-tête `Origin` d'un autre site refusé ; chaque appel audité.
+- Agendas en ligne (ICS) : HTTPS seulement, sans redirection, 2 Mio au plus ; l'adresse (qui peut contenir une
+  clé secrète) n'est jamais journalisée ni publiée, seulement le nom du site ; lecture seule.
 - Alexa (faux pont Hue, sans authentification possible) : désactivée par défaut ; seuls les appareils listés
   dans `alexa.yaml` sont exposés, jamais serrure, alarme, portail ni porte de garage ; seules les adresses
   autorisées (les Echo, ou à défaut le réseau local) sont servies ; serveur séparé de l'API ; chaque ordre est

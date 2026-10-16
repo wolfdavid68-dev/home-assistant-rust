@@ -9,10 +9,13 @@ publish.workspace = true
 [dependencies]
 axum.workspace = true
 ha-areas = { path = "../ha-areas" }
+ha-assist = { path = "../ha-assist" }
 ha-auth = { path = "../ha-auth" }
 ha-automation = { path = "../ha-automation" }
 ha-energy = { path = "../ha-energy" }
 ha-core = { path = "../ha-core" }
+ha-notices = { path = "../ha-notices" }
+ha-push = { path = "../ha-push" }
 jiff.workspace = true
 ha-storage = { path = "../ha-storage" }
 serde.workspace = true

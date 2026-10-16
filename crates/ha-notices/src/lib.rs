@@ -399,18 +399,14 @@ fn approvals(core: &Core) {
         if states.get(&entity_id).is_some() {
             continue;
         }
-        let device = states
-            .get(&order.entity_id)
-            .and_then(|state| text(state.attributes(), "friendly_name").map(str::to_owned))
-            .unwrap_or_else(|| order.entity_id.to_string());
         let who = order.origin.describe().map_or_else(
             || "Un ordre".to_owned(),
             |by| format!("Un ordre donné {by}"),
         );
         let message = format!(
-            "{who} attend ta validation : {} {device}. Il est retenu parce que {}. \
+            "{who} attend ta validation : {}. Il est retenu parce que {}. \
              Sans réponse, il sera oublié à {}.",
-            action(&order.domain, &order.service),
+            order_summary(states, &order),
             order.reason,
             Timestamp::try_from(order.held_since + ha_core::guard::HELD_TTL).map_or_else(
                 |_| "un moment".to_owned(),
@@ -432,6 +428,27 @@ fn approvals(core: &Core) {
             warn!("ordre à valider : notification refusée ({error})");
         }
     }
+}
+
+/// Ce que fait un ordre retenu : « fermer Volet chambre ».
+#[must_use]
+pub fn order_summary(states: &StateMachine, order: &ha_core::guard::HeldOrder) -> String {
+    describe_order(states, &order.domain, &order.service, &order.entity_id)
+}
+
+/// « fermer Volet chambre », d'après le service et l'appareil.
+#[must_use]
+pub fn describe_order(
+    states: &StateMachine,
+    domain: &str,
+    service: &str,
+    entity_id: &EntityId,
+) -> String {
+    let device = states
+        .get(entity_id)
+        .and_then(|state| text(state.attributes(), "friendly_name").map(str::to_owned))
+        .unwrap_or_else(|| entity_id.to_string());
+    format!("{} {device}", action(domain, service))
 }
 
 /// « allumer », « fermer »… ou le nom du service.
