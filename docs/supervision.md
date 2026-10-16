@@ -1,6 +1,6 @@
 # Étape 45 : la supervision des intégrations, expliquée
 
-![Mon compte → Intégrations : MQTT ne répond pas, ses 4 appareils sont indisponibles ; la météo réessaie](images/integrations.png)
+![Mon compte → Intégrations : MQTT ne répond pas, ses 4 appareils sont indisponibles ; la météo est connectée](images/integrations.png)
 
 ## Le but
 
