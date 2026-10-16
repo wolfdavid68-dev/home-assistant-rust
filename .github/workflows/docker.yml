@@ -58,6 +58,30 @@ jobs:
           docker logs ha
           test "$status" = healthy
           curl -fsS -D - -o /dev/null http://127.0.0.1:8123/ | grep -i '^content-security-policy:'
+
+      - name: Budget de performance
+        # Étape 47 (docs/performance.md) : une régression fait échouer la PR
+        # au lieu de s'installer en silence.
+        run: |
+          size=$(docker image inspect ha-server:ci --format '{{.Size}}')
+          echo "image : $((size / 1024 / 1024)) Mo (budget 80 Mo)"
+          test "$size" -le $((80 * 1024 * 1024))
+          # Mémoire au repos, après quelques secondes de marche.
+          sleep 10
+          memory=$(docker stats --no-stream --format '{{.MemUsage}}' ha | cut -d/ -f1 | tr -d ' ')
+          echo "mémoire au repos : $memory (budget 64 MiB)"
+          mib=$(echo "$memory" | awk '/GiB/ {print $1 * 1024; next} /MiB/ {print $1 + 0; next} /KiB/ {print $1 / 1024; next} {print 9999}')
+          awk -v m="$mib" 'BEGIN { exit !(m <= 64) }'
+          # Temps de réponse : 95 % des réponses en moins de 25 ms.
+          for path in / /api/; do
+            p95=$(for _ in $(seq 1 60); do curl -s -o /dev/null -w '%{time_total}\n' "http://127.0.0.1:8123$path"; done \
+              | sort -n | awk '{t[NR] = $1} END {print t[int(NR * 0.95)] * 1000}')
+            echo "$path : 95 % sous $p95 ms (budget 25 ms)"
+            awk -v p="$p95" 'BEGIN { exit !(p <= 25) }'
+          done
+
+      - name: Arrêt propre
+        run: |
           docker stop ha
           docker logs ha 2>&1 | grep 'SIGTERM'
           test "$(docker inspect --format '{{.State.ExitCode}}' ha)" = 0

@@ -857,6 +857,32 @@ async fn integrations_report_their_health() {
 }
 
 #[tokio::test]
+async fn the_system_page_measures_the_server() {
+    let app = TestApp::new().await;
+    let token = app.login().await;
+    // Quelques requêtes à mesurer.
+    for _ in 0..3 {
+        app.request("GET", "/api/states", Some(&token), None).await;
+    }
+    let (status, body) = app.request("GET", "/api/system", Some(&token), None).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert!(body["api"]["samples"].as_u64().unwrap() >= 3, "{body}");
+    assert!(body["api"]["p95_ms"].as_f64().unwrap() >= 0.0);
+    assert!(body["database_bytes"].as_u64().unwrap() > 0);
+    assert!(body["uptime_seconds"].is_u64());
+    assert_eq!(body["budget"]["memory_mib"], 64);
+    if cfg!(target_os = "linux") {
+        assert!(body["memory"]["resident_bytes"].as_u64().unwrap() > 0);
+        assert!(body["cpu_percent"].is_number());
+    }
+
+    // Réservé à l'administrateur.
+    let family = app.login_as("alice", ha_auth::Role::Family).await;
+    let (status, _) = app.request("GET", "/api/system", Some(&family), None).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
 async fn history_series_for_a_chart() {
     let mut app = TestApp::new().await;
     let token = app.login().await;
