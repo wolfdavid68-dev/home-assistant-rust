@@ -11,7 +11,9 @@ name: Docker
 # exemple un en-tête de sécurité retiré dans le code du serveur.
 
 on:
+  # Rien sur une PR en brouillon : voir ci.yml.
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - Dockerfile
       - compose.yaml
@@ -35,6 +37,7 @@ jobs:
     # Construit l'image, la démarre avec les mêmes protections que
     # compose.yaml, puis vérifie qu'elle répond et s'arrête proprement.
     name: image Docker
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
