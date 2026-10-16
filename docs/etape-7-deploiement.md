@@ -231,7 +231,7 @@ reste entière.
 | [.dockerignore](../.dockerignore) | Ce qui n'est jamais envoyé à Docker |
 | [health.rs](../crates/ha-server/src/health.rs) | `ha-server healthcheck` : le programme vérifie qu'il répond |
 | [main.rs](../crates/ha-server/src/main.rs) | Arrêt propre sur `SIGTERM` |
-| [ci.yml](../.github/workflows/ci.yml) | La CI construit l'image, la démarre et vérifie l'arrêt propre |
+| [docker.yml](../.github/workflows/docker.yml) | La CI construit l'image, la démarre et vérifie l'arrêt propre |
 
 **Concepts Rust rencontrés :**
 
@@ -265,7 +265,8 @@ reste entière.
   `sauvegarde`.)
 - Dans l'image : ni `/bin/sh` ni `curl` ; fuseau horaire Europe/Paris et certificats racines
   présents (pour la création du jeton Somfy).
-- La CI refait ces vérifications à chaque modification (job « image Docker »).
+- La CI refait ces vérifications quand l'emballage change (Dockerfile, compose, dépendances)
+  et chaque lundi (job « image Docker »).
 
 Tailscale n'a pas pu être testé ici : il demande ton compte. Si `tailscale serve` affiche une
 erreur, copie-la-moi.

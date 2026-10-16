@@ -1,9 +1,42 @@
 name: CI
 
+# Mesuré sur les 118 runs du 14 au 16 octobre : 2 447 minutes facturées en
+# deux jours et demi, plus que tout le quota mensuel d'un dépôt privé.
+#
+#   job                     minutes   part
+#   clippy et tests Windows   1 282    52 %   (minute Windows comptée double)
+#   image Docker                506    21 %
+#   clippy et tests Linux       280    11 %
+#   deny + msrv + format        355    15 %   (une minute pleine chacun)
+#
+# Et 42 % de ce total venait des pushes sur `main`, qui revalidaient l'arbre
+# que la PR venait de valider. Trois changements :
+#
+#   1. Sur `main`, plus de CI complète. `pull_request` teste déjà le résultat
+#      de la fusion. Un push ne relance ce job que si le lockfile ou la
+#      toolchain bougent : c'est ce qui périme le cache Rust, et le cache de
+#      `main` est le seul dont toutes les PR héritent.
+#   2. Windows et Docker sortent dans leurs propres workflows (windows.yml,
+#      docker.yml), déclenchés seulement quand ils ont quelque chose à dire.
+#   3. Format, clippy, tests, deny et MSRV tiennent dans un seul job : chaque
+#      job est arrondi à la minute supérieure, cinq jobs de 10 à 50 s
+#      coûtaient cinq minutes.
+
 on:
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
   push:
     branches: [main]
-  pull_request:
+    paths:
+      - Cargo.lock
+      - Cargo.toml
+      - rust-toolchain.toml
+  # Filet contre l'éviction du cache (7 jours sans accès).
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
 
 # Le workflow ne peut que lire le dépôt : rien d'autre.
 permissions:
@@ -21,13 +54,8 @@ env:
 # Dependabot les met à jour.
 jobs:
   check:
-    name: clippy et tests (${{ matrix.os }})
-    # Linux (comme un futur serveur) et Windows (comme ton PC).
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+    name: vérifications (Linux)
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -37,6 +65,15 @@ jobs:
       - name: Install toolchain
         run: rustup toolchain install
 
+      # En premier : une seconde, et l'erreur la plus fréquente.
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Dépendances (failles, licences, sources)
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          command: check all
+
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
       - name: Clippy
@@ -45,20 +82,9 @@ jobs:
       - name: Tests
         run: cargo test --workspace --all-features --locked
 
-  fmt:
-    name: format
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Install toolchain
-        run: rustup toolchain install
-
-      - name: Format
-        run: cargo fmt --all --check
-
+  # Reste à part : une autre version de rustc recompile tout, et elle a besoin
+  # de son propre cache. Dans le même job, les deux caches se marcheraient
+  # dessus.
   msrv:
     # Vérifie que le projet compile avec la version minimale annoncée dans
     # Cargo.toml (`rust-version`), et pas seulement avec la dernière.
@@ -79,46 +105,3 @@ jobs:
 
       - name: Check
         run: cargo +"$MSRV" check --workspace --all-targets --locked
-
-  deny:
-    name: dépendances (failles, licences, sources)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
-        with:
-          command: check all
-
-  docker:
-    # Construit l'image, la démarre avec les mêmes protections que
-    # compose.yaml, puis vérifie qu'elle répond et s'arrête proprement.
-    name: image Docker
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Build
-        run: docker build -t ha-server:ci .
-
-      - name: Smoke test
-        run: |
-          docker run -d --name ha --read-only --tmpfs /tmp \
-            --cap-drop ALL --security-opt no-new-privileges:true \
-            -p 127.0.0.1:8123:8123 ha-server:ci
-          status=starting
-          for _ in $(seq 1 60); do
-            status=$(docker inspect --format '{{.State.Health.Status}}' ha)
-            [ "$status" = healthy ] && break
-            sleep 2
-          done
-          docker logs ha
-          test "$status" = healthy
-          curl -fsS -D - -o /dev/null http://127.0.0.1:8123/ | grep -i '^content-security-policy:'
-          docker stop ha
-          docker logs ha 2>&1 | grep 'SIGTERM'
-          test "$(docker inspect --format '{{.State.ExitCode}}' ha)" = 0
