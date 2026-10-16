@@ -2466,6 +2466,22 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 
 /* ---------- La santé des intégrations (étape 45), dans « Mon compte ». */
 .integrations { display: grid; gap: 0.5rem; margin: 0.4rem 0 1rem; }
+/* Assist (étape 54) */
+.assist-dialog { width: min(520px, calc(100vw - 2rem)); }
+.assist-dialog[open] { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem; }
+.assist-log { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; max-height: min(50vh, 420px); overflow-y: auto; }
+.assist-log:empty { display: none; }
+.assist-line { display: flex; }
+.assist-line p { margin: 0; padding: 0.55rem 0.8rem; border-radius: 14px; max-width: 85%; overflow-wrap: anywhere; line-height: 1.4; }
+.assist-line.from-me { justify-content: flex-end; }
+.assist-line.from-me p { background: var(--accent); color: var(--accent-ink, #fff); border-bottom-right-radius: 4px; }
+.assist-line.from-home p { background: var(--card-2); color: var(--text); border-bottom-left-radius: 4px; }
+.assist-line.is-error p { box-shadow: inset 3px 0 0 var(--alert); }
+.assist-examples { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.assist-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; }
+.assist-form input { min-width: 0; }
+.assist-dialog .account { margin: 0; font-size: 0.82rem; }
+
 /* Notifications du navigateur (étape 50) */
 .push-option { display: grid; gap: 0.5rem; padding: 0.8rem 0; border-bottom: 1px solid var(--line); }
 .push-option h3 { margin: 0; font-size: 1rem; }

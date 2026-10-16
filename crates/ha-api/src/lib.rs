@@ -25,10 +25,12 @@
 //! | POST | `/api/push/subscriptions` | Abonne ce navigateur aux notifications |
 //! | PATCH / DELETE | `/api/push/subscriptions/{id}` | Change ce qu'il reçoit / le retire |
 //! | POST | `/api/push/test` | Envoie un essai à ses appareils |
+//! | POST | `/api/conversation/process` | Assist : une phrase en français (« ferme le volet de la chambre ») |
 //! | POST | `/api/push/action` | Un bouton touché sur une notification (sans connexion : le ticket en tient lieu) |
 //! | GET | `/api/websocket` | API WebSocket (authentification dans le 1er message) |
 //! | GET | `/` | Tableau de bord web (page publique ; les données demandent un jeton) |
 
+mod assist;
 mod auth;
 mod automations;
 mod drawing;
@@ -168,6 +170,7 @@ pub fn router(state: Arc<ApiState>) -> Router {
         )
         .route("/api/push/test", post(push::test))
         .route("/api/push/action", post(push::action))
+        .route("/api/conversation/process", post(assist::process))
         .route("/api/home/drawing", get(drawing::get).put(drawing::put))
         .route(
             "/api/home/images/{name}",

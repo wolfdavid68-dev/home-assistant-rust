@@ -61,6 +61,7 @@ Un noyau domotique en Rust, inspiré de Home Assistant.
 - [Étape 51 : des boutons dans les notifications](docs/notifications-navigateur.md#étape-51--des-boutons-dans-la-notification)
 - [Étape 52 : les notifications se rangent toutes seules](docs/notifications-navigateur.md#étape-52--les-notifications-se-rangent-toutes-seules)
 - [Étape 53 : des ordres vérifiés avant l'envoi](docs/ordres.md#étape-53--vérifié-avant-lenvoi)
+- [Étape 54 : Assist, expliqué](docs/assist.md)
 - [Étape 5 : les automatisations, expliqué](docs/etape-5-automatisations.md)
 - [Modernisation du code, expliquée](docs/modernisation.md)
 - [Étape 6 : l'interface web, expliquée](docs/etape-6-interface-web.md)

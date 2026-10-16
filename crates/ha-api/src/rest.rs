@@ -527,6 +527,43 @@ pub(crate) async fn call_service(
         Some(Value::String(entity_id)) => parse_entity_id(&entity_id)?,
         _ => return Err(ApiError::BadRequest("champ « entity_id » attendu".into())),
     };
+    match execute(&state, &auth, client, &domain, &service, entity_id, data).await? {
+        Outcome::Held(reason) => Ok((
+            StatusCode::ACCEPTED,
+            Json(json!({
+                "result": "held",
+                "message": format!("ordre en attente de validation : {reason}"),
+            })),
+        )
+            .into_response()),
+        Outcome::Sent => Ok(Json(json!({"result": "sent"})).into_response()),
+        Outcome::Done => Ok(Json(json!({"result": "done"})).into_response()),
+    }
+}
+
+/// Ce qu'est devenu un ordre accepté.
+pub(crate) enum Outcome {
+    /// Retenu par la garde : il attend qu'un membre de la famille le valide.
+    Held(String),
+    /// Envoyé ; l'appareil confirmera en changeant d'état.
+    Sent,
+    /// L'appareil a répondu qu'il l'a fait (Hue, Somfy).
+    Done,
+}
+
+/// Donne un ordre au nom de `auth`, avec toutes les vérifications : droits
+/// du compte, mot de passe redemandé pour ouvrir la maison, garde,
+/// intégration en panne, réponse de l'appareil. Le chemin de
+/// `POST /api/services` et d'Assist.
+pub(crate) async fn execute(
+    state: &ApiState,
+    auth: &Authenticated,
+    client: SocketAddr,
+    domain: &str,
+    service: &str,
+    entity_id: EntityId,
+    data: Attributes,
+) -> Result<Outcome, ApiError> {
     if !roles::can_control_with_members(&auth.user, &entity_id, &state.core.states) {
         tracing::warn!(
             "{domain}.{service} sur {entity_id} refusé à {} ({})",
@@ -538,8 +575,8 @@ pub(crate) async fn call_service(
             auth.user.role.label()
         )));
     }
-    if roles::needs_confirmation(&domain, &service)
-        && crate::automations::confirmation_left(&state, &auth.token).is_none()
+    if roles::needs_confirmation(domain, service)
+        && crate::automations::confirmation_left(state, &auth.token).is_none()
     {
         return Err(ApiError::ConfirmationRequired);
     }
@@ -553,8 +590,8 @@ pub(crate) async fn call_service(
             .core
             .hold(
                 origin,
-                &domain,
-                &service,
+                domain,
+                service,
                 entity_id.clone(),
                 data,
                 reason.clone(),
@@ -565,7 +602,7 @@ pub(crate) async fn call_service(
             auth.user.username
         );
         audit(
-            &state,
+            state,
             &auth.user.username,
             "held",
             Some(entity_id.as_str()),
@@ -573,14 +610,7 @@ pub(crate) async fn call_service(
             client,
         )
         .await;
-        return Ok((
-            StatusCode::ACCEPTED,
-            Json(json!({
-                "result": "held",
-                "message": format!("ordre en attente de validation : {reason}"),
-            })),
-        )
-            .into_response());
+        return Ok(Outcome::Held(reason));
     }
     // L'intégration de l'appareil est en panne : l'ordre ne partirait nulle
     // part (et pourrait s'exécuter bien plus tard). On le dit tout de suite.
@@ -597,13 +627,13 @@ pub(crate) async fn call_service(
         Some(
             state
                 .core
-                .call_service_tracked(origin, &domain, &service, entity_id.clone(), data)
+                .call_service_tracked(origin, domain, service, entity_id.clone(), data)
                 .map_err(|error| ApiError::BadRequest(error.to_string()))?,
         )
     } else {
         state
             .core
-            .call_service_from(origin, &domain, &service, entity_id.clone(), data)
+            .call_service_from(origin, domain, service, entity_id.clone(), data)
             .map_err(|error| ApiError::BadRequest(error.to_string()))?;
         None
     };
@@ -612,7 +642,7 @@ pub(crate) async fn call_service(
         auth.user.username
     );
     audit(
-        &state,
+        state,
         &auth.user.username,
         "service",
         Some(entity_id.as_str()),
@@ -621,13 +651,12 @@ pub(crate) async fn call_service(
     )
     .await;
     let (Some((id, reply)), Some(owner)) = (reply, answering) else {
-        // Envoyé ; l'appareil confirmera en changeant d'état.
-        return Ok(Json(json!({"result": "sent"})).into_response());
+        return Ok(Outcome::Sent);
     };
     // Un peu plus que la durée de vie de l'ordre : reçu à temps, il a encore
     // quelques secondes pour arriver jusqu'à l'appareil.
     match tokio::time::timeout(ha_core::COMMAND_TTL + ANSWER_MARGIN, reply).await {
-        Ok(Ok(Ok(()))) => Ok(Json(json!({"result": "done"})).into_response()),
+        Ok(Ok(Ok(()))) => Ok(Outcome::Done),
         Ok(Ok(Err(refused))) => Err(ApiError::DeviceRefused(refused)),
         Ok(Err(_)) => Err(ApiError::DeviceRefused(format!(
             "{} n'a pas répondu",

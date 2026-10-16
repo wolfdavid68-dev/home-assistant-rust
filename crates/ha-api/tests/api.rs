@@ -1838,6 +1838,121 @@ async fn an_order_the_device_cannot_follow_is_refused_before_it_leaves() {
     assert_eq!(status, StatusCode::OK, "{body}");
 }
 
+#[tokio::test]
+async fn assist_understands_french_and_obeys_the_same_rules() {
+    let app = TestApp::new().await;
+    furnish(&app);
+    let core = &app.state.core;
+    for (id, name) in [
+        ("cover.salon", "Volet salon"),
+        ("light.salon", "Lampe salon"),
+        ("lock.entree", "Porte d'entrée"),
+        ("person.david", "David"),
+    ] {
+        let state = core.states.get(&id.parse().unwrap()).unwrap();
+        let mut attributes = state.attributes().clone();
+        attributes.insert("friendly_name".into(), name.into());
+        core.states
+            .set(id.parse().unwrap(), state.state(), attributes)
+            .unwrap();
+    }
+    core.guard.configure(
+        ha_core::Policy {
+            protected: [("light.salon".parse().unwrap(), "Salon".to_owned())].into(),
+            quiet_hours: None,
+        },
+        || 0,
+    );
+    let david = app.login().await;
+    let guest = app.login_as("visiteur", ha_auth::Role::Guest).await;
+    let say = |token: &String, text: &str| {
+        let token = token.clone();
+        let text = text.to_owned();
+        let app = &app;
+        async move {
+            let (status, body) = app
+                .request(
+                    "POST",
+                    "/api/conversation/process",
+                    Some(&token),
+                    Some(json!({"text": text, "language": "fr"})),
+                )
+                .await;
+            assert_eq!(status, StatusCode::OK, "{body}");
+            (
+                body["response"]["response_type"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned(),
+                body["response"]["speech"]["plain"]["speech"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned(),
+            )
+        }
+    };
+
+    let mut events = core.bus.subscribe();
+    let (kind, speech) = say(&david, "Ferme le volet du salon").await;
+    assert_eq!(kind, "action_done");
+    assert_eq!(speech, "C'est fait : fermer Volet salon.");
+    let event = events.recv().await.unwrap();
+    let ha_core::Event::CallService {
+        service, origin, ..
+    } = event.as_ref()
+    else {
+        panic!("un ordre est attendu");
+    };
+    assert_eq!(service, "close_cover");
+    assert_eq!(*origin, ha_core::Origin::User("david".into()));
+
+    // Les valeurs sont vérifiées comme ailleurs.
+    let (kind, speech) = say(&david, "ouvre le volet du salon à 150 %").await;
+    assert_eq!(kind, "error");
+    assert!(
+        speech.contains("position entre 0 et 100 (reçu 150)"),
+        "{speech}"
+    );
+    // Ouvrir la maison redemande le mot de passe.
+    let (kind, speech) = say(&david, "déverrouille la porte d'entrée").await;
+    assert_eq!(kind, "error");
+    assert!(speech.contains("redonne ton mot de passe"), "{speech}");
+    // Une question.
+    let (kind, speech) = say(&david, "Qui est à la maison ?").await;
+    assert_eq!(
+        (kind.as_str(), speech.as_str()),
+        ("query_answer", "À la maison : David.")
+    );
+    // Pas compris.
+    let (kind, _) = say(&david, "fais-moi un café").await;
+    assert_eq!(kind, "error");
+
+    // L'invité : la pièce protégée attend une validation ; la présence et la
+    // serrure lui restent invisibles.
+    let (kind, speech) = say(&guest, "allume la lampe du salon").await;
+    assert_eq!(kind, "action_done");
+    assert!(
+        speech.starts_with("En attente de validation : allumer Lampe salon"),
+        "{speech}"
+    );
+    assert_eq!(core.held_orders().len(), 1);
+    let (_, speech) = say(&guest, "qui est à la maison ?").await;
+    assert_eq!(speech, "Je ne peux pas te le dire.");
+    let (kind, _) = say(&guest, "verrouille la porte d'entrée").await;
+    assert_eq!(kind, "error", "la serrure n'existe pas pour lui");
+
+    // Sans connexion : refusé.
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/conversation/process",
+            None,
+            Some(json!({"text": "ferme le volet du salon"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
 /// Un ticket de bouton, comme le service des notifications en émet un.
 async fn button_ticket(
     app: &TestApp,

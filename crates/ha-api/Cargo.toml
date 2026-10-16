@@ -9,6 +9,7 @@ publish.workspace = true
 [dependencies]
 axum.workspace = true
 ha-areas = { path = "../ha-areas" }
+ha-assist = { path = "../ha-assist" }
 ha-auth = { path = "../ha-auth" }
 ha-automation = { path = "../ha-automation" }
 ha-energy = { path = "../ha-energy" }

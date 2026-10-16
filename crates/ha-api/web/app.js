@@ -3839,6 +3839,57 @@ for (const opener of ["#dock-account", "#open-account"]) {
 }
 $("#account-close").addEventListener("click", () => $("#account-dialog").close());
 
+// ---------------------------------------------------------------- Assist
+// « Ferme le volet de la chambre » : la phrase est comprise sur le serveur
+// (étape 54), qui donne les ordres avec les mêmes vérifications qu'un
+// toucher. La conversation n'est gardée que tant que la page est ouverte.
+
+const ASSIST_KEEP = 20;
+
+function assistSay(from, text, kind = "") {
+  const log = $("#assist-log");
+  log.append(el("li", { class: `assist-line from-${from}${kind ? ` ${kind}` : ""}` }, el("p", { text })));
+  while (log.children.length > ASSIST_KEEP) log.firstElementChild.remove();
+  log.lastElementChild.scrollIntoView({ block: "end" });
+}
+
+async function assistAsk(text) {
+  const asked = text.trim();
+  if (!asked) return;
+  assistSay("me", asked);
+  $("#assist-text").value = "";
+  const submit = $("#assist-form button[type=submit]");
+  submit.disabled = true;
+  try {
+    const { status, data } = await api("POST", "/api/conversation/process", { text: asked, language: "fr" });
+    const response = data?.response;
+    const speech = response?.speech?.plain?.speech;
+    if (status === 200 && typeof speech === "string") {
+      assistSay("home", speech, response.response_type === "error" ? "is-error" : "");
+    } else {
+      assistSay("home", typeof data?.error === "string" ? `${data.error}.` : "La maison n'a pas répondu.", "is-error");
+    }
+  } catch {
+    assistSay("home", "La maison n'a pas répondu.", "is-error");
+  } finally {
+    submit.disabled = false;
+    $("#assist-text").focus();
+  }
+}
+
+$("#open-assist").addEventListener("click", () => {
+  $("#assist").showModal();
+  $("#assist-text").focus();
+});
+$("#assist-close").addEventListener("click", () => $("#assist").close());
+$("#assist-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  assistAsk($("#assist-text").value);
+});
+for (const example of document.querySelectorAll("#assist-examples button")) {
+  example.addEventListener("click", () => assistAsk(example.textContent));
+}
+
 // ---------------------------------------------------------------- Notifications du navigateur
 // Dans « Mon compte » : recevoir les notifications sur ce téléphone, même
 // page fermée (Web Push, étape 50). Le navigateur s'abonne avec la clé

@@ -834,6 +834,7 @@ dependencies = [
  "axum",
  "futures-util",
  "ha-areas",
+ "ha-assist",
  "ha-auth",
  "ha-automation",
  "ha-core",
@@ -860,6 +861,14 @@ dependencies = [
  "serde",
  "serde-saphyr",
  "thiserror",
+]
+
+[[package]]
+name = "ha-assist"
+version = "0.1.0"
+dependencies = [
+ "ha-core",
+ "serde_json",
 ]
 
 [[package]]
