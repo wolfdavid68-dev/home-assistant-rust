@@ -77,6 +77,23 @@ const WEATHERS: [&str; 10] = [
     "pluie-neige",
 ];
 
+/// Les effets animés sur le dessin (étape 43) : `off`, ou un effet imposé
+/// pour essayer ; sans réglage, ils suivent la météo.
+const EFFECTS: [&str; 10] = [
+    "off",
+    "pluie",
+    "averses",
+    "orage",
+    "grele",
+    "neige",
+    "pluie-neige",
+    "brouillard",
+    "vent",
+    "etoiles",
+];
+/// Leur intensité ; sans réglage : normale.
+const EFFECT_LEVELS: [&str; 2] = ["discret", "fort"];
+
 /// Une ambiance : le moment, puis le temps (`jour-pluie`, `nuit-pluie-neige`).
 fn is_ambiance(key: &str) -> bool {
     key.split_once('-').is_some_and(|(moment, weather)| {
@@ -136,6 +153,12 @@ struct Page {
     /// soleil : `jour`, `nuit`, ou une des ambiances.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     forced: Option<String>,
+    /// Les effets animés : `off`, ou un effet imposé ; absent : selon la météo.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    effects: Option<String>,
+    /// L'intensité des effets : `discret` ou `fort` ; absente : normale.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    effects_level: Option<String>,
     /// Les boutons rapides sous le dessin (porche, parking, garage…).
     #[serde(default)]
     actions: Vec<String>,
@@ -367,6 +390,21 @@ fn check_page(config: &Page, images: &HashSet<String>) -> Result<(), ApiError> {
     {
         return Err(ApiError::BadRequest(format!(
             "ambiance imposée « {forced} » inconnue"
+        )));
+    }
+    if let Some(effects) = &config.effects
+        && !EFFECTS.contains(&effects.as_str())
+    {
+        return Err(ApiError::BadRequest(format!(
+            "effets « {effects} » inconnus : {}",
+            EFFECTS.join(", ")
+        )));
+    }
+    if let Some(level) = &config.effects_level
+        && !EFFECT_LEVELS.contains(&level.as_str())
+    {
+        return Err(ApiError::BadRequest(format!(
+            "intensité des effets « {level} » inconnue : discret ou fort"
         )));
     }
     if config.layers.len() > MAX_LAYERS {
@@ -764,6 +802,9 @@ mod tests {
             r#"{"background":"jour","ambiances":{"jour-pluie":"garage","nuit-pluie-neige":"jour","jour-orage":"jour"},"forced":"nuit-pluie-neige"}"#,
         );
         assert!(check_page(&rainy, &images).is_ok());
+        let effects = config(r#"{"effects":"orage","effects_level":"fort"}"#);
+        assert!(check_page(&effects, &images).is_ok());
+        assert!(check_page(&config(r#"{"effects":"off"}"#), &images).is_ok());
         let charts = config(
             r#"{"charts":[{"entity_id":"sensor.nas","name":"NAS","color":"violet","hours":24},
                 {"entity_id":"sensor.nvr","color":"ambre","hours":6}]}"#,
@@ -792,6 +833,8 @@ mod tests {
             r#"{"ambiances":{"jour-pluie":"garage"}}"#,
             r#"{"background":"jour","ambiances":{"jour-pluie":"absente"}}"#,
             r#"{"forced":"tempete"}"#,
+            r#"{"effects":"tornade"}"#,
+            r#"{"effects":"neige","effects_level":"enorme"}"#,
             r#"{"charts":[{"entity_id":"sensor.nas","color":"fuchsia","hours":24}]}"#,
             r#"{"charts":[{"entity_id":"sensor.nas","color":"vert","hours":12}]}"#,
             r#"{"charts":[{"entity_id":"pas un capteur","color":"vert","hours":24}]}"#,
