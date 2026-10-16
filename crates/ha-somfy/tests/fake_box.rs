@@ -372,9 +372,15 @@ async fn devices_become_entities_and_shutters_obey() {
 
     // Rien n'est envoyé pour une position invalide ou un capteur.
     let before = box_state.lock().unwrap().commands.len();
+    // Une position hors plage est refusée par le noyau, avant l'envoi.
     let bad: Attributes = json!({"position": 150}).as_object().unwrap().clone();
-    core.call_service("cover", "set_cover_position", id("cover.volet_salon"), bad)
-        .unwrap();
+    let refused = core
+        .call_service("cover", "set_cover_position", id("cover.volet_salon"), bad)
+        .unwrap_err();
+    assert_eq!(
+        refused.to_string(),
+        "Volet salon : position entre 0 et 100 (reçu 150)"
+    );
     core.call_service(
         "cover",
         "open_cover",

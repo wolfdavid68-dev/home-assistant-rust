@@ -215,6 +215,12 @@ async function callService(domain, service, data) {
     const body = await response.json().catch(() => ({}));
     flash(typeof body.message === "string" ? `${body.message}.` : "Ordre en attente de validation.");
     unmarkPending(data.entity_id);
+  } else if (response.status === 400) {
+    // L'ordre ne convient pas à l'appareil (« consigne entre 7 et 30 ») :
+    // le serveur l'a refusé avant de l'envoyer.
+    const body = await response.json().catch(() => ({}));
+    flash(typeof body.error === "string" ? `${body.error}.` : "Commande refusée.");
+    unmarkPending(data.entity_id);
   } else if ([502, 503, 504].includes(response.status)) {
     // L'appareil a refusé, son intégration est en panne, ou il n'a pas
     // répondu : on le dit, plutôt que de laisser la tuile clignoter.

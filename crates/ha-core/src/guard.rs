@@ -208,6 +208,9 @@ impl Core {
         reason: String,
     ) -> Result<u64, CoreError> {
         check_service_names(domain, service)?;
+        // Un ordre qui ne convient pas à l'appareil n'attend pas : refusé
+        // tout de suite, plutôt qu'après la validation.
+        self.check_call(domain, service, &entity_id, &data)?;
         let id = self.guard.next.fetch_add(1, Ordering::Relaxed) + 1;
         let dropped = {
             let mut held = self.guard.held();

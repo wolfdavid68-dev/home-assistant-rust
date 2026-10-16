@@ -4,6 +4,7 @@
 //! remettent les types principaux à la racine, pour écrire `ha_core::EntityId`
 //! au lieu de `ha_core::entity_id::EntityId`.
 
+pub mod checks;
 pub mod commands;
 mod entity_id;
 mod error;
@@ -125,6 +126,8 @@ impl Core {
         data: Attributes,
     ) -> Result<(u64, tokio::sync::oneshot::Receiver<CommandResult>), CoreError> {
         check_service_names(domain, service)?;
+        // Vérifié avant d'ouvrir l'attente : un ordre refusé n'en laisse pas.
+        self.check_call(domain, service, &entity_id, &data)?;
         let (id, reply) = self.commands.open();
         self.publish_call(origin, domain, service, entity_id, data, Some(id))?;
         Ok((id, reply))
@@ -140,6 +143,7 @@ impl Core {
         command: Option<u64>,
     ) -> Result<(), CoreError> {
         check_service_names(domain, service)?;
+        self.check_call(domain, service, &entity_id, &data)?;
         self.bus.publish(Event::CallService {
             domain: domain.to_owned(),
             service: service.to_owned(),
@@ -150,6 +154,28 @@ impl Core {
             issued_at: std::time::Instant::now(),
         });
         Ok(())
+    }
+
+    /// Vérifie qu'un ordre convient à l'appareil (voir [`checks`]) : fait
+    /// avant chaque envoi, et avant qu'un ordre soit retenu par la garde.
+    pub fn check_call(
+        &self,
+        domain: &str,
+        service: &str,
+        entity_id: &EntityId,
+        data: &Attributes,
+    ) -> Result<(), CoreError> {
+        let Some(state) = self.states.get(entity_id) else {
+            return Ok(());
+        };
+        checks::check(domain, service, data, &state).map_err(|reason| {
+            let device = state
+                .attributes()
+                .get("friendly_name")
+                .and_then(serde_json::Value::as_str)
+                .map_or_else(|| entity_id.to_string(), str::to_owned);
+            CoreError::Refused { device, reason }
+        })
     }
 
     /// Publie un événement nommé (voir [`Event::Fired`]).

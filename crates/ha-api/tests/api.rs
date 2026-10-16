@@ -1783,6 +1783,61 @@ async fn phones_subscribe_to_notifications() {
     assert!(journal.iter().any(|e| e.action == "push_unsubscribe"));
 }
 
+#[tokio::test]
+async fn an_order_the_device_cannot_follow_is_refused_before_it_leaves() {
+    let app = TestApp::new().await;
+    furnish(&app);
+    let core = &app.state.core;
+    core.guard.configure(
+        ha_core::Policy {
+            protected: [("cover.salon".parse().unwrap(), "Salon".to_owned())].into(),
+            quiet_hours: None,
+        },
+        || 0,
+    );
+    let david = app.login().await;
+    let guest = app.login_as("visiteur", ha_auth::Role::Guest).await;
+    let mut events = core.bus.subscribe();
+    for (token, data) in [
+        (&david, json!({"entity_id": "cover.salon", "position": 150})),
+        (&david, json!({"entity_id": "cover.salon"})),
+        // Un invité dans une pièce protégée : refusé tout de suite, pas
+        // retenu pour être validé puis refusé.
+        (&guest, json!({"entity_id": "cover.salon", "position": -5})),
+    ] {
+        let (status, body) = app
+            .request(
+                "POST",
+                "/api/services/cover/set_cover_position",
+                Some(token),
+                Some(data),
+            )
+            .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+        assert!(
+            body["error"]
+                .as_str()
+                .unwrap()
+                .starts_with("cover.salon : position"),
+            "{body}"
+        );
+    }
+    assert_eq!(core.held_orders().len(), 0);
+    assert!(
+        events.try_recv().is_err(),
+        "aucun ordre n'est parti sur le bus"
+    );
+    let (status, body) = app
+        .request(
+            "POST",
+            "/api/services/cover/set_cover_position",
+            Some(&david),
+            Some(json!({"entity_id": "cover.salon", "position": 40})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+}
+
 /// Un ticket de bouton, comme le service des notifications en émet un.
 async fn button_ticket(
     app: &TestApp,
