@@ -87,6 +87,7 @@
 //! - `HA_CALENDARS_PATH` : agendas en ligne, fichiers ICS (par défaut
 //!   `calendriers.yaml`) ;
 //! - `HA_DELESTAGE_PATH` : délestage (par défaut `delestage.yaml`) ;
+//! - `HA_TEMPLATES_PATH` : capteurs modèles (par défaut `modeles.yaml`) ;
 //! - `HA_SIMULATION_PATH` : simulation de présence (par défaut
 //!   `simulation.yaml`) ;
 //! - `HA_AUTOMATIONS_PATH` : fichier d'automatisations (par défaut `automations.yaml`) ;
@@ -133,6 +134,7 @@ const DEFAULT_AREAS_PATH: &str = "areas.yaml";
 const DEFAULT_CALENDARS_PATH: &str = "calendriers.yaml";
 const DEFAULT_SIMULATION_PATH: &str = "simulation.yaml";
 const DEFAULT_SHEDDING_PATH: &str = "delestage.yaml";
+const DEFAULT_TEMPLATES_PATH: &str = "modeles.yaml";
 const DEFAULT_GUARD_PATH: &str = "guard.yaml";
 
 /// Concept Rust : `#[tokio::main]` démarre le moteur asynchrone de tokio.
@@ -161,6 +163,7 @@ async fn main() -> ExitCode {
         ["calendriers", "check"] => cli::check_calendars(&calendars_path()),
         ["simulation", "check"] => cli::check_simulation(&simulation_path()),
         ["delestage", "check"] => cli::check_shedding(&shedding_path()),
+        ["modeles", "check"] => cli::check_templates(&templates_path()),
         ["guard", "check"] => cli::check_guard(&areas_path(), &guard_path()),
         ["alexa", "check"] => cli::check_alexa(&alexa_path()),
         ["thermostats", "check"] => cli::check_thermostats(&thermostats_path()),
@@ -240,6 +243,12 @@ fn areas_path() -> std::path::PathBuf {
 fn calendars_path() -> std::path::PathBuf {
     std::env::var("HA_CALENDARS_PATH")
         .unwrap_or_else(|_| DEFAULT_CALENDARS_PATH.to_owned())
+        .into()
+}
+
+fn templates_path() -> std::path::PathBuf {
+    std::env::var("HA_TEMPLATES_PATH")
+        .unwrap_or_else(|_| DEFAULT_TEMPLATES_PATH.to_owned())
         .into()
 }
 
@@ -508,6 +517,18 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
             None
         }
     };
+    // Capteurs modèles (étape 64) : recalculés dès ce qu'ils lisent change.
+    let template_entities = match ha_automation::load_template_entities(&templates_path()) {
+        Ok(entities) if !entities.is_empty() => Some(ha_automation::TemplateEntities::start(
+            entities,
+            Arc::clone(&core),
+        )),
+        Ok(_) => None,
+        Err(error) => {
+            warn!("capteurs modèles : {error}");
+            None
+        }
+    };
     // Délestage (étape 62) : lui aussi après la restauration des états, pour
     // rester armé et reprendre ses coupures en cours.
     let shedding = match ha_shedding::load(&shedding_path()) {
@@ -667,6 +688,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     }
     if let Some(shedding) = shedding {
         shedding.stop().await;
+    }
+    if let Some(template_entities) = template_entities {
+        template_entities.stop().await;
     }
     if let Some(presence_simulation) = presence_simulation {
         presence_simulation.stop().await;

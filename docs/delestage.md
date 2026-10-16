@@ -79,13 +79,13 @@ Chaque coupure et chaque remise en marche publie l'événement `delestage`, avec
       data:
         title: Délestage
         message: >-
-          Un appareil vient d'être coupé pour ne pas faire sauter le disjoncteur
-          ({{ states('sensor.linky_intensite') }} A).
+          {{ trigger.event.data.entity_id }} coupé :
+          {{ trigger.event.data.mesure }} sur {{ trigger.event.data.limite }}.
         tag: delestage
 ```
 
-Le détail (quel appareil, quelle mesure) est dans le journal de bord, et dans l'attribut `coupes`
-de `switch.delestage`.
+`trigger.event.data` est lisible dans les modèles depuis l'[étape 64](calculs.md). Le détail est
+aussi dans le journal de bord, et dans l'attribut `coupes` de `switch.delestage`.
 
 ## Sécurité
 

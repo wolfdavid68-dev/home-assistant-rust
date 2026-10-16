@@ -8,11 +8,14 @@
 //! Sécurité : une automatisation ne peut **que** appeler des services sur des
 //! entités et attendre. Pas de commande système, pas de code. Les
 //! [`template`]s (`{{ states('sensor.x') }}`) ne savent que **lire** des
-//! états : un fichier d'automatisations ne peut rien faire d'autre.
+//! états et calculer : un fichier d'automatisations ne peut rien faire
+//! d'autre. Les [`entities`] (capteurs modèles) publient le résultat d'un
+//! modèle comme un capteur.
 
 pub mod config;
 pub mod editor;
 mod engine;
+pub mod entities;
 mod error;
 pub mod evaluator;
 pub mod scripts;
@@ -27,6 +30,9 @@ pub use config::{
 };
 pub use editor::Editor;
 pub use engine::{AUTOMATION_TRIGGERED, Engine, Reloader, Reloads, Setup, reload_channel};
+pub use entities::{
+    TemplateEntities, TemplateEntity, load_template_entities, parse_template_entities,
+};
 pub use error::AutomationError;
 pub use scripts::{Scene, Script, parse_scenes, parse_scripts};
 pub use template::{Template, TriggerData};

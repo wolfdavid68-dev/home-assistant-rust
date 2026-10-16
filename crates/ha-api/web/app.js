@@ -2417,6 +2417,7 @@ const CONDITION_KINDS = {
   and: ["Toutes ces conditions (et)", () => ({ condition: "and", conditions: [] })],
   not: ["Aucune de ces conditions (non)", () => ({ condition: "not", conditions: [] })],
   trigger: ["Selon le déclencheur", () => ({ condition: "trigger", id: "" })],
+  template: ["Un calcul est vrai (modèle)", () => ({ condition: "template", value_template: "{{ states('sensor.temperature_salon') | float(0) > 24 }}" })],
 };
 const ACTION_KINDS = {
   service: ["Commander un appareil", () => ({ action: "light.turn_on", target: { entity_id: "" } })],
@@ -2892,6 +2893,8 @@ function describeCondition(c) {
       return `pas (${list(c.conditions).join(" ou ")})`;
     case "trigger":
       return `déclenchée par « ${asList(c.id).join(" » ou « ")} »`;
+    case "template":
+      return `${String(c.value_template ?? "").trim()} est vrai`;
     case "state":
       return `${entityNames(c.entity_id)} est « ${asList(c.state).join(" » ou « ")} »`;
     case "numeric_state":
@@ -3283,6 +3286,8 @@ function conditionFields(c) {
       return [nested(itemsBlock("Conditions", lookup(CONDITION_KINDS, c.condition)?.[0] ?? "", c, "conditions", CONDITION_KINDS, "condition", conditionFields))];
     case "trigger":
       return [textField("Identifiant du déclencheur", c, "id", { placeholder: "arrivee", list: true })];
+    case "template":
+      return [textField("Modèle (vrai ou faux)", c, "value_template", { placeholder: "{{ states('sensor.x') | float(0) > 20 }}" })];
     case "state":
       return [
         entityField(c, "entity_id"),

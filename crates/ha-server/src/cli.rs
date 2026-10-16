@@ -44,6 +44,7 @@ utilisation :
   ha-server calendriers check     vérifie le fichier des agendas en ligne (ICS)
   ha-server simulation check      vérifie la simulation de présence
   ha-server delestage check       vérifie le délestage
+  ha-server modeles check         vérifie les capteurs modèles
   ha-server guard check           vérifie la garde (pièces protégées, heures calmes)
   ha-server alexa check           vérifie le fichier des appareils pour Alexa
   ha-server thermostats check     vérifie le fichier des thermostats
@@ -853,6 +854,41 @@ pub fn check_simulation(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
                 println!("  - {device}");
             }
         }
+    }
+    Ok(())
+}
+
+/// `ha-server modeles check` : vérifie `modeles.yaml`.
+pub fn check_templates(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
+    let entities = ha_automation::load_template_entities(path)?;
+    if entities.is_empty() {
+        println!(
+            "{} : absent ou vide (pas de capteur modèle)",
+            path.display()
+        );
+        return Ok(());
+    }
+    println!(
+        "{} : {} capteur(s) modèle(s) valide(s)",
+        path.display(),
+        entities.len()
+    );
+    for entity in &entities {
+        let reads: Vec<&str> = entity
+            .template
+            .entity_ids()
+            .map(ha_core::EntityId::as_str)
+            .collect();
+        println!(
+            "  - {} ({}) : lit {}",
+            entity.entity_id,
+            entity.name,
+            if reads.is_empty() {
+                "rien".to_owned()
+            } else {
+                reads.join(", ")
+            }
+        );
     }
     Ok(())
 }

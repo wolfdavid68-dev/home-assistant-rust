@@ -107,6 +107,7 @@ le soleil…), il est vide.
 | `lower`, `upper`, `capitalize` | minuscules, majuscules, majuscule au début      |
 | `default('?')`     | la valeur à utiliser si rien n'a été trouvé                 |
 | `replace('_', ' ')`| remplace un texte par un autre                              |
+| `abs`              | valeur absolue (étape 64)                                   |
 
 Ils s'enchaînent : `{{ states('sensor.cave') | float(0) | round(1) }}`.
 
@@ -133,11 +134,10 @@ valeur de `default(…)`.
 
 ## Ce qui n'est pas pris en charge (exprès)
 
-Pas de `{% if %}`, pas de boucles, pas de calculs (`+`, `*`), pas de comparaisons, pas de `now()`.
-Le vrai Jinja de Home Assistant est un petit langage de programmation : un fichier
-d'automatisations pourrait alors faire beaucoup plus que commander des appareils. Ici, un modèle ne
-sait que **lire** un état et le mettre en forme. Pour choisir entre deux messages, on utilise
-`choose:` ou `if:`, avec des conditions, comme avant.
+Pas de `{% if %}`, pas de boucles, pas de variables, pas de `now()`. Le vrai Jinja de Home Assistant
+est un petit langage de programmation : un fichier d'automatisations pourrait alors faire beaucoup
+plus que commander des appareils. Ici, un modèle sait **lire** un état, **calculer** (depuis
+l'[étape 64](calculs.md)) et le mettre en forme, rien d'autre.
 
 ## Sécurité
 
