@@ -808,6 +808,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "ha-alert"
+version = "0.1.0"
+dependencies = [
+ "ha-automation",
+ "ha-core",
+ "jiff",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "ha-alexa"
 version = "0.1.0"
 dependencies = [
@@ -1117,6 +1131,7 @@ name = "ha-server"
 version = "0.1.0"
 dependencies = [
  "ha-agenda",
+ "ha-alert",
  "ha-alexa",
  "ha-api",
  "ha-areas",

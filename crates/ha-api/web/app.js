@@ -250,6 +250,7 @@ function unmarkPending(entityId) {
 
 // ---------------------------------------------------------------- Affichage
 const SECTIONS = [
+  { title: "Rappels", domains: ["alert"] },
   { title: "Agenda et listes", domains: ["calendar", "todo"] },
   { title: "Entrées", domains: ["input_boolean", "input_number", "input_select", "input_button", "timer", "counter", "input_text", "input_datetime", "schedule"] },
   // Les capteurs de la météo (sensor.meteo_…) vont avec la météo.
@@ -393,6 +394,12 @@ function alertText(state) {
   if (state.entity_id === VIGILANCE_TODAY && vigilanceRank(state.state) >= 2) return vigilanceSummary(state);
   // Un jour rouge Tempo : l'électricité coûte bien plus cher en heures pleines.
   if ((state.entity_id === TEMPO_TODAY || state.entity_id === TEMPO_TOMORROW) && state.state === "Rouge") return "jour rouge";
+  // Un rappel en cours (étape 69), sauf si ce qu'il surveille est déjà
+  // signalé (le garage ouvert) : on ne le compte pas deux fois.
+  if (domain === "alert" && state.state === "on") {
+    const watched = entities.get(state.attributes.surveille);
+    return watched !== undefined && domainOf(watched) !== "alert" && alertText(watched) !== null ? null : "rappel en cours";
+  }
   return null;
 }
 
@@ -645,6 +652,7 @@ function renderTileContent(state) {
     case "input_select": return inputSelectTile(state);
     case "input_button": return inputButtonTile(state);
     case "timer": return timerTile(state);
+    case "alert": return alertTile(state);
     case "switch": return state.entity_id === SHEDDING ? switchTile(state, ICONS.bolt, sheddingLabels(state)) : switchTile(state);
     case "siren": return switchTile(state, ICONS.siren, { on: "Sonne !", off: "Au repos" });
     case "humidifier": return humidifierTile(state);
@@ -1541,6 +1549,38 @@ function inputButtonTile(state) {
   const button = el("button", { type: "button", class: "action-button", text: "Appuyer" });
   button.addEventListener("click", () => inputCommand(state, "press"));
   return el("div", { id: tileId(state.entity_id), class: "tile action" }, tileHead(state, ICONS.button, subtitle), button);
+}
+
+/** Un rappel insistant (étape 69) : calme, en cours (avec « Compris »), ou
+ *  compris (avec « Reprendre »). */
+function alertTile(state) {
+  const a = state.attributes;
+  const sent = Number.isInteger(a.rappels) ? a.rappels : 0;
+  const next = typeof a.prochain_rappel === "string" ? Date.parse(a.prochain_rappel) : NaN;
+  let subtitle;
+  let button = null;
+  if (state.state === "on") {
+    const parts = ["En cours"];
+    if (sent > 0) parts.push(`${sent} message${sent > 1 ? "s" : ""}`);
+    if (!Number.isNaN(next)) parts.push(`${sent === 0 ? "premier message" : "prochain"} à ${hourMinute.format(new Date(next))}`);
+    subtitle = parts.join(" · ");
+    if (a.acquittable !== false) {
+      button = el("button", { type: "button", class: "action-button", text: "Compris" });
+      button.addEventListener("click", () => inputCommand(state, "turn_off"));
+    }
+  } else if (state.state === "off") {
+    subtitle = typeof a.compris_par === "string" ? `Compris par ${a.compris_par}` : "Compris";
+    button = el("button", { type: "button", class: "action-button", text: "Reprendre" });
+    button.addEventListener("click", () => inputCommand(state, "turn_on"));
+  } else {
+    subtitle = state.state === "idle" ? "Rien à signaler" : statusText(state);
+  }
+  return el(
+    "div",
+    { id: tileId(state.entity_id), class: `${tileClass(state, "reminder")} action${state.state === "on" ? " alert" : ""}` },
+    tileHead(state, ICONS.bell, subtitle),
+    ...(button ? [button] : []),
+  );
 }
 
 const TIMER_LABELS = { idle: "Arrêté", active: "En marche", paused: "En pause" };
@@ -2446,6 +2486,7 @@ const SERVICES = {
   input_number: [["set_value", "Régler la valeur"], ["increment", "Augmenter d'un pas"], ["decrement", "Diminuer d'un pas"]],
   input_select: [["select_option", "Choisir"], ["select_next", "Choix suivant"], ["select_previous", "Choix précédent"], ["select_first", "Premier choix"]],
   input_button: [["press", "Appuyer"]],
+  alert: [["turn_off", "Compris (faire taire)"], ["turn_on", "Reprendre les rappels"]],
   timer: [["start", "Démarrer"], ["pause", "Mettre en pause"], ["cancel", "Annuler"], ["finish", "Terminer"]],
   lock: [["lock", "Verrouiller"], ["unlock", "Déverrouiller"], ["open", "Ouvrir la porte"]],
   siren: [["turn_on", "Faire sonner"], ["turn_off", "Arrêter"]],

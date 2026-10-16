@@ -2,7 +2,7 @@
 //!
 //! Un **invité** ne voit pas la présence de la famille (personnes,
 //! téléphones, zone Maison), ni l'alarme, ni les serrures et sirènes, ni
-//! l'agenda et les listes, ni les notifications. Il ne
+//! l'agenda et les listes, ni les notifications et les rappels. Il ne
 //! commande que des appareils sans risque : lumières, prises, ventilateurs,
 //! scènes, et les volets (jamais un portail, une porte de garage ou une
 //! porte). Les interrupteurs du serveur lui-même (simulation de présence,
@@ -16,9 +16,11 @@ use crate::error::ApiError;
 
 /// Domaines cachés aux invités : la présence de la famille, les messages, et
 /// ce qui dit si la maison est fermée (serrures, sirènes).
-const HIDDEN_FROM_GUESTS: [&str; 10] = [
-    // Les notifications et alertes parlent de la maison (porte ouverte…).
+const HIDDEN_FROM_GUESTS: [&str; 11] = [
+    // Les notifications, alertes et rappels parlent de la maison (porte
+    // ouverte…).
     "persistent_notification",
+    "alert",
     "person",
     "device_tracker",
     "zone",

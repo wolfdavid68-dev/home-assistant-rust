@@ -35,7 +35,7 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
   compris ; tout droit non accordé explicitement est refusé. Un invité ne voit pas la présence de la
   famille ni l'alarme, et ne commande jamais un portail, une porte de garage ou une serrure. Les
   interrupteurs du serveur lui-même (simulation de présence, qui dit quand la maison est vide, et
-  délestage) lui sont cachés. Il reste
+  délestage) lui sont cachés, comme les rappels insistants (« Garage ouvert »). Il reste
   toujours au moins un administrateur ; les rôles ne se changent que sur la machine (`ha-server user role`).
 
 ## Réseau

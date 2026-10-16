@@ -60,6 +60,7 @@ ENV HA_DB_PATH=/data/ha.db \
     HA_SIMULATION_PATH=/config/simulation.yaml \
     HA_DELESTAGE_PATH=/config/delestage.yaml \
     HA_TEMPLATES_PATH=/config/modeles.yaml \
+    HA_RAPPELS_PATH=/config/rappels.yaml \
     HA_BACKUP_DIR=/sauvegardes \
     HA_BIND=0.0.0.0:8123 \
     TZ=Europe/Paris

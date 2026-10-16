@@ -1482,11 +1482,12 @@ async fn a_guest_sees_and_controls_only_safe_devices() {
 async fn a_guest_never_sees_nor_controls_the_server_switches() {
     // La simulation de présence dit quand la maison est vide ; le délestage
     // protège le compteur : pas pour un invité, même si ce sont des
-    // « switch ».
+    // « switch ». Un rappel (étape 69) dit que le garage est ouvert.
     let app = TestApp::new().await;
     for (entity, attributes) in [
         ("switch.simulation_presence", json!({"en_cours": true})),
         ("switch.delestage", json!({"coupes": []})),
+        ("alert.garage_ouvert", json!({"surveille": "cover.garage"})),
         ("switch.prise_salon", json!({})),
     ] {
         let Value::Object(attributes) = attributes else {
@@ -1507,15 +1508,20 @@ async fn a_guest_never_sees_nor_controls_the_server_switches() {
         .map(|s| s["entity_id"].as_str().unwrap())
         .collect();
     assert_eq!(ids, ["switch.prise_salon"]);
-    for hidden in ["switch.simulation_presence", "switch.delestage"] {
+    for hidden in [
+        "switch.simulation_presence",
+        "switch.delestage",
+        "alert.garage_ouvert",
+    ] {
         let (status, _) = app
             .request("GET", &format!("/api/states/{hidden}"), Some(&guest), None)
             .await;
         assert_eq!(status, StatusCode::NOT_FOUND, "{hidden}");
+        let domain = hidden.split('.').next().unwrap();
         let (status, _) = app
             .request(
                 "POST",
-                "/api/services/switch/turn_off",
+                &format!("/api/services/{domain}/turn_off"),
                 Some(&guest),
                 Some(json!({"entity_id": hidden})),
             )
@@ -1530,6 +1536,15 @@ async fn a_guest_never_sees_nor_controls_the_server_switches() {
             "/api/services/switch/turn_off",
             Some(&family),
             Some(json!({"entity_id": "switch.delestage"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/services/alert/turn_off",
+            Some(&family),
+            Some(json!({"entity_id": "alert.garage_ouvert"})),
         )
         .await;
     assert_eq!(status, StatusCode::OK);

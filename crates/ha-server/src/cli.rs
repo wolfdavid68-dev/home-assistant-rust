@@ -45,6 +45,7 @@ utilisation :
   ha-server simulation check      vérifie la simulation de présence
   ha-server delestage check       vérifie le délestage
   ha-server modeles check         vérifie les capteurs modèles
+  ha-server rappels check         vérifie les rappels insistants
   ha-server guard check           vérifie la garde (pièces protégées, heures calmes)
   ha-server alexa check           vérifie le fichier des appareils pour Alexa
   ha-server thermostats check     vérifie le fichier des thermostats
@@ -887,6 +888,38 @@ pub fn check_templates(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
                 "rien".to_owned()
             } else {
                 reads.join(", ")
+            }
+        );
+    }
+    Ok(())
+}
+
+/// `ha-server rappels check` : vérifie `rappels.yaml`.
+pub fn check_alerts(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
+    let alerts = ha_alert::load(path)?;
+    if alerts.is_empty() {
+        println!("{} : absent ou vide (pas de rappel)", path.display());
+        return Ok(());
+    }
+    println!("{} : {} rappel(s) valide(s)", path.display(), alerts.len());
+    for alert in &alerts {
+        let notifiers: Vec<&str> = alert
+            .notifiers
+            .iter()
+            .map(ha_core::EntityId::as_str)
+            .collect();
+        println!(
+            "  - {} ({}) : quand {} est « {} » ; {} ; vers {}{}",
+            alert.entity_id,
+            alert.name,
+            alert.watched,
+            alert.state,
+            alert.rhythm(),
+            notifiers.join(", "),
+            if alert.can_acknowledge {
+                ""
+            } else {
+                " (sans « Compris »)"
             }
         );
     }

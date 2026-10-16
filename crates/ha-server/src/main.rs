@@ -88,6 +88,7 @@
 //!   `calendriers.yaml`) ;
 //! - `HA_DELESTAGE_PATH` : délestage (par défaut `delestage.yaml`) ;
 //! - `HA_TEMPLATES_PATH` : capteurs modèles (par défaut `modeles.yaml`) ;
+//! - `HA_RAPPELS_PATH` : rappels insistants (par défaut `rappels.yaml`) ;
 //! - `HA_SIMULATION_PATH` : simulation de présence (par défaut
 //!   `simulation.yaml`) ;
 //! - `HA_AUTOMATIONS_PATH` : fichier d'automatisations (par défaut `automations.yaml`) ;
@@ -135,6 +136,7 @@ const DEFAULT_CALENDARS_PATH: &str = "calendriers.yaml";
 const DEFAULT_SIMULATION_PATH: &str = "simulation.yaml";
 const DEFAULT_SHEDDING_PATH: &str = "delestage.yaml";
 const DEFAULT_TEMPLATES_PATH: &str = "modeles.yaml";
+const DEFAULT_ALERTS_PATH: &str = "rappels.yaml";
 const DEFAULT_GUARD_PATH: &str = "guard.yaml";
 
 /// Concept Rust : `#[tokio::main]` démarre le moteur asynchrone de tokio.
@@ -164,6 +166,7 @@ async fn main() -> ExitCode {
         ["simulation", "check"] => cli::check_simulation(&simulation_path()),
         ["delestage", "check"] => cli::check_shedding(&shedding_path()),
         ["modeles", "check"] => cli::check_templates(&templates_path()),
+        ["rappels", "check"] => cli::check_alerts(&alerts_path()),
         ["guard", "check"] => cli::check_guard(&areas_path(), &guard_path()),
         ["alexa", "check"] => cli::check_alexa(&alexa_path()),
         ["thermostats", "check"] => cli::check_thermostats(&thermostats_path()),
@@ -249,6 +252,12 @@ fn calendars_path() -> std::path::PathBuf {
 fn templates_path() -> std::path::PathBuf {
     std::env::var("HA_TEMPLATES_PATH")
         .unwrap_or_else(|_| DEFAULT_TEMPLATES_PATH.to_owned())
+        .into()
+}
+
+fn alerts_path() -> std::path::PathBuf {
+    std::env::var("HA_RAPPELS_PATH")
+        .unwrap_or_else(|_| DEFAULT_ALERTS_PATH.to_owned())
         .into()
 }
 
@@ -529,6 +538,18 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
             None
         }
     };
+    // Rappels insistants (étape 69) : après la restauration des états, pour
+    // reprendre un rappel en cours (ou « compris ») sans le redire aussitôt.
+    let alerts = match ha_alert::load(&alerts_path()) {
+        Ok(alerts) if !alerts.is_empty() => {
+            Some(ha_alert::Alerts::start(alerts, Arc::clone(&core)))
+        }
+        Ok(_) => None,
+        Err(error) => {
+            warn!("rappels : {error}");
+            None
+        }
+    };
     // Délestage (étape 62) : lui aussi après la restauration des états, pour
     // rester armé et reprendre ses coupures en cours.
     let shedding = match ha_shedding::load(&shedding_path()) {
@@ -685,6 +706,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     }
     if let Some(calendars) = calendars {
         calendars.stop().await;
+    }
+    if let Some(alerts) = alerts {
+        alerts.stop().await;
     }
     if let Some(shedding) = shedding {
         shedding.stop().await;
