@@ -25,6 +25,7 @@
 //! | POST | `/api/push/subscriptions` | Abonne ce navigateur aux notifications |
 //! | PATCH / DELETE | `/api/push/subscriptions/{id}` | Change ce qu'il reçoit / le retire |
 //! | POST | `/api/push/test` | Envoie un essai à ses appareils |
+//! | POST | `/api/push/action` | Un bouton touché sur une notification (sans connexion : le ticket en tient lieu) |
 //! | GET | `/api/websocket` | API WebSocket (authentification dans le 1er message) |
 //! | GET | `/` | Tableau de bord web (page publique ; les données demandent un jeton) |
 
@@ -81,6 +82,9 @@ pub struct ApiState {
     confirmations: Mutex<HashMap<[u8; 32], Instant>>,
     /// Ce que le serveur consomme (page « Système »).
     metrics: system::Metrics,
+    /// Les boutons des notifications du navigateur (étape 51) : partagés
+    /// avec le service qui les envoie.
+    pub push_tickets: ha_push::Tickets,
     shutdown: CancellationToken,
 }
 
@@ -103,6 +107,7 @@ impl ApiState {
             energy,
             confirmations: Mutex::default(),
             metrics: system::Metrics::default(),
+            push_tickets: ha_push::Tickets::default(),
             shutdown,
         })
     }
@@ -162,6 +167,7 @@ pub fn router(state: Arc<ApiState>) -> Router {
             axum::routing::patch(push::update).delete(push::remove),
         )
         .route("/api/push/test", post(push::test))
+        .route("/api/push/action", post(push::action))
         .route("/api/home/drawing", get(drawing::get).put(drawing::put))
         .route(
             "/api/home/images/{name}",

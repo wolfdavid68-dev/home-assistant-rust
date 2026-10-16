@@ -687,6 +687,23 @@ pub(crate) async fn answer_approval(
     roles::require(&auth.user, Permission::AllDevices)?;
     let ApprovalBody { approve } = parse_json(&body)?;
     let order = state.core.release(id).ok_or(ApiError::NotFound)?;
+    decide(&state, order, approve, &auth.user.username, client).await?;
+    Ok(Json(
+        json!({ "result": if approve { "sent" } else { "refused" } }),
+    ))
+}
+
+/// Valide (l'ordre part) ou refuse un ordre retenu, déjà retiré de
+/// l'attente : depuis la cloche, ou depuis un bouton de notification.
+pub(crate) async fn decide(
+    state: &ApiState,
+    order: ha_core::HeldOrder,
+    approve: bool,
+    username: &str,
+    client: SocketAddr,
+) -> Result<(), ApiError> {
+    // Les boutons envoyés aux autres appareils ne servent plus.
+    state.push_tickets.forget_approval(order.id);
     let call = format!("{}.{}", order.domain, order.service);
     let by = order.origin.describe().unwrap_or_default();
     if approve {
@@ -704,23 +721,17 @@ pub(crate) async fn answer_approval(
             .map_err(|error| ApiError::BadRequest(error.to_string()))?;
     }
     let verdict = if approve { "validé" } else { "refusé" };
-    tracing::info!(
-        "{call} sur {} {verdict} par {}",
-        order.entity_id,
-        auth.user.username
-    );
+    tracing::info!("{call} sur {} {verdict} par {username}", order.entity_id);
     audit(
-        &state,
-        &auth.user.username,
+        state,
+        username,
         if approve { "approve" } else { "deny" },
         Some(order.entity_id.as_str()),
         Some(format!("{call} {by}").trim_end()),
         client,
     )
     .await;
-    Ok(Json(
-        json!({ "result": if approve { "sent" } else { "refused" } }),
-    ))
+    Ok(())
 }
 
 /// Le temps laissé à l'appareil, au-delà de la durée de vie de l'ordre.

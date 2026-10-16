@@ -96,6 +96,7 @@ Les fonctions de Home Assistant les plus utiles au quotidien, une par une, dans 
 - [x] **48. Pièces protégées et heures calmes** : un ordre à la voix ou d'un invité sur une pièce protégée (la chambre, éventuellement la nuit seulement) attend qu'un membre de la famille le valide, depuis la cloche ; oublié après 10 minutes ; un clic de la famille est toujours obéi ([guide](docs/garde.md))
 - [x] **49. L'écran de veille de la tablette murale** : après 5 minutes sans contact, la maison en grand, l'heure, la météo, ce qui demande de l'attention et les ordres à valider ; plus sombre la nuit, décalé chaque minute ; un contact pour revenir, sans rien commander ([guide](docs/veille.md))
 - [x] **50. Les notifications du navigateur** : le téléphone sonne pour un ordre à valider, une alerte grave ou un message d'automatisation (`notify.appli`), même page fermée, sans appli à installer (Web Push, chiffré de bout en bout) ; chaque appareil choisit ce qu'il reçoit ([guide](docs/notifications-navigateur.md))
+- [x] **51. Des boutons dans les notifications** : « Valider » et « Refuser » sur un ordre à valider, sans ouvrir le tableau de bord ; deux boutons au choix sur un message d'automatisation (événement `notification_action`) ; un ticket à usage unique par message et par appareil ([guide](docs/notifications-navigateur.md#étape-51--des-boutons-dans-la-notification))
 
 En parallèle, dès que tu me donnes les informations : commande du chauffage Somfy (résultat de
 `somfy devices`), puis de l'alarme (avec confirmation et journal).

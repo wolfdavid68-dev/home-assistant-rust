@@ -73,6 +73,78 @@ La vigilance météo orange ou rouge, par exemple (voir l'[étape 33](vigilance.
         priority: 5
 ```
 
+## Étape 51 : des boutons dans la notification
+
+Un **ordre à valider** arrive avec deux boutons, **Valider** et **Refuser** : un toucher suffit,
+sans ouvrir le tableau de bord ni se reconnecter. La notification est alors remplacée, sans
+sonner, par la réponse de la maison (« Validé : fermer Volet chambre. »). Si quelqu'un d'autre a
+déjà répondu, depuis son téléphone ou depuis la cloche : « Déjà traité, ou trop tard : rien n'a
+été fait. »
+
+Une automatisation peut aussi ajouter **deux boutons** à son message. Le bouton touché déclenche
+l'événement `notification_action`, avec son identifiant et le compte de la personne :
+
+```yaml
+- id: lessive_finie
+  alias: Lessive finie
+  triggers:
+    - trigger: state
+      entity_id: input_boolean.lessive
+      to: "on"
+  actions:
+    - action: notify.send_message
+      target: {entity_id: notify.appli}
+      data:
+        title: Lessive
+        message: La machine a fini.
+        actions:
+          - action: LESSIVE_VUE        # lettres, chiffres, « _ » et « - »
+            title: Je m'en occupe      # 24 caractères au plus
+          - action: LESSIVE_PLUS_TARD
+            title: Rappelle-moi
+
+- id: lessive_vue
+  alias: Quelqu'un s'occupe de la lessive
+  triggers:
+    - trigger: event
+      event_type: notification_action
+      event_data:
+        action: LESSIVE_VUE
+  actions:
+    - action: input_boolean.turn_off
+      target: {entity_id: input_boolean.lessive}
+```
+
+`trigger.event.data.user` donne qui a touché le bouton.
+
+Sur **iPhone**, Safari n'affiche pas les boutons des notifications : toucher la notification
+ouvre la cloche, comme avant. Sur Android, Windows et Mac, ils apparaissent sous le message
+(parfois après l'avoir déplié).
+
+### Ce qui protège les boutons
+
+Le service worker n'a pas le jeton de connexion de la page. Chaque notification avec des boutons
+emporte donc un **ticket** :
+
+- tiré au hasard (256 bits), **à usage unique**, pour **ce** message, **cet** appareil et **ce**
+  compte ; il ne permet que les boutons de sa notification (valider **cet** ordre, pas un autre) ;
+- valable le temps que la notification reste utile : 10 minutes pour un ordre à valider (comme
+  l'ordre lui-même), 24 heures pour un message d'automatisation ;
+- il voyage dans la notification **chiffrée de bout en bout** : Google ou Apple ne le voient pas ;
+- le serveur n'en garde que l'**empreinte**, en mémoire (un redémarrage les oublie tous) ;
+- au toucher, le serveur revérifie que l'appareil est **toujours abonné** à cette catégorie et que
+  le compte est **toujours famille ou administrateur** : retirer un téléphone perdu annule ses
+  boutons, comme passer un compte en invité ;
+- un ordre traité annule les boutons envoyés aux autres appareils ; le journal d'audit note qui a
+  validé, comme depuis la cloche.
+
+À savoir : sur Android, les boutons peuvent être touchés **depuis l'écran verrouillé**, si le
+téléphone affiche le contenu des notifications sur cet écran. Quelqu'un qui a ton téléphone en
+main peut donc valider un ordre retenu sans le déverrouiller. Pour l'éviter : réglages
+d'Android → Notifications → « Notifications sensibles » ou « Sur l'écran de verrouillage » →
+masquer le contenu. Les ordres que la garde retient sont ceux d'un invité ou de la voix
+(lumières, prises, volets) : jamais une serrure, l'alarme, un portail ni la porte du garage.
+
 ### Réglages (facultatifs)
 
 | Variable | Rôle |
@@ -122,7 +194,9 @@ La vigilance météo orange ou rouge, par exemple (voir l'[étape 33](vigilance.
 | [ha-push/src/lib.rs](../crates/ha-push/src/lib.rs) (nouveau) | Vérification des abonnements, quels événements notifient, envoi, limites |
 | [ha-storage/src/push.rs](../crates/ha-storage/src/push.rs) (nouveau) | La clé du serveur et les abonnements (migration `0018_push.sql`) |
 | [ha-api/src/push.rs](../crates/ha-api/src/push.rs) (nouveau) | `GET /api/push`, `POST /api/push/subscriptions`, `PATCH` et `DELETE /api/push/subscriptions/{id}`, `POST /api/push/test` |
-| [web/sw.js](../crates/ha-api/web/sw.js) (nouveau) | Le service worker : affiche la notification, ouvre la cloche au toucher |
+| [web/sw.js](../crates/ha-api/web/sw.js) (nouveau) | Le service worker : affiche la notification et ses boutons, ouvre la cloche au toucher |
+| [ha-push/src/tickets.rs](../crates/ha-push/src/tickets.rs) (étape 51) | Les tickets des boutons : émis, servis une fois, oubliés |
+| [ha-api/src/push.rs](../crates/ha-api/src/push.rs) (étape 51) | `POST /api/push/action` : le bouton touché, revérifié, puis la même validation que la cloche |
 | [web/app.js](../crates/ha-api/web/app.js) | La section « Notifications sur cet appareil » de Mon compte |
 | `web/icon-192.png`, `icon-512.png`, `apple-touch-icon.png` | Les icônes de l'appli installée (Android et iPhone ne prennent pas le SVG) |
 

@@ -59,6 +59,7 @@ pub struct PushSubscriptionInfo {
 /// Un appareil à qui envoyer une notification.
 pub struct PushTarget {
     pub id: i64,
+    pub user_id: i64,
     pub username: String,
     pub endpoint: String,
     pub p256dh: String,
@@ -261,8 +262,8 @@ impl Store {
         category: u8,
         user_id: Option<i64>,
     ) -> Result<Vec<PushTarget>, StorageError> {
-        let rows: Vec<(i64, String, String, String, String)> = sqlx::query_as(
-            "SELECT s.id, u.username, s.endpoint, s.p256dh, s.auth
+        let rows: Vec<(i64, i64, String, String, String, String)> = sqlx::query_as(
+            "SELECT s.id, u.id, u.username, s.endpoint, s.p256dh, s.auth
              FROM push_subscriptions s JOIN users u ON u.id = s.user_id
              WHERE (s.categories & ?1) != 0 AND u.role IN ('admin', 'family')
                AND (?2 IS NULL OR s.user_id = ?2)
@@ -273,9 +274,10 @@ impl Store {
         .fetch_all(self.pool())
         .await?;
         rows.into_iter()
-            .map(|(id, username, endpoint, p256dh, auth)| {
+            .map(|(id, user_id, username, endpoint, p256dh, auth)| {
                 Ok(PushTarget {
                     id,
+                    user_id,
                     username,
                     endpoint,
                     p256dh,
@@ -397,6 +399,7 @@ mod tests {
         );
         let target = store.push_targets(1, Some(david)).await.unwrap().remove(0);
         assert_eq!(target.auth.as_str(), "secret-auth");
+        assert_eq!(target.user_id, david);
 
         // Personne ne touche aux appareils des autres.
         assert!(!store.set_push_categories(alice, a, 7).await.unwrap());

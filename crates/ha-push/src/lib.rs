@@ -18,7 +18,14 @@
 //!     title: Lessive
 //!     message: La machine a fini.
 //!     users: [david]        # facultatif : sinon, toute la famille
+//!     actions:              # facultatif : deux boutons au plus
+//!       - action: LESSIVE_VUE
+//!         title: Je m'en occupe
 //! ```
+//!
+//! Un ordre à valider arrive avec « Valider » et « Refuser » ; un bouton
+//! d'automatisation annonce l'événement `notification_action` (voir
+//! [`tickets`]).
 //!
 //! Seuls les comptes famille et administrateur reçoivent des notifications.
 //!
@@ -29,6 +36,7 @@
 //! abonné (voir [`crypto`]).
 
 pub mod crypto;
+pub mod tickets;
 
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -43,9 +51,19 @@ use tracing::{info, warn};
 use zeroize::Zeroizing;
 
 pub use crypto::{CryptoError, Vapid};
+pub use tickets::{Purpose, Refused, Ticket, Tickets};
 
 /// L'entité à qui les automatisations écrivent.
 pub const ENTITY: &str = "notify.appli";
+/// L'événement annoncé quand on touche un bouton d'automatisation.
+pub const ACTION_EVENT: &str = "notification_action";
+/// Les boutons d'un ordre à valider.
+pub const APPROVE: &str = "approve";
+pub const DENY: &str = "deny";
+/// Les navigateurs n'en montrent souvent que deux.
+pub const MAX_BUTTONS: usize = 2;
+const MAX_BUTTON_TITLE_CHARS: usize = 24;
+const MAX_BUTTON_ID_LEN: usize = 40;
 /// Abonnements au plus par compte, et en tout.
 pub const MAX_PER_USER: u64 = 10;
 pub const MAX_TOTAL: u64 = 50;
@@ -203,6 +221,24 @@ fn clean(text: &str, max: usize) -> String {
         .collect()
 }
 
+/// Un bouton d'une notification.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Button {
+    /// L'identifiant renvoyé au serveur (`approve`, `LESSIVE_VUE`…).
+    pub action: String,
+    /// Ce qui est écrit dessus.
+    pub title: String,
+}
+
+/// Un identifiant de bouton : lettres, chiffres, « _ » et « - ».
+#[must_use]
+pub fn is_valid_button_id(id: &str) -> bool {
+    (1..=MAX_BUTTON_ID_LEN).contains(&id.len())
+        && id
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+}
+
 /// Une notification à envoyer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Message {
@@ -217,19 +253,31 @@ pub struct Message {
     pub ttl: Duration,
     /// Réveille le téléphone même en économie d'énergie.
     pub urgent: bool,
+    /// Les boutons (montrés seulement avec un ticket, voir [`tickets`]).
+    pub buttons: Vec<Button>,
 }
 
 impl Message {
     /// Le contenu chiffré : du JSON lu par le service worker (`sw.js`).
-    fn payload(&self) -> Vec<u8> {
-        json!({
+    /// Le ticket est propre à chaque appareil.
+    fn payload(&self, ticket: Option<&str>) -> Vec<u8> {
+        let mut payload = json!({
             "title": self.title,
             "body": self.body,
             "tag": self.tag,
             "url": self.url,
-        })
-        .to_string()
-        .into_bytes()
+        });
+        if let Some(ticket) = ticket
+            && !self.buttons.is_empty()
+        {
+            payload["token"] = ticket.into();
+            payload["actions"] = self
+                .buttons
+                .iter()
+                .map(|button| json!({ "action": button.action, "title": button.title }))
+                .collect();
+        }
+        payload.to_string().into_bytes()
     }
 }
 
@@ -242,6 +290,8 @@ pub struct Outgoing {
     pub users: Option<Vec<String>>,
     /// Un essai : envoyé quelles que soient les catégories choisies.
     pub test: bool,
+    /// Ce que permettent les boutons (`None` : pas de boutons).
+    pub purpose: Option<Purpose>,
 }
 
 fn text<'a>(attributes: &'a Attributes, key: &str) -> Option<&'a str> {
@@ -277,19 +327,37 @@ pub fn outgoing(event: &Event) -> Option<Outgoing> {
             let body = clean(text(attributes, "message")?, MAX_BODY_CHARS);
             let tag = entity_id.as_str().to_owned();
             match text(attributes, "kind") {
-                Some("approval") => Some(Outgoing {
-                    category: Category::Approvals,
-                    message: Message {
-                        title,
-                        body,
-                        tag,
-                        url: "/#notifications",
-                        ttl: ha_core::guard::HELD_TTL,
-                        urgent: true,
-                    },
-                    users: None,
-                    test: false,
-                }),
+                Some("approval") => {
+                    let approval = attributes.get("approval_id").and_then(Value::as_u64);
+                    Some(Outgoing {
+                        category: Category::Approvals,
+                        message: Message {
+                            title,
+                            body,
+                            tag,
+                            url: "/#notifications",
+                            ttl: ha_core::guard::HELD_TTL,
+                            urgent: true,
+                            buttons: if approval.is_some() {
+                                vec![
+                                    Button {
+                                        action: APPROVE.into(),
+                                        title: "Valider".into(),
+                                    },
+                                    Button {
+                                        action: DENY.into(),
+                                        title: "Refuser".into(),
+                                    },
+                                ]
+                            } else {
+                                Vec::new()
+                            },
+                        },
+                        users: None,
+                        test: false,
+                        purpose: approval.map(Purpose::Approval),
+                    })
+                }
                 Some("repair") if text(attributes, "severity") == Some("error") => Some(Outgoing {
                     category: Category::Alerts,
                     message: Message {
@@ -299,9 +367,11 @@ pub fn outgoing(event: &Event) -> Option<Outgoing> {
                         url: "/#notifications",
                         ttl: Duration::from_hours(24),
                         urgent: true,
+                        buttons: Vec::new(),
                     },
                     users: None,
                     test: false,
+                    purpose: None,
                 }),
                 _ => None,
             }
@@ -340,6 +410,28 @@ fn from_automation(data: &Attributes, origin: &Origin) -> Option<Outgoing> {
         users = Some(vec![me.clone()]);
     }
     let priority = data.get("priority").and_then(Value::as_u64).unwrap_or(3);
+    // Les boutons : identifiant et titre, deux au plus ; un bouton mal
+    // formé est ignoré.
+    let buttons: Vec<Button> = if test {
+        Vec::new()
+    } else {
+        data.get("actions")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|button| {
+                let action = button.get("action")?.as_str()?;
+                let title = clean(button.get("title")?.as_str()?, MAX_BUTTON_TITLE_CHARS)
+                    .replace('\n', " ");
+                (is_valid_button_id(action) && !title.is_empty()).then(|| Button {
+                    action: action.to_owned(),
+                    title,
+                })
+            })
+            .take(MAX_BUTTONS)
+            .collect()
+    };
+    let purpose = (!buttons.is_empty()).then_some(Purpose::Automation);
     Some(Outgoing {
         category: Category::Automations,
         message: Message {
@@ -353,9 +445,11 @@ fn from_automation(data: &Attributes, origin: &Origin) -> Option<Outgoing> {
             url: "/",
             ttl: Duration::from_hours(24),
             urgent: priority >= 4,
+            buttons,
         },
         users,
         test,
+        purpose,
     })
 }
 
@@ -395,12 +489,13 @@ impl Sender {
         p256dh: &str,
         auth: &str,
         message: &Message,
+        ticket: Option<&str>,
     ) -> Delivery {
         let (Some(public), Some(secret)) = (crypto::decode(p256dh), crypto::decode(auth)) else {
             return Delivery::Failed;
         };
         let secret = Zeroizing::new(secret);
-        let body = match crypto::encrypt(&public, &secret, &message.payload()) {
+        let body = match crypto::encrypt(&public, &secret, &message.payload(ticket)) {
             Ok(body) => body,
             Err(error) => {
                 warn!("notification : chiffrement impossible ({error})");
@@ -493,7 +588,13 @@ pub struct Push(Background);
 impl Push {
     /// Démarre le service. L'abonnement au bus est fait avant de rendre la
     /// main : aucun ordre retenu n'est manqué.
-    pub async fn start(store: Store, core: Arc<Core>, contact: String) -> Result<Self, PushError> {
+    /// `tickets` est partagé avec l'API, qui sert les boutons touchés.
+    pub async fn start(
+        store: Store,
+        core: Arc<Core>,
+        contact: String,
+        tickets: Tickets,
+    ) -> Result<Self, PushError> {
         let contact = check_contact(&contact)?;
         let vapid = load_or_create_vapid(&store).await?;
         let http = ha_tls::web_client(true)?;
@@ -508,7 +609,7 @@ impl Push {
         }
         Ok(Self(Background::spawn(
             "les notifications du navigateur",
-            move |token| run(store, core, sender, events, token),
+            move |token| run(store, core, sender, tickets, events, token),
         )))
     }
 
@@ -542,6 +643,7 @@ async fn run(
     store: Store,
     core: Arc<Core>,
     sender: Arc<Sender>,
+    tickets: Tickets,
     mut events: tokio::sync::broadcast::Receiver<Arc<Event>>,
     token: CancellationToken,
 ) {
@@ -583,13 +685,43 @@ async fn run(
             store.clone(),
             Arc::clone(&core),
             Arc::clone(&sender),
+            tickets.clone(),
             outgoing,
         ));
     }
 }
 
+/// Un ticket par appareil : il ne vaut que pour ce compte et cet appareil,
+/// le temps que la notification reste utile. `None` sans boutons.
+fn issue_ticket(tickets: &Tickets, outgoing: &Outgoing, target: &PushTarget) -> Option<String> {
+    let purpose = outgoing.purpose.clone()?;
+    if outgoing.message.buttons.is_empty() {
+        return None;
+    }
+    tickets.issue(Ticket::new(
+        target.id,
+        target.user_id,
+        target.username.clone(),
+        purpose,
+        outgoing
+            .message
+            .buttons
+            .iter()
+            .map(|button| button.action.clone())
+            .collect(),
+        outgoing.message.title.clone(),
+        outgoing.message.ttl,
+    ))
+}
+
 /// Envoie à tous les appareils concernés.
-async fn send_all(store: Store, core: Arc<Core>, sender: Arc<Sender>, outgoing: Outgoing) {
+async fn send_all(
+    store: Store,
+    core: Arc<Core>,
+    sender: Arc<Sender>,
+    tickets: Tickets,
+    outgoing: Outgoing,
+) {
     let category = if outgoing.test {
         Category::ALL
     } else {
@@ -623,9 +755,16 @@ async fn send_all(store: Store, core: Arc<Core>, sender: Arc<Sender>, outgoing: 
             let _ = store.forget_push_subscription(target.id).await;
             continue;
         };
+        let ticket = issue_ticket(&tickets, &outgoing, target);
         // Le contenu n'est pas écrit dans les logs : il peut être personnel.
         let result = sender
-            .deliver(&endpoint, &target.p256dh, &target.auth, &outgoing.message)
+            .deliver(
+                &endpoint,
+                &target.p256dh,
+                &target.auth,
+                &outgoing.message,
+                ticket.as_deref(),
+            )
             .await;
         let stored = match result {
             Delivery::Delivered => {
@@ -785,6 +924,14 @@ mod tests {
         assert_eq!(out.message.url, "/#notifications");
         assert!(out.message.urgent);
         assert_eq!(out.message.ttl, Duration::from_mins(10));
+        assert_eq!(out.purpose, Some(Purpose::Approval(3)));
+        let buttons: Vec<&str> = out
+            .message
+            .buttons
+            .iter()
+            .map(|b| b.action.as_str())
+            .collect();
+        assert_eq!(buttons, [APPROVE, DENY]);
         // Mise à jour du texte : pas de nouvelle notification.
         assert_eq!(outgoing(&changed(approval.clone(), Some(approval))), None);
 
@@ -855,7 +1002,7 @@ mod tests {
         assert_eq!(plain.message.title, "Maison");
         assert_eq!(plain.message.body.chars().count(), MAX_BODY_CHARS);
         assert_eq!(plain.users, None);
-        assert!(plain.message.payload().len() < crypto::MAX_PLAINTEXT);
+        assert!(plain.message.payload(None).len() < crypto::MAX_PLAINTEXT);
         let one = outgoing(&call(
             json!({"message": "x", "users": "alice"}),
             Origin::System,
@@ -953,6 +1100,7 @@ mod tests {
             url: "/#notifications",
             ttl: Duration::from_mins(10),
             urgent: true,
+            buttons: Vec::new(),
         }
     }
 
@@ -973,6 +1121,7 @@ mod tests {
                 &crypto::encode(&public),
                 &crypto::encode(&auth),
                 &message(),
+                None,
             )
             .await;
         assert_eq!(result, Delivery::Delivered);
@@ -1014,6 +1163,7 @@ mod tests {
                     &crypto::encode(&public),
                     &crypto::encode(&auth),
                     &message(),
+                    None,
                 )
                 .await;
             assert_eq!(result, expected, "{status}");
@@ -1021,7 +1171,7 @@ mod tests {
         let (endpoint, _) = fake_service("201 Created").await;
         assert_eq!(
             sender
-                .deliver(&endpoint, "AAAA", &crypto::encode(&auth), &message())
+                .deliver(&endpoint, "AAAA", &crypto::encode(&auth), &message(), None)
                 .await,
             Delivery::Failed
         );
@@ -1037,5 +1187,131 @@ mod tests {
             store.push_public_key().await.unwrap().as_deref(),
             Some(first.public_key())
         );
+    }
+
+    #[test]
+    fn automations_can_add_two_buttons() {
+        let out = outgoing(&call(
+            json!({"message": "La machine a fini.", "actions": [
+                {"action": "LESSIVE_VUE", "title": "Je m'en occupe"},
+                {"action": "pas d'espace", "title": "ignoré"},
+                {"action": "SANS_TITRE"},
+                {"action": "PLUS_TARD", "title": "Plus tard\nvraiment, c'est beaucoup trop long"},
+                {"action": "TROISIEME", "title": "de trop"},
+            ]}),
+            Origin::Automation("lessive".into()),
+            ENTITY,
+        ))
+        .unwrap();
+        assert_eq!(out.purpose, Some(Purpose::Automation));
+        assert_eq!(
+            out.message.buttons,
+            [
+                Button {
+                    action: "LESSIVE_VUE".into(),
+                    title: "Je m'en occupe".into()
+                },
+                Button {
+                    action: "PLUS_TARD".into(),
+                    title: "Plus tard vraiment, c'es".into()
+                },
+            ]
+        );
+        // Sans bouton valable : pas de ticket.
+        let plain = outgoing(&call(
+            json!({"message": "x", "actions": [{"action": "", "title": "x"}]}),
+            Origin::System,
+            ENTITY,
+        ))
+        .unwrap();
+        assert_eq!(plain.purpose, None);
+        // Un essai n'a jamais de boutons.
+        let test = outgoing(&call(
+            json!({"message": "x", "test": true, "actions": [{"action": "A", "title": "a"}]}),
+            Origin::User("david".into()),
+            ENTITY,
+        ))
+        .unwrap();
+        assert_eq!(test.purpose, None);
+        assert_eq!(test.message.buttons, []);
+    }
+
+    #[test]
+    fn buttons_travel_only_with_a_ticket() {
+        let mut message = message();
+        message.buttons = vec![Button {
+            action: APPROVE.into(),
+            title: "Valider".into(),
+        }];
+        let without: Value = serde_json::from_slice(&message.payload(None)).unwrap();
+        assert!(without.get("actions").is_none());
+        assert!(without.get("token").is_none());
+        let with: Value = serde_json::from_slice(&message.payload(Some("secret"))).unwrap();
+        assert_eq!(with["token"], "secret");
+        assert_eq!(with["actions"][0]["action"], APPROVE);
+        assert_eq!(with["actions"][0]["title"], "Valider");
+        // Le pire cas tient dans un seul envoi chiffré.
+        message.title = "é".repeat(MAX_TITLE_CHARS);
+        message.body = "\u{1F600}".repeat(MAX_BODY_CHARS);
+        message.buttons = vec![
+            Button {
+                action: "A".repeat(MAX_BUTTON_ID_LEN),
+                title: "\u{1F600}".repeat(MAX_BUTTON_TITLE_CHARS),
+            };
+            MAX_BUTTONS
+        ];
+        assert!(message.payload(Some(&"t".repeat(43))).len() <= crypto::MAX_PLAINTEXT);
+        assert!(is_valid_button_id("LESSIVE_VUE-2"));
+        assert!(!is_valid_button_id("é"));
+        assert!(!is_valid_button_id(&"a".repeat(41)));
+    }
+
+    #[test]
+    fn each_device_gets_its_own_ticket() {
+        let tickets = Tickets::default();
+        let out = outgoing(&changed(
+            notice(
+                "persistent_notification.approval_4",
+                "notifying",
+                json!({"title": "Ordre à valider", "message": "…", "kind": "approval", "approval_id": 4}),
+            ),
+            None,
+        ))
+        .unwrap();
+        let target = |id, user_id, username: &str| PushTarget {
+            id,
+            user_id,
+            username: username.into(),
+            endpoint: "https://fcm.googleapis.com/fcm/send/x".into(),
+            p256dh: String::new(),
+            auth: Zeroizing::new(String::new()),
+        };
+        let phone = issue_ticket(&tickets, &out, &target(10, 1, "david")).unwrap();
+        let tablet = issue_ticket(&tickets, &out, &target(11, 2, "alice")).unwrap();
+        assert_ne!(phone, tablet);
+        let served = tickets.redeem(&tablet, DENY).unwrap();
+        assert_eq!(
+            (
+                served.subscription,
+                served.user_id,
+                served.username.as_str()
+            ),
+            (11, 2, "alice")
+        );
+        assert_eq!(served.purpose, Purpose::Approval(4));
+        assert_eq!(served.title, "Ordre à valider");
+        // Sans boutons : pas de ticket.
+        let mut plain = out;
+        plain.message.buttons.clear();
+        assert_eq!(
+            issue_ticket(&tickets, &plain, &target(10, 1, "david")),
+            None
+        );
+        plain.purpose = None;
+        assert_eq!(
+            issue_ticket(&tickets, &plain, &target(10, 1, "david")),
+            None
+        );
+        assert_eq!(tickets.len(), 1, "seul le ticket du téléphone reste");
     }
 }

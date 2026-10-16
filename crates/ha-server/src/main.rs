@@ -392,7 +392,8 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     } else {
         let contact = std::env::var("HA_PUSH_CONTACT")
             .unwrap_or_else(|_| ha_push::DEFAULT_CONTACT.to_owned());
-        match ha_push::Push::start(store.clone(), Arc::clone(&core), contact).await {
+        let tickets = api_state.push_tickets.clone();
+        match ha_push::Push::start(store.clone(), Arc::clone(&core), contact, tickets).await {
             Ok(push) => Some(push),
             Err(error) => {
                 warn!("notifications du navigateur : démarrage impossible ({error})");

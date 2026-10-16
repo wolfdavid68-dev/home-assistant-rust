@@ -7,9 +7,16 @@
 //! | POST | `/api/push/subscriptions` | Abonne ce navigateur |
 //! | PATCH / DELETE | `/api/push/subscriptions/{id}` | Change ce qu'il reçoit / le retire |
 //! | POST | `/api/push/test` | Envoie un essai à ses propres appareils |
+//! | POST | `/api/push/action` | Un bouton touché sur une notification |
 //!
 //! Réservé aux comptes famille et administrateur : un invité ne reçoit pas
 //! de notifications.
+//!
+//! `/api/push/action` est la seule route sans connexion : le service worker
+//! n'a pas le jeton de la page. Le **ticket** reçu dans la notification en
+//! tient lieu (voir `ha_push::tickets`) : à usage unique, pour ce message,
+//! cet appareil et ce compte, et revérifié ici (appareil toujours abonné,
+//! compte toujours famille ou administrateur).
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -21,7 +28,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use ha_auth::Permission;
 use ha_core::{Attributes, EntityId, Origin};
-use ha_push::{MAX_PER_USER, MAX_TOTAL, Subscription};
+use ha_push::{Category, MAX_PER_USER, MAX_TOTAL, Purpose, Refused, Subscription};
 use ha_storage::NewPushSubscription;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -30,7 +37,7 @@ use crate::ApiState;
 use crate::auth::Authenticated;
 use crate::error::ApiError;
 use crate::json::format_timestamp;
-use crate::rest::{audit, parse_json};
+use crate::rest::{audit, decide, parse_json};
 use crate::roles;
 
 /// `GET /api/push`
@@ -242,4 +249,93 @@ pub(crate) async fn test(
         )
         .map_err(|error| ApiError::Internal(error.to_string()))?;
     Ok((StatusCode::ACCEPTED, Json(json!({ "result": "sent" }))).into_response())
+}
+
+/// Ce qu'envoie le service worker. Pas de `Debug` : le ticket est un secret.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ActionBody {
+    token: String,
+    action: String,
+}
+
+/// `POST /api/push/action` avec `{"token": "…", "action": "approve"}` : un
+/// bouton touché sur une notification. La réponse donne le texte que le
+/// téléphone affiche (`message`).
+pub(crate) async fn action(
+    State(state): State<Arc<ApiState>>,
+    ConnectInfo(client): ConnectInfo<SocketAddr>,
+    body: Bytes,
+) -> Result<Json<Value>, ApiError> {
+    let ActionBody { token, action } = parse_json(&body)?;
+    let ticket = state
+        .push_tickets
+        .redeem(&token, &action)
+        .map_err(|refused| match refused {
+            Refused::Unknown => ApiError::Forbidden(refused.to_string()),
+            Refused::Action => ApiError::BadRequest(refused.to_string()),
+        })?;
+    // Le ticket a pu être émis avant qu'on retire l'appareil, qu'on décoche
+    // la catégorie, ou que le compte devienne invité.
+    let category = match ticket.purpose {
+        Purpose::Approval(_) => Category::Approvals,
+        Purpose::Automation => Category::Automations,
+    };
+    let still_allowed = state
+        .store
+        .push_targets(category as u8, Some(ticket.user_id))
+        .await?
+        .iter()
+        .any(|target| target.id == ticket.subscription && target.username == ticket.username);
+    if !still_allowed {
+        tracing::warn!(
+            "notifications du navigateur : bouton refusé ({} ne reçoit plus ces notifications sur cet appareil)",
+            ticket.username
+        );
+        return Err(ApiError::Forbidden(
+            "cet appareil ne reçoit plus ces notifications".into(),
+        ));
+    }
+    match ticket.purpose {
+        Purpose::Approval(id) => {
+            let Some(order) = state.core.release(id) else {
+                state.push_tickets.forget_approval(id);
+                return Ok(Json(json!({
+                    "result": "gone",
+                    "message": "Déjà traité, ou trop tard : rien n'a été fait.",
+                })));
+            };
+            let approve = action == ha_push::APPROVE;
+            let summary = ha_notices::order_summary(&state.core.states, &order);
+            decide(&state, order, approve, &ticket.username, client).await?;
+            let message = if approve {
+                format!("Validé : {summary}.")
+            } else {
+                format!("Refusé : {summary}.")
+            };
+            Ok(Json(json!({
+                "result": if approve { "sent" } else { "refused" },
+                "message": message,
+            })))
+        }
+        Purpose::Automation => {
+            let mut data = Attributes::new();
+            data.insert("action".into(), action.clone().into());
+            data.insert("user".into(), ticket.username.clone().into());
+            state
+                .core
+                .fire(ha_push::ACTION_EVENT, data)
+                .map_err(|error| ApiError::Internal(error.to_string()))?;
+            audit(
+                &state,
+                &ticket.username,
+                "notification_action",
+                None,
+                Some(&action),
+                client,
+            )
+            .await;
+            Ok(Json(json!({ "result": "fired", "message": "C'est noté." })))
+        }
+    }
 }

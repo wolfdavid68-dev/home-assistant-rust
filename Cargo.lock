@@ -838,6 +838,7 @@ dependencies = [
  "ha-automation",
  "ha-core",
  "ha-energy",
+ "ha-notices",
  "ha-push",
  "ha-storage",
  "jiff",

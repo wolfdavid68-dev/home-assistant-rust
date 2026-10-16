@@ -53,6 +53,8 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
 - Notifications du navigateur (Web Push) : envoi uniquement aux services de notifications des
   navigateurs (liste fermée, HTTPS, port standard, sans redirection), contenu chiffré de bout en bout
   (RFC 8291), clé VAPID et secrets des appareils chiffrés dans la base ; famille et administrateur seulement.
+  Boutons des notifications : ticket aléatoire de 256 bits, à usage unique, pour un seul message, un seul
+  appareil et un seul compte, gardé en empreinte et en mémoire ; abonnement et rôle revérifiés au toucher.
 - Alexa (faux pont Hue, sans authentification possible) : désactivée par défaut ; seuls les appareils listés
   dans `alexa.yaml` sont exposés, jamais serrure, alarme, portail ni porte de garage ; seules les adresses
   autorisées (les Echo, ou à défaut le réseau local) sont servies ; serveur séparé de l'API ; chaque ordre est
