@@ -32,6 +32,10 @@ pub struct LightResource {
 #[derive(Debug, Clone, Deserialize)]
 pub struct Metadata {
     pub name: String,
+    /// Le genre d'appareil : `sultan_bulb`, `ceiling_round`… et `plug` pour
+    /// une prise Hue (le pont la présente comme une lampe).
+    #[serde(default)]
+    pub archetype: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]

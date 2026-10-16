@@ -255,9 +255,10 @@ const SECTIONS = [
   // Les capteurs de la météo (sensor.meteo_…) vont avec la météo.
   { title: "Météo, présence et soleil", domains: ["weather", "zone", "person", "device_tracker", "sun", "notify"], extra: (s) => s.entity_id.startsWith("sensor.meteo_") || s.entity_id === VIGILANCE_TODAY },
   { title: "Chauffage", domains: ["climate"] },
-  { title: "Lumières", domains: ["light"] },
+  // Fonctions appelées plus tard : isLight est défini plus bas.
+  { title: "Lumières", domains: [], extra: (s) => isLight(s) },
   { title: "Volets", domains: ["cover"] },
-  { title: "Prises et interrupteurs", domains: ["switch", "fan"] },
+  { title: "Prises et interrupteurs", domains: ["switch", "fan"], extra: (s) => isOutlet(s) },
   { title: "Alarme, serrures et sirènes", domains: ["alarm_control_panel", "lock", "siren"] },
   { title: "Boutons et réglages", domains: ["button", "number", "select", "text", "event"] },
   { title: "Eau et air", domains: ["valve", "humidifier", "water_heater"] },
@@ -476,7 +477,7 @@ function renderHome() {
 /** Ce qu'on sait d'une pièce : lumières, température, alertes. */
 function roomInfo(area) {
   const states = area.entities.map((e) => entities.get(e.entity_id)).filter((s) => s !== undefined);
-  const lights = states.filter((s) => domainOf(s) === "light" && s.state === "on").length;
+  const lights = states.filter((s) => isLight(s) && s.state === "on").length;
   const temperature = states
     .map((s) => (domainOf(s) === "climate" ? s.attributes.current_temperature
       : s.attributes.device_class === "temperature" ? Number(s.state) : NaN))
@@ -628,7 +629,7 @@ function renderTileContent(state) {
   if (state.entity_id === VIGILANCE_TODAY) return vigilanceTile(state);
   if (state.entity_id === TEMPO_TODAY) return tempoTile(state);
   switch (domainOf(state)) {
-    case "light": return lightTile(state);
+    case "light": return isOutlet(state) ? switchTile(state) : lightTile(state);
     case "cover": return coverTile(state);
     case "device_tracker":
     case "person": return presenceTile(state);
@@ -1874,6 +1875,10 @@ const BINARY_LABELS = {
  *  obtiendrait des objets internes de JavaScript au lieu d'un libellé. */
 const lookup = (table, key) => (typeof key === "string" && Object.hasOwn(table, key) ? table[key] : undefined);
 const domainOf = (state) => state.entity_id.split(".")[0];
+// Une prise Hue est une « lampe » de classe outlet pour le pont : sur le
+// tableau de bord, c'est une prise, et « les lumières » ne la comptent pas.
+const isOutlet = (state) => domainOf(state) === "light" && state.attributes.device_class === "outlet";
+const isLight = (state) => domainOf(state) === "light" && !isOutlet(state);
 const nameOf = (state) =>
   customNames.get(state.entity_id) || state.attributes.friendly_name || state.entity_id.split(".")[1].replaceAll("_", " ");
 const tileId = (entityId) => `tile-${entityId}`;
