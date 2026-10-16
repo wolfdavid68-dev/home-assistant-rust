@@ -644,7 +644,7 @@ function renderTileContent(state) {
     case "input_select": return inputSelectTile(state);
     case "input_button": return inputButtonTile(state);
     case "timer": return timerTile(state);
-    case "switch": return switchTile(state);
+    case "switch": return state.entity_id === SHEDDING ? switchTile(state, ICONS.bolt, sheddingLabels(state)) : switchTile(state);
     case "siren": return switchTile(state, ICONS.siren, { on: "Sonne !", off: "Au repos" });
     case "humidifier": return humidifierTile(state);
     case "lock": return lockTile(state);
@@ -752,6 +752,20 @@ function switchTile(state, icon = ICONS.plug, labels = null) {
     callService(domainOf(state), "toggle", { entity_id: state.entity_id });
   });
   return el("div", { id: tileId(state.entity_id), class: `${tileClass(state, "switch")} has-knob` }, toggle);
+}
+
+// Le délestage (étape 62) : ce qu'il a coupé, sous son nom.
+const SHEDDING = "switch.delestage";
+function sheddingLabels(state) {
+  const cut = Array.isArray(state.attributes.coupes) ? state.attributes.coupes : [];
+  const names = cut
+    .map((item) => (typeof item?.entity_id === "string" ? entities.get(item.entity_id) : undefined))
+    .filter((device) => device !== undefined)
+    .map((device) => nameOf(device));
+  let on = "Armé, rien de coupé";
+  if (typeof state.attributes.erreur === "string") on = "Armé, limite inconnue";
+  else if (names.length > 0) on = `Coupé : ${joinNames(names)}`;
+  return { on, off: "Désarmé" };
 }
 
 // ----- Serrure, vanne, aspirateur, humidificateur, chauffe-eau (MQTT)

@@ -86,6 +86,7 @@
 //! - `HA_AREAS_PATH` : fichier des pièces (par défaut `areas.yaml`) ;
 //! - `HA_CALENDARS_PATH` : agendas en ligne, fichiers ICS (par défaut
 //!   `calendriers.yaml`) ;
+//! - `HA_DELESTAGE_PATH` : délestage (par défaut `delestage.yaml`) ;
 //! - `HA_SIMULATION_PATH` : simulation de présence (par défaut
 //!   `simulation.yaml`) ;
 //! - `HA_AUTOMATIONS_PATH` : fichier d'automatisations (par défaut `automations.yaml`) ;
@@ -131,6 +132,7 @@ const DEFAULT_AUTOMATIONS_PATH: &str = "automations.yaml";
 const DEFAULT_AREAS_PATH: &str = "areas.yaml";
 const DEFAULT_CALENDARS_PATH: &str = "calendriers.yaml";
 const DEFAULT_SIMULATION_PATH: &str = "simulation.yaml";
+const DEFAULT_SHEDDING_PATH: &str = "delestage.yaml";
 const DEFAULT_GUARD_PATH: &str = "guard.yaml";
 
 /// Concept Rust : `#[tokio::main]` démarre le moteur asynchrone de tokio.
@@ -158,6 +160,7 @@ async fn main() -> ExitCode {
         ["areas", "check"] => cli::check_areas(&areas_path()),
         ["calendriers", "check"] => cli::check_calendars(&calendars_path()),
         ["simulation", "check"] => cli::check_simulation(&simulation_path()),
+        ["delestage", "check"] => cli::check_shedding(&shedding_path()),
         ["guard", "check"] => cli::check_guard(&areas_path(), &guard_path()),
         ["alexa", "check"] => cli::check_alexa(&alexa_path()),
         ["thermostats", "check"] => cli::check_thermostats(&thermostats_path()),
@@ -237,6 +240,12 @@ fn areas_path() -> std::path::PathBuf {
 fn calendars_path() -> std::path::PathBuf {
     std::env::var("HA_CALENDARS_PATH")
         .unwrap_or_else(|_| DEFAULT_CALENDARS_PATH.to_owned())
+        .into()
+}
+
+fn shedding_path() -> std::path::PathBuf {
+    std::env::var("HA_DELESTAGE_PATH")
+        .unwrap_or_else(|_| DEFAULT_SHEDDING_PATH.to_owned())
         .into()
 }
 
@@ -499,6 +508,16 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
             None
         }
     };
+    // Délestage (étape 62) : lui aussi après la restauration des états, pour
+    // rester armé et reprendre ses coupures en cours.
+    let shedding = match ha_shedding::load(&shedding_path()) {
+        Ok(Some(config)) => Some(ha_shedding::Shedding::start(config, Arc::clone(&core))),
+        Ok(None) => None,
+        Err(error) => {
+            warn!("délestage : {error}");
+            None
+        }
+    };
     let thermostats = (!thermostat_configs.is_empty())
         .then(|| ha_thermostat::Thermostats::start(thermostat_configs, Arc::clone(&core)));
     let backups = if let Some(settings) = backup_settings {
@@ -645,6 +664,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     }
     if let Some(calendars) = calendars {
         calendars.stop().await;
+    }
+    if let Some(shedding) = shedding {
+        shedding.stop().await;
     }
     if let Some(presence_simulation) = presence_simulation {
         presence_simulation.stop().await;

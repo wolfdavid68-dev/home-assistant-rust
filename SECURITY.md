@@ -33,7 +33,9 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
   les automatisations ; elle est vérifiée (400 blocs, coordonnées bornées) et rien d'autre n'est gardé.
 - **Rôles** (administrateur, famille, invité) vérifiés **par le serveur** à chaque demande, WebSocket
   compris ; tout droit non accordé explicitement est refusé. Un invité ne voit pas la présence de la
-  famille ni l'alarme, et ne commande jamais un portail, une porte de garage ou une serrure. Il reste
+  famille ni l'alarme, et ne commande jamais un portail, une porte de garage ou une serrure. Les
+  interrupteurs du serveur lui-même (simulation de présence, qui dit quand la maison est vide, et
+  délestage) lui sont cachés. Il reste
   toujours au moins un administrateur ; les rôles ne se changent que sur la machine (`ha-server user role`).
 
 ## Réseau

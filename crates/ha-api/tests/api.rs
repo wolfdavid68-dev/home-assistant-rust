@@ -1440,6 +1440,63 @@ async fn a_guest_sees_and_controls_only_safe_devices() {
 }
 
 #[tokio::test]
+async fn a_guest_never_sees_nor_controls_the_server_switches() {
+    // La simulation de présence dit quand la maison est vide ; le délestage
+    // protège le compteur : pas pour un invité, même si ce sont des
+    // « switch ».
+    let app = TestApp::new().await;
+    for (entity, attributes) in [
+        ("switch.simulation_presence", json!({"en_cours": true})),
+        ("switch.delestage", json!({"coupes": []})),
+        ("switch.prise_salon", json!({})),
+    ] {
+        let Value::Object(attributes) = attributes else {
+            panic!("un objet est attendu")
+        };
+        app.state
+            .core
+            .states
+            .set(entity.parse().unwrap(), "on", attributes)
+            .unwrap();
+    }
+    let guest = app.login_as("visiteur", ha_auth::Role::Guest).await;
+    let (_, listed) = app.request("GET", "/api/states", Some(&guest), None).await;
+    let ids: Vec<&str> = listed
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["entity_id"].as_str().unwrap())
+        .collect();
+    assert_eq!(ids, ["switch.prise_salon"]);
+    for hidden in ["switch.simulation_presence", "switch.delestage"] {
+        let (status, _) = app
+            .request("GET", &format!("/api/states/{hidden}"), Some(&guest), None)
+            .await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{hidden}");
+        let (status, _) = app
+            .request(
+                "POST",
+                "/api/services/switch/turn_off",
+                Some(&guest),
+                Some(json!({"entity_id": hidden})),
+            )
+            .await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{hidden}");
+    }
+    // La famille, elle, les commande.
+    let family = app.login_as("alice", ha_auth::Role::Family).await;
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/services/switch/turn_off",
+            Some(&family),
+            Some(json!({"entity_id": "switch.delestage"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
 async fn a_guest_order_in_a_protected_room_waits_for_the_family() {
     let app = TestApp::new().await;
     furnish(&app);

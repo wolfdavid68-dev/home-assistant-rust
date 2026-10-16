@@ -5,7 +5,8 @@
 //! l'agenda et les listes, ni les notifications. Il ne
 //! commande que des appareils sans risque : lumières, prises, ventilateurs,
 //! scènes, et les volets (jamais un portail, une porte de garage ou une
-//! porte).
+//! porte). Les interrupteurs du serveur lui-même (simulation de présence,
+//! délestage) lui sont cachés.
 
 use ha_auth::{Permission, User};
 use ha_core::{EntityId, State};
@@ -30,6 +31,10 @@ const HIDDEN_FROM_GUESTS: [&str; 10] = [
     "calendar",
     "todo",
 ];
+/// Les interrupteurs du serveur lui-même, cachés aux invités : la simulation
+/// de présence dit quand la maison est vide (étape 58), le délestage protège
+/// le compteur (étape 62).
+const HIDDEN_SWITCHES: [&str; 2] = ["switch.simulation_presence", "switch.delestage"];
 /// Domaines qu'un invité peut commander.
 const GUEST_CONTROLS: [&str; 5] = ["light", "switch", "fan", "scene", "cover"];
 /// Volets qu'un invité ne commande jamais (comme Alexa).
@@ -66,7 +71,9 @@ pub(crate) fn can_see(user: &User, entity_id: &EntityId, state: Option<&State>) 
     }
     let domain = entity_id.domain();
     let alarm = domain == "sensor" && device_class(state) == Some("alarm");
-    !HIDDEN_FROM_GUESTS.contains(&domain) && !alarm
+    !HIDDEN_FROM_GUESTS.contains(&domain)
+        && !alarm
+        && !HIDDEN_SWITCHES.contains(&entity_id.as_str())
 }
 
 /// Ce compte peut-il commander cet appareil ?
@@ -75,7 +82,7 @@ pub(crate) fn can_control(user: &User, entity_id: &EntityId, state: Option<&Stat
         return true;
     }
     let domain = entity_id.domain();
-    if !GUEST_CONTROLS.contains(&domain) {
+    if !GUEST_CONTROLS.contains(&domain) || HIDDEN_SWITCHES.contains(&entity_id.as_str()) {
         return false;
     }
     // Un volet sans classe connue est accepté ; un portail ou un garage, jamais.

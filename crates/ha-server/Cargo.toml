@@ -27,6 +27,7 @@ ha-notices = { path = "../ha-notices" }
 ha-teleinfo = { path = "../ha-teleinfo" }
 ha-input = { path = "../ha-input" }
 ha-logbook = { path = "../ha-logbook" }
+ha-shedding = { path = "../ha-shedding" }
 ha-simulation = { path = "../ha-simulation" }
 ha-somfy = { path = "../ha-somfy" }
 ha-thermostat = { path = "../ha-thermostat" }

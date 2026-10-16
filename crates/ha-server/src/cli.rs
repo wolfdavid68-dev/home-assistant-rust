@@ -43,6 +43,7 @@ utilisation :
   ha-server areas check           vérifie le fichier des pièces
   ha-server calendriers check     vérifie le fichier des agendas en ligne (ICS)
   ha-server simulation check      vérifie la simulation de présence
+  ha-server delestage check       vérifie le délestage
   ha-server guard check           vérifie la garde (pièces protégées, heures calmes)
   ha-server alexa check           vérifie le fichier des appareils pour Alexa
   ha-server thermostats check     vérifie le fichier des thermostats
@@ -847,6 +848,30 @@ pub fn check_simulation(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
                 "{} : simulation valide, rejoue il y a {} jours :",
                 path.display(),
                 config.days_ago
+            );
+            for device in &config.devices {
+                println!("  - {device}");
+            }
+        }
+    }
+    Ok(())
+}
+
+/// `ha-server delestage check` : vérifie `delestage.yaml`.
+pub fn check_shedding(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
+    match ha_shedding::load(path)? {
+        None => println!("{} : fichier absent (pas de délestage)", path.display()),
+        Some(config) => {
+            let limit = config.limit.map_or_else(
+                || "la puissance souscrite du Linky".to_owned(),
+                |limit| format!("{limit}"),
+            );
+            println!(
+                "{} : délestage valide, mesure {}, limite {limit}, retour après {} min ; \
+                 coupés dans cet ordre :",
+                path.display(),
+                config.measure,
+                config.restore_after.as_secs() / 60
             );
             for device in &config.devices {
                 println!("  - {device}");
