@@ -609,6 +609,148 @@ function fxStep(fx, dt, t, still) {
   }
 }
 
+// ---------------------------------------------------------------- Demandes pour l'IA
+// Pour faire les images (le fond, les ambiances, les calques) avec une IA qui
+// retouche les photos (Gemini, ChatGPT…). La méthode est celle de domo-blog :
+// une image de départ, au soleil et « au repos », puis chaque variante faite
+// à partir d'elle, sans rien bouger. Les demandes sont en anglais : c'est ce
+// qui marche le mieux.
+
+const AI_REFERENCE = "Use the attached image as the strict reference. Keep EXACTLY the same composition, camera angle, framing, scale, image size and the position of every object. Change ONLY what is described below. Do not add or remove anything else.";
+const AI_BACKGROUND = { maquette: "Keep the plain uniform dark background (#1C1C1C), no sky, no horizon.", plan: "Keep the plain paper background, no sky, no horizon." };
+/** Le temps, en mots pour l'IA. */
+const AI_WEATHER = {
+  "eclaircies": "PARTLY CLOUDY: bright light with a few soft cloud shadows drifting over the plot, slightly softer shadows.",
+  "nuageux": "OVERCAST: soft diffuse grey light, no hard shadows, slightly muted colours.",
+  "brouillard": "FOG: a light mist around the property, the far edges of the plot fading softly, diffuse light, low contrast.",
+  "vent": "WINDY: trees and hedges bent by the wind, a few leaves in the air, cool grey-blue light.",
+  "pluie": "RAIN: grey overcast light, visible falling rain, wet reflective ground, small puddles on the driveway and terrace.",
+  "averses": "HEAVY DOWNPOUR: dark grey light, dense falling rain, streaming wet ground and roofs, larger puddles.",
+  "orage": "THUNDERSTORM: very dark stormy light, heavy rain, a cold flash of lightning catching the edges of the roofs, wet reflective ground.",
+  "grele": "HAIL: small white hailstones scattered on the roofs, lawn and driveway, cold grey light.",
+  "neige": "SNOW: fresh snow covering the roofs, ground, hedges and trees, a few falling snowflakes, cold soft light, driveway lightly covered.",
+  "pluie-neige": "SLEET: wet slushy snow patches on the roofs and lawn, rain and snow falling together, cold grey light.",
+};
+const AI_NIGHT = "NIGHT: deep blue ambient light, soft cool moonlight. All interior and exterior lights stay OFF (they will be added later as separate layers).";
+const AI_CORRECTIONS = [
+  ["camera", "Correction : le cadrage a bougé", "You moved the camera. Go back to the exact framing, camera angle and scale of the reference image, then apply only the requested change."],
+  ["size", "Correction : la taille a changé", "Keep exactly the same image size and aspect ratio as the reference image."],
+  ["style", "Retenir le style", "Remember this style, framing and camera angle: I will ask you for more variations of this same model, always from this reference image."],
+];
+
+/** Le nom d'image conseillé pour une ambiance (« nuit-pluie » → nuit_pluie). */
+const aiFileName = (key) => key.replaceAll("-", "_");
+
+/** Les appareils pour lesquels proposer un calque : ceux de l'onglet (boutons,
+ *  zones, calques), plus les lumières et les volets de ses pièces. */
+function aiLayerEntities(draft) {
+  const ids = new Set([...draft.actions, ...draft.zones.map((z) => z.entity_id), ...draft.layers.map((l) => l.entity_id)]);
+  const rooms = draft.areas.length > 0 ? areas.filter((a) => draft.areas.includes(a.name)) : areas;
+  for (const area of rooms) for (const e of area.entities) if (/^(light|cover)\./.test(e.entity_id)) ids.add(e.entity_id);
+  return [...ids].filter(Boolean).map((id) => entities.get(id)).filter((state) => state !== undefined && ["light", "cover", "switch", "lock", "valve", "fan"].includes(domainOf(state)));
+}
+
+/** « Volet · Salon » : le nom, et la pièce (il y a souvent plusieurs volets). */
+function aiLayerName(state) {
+  const area = areas.find((a) => a.entities.some((e) => e.entity_id === state.entity_id));
+  return area && area.name !== nameOf(state) ? `${nameOf(state)} · ${area.name}` : nameOf(state);
+}
+
+/** La demande pour une image : { text, attach, save }. */
+function aiPrompt(choice, draft, style) {
+  const base = draft.background ?? "jour";
+  const bg = AI_BACKGROUND[style];
+  if (choice === "analyse") {
+    return {
+      attach: "1 à 3 photos de ta maison (de trois quarts, en pleine lumière)",
+      save: "rien : corrige sa fiche si besoin, puis demande le fond de jour",
+      text: "Look carefully at the attached photos of my house. Do NOT generate any image yet.\nWrite a numbered HOUSE SHEET: 1. overall shape and number of floors, 2. roof (shape, material, colour, chimneys, solar panels), 3. walls and colours, 4. windows on each side, 5. doors, 6. garage doors and gates, 7. plot and garden (pool, terrace, hedges, trees, driveway), 8. exterior lights.\nThen list, as questions, everything you are unsure about.",
+    };
+  }
+  if (choice === "jour") {
+    const look = style === "plan"
+      ? "STYLE: clean isometric architectural blueprint drawing, fine dark-blue ink lines on white paper, light blue tints for glass and water, technical hatching on the roofs."
+      : "STYLE: clean, slightly stylised 3D render, soft global illumination, premium architectural scale-model look.";
+    return {
+      attach: "la meilleure photo de ta maison",
+      save: `${base}.webp (le fond de jour)`,
+      text: [
+        style === "plan" ? "Transform the attached photo of my house into an isometric architectural blueprint." : "Transform the attached photo of my house into a highly detailed 3D isometric miniature model (diorama).",
+        "FIDELITY: keep the exact architecture, proportions, roof shape, number and position of windows and doors, garage, garden, pool and terrace. Do not add or remove any part of the building.",
+        "CAMERA: true isometric view from a front three-quarter angle, the whole property centred with a small margin, nothing cropped.",
+        look,
+        "LIGHTING: bright sunny day, soft shadows. All interior and exterior lights OFF. All garage doors, gates and shutters CLOSED.",
+        style === "plan" ? "BACKGROUND: plain white paper, no sky, no horizon." : "BACKGROUND: plain uniform dark background (#1C1C1C), no sky, no horizon.",
+        "EXCLUDE: no text, no labels, no people, no cars, no watermark.",
+        "FORMAT: landscape 16:9, highest resolution.",
+      ].join("\n"),
+    };
+  }
+  if (choice === "nuit" || AMBIANCE_KEYS.includes(choice)) {
+    const night = choice.startsWith("nuit");
+    const weather = choice.includes("-") ? choice.slice(choice.indexOf("-") + 1) : null;
+    // La nuit sous la pluie : à partir de la pluie de jour, si on l'a déjà.
+    const dayWeather = weather ? draft.ambiances[`jour-${weather}`] : null;
+    const reference = night && weather ? `${dayWeather ?? aiFileName(`jour-${weather}`)}.webp (la même météo de jour ; sinon ${base}.webp)` : `${base}.webp (le fond de jour)`;
+    const lines = [AI_REFERENCE];
+    if (night && style === "plan") lines.push("NIGHT BLUEPRINT: white ink lines on deep blue paper, like a cyanotype print. All lights stay OFF.");
+    else if (night) lines.push(AI_NIGHT);
+    if (weather) lines.push(AI_WEATHER[weather]);
+    if (choice === "nuit" && style !== "plan") lines.push("Clear sky feeling, calm night.");
+    lines.push(bg);
+    return { attach: reference, save: `${aiFileName(choice)}.webp`, text: lines.join("\n") };
+  }
+  if (choice.startsWith("calque:")) {
+    const state = entities.get(choice.slice(7));
+    if (!state) return { attach: "", save: "", text: "" };
+    const name = `"${aiLayerName(state)}"`;
+    const file = slug(aiLayerName(state)) || "calque";
+    const domain = domainOf(state);
+    const dc = state.attributes.device_class;
+    let change;
+    let from = `${draft.night ?? "nuit"}.webp (le fond de nuit), et refais-le avec ${base}.webp si tu veux aussi le calque de jour`;
+    let save = `${file}_allume.webp`;
+    if (domain === "light") {
+      change = `Only turn ON the light named ${name} (location: WHERE IT IS, e.g. above the front door): warm 2700 K light with a soft halo on the nearby wall and ground.`;
+    } else if (domain === "cover" && ["garage", "gate", "door"].includes(dc)) {
+      change = `Only the door named ${name} (location: WHERE IT IS, e.g. the left garage door) is fully OPEN, with the dark interior visible behind it.`;
+      from = `${base}.webp (le fond de jour), puis la même chose avec ${draft.night ?? "nuit"}.webp`;
+      save = `${file}_ouvert.webp`;
+    } else if (domain === "cover") {
+      change = `Only the shutters named ${name} (location: WHERE THEY ARE, e.g. the large living-room window) are fully OPEN.`;
+      from = `${base}.webp (le fond de jour)`;
+      save = `${file}_ouvert.webp`;
+    } else {
+      change = `Only change: the device named ${name} (location: WHERE IT IS) is ON — DESCRIBE what it looks like when it is on.`;
+      from = `${base}.webp (le fond de jour)`;
+    }
+    return {
+      attach: from,
+      save: `${save} — remplace d'abord « WHERE IT IS » dans la demande. Puis, dans GIMP : superpose-le au fond en mode « Différence », garde seulement ce qui change, et exporte en WebP transparent, à la taille du fond`,
+      text: [AI_REFERENCE, change, "Nothing else changes: same light, same weather, same framing, same image size."].join("\n"),
+    };
+  }
+  const correction = AI_CORRECTIONS.find(([key]) => `correction:${key}` === choice);
+  return { attach: "la même conversation", save: "—", text: correction?.[2] ?? "" };
+}
+
+/** Copie un texte : le presse-papiers si la page le permet (HTTPS), sinon
+ *  la sélection de la zone de texte (le réseau local en HTTP). */
+async function copyText(area) {
+  try {
+    await navigator.clipboard.writeText(area.value);
+    return true;
+  } catch {
+    area.focus();
+    area.select();
+    try {
+      return document.execCommand("copy");
+    } catch {
+      return false;
+    }
+  }
+}
+
 // ---------------------------------------------------------------- Onglets
 // Maison, Garage, Piscine… : chacun son dessin, ses boutons, et les pièces
 // qu'il montre. L'onglet ouvert est retenu sur cet appareil (localStorage) :
@@ -1218,6 +1360,52 @@ function renderDrawingEditor() {
     el("div", { class: "drawing-row" }, nameInput, fileInput, send),
   );
 
+  // Les demandes pour l'IA : choisir l'image à faire, copier la demande.
+  const aiStyle = el("select", { "aria-label": "Style des images" },
+    el("option", { value: "maquette", text: "Maquette 3D (diorama)" }), el("option", { value: "plan", text: "Plan d'architecte" }));
+  aiStyle.value = drawingEdit.aiStyle ?? (isPlan() ? "plan" : "maquette");
+  const aiChoice = el("select", { "aria-label": "Image à faire" },
+    el("optgroup", { label: "Pour commencer" },
+      el("option", { value: "analyse", text: "1. Faire décrire la maison (sans image)" }),
+      el("option", { value: "jour", text: "2. Le fond de jour, au soleil" })),
+    ...MOMENTS.map(([moment, momentLabel]) => el("optgroup", { label: `Ambiances : ${momentLabel.toLowerCase()}` },
+      ...WEATHERS.filter(([key]) => !(moment === "jour" && key === "soleil")).map(([key, label]) => {
+        const value = key === "soleil" ? moment : `${moment}-${key}`;
+        const weatherText = moment === "nuit" && key === "soleil" ? "ciel clair" : label.toLowerCase();
+        return el("option", { value, text: `${momentLabel}, ${weatherText}` });
+      }))),
+    el("optgroup", { label: "Calques" }, ...aiLayerEntities(draft).map((state) => el("option", { value: `calque:${state.entity_id}`, text: aiLayerName(state) }))),
+    el("optgroup", { label: "Si l'IA se trompe" }, ...AI_CORRECTIONS.map(([key, label]) => el("option", { value: `correction:${key}`, text: label }))));
+  aiChoice.value = drawingEdit.aiChoice ?? (draft.background ? "nuit" : "analyse");
+  // Modifiable : on peut préciser où est le porche avant de copier.
+  const aiText = el("textarea", { class: "ai-prompt", rows: "8", spellcheck: "false", "aria-label": "Demande à copier (modifiable)" });
+  const aiAttach = el("span");
+  const aiSave = el("span");
+  const aiCopy = el("button", { type: "button", class: "primary small", text: "Copier la demande" });
+  const aiShow = () => {
+    drawingEdit.aiStyle = aiStyle.value;
+    drawingEdit.aiChoice = aiChoice.value;
+    const prompt = aiPrompt(aiChoice.value, draft, aiStyle.value);
+    aiText.value = prompt.text;
+    aiAttach.textContent = prompt.attach;
+    aiSave.textContent = prompt.save;
+  };
+  aiStyle.addEventListener("change", aiShow);
+  aiChoice.addEventListener("change", aiShow);
+  aiCopy.addEventListener("click", async () => {
+    const done = await copyText(aiText);
+    drawingStatus(done ? "Demande copiée : colle-la dans Gemini ou ChatGPT, avec l'image à joindre." : "Copie impossible ici : sélectionne le texte et copie-le.", done ? "ok" : "error");
+  });
+  aiShow();
+  const ai = drawingFieldset(
+    "Faire les images avec l'IA",
+    "Choisis l'image à faire, copie la demande et colle-la dans une IA qui retouche les photos (Gemini, ChatGPT…), avec l'image indiquée. Fais toujours les variantes à partir du fond de jour, jamais l'une de l'autre : le dessin ne bouge pas.",
+    el("div", { class: "drawing-grid" }, field("Style", aiStyle), field("Image à faire", aiChoice)),
+    aiText,
+    el("dl", { class: "ai-steps" }, el("dt", { text: "Joindre" }), el("dd", {}, aiAttach), el("dt", { text: "Enregistrer sous" }), el("dd", {}, aiSave)),
+    aiCopy,
+  );
+
   // Les fonds : un par ambiance (moment × temps). Le jour au soleil est le
   // fond principal ; les autres sont facultatifs.
   const groups = [];
@@ -1487,7 +1675,7 @@ function renderDrawingEditor() {
     addChart,
   );
 
-  $("#drawing-form").replaceChildren(pagesPart(), images, backgrounds, effects, layers, labels, zones, actions, charts);
+  $("#drawing-form").replaceChildren(pagesPart(), ai, images, backgrounds, effects, layers, labels, zones, actions, charts);
 }
 
 /** Un identifiant d'onglet à partir de son nom (« Salle de jeux » → salle-de-jeux). */

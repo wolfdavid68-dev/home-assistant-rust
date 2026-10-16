@@ -65,6 +65,10 @@ pour rester lisible.
 
 ### Faire les images
 
+Depuis l'[étape 44](images-ia.md), le réglage du dessin donne la demande à copier pour chaque
+image, et le guide détaille toute la méthode. En bref :
+
+
 Une intelligence artificielle qui retouche les photos (Gemini, ChatGPT…) fait cela très bien, à
 partir d'une photo de ta maison de trois quarts, en pleine lumière. Les demandes en anglais
 marchent le mieux. Pour le style plan :
