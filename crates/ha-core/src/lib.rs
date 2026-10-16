@@ -4,6 +4,7 @@
 //! remettent les types principaux à la racine, pour écrire `ha_core::EntityId`
 //! au lieu de `ha_core::entity_id::EntityId`.
 
+pub mod commands;
 mod entity_id;
 mod error;
 mod event;
@@ -13,6 +14,7 @@ mod state;
 mod state_machine;
 pub mod task;
 
+pub use commands::{COMMAND_TTL, CommandResult, Commands};
 pub use entity_id::{EntityId, MAX_ENTITY_ID_LEN, slugify};
 pub use error::CoreError;
 pub use event::{DEFAULT_BUS_CAPACITY, Event, EventBus};
@@ -60,6 +62,8 @@ pub struct Core {
     pub states: StateMachine,
     /// La santé des intégrations (voir [`integrations`]).
     pub integrations: Integrations,
+    /// Les ordres en attente de réponse (voir [`commands`]).
+    pub commands: Commands,
 }
 
 impl Core {
@@ -71,6 +75,7 @@ impl Core {
             bus,
             states,
             integrations: Integrations::default(),
+            commands: Commands::default(),
         }
     }
 }
@@ -99,17 +104,45 @@ impl Core {
         entity_id: EntityId,
         data: Attributes,
     ) -> Result<(), CoreError> {
-        for name in [domain, service] {
-            if !is_valid_name(name) {
-                return Err(CoreError::InvalidServiceName(name.to_owned()));
-            }
-        }
+        self.publish_call(origin, domain, service, entity_id, data, None)
+    }
+
+    /// Comme [`Core::call_service_from`], en attendant la réponse : le
+    /// numéro de l'ordre, et de quoi recevoir ce que l'intégration en dit
+    /// (voir [`commands`]). Il faut appeler [`Core::forget_command`] si on
+    /// renonce à attendre.
+    pub fn call_service_tracked(
+        &self,
+        origin: Origin,
+        domain: &str,
+        service: &str,
+        entity_id: EntityId,
+        data: Attributes,
+    ) -> Result<(u64, tokio::sync::oneshot::Receiver<CommandResult>), CoreError> {
+        check_service_names(domain, service)?;
+        let (id, reply) = self.commands.open();
+        self.publish_call(origin, domain, service, entity_id, data, Some(id))?;
+        Ok((id, reply))
+    }
+
+    fn publish_call(
+        &self,
+        origin: Origin,
+        domain: &str,
+        service: &str,
+        entity_id: EntityId,
+        data: Attributes,
+        command: Option<u64>,
+    ) -> Result<(), CoreError> {
+        check_service_names(domain, service)?;
         self.bus.publish(Event::CallService {
             domain: domain.to_owned(),
             service: service.to_owned(),
             entity_id,
             data,
             origin,
+            command,
+            issued_at: std::time::Instant::now(),
         });
         Ok(())
     }
@@ -125,6 +158,15 @@ impl Core {
         });
         Ok(())
     }
+}
+
+fn check_service_names(domain: &str, service: &str) -> Result<(), CoreError> {
+    for name in [domain, service] {
+        if !is_valid_name(name) {
+            return Err(CoreError::InvalidServiceName(name.to_owned()));
+        }
+    }
+    Ok(())
 }
 
 impl Default for Core {

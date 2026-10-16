@@ -42,6 +42,12 @@ pub enum Event {
         data: Attributes,
         /// Qui le demande (pour le journal de bord).
         origin: Origin,
+        /// Le numéro de l'ordre, quand quelqu'un attend la réponse (voir
+        /// [`crate::commands`]) : l'intégration la donne avec
+        /// [`crate::Core::command_done`].
+        command: Option<u64>,
+        /// Quand l'ordre a été donné : un ordre périmé n'est pas exécuté.
+        issued_at: std::time::Instant,
     },
 
     /// Un événement « libre », nommé : `timer.finished` quand un minuteur

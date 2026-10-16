@@ -91,6 +91,7 @@ Les fonctions de Home Assistant les plus utiles au quotidien, une par une, dans 
 - [x] **43. Effets météo animés** : sur la maquette, la pluie, les averses, l'orage et ses éclairs, la grêle, la neige, le brouillard, le vent, les étoiles par nuit claire ; selon la météo locale, imposés ou désactivés, trois intensités ; image fixe si l'appareil demande moins de mouvements ([guide](docs/effets.md))
 - [x] **44. Faire les images avec l'IA** : dans le réglage du dessin, la demande à copier pour chaque image (description de la maison, fond de jour en diorama ou en plan, nuit, les 20 ambiances, les calques des lumières et des portes, les corrections), avec l'image à joindre et le nom à donner ; la méthode de domo-blog ([guide](docs/images-ia.md))
 - [x] **45. Supervision des intégrations** : une intégration qui plante est relancée toute seule (attente croissante) ; en panne plus d'une minute, ses appareils passent « indisponibles », puis retrouvent leur valeur ; une seule alerte par intégration ; leur état dans « Mon compte » ([guide](docs/supervision.md))
+- [x] **46. Des ordres avec réponse** : Hue et Somfy disent si l'ordre a abouti (refus et silence affichés) ; une intégration en panne refuse l'ordre d'office ; un ordre de plus de 5 s n'est jamais exécuté, même après une reconnexion ([guide](docs/ordres.md))
 
 En parallèle, dès que tu me donnes les informations : commande du chauffage Somfy (résultat de
 `somfy devices`), puis de l'alarme (avec confirmation et journal).

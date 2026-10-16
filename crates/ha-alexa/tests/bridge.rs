@@ -112,6 +112,7 @@ async fn next_call(rx: &mut Receiver<Arc<Event>>) -> String {
             entity_id,
             data,
             origin,
+            ..
         } = event.as_ref()
         {
             assert_eq!(*origin, ha_core::Origin::Voice);

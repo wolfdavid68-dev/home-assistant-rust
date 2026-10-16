@@ -342,7 +342,7 @@ async fn run(
                             live.refresh(index, &core, now, new_state.as_ref());
                         }
                     }
-                    Event::CallService { domain, service, entity_id, data, origin } if domain == entity_id.domain() => {
+                    Event::CallService { domain, service, entity_id, data, origin, .. } if domain == entity_id.domain() => {
                         live.forward(&core, entity_id, service, data, origin);
                     }
                     _ => {}

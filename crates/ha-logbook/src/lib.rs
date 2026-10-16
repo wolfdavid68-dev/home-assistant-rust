@@ -209,6 +209,8 @@ mod tests {
             entity_id: id("light.salon"),
             data: Attributes::new(),
             origin,
+            command: None,
+            issued_at: std::time::Instant::now(),
         }
     }
 

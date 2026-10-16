@@ -209,6 +209,12 @@ async function callService(domain, service, data) {
     }
     flash(typeof body.error === "string" ? `${body.error}.` : "Ton compte ne permet pas cette commande.");
     unmarkPending(data.entity_id);
+  } else if ([502, 503, 504].includes(response.status)) {
+    // L'appareil a refusé, son intégration est en panne, ou il n'a pas
+    // répondu : on le dit, plutôt que de laisser la tuile clignoter.
+    const body = await response.json().catch(() => ({}));
+    flash(typeof body.error === "string" ? `${body.error}.` : "L'appareil n'a pas répondu.");
+    unmarkPending(data.entity_id);
   }
 }
 

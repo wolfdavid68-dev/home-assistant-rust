@@ -33,6 +33,8 @@ impl Somfy {
     pub fn start(pairing: Pairing, core: Arc<Core>) -> Self {
         // Sous surveillance : si elle plante, elle est relancée.
         let supervisor = Arc::clone(&core);
+        // Somfy dit si la box a accepté chaque ordre.
+        core.answers_commands(crate::ID);
         Self(ha_core::supervise(
             supervisor,
             crate::ID,
@@ -133,19 +135,30 @@ async fn run(pairing: Pairing, core: Arc<Core>, token: CancellationToken) {
 
                 received = events.recv() => match received {
                     Ok(event) => {
-                        if let Event::CallService { domain, service, entity_id, data, .. } = event.as_ref()
+                        if let Event::CallService { domain, service, entity_id, data, command: order, issued_at, .. } = event.as_ref()
                             && let Some(command) = devices.command(domain, service, entity_id, data)
                         {
+                            // Un ordre resté en attente pendant une coupure n'est
+                            // plus voulu : on ne l'exécute pas.
+                            if ha_core::commands::is_stale(*issued_at) {
+                                warn!("Somfy : ordre périmé ignoré pour {entity_id}");
+                                core.command_done(*order, Err("ordre périmé : la box a mis trop longtemps".into()));
+                                continue;
+                            }
                             let api = api.clone();
                             let entity_id = entity_id.clone();
+                            let core = Arc::clone(&core);
+                            let order = *order;
                             tokio::spawn(async move {
                                 debug!("Somfy : {} sur {entity_id}", command.name);
-                                if let Err(error) = api
+                                let result = api
                                     .execute(&command.device_url, &command.name, command.parameters)
-                                    .await
-                                {
+                                    .await;
+                                if let Err(error) = &result {
                                     warn!("Somfy : commande refusée pour {entity_id} : {error}");
                                 }
+                                core.command_done(order, // Le détail (qui peut citer l'adresse de la box) reste dans les logs.
+                                    result.map_err(|_| "la box Somfy n'a pas accepté l'ordre".to_owned()));
                             });
                         }
                     }
