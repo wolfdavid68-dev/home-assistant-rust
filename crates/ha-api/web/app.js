@@ -3821,7 +3821,8 @@ async function loadIntegrations() {
     if (item.error) lines.push(item.error);
     if (item.retry_at && kind !== "connected") lines.push(`nouvel essai à ${shortWhen(item.retry_at)}`);
     if (item.restarts > 0) lines.push(`relancée ${item.restarts} fois`);
-    const devices = `${item.entities} appareil${item.entities > 1 ? "s" : ""}${item.unavailable ? " indisponibles" : ""}`;
+    const plural = item.entities > 1 ? "s" : "";
+    const devices = `${item.entities} appareil${plural}${item.unavailable && item.entities > 0 ? ` indisponible${plural}` : ""}`;
     return el("li", { class: `integration i-${kind}` },
       el("span", { class: "integration-dot", "aria-hidden": "true" }),
       el("span", { class: "integration-text" },
