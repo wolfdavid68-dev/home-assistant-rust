@@ -2418,3 +2418,13 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 @media (prefers-reduced-motion: no-preference) {
   .i-starting .integration-dot { animation: pulse 1s ease-in-out infinite; }
 }
+
+/* ---------- Ce que le serveur consomme (étape 47), dans « Mon compte ». */
+.system-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 0.4rem; margin: 0; }
+.system-row { display: grid; gap: 0.15rem; padding: 0.55rem 0.75rem; border-radius: 12px; background: var(--card-2); }
+.system-row dt { font-size: 0.74rem; color: var(--muted); }
+.system-row dd { margin: 0; display: grid; gap: 0.1rem; }
+.system-row b { font-size: 0.92rem; font-variant-numeric: tabular-nums; }
+.system-row span { font-size: 0.72rem; color: var(--muted); }
+.system-row.over { box-shadow: inset 3px 0 0 var(--alert); }
+.system-row.over span { color: var(--alert); }

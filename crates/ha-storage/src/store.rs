@@ -189,6 +189,16 @@ impl Store {
         self.secrets.unseal(context, sealed)
     }
 
+    /// La taille de la base, en octets (pages utilisées × taille d'une page).
+    pub async fn database_size(&self) -> Result<u64, StorageError> {
+        let (size,): (i64,) = sqlx::query_as(
+            "SELECT page_count * page_size FROM pragma_page_count(), pragma_page_size()",
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(u64::try_from(size).unwrap_or(0))
+    }
+
     /// Ferme proprement toutes les connexions.
     pub async fn close(&self) {
         self.pool.close().await;

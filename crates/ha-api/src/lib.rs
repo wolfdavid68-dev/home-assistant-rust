@@ -31,6 +31,7 @@ mod error;
 mod json;
 mod rest;
 mod roles;
+mod system;
 mod web;
 mod ws;
 
@@ -73,6 +74,8 @@ pub struct ApiState {
     pub energy: ha_energy::EnergyConfig,
     /// Confirmations d'identité en cours : empreinte du jeton → fin de validité.
     confirmations: Mutex<HashMap<[u8; 32], Instant>>,
+    /// Ce que le serveur consomme (page « Système »).
+    metrics: system::Metrics,
     shutdown: CancellationToken,
 }
 
@@ -94,6 +97,7 @@ impl ApiState {
             automations,
             energy,
             confirmations: Mutex::default(),
+            metrics: system::Metrics::default(),
             shutdown,
         })
     }
@@ -143,6 +147,7 @@ pub fn router(state: Arc<ApiState>) -> Router {
         .route("/api/audit", get(rest::audit_log))
         .route("/api/areas", get(rest::areas))
         .route("/api/integrations", get(rest::integrations))
+        .route("/api/system", get(system::system))
         .route("/api/home/drawing", get(drawing::get).put(drawing::put))
         .route(
             "/api/home/images/{name}",
@@ -188,6 +193,11 @@ pub fn router(state: Arc<ApiState>) -> Router {
         .layer(TimeoutLayer::with_status_code(
             StatusCode::REQUEST_TIMEOUT,
             REQUEST_TIMEOUT,
+        ))
+        // La durée de chaque requête, pour la page « Système ».
+        .layer(axum::middleware::from_fn_with_state(
+            Arc::clone(&state),
+            system::measure,
         ))
         .with_state(state)
 }

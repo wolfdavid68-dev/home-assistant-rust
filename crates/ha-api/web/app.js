@@ -3840,10 +3840,47 @@ async function loadIntegrations() {
 
 function watchIntegrations() {
   loadIntegrations();
+  loadSystem();
   clearInterval(integrationTimer);
   integrationTimer = setInterval(() => {
-    if ($("#account-dialog").open) loadIntegrations(); else clearInterval(integrationTimer);
+    if ($("#account-dialog").open) { loadIntegrations(); loadSystem(); } else clearInterval(integrationTimer);
   }, 10_000);
+}
+
+// ---------------------------------------------------------------- Système
+// Ce que le serveur consomme, et son budget (étape 47) : pour l'administrateur.
+
+const bytes = (n) => (n >= 1024 ** 2 ? `${number.format(n / 1024 ** 2)} Mio` : `${number.format(n / 1024)} Kio`);
+
+function duration(seconds) {
+  const days = Math.floor(seconds / 86_400);
+  const hours = Math.floor((seconds % 86_400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  return days > 0 ? `${days} j ${hours} h` : hours > 0 ? `${hours} h ${minutes} min` : `${minutes} min`;
+}
+
+async function loadSystem() {
+  const box = $("#system");
+  if (account.permissions.audit === false) { box.hidden = true; return; }
+  const { status, data } = await api("GET", "/api/system").catch(() => ({ status: 0, data: {} }));
+  box.hidden = status !== 200;
+  if (status !== 200) return;
+  const budget = data.budget ?? {};
+  // [libellé, valeur, dans le budget ?, budget]
+  const rows = [];
+  if (data.memory) {
+    const mib = data.memory.resident_bytes / 1024 ** 2;
+    rows.push(["Mémoire", `${bytes(data.memory.resident_bytes)} (dont ${bytes(data.memory.anonymous_bytes)} en propre)`, mib <= budget.memory_mib, `≤ ${budget.memory_mib} Mio`]);
+  }
+  if (typeof data.cpu_percent === "number") rows.push(["Processeur", `${number.format(data.cpu_percent)} %`, data.cpu_percent <= budget.cpu_percent, `≤ ${number.format(budget.cpu_percent)} % au repos`]);
+  if (data.api) rows.push(["Réponses de l'API", `${number.format(data.api.p50_ms)} ms (95 % sous ${number.format(data.api.p95_ms)} ms)`, data.api.p95_ms <= budget.api_p95_ms, `95 % ≤ ${budget.api_p95_ms} ms`]);
+  if (typeof data.database_bytes === "number") rows.push(["Base de données", bytes(data.database_bytes), true, ""]);
+  rows.push(["Appareils", String(data.entities ?? 0), true, ""]);
+  rows.push(["En marche depuis", duration(data.uptime_seconds ?? 0), true, `version ${data.version ?? "?"}`]);
+  $("#system-list").replaceChildren(...rows.map(([label, value, ok, note]) =>
+    el("div", { class: ok ? "system-row" : "system-row over" },
+      el("dt", { text: label }),
+      el("dd", {}, el("b", { text: value }), note ? el("span", { text: ok ? note : `au-delà du budget (${note})` }) : ""))));
 }
 
 // ---------------------------------------------------------------- Mode tablette
