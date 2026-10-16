@@ -15,6 +15,7 @@ pub mod backup;
 mod drawing;
 mod error;
 mod logbook;
+mod push;
 mod recorder;
 mod secrets;
 mod statistics;
@@ -26,6 +27,7 @@ pub use automations::{AutomationVersion, MAX_VERSIONS, StoredAutomation};
 pub use drawing::{HomeImage, HomeImageInfo};
 pub use error::StorageError;
 pub use logbook::{LogbookEntry, MAX_LOGBOOK_LIMIT, NewLogbookEntry};
+pub use push::{NewPushSubscription, PushSubscriptionInfo, PushTarget, VapidKeys};
 pub use recorder::Recorder;
 pub use secrets::{SecretKey, is_sealed};
 pub use statistics::{

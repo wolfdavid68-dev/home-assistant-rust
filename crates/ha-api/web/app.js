@@ -3801,6 +3801,9 @@ async function loadAccount() {
   $("#open-drawing").hidden = account.permissions.edit_dashboard !== true;
   $(".dock").style.gridTemplateColumns = `repeat(${$(".dock").querySelectorAll(":scope > :not([hidden])").length}, minmax(0, 1fr))`;
   renderAll();
+  // Le service worker est (ré)enregistré à chaque ouverture : il prend la
+  // version du serveur.
+  loadPush().catch(() => {});
 }
 
 /** Un message bref en bas de l'écran (une commande refusée…). */
@@ -3825,9 +3828,182 @@ for (const opener of ["#dock-account", "#open-account"]) {
   $(opener).addEventListener("click", () => {
     $("#account-dialog").showModal();
     watchIntegrations();
+    loadPush().catch(() => {});
   });
 }
 $("#account-close").addEventListener("click", () => $("#account-dialog").close());
+
+// ---------------------------------------------------------------- Notifications du navigateur
+// Dans « Mon compte » : recevoir les notifications sur ce téléphone, même
+// page fermée (Web Push, étape 50). Le navigateur s'abonne avec la clé
+// publique du serveur ; le service worker (sw.js) affiche ce qui arrive.
+
+const pushView = { info: null, registration: null, subscription: null, busy: false };
+
+/** Ce qui empêche ce navigateur de recevoir des notifications, ou null. */
+function pushBlocker() {
+  if (!window.isSecureContext) {
+    return "Il faut ouvrir le tableau de bord en HTTPS (voir l'étape 7) : sans connexion sécurisée, le navigateur refuse les notifications.";
+  }
+  if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+    return /iPhone|iPad/.test(navigator.userAgent)
+      ? "Sur iPhone : touche Partager, puis « Sur l'écran d'accueil », et ouvre Maison depuis l'écran d'accueil (iOS 16.4 ou plus récent)."
+      : "Ce navigateur ne sait pas recevoir de notifications.";
+  }
+  return null;
+}
+
+/** « Pixel (Chrome) », « iPhone (Safari) »… pour reconnaître ses appareils. */
+function deviceName() {
+  const ua = navigator.userAgent;
+  const device = /iPhone/.test(ua) ? "iPhone" : /iPad/.test(ua) ? "iPad" : /Android/.test(ua) ? "Android"
+    : /Windows/.test(ua) ? "Windows" : /Macintosh/.test(ua) ? "Mac" : /Linux/.test(ua) ? "Linux" : "Appareil";
+  const browser = /Edg\//.test(ua) ? "Edge" : /Firefox\//.test(ua) ? "Firefox" : /Chrome\//.test(ua) ? "Chrome"
+    : /Safari\//.test(ua) ? "Safari" : "";
+  return browser ? `${device} (${browser})` : device;
+}
+
+/** La clé du serveur (base64url) au format attendu par `subscribe`. */
+function keyBytes(base64url) {
+  const base64 = base64url.replace(/-/g, "+").replace(/_/g, "/");
+  return Uint8Array.from(atob(base64 + "=".repeat((4 - (base64.length % 4)) % 4)), (c) => c.charCodeAt(0));
+}
+
+async function loadPush() {
+  const section = $("#push");
+  // Un invité ne reçoit pas de notifications.
+  section.hidden = account.permissions.controls != null;
+  if (section.hidden) return;
+  const { status, data } = await api("GET", "/api/push");
+  if (status !== 200) {
+    section.hidden = true;
+    return;
+  }
+  pushView.info = data;
+  const blocker = data.available ? pushBlocker() : "Les notifications du navigateur sont coupées sur le serveur (HA_PUSH=off).";
+  if (blocker === null && pushView.registration === null) {
+    try {
+      pushView.registration = await navigator.serviceWorker.register("/sw.js");
+      await navigator.serviceWorker.ready;
+    } catch {
+      pushView.registration = null;
+    }
+  }
+  pushView.subscription = (await pushView.registration?.pushManager.getSubscription().catch(() => null)) ?? null;
+  renderPush(blocker);
+}
+
+function renderPush(blocker) {
+  const info = pushView.info;
+  if (!info) return;
+  const mine = info.devices.find((d) => d.endpoint === pushView.subscription?.endpoint) ?? null;
+  const denied = "Notification" in window && Notification.permission === "denied";
+  const on = mine !== null && !denied;
+  let status;
+  if (blocker) status = blocker;
+  else if (denied) status = "Notifications bloquées pour ce site : autorise-les dans les réglages du navigateur, puis reviens ici.";
+  else if (pushView.registration === null) status = "Le navigateur n'a pas pu préparer les notifications. Recharge la page.";
+  else if (on) status = "Activées : cet appareil est prévenu même quand la page est fermée.";
+  else status = "Reçois les ordres à valider, les alertes et les messages des automatisations, même page fermée.";
+  $("#push-status").textContent = status;
+  const usable = !blocker && !denied && pushView.registration !== null;
+  $("#push-enable").hidden = !usable || on;
+  $("#push-test").hidden = !on;
+  $("#push-disable").hidden = !on;
+  $("#push-categories").hidden = !on;
+  // Pendant une action, les cases gardent ce que la personne vient de cocher.
+  if (!pushView.busy) {
+    for (const box of document.querySelectorAll("#push-categories input")) {
+      box.checked = on && (mine.categories & Number(box.dataset.bit)) !== 0;
+    }
+  }
+  for (const box of document.querySelectorAll("#push-categories input")) box.disabled = pushView.busy;
+  for (const button of document.querySelectorAll("#push button")) button.disabled = pushView.busy;
+  const others = info.devices.filter((d) => d !== mine);
+  $("#push-devices").replaceChildren(...others.map((device) => {
+    const remove = el("button", { type: "button", class: "ghost small", text: "Retirer" });
+    remove.addEventListener("click", () => pushAction(async () => {
+      await api("DELETE", `/api/push/subscriptions/${device.id}`);
+    }));
+    const seen = device.last_success ? `prévenu il y a ${ago(device.last_success)}` : "jamais prévenu";
+    return el("li", { class: "push-device" },
+      el("span", {}, el("strong", { text: device.name }), el("small", { text: device.failures > 0 ? `${seen} · ${device.failures} échec(s)` : seen })),
+      remove);
+  }));
+}
+
+/** Une action à la fois ; la section est relue après. */
+async function pushAction(action) {
+  if (pushView.busy) return;
+  pushView.busy = true;
+  renderPush(null);
+  try {
+    await action();
+  } catch (error) {
+    flash(error instanceof Error && error.message ? error.message : "Action impossible.");
+  } finally {
+    pushView.busy = false;
+    await loadPush().catch(() => {});
+  }
+}
+
+$("#push-enable").addEventListener("click", () => pushAction(async () => {
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") throw new Error("Notifications refusées : rien ne sera envoyé à cet appareil.");
+  const manager = pushView.registration.pushManager;
+  const options = { userVisibleOnly: true, applicationServerKey: keyBytes(pushView.info.public_key) };
+  let subscription;
+  try {
+    subscription = await manager.subscribe(options);
+  } catch {
+    // Un ancien abonnement (autre clé du serveur) : on le remplace.
+    await (await manager.getSubscription())?.unsubscribe();
+    subscription = await manager.subscribe(options);
+  }
+  const { status, data } = await api("POST", "/api/push/subscriptions", { ...subscription.toJSON(), name: deviceName(), categories: 7 });
+  if (status !== 201) {
+    await subscription.unsubscribe().catch(() => {});
+    throw new Error(typeof data.error === "string" ? `${data.error}.` : "Abonnement refusé par le serveur.");
+  }
+  flash("Notifications activées sur cet appareil.");
+}));
+
+$("#push-disable").addEventListener("click", () => pushAction(async () => {
+  const mine = pushView.info.devices.find((d) => d.endpoint === pushView.subscription?.endpoint);
+  if (mine) await api("DELETE", `/api/push/subscriptions/${mine.id}`);
+  await pushView.subscription?.unsubscribe();
+  flash("Notifications désactivées sur cet appareil.");
+}));
+
+$("#push-test").addEventListener("click", () => pushAction(async () => {
+  const { status } = await api("POST", "/api/push/test");
+  if (status !== 202) throw new Error("Essai impossible.");
+  flash("Essai envoyé : la notification arrive dans quelques secondes.");
+}));
+
+for (const box of document.querySelectorAll("#push-categories input")) {
+  box.addEventListener("change", () => {
+    let categories = 0;
+    for (const input of document.querySelectorAll("#push-categories input")) {
+      if (input.checked) categories |= Number(input.dataset.bit);
+    }
+    pushAction(async () => {
+      const mine = pushView.info.devices.find((d) => d.endpoint === pushView.subscription?.endpoint);
+      if (mine) await api("PATCH", `/api/push/subscriptions/${mine.id}`, { categories });
+    });
+  });
+}
+
+/** Toucher une notification « ordre à valider » ouvre la cloche. */
+function openFromNotification(url) {
+  if (typeof url === "string" && url.endsWith("#notifications") && !$("#dashboard-view").hidden) {
+    $("#notices").showModal();
+    renderNotices();
+  }
+}
+navigator.serviceWorker?.addEventListener("message", (event) => {
+  if (event.data?.type === "open") openFromNotification(event.data.url);
+});
 
 // ---------------------------------------------------------------- Intégrations
 // Dans « Mon compte » : Hue, Somfy, MQTT… connectées, ou en panne, et quand
@@ -4098,6 +4274,11 @@ function showDashboard() {
   live.open();
   loadAccount().catch(() => {});
   loadAreas().catch(() => {});
+  // Ouvert depuis une notification : la cloche directement.
+  if (location.hash === "#notifications") {
+    history.replaceState(null, "", "/");
+    openFromNotification("/#notifications");
+  }
 }
 
 // Rafraîchit les « il y a … » chaque minute.

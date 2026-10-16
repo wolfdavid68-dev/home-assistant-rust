@@ -13,6 +13,7 @@ ha-auth = { path = "../ha-auth" }
 ha-automation = { path = "../ha-automation" }
 ha-energy = { path = "../ha-energy" }
 ha-core = { path = "../ha-core" }
+ha-push = { path = "../ha-push" }
 jiff.workspace = true
 ha-storage = { path = "../ha-storage" }
 serde.workspace = true

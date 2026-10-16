@@ -57,6 +57,7 @@ Un noyau domotique en Rust, inspiré de Home Assistant.
 - [Étape 47 : la performance, mesurée, expliquée](docs/performance.md)
 - [Étape 48 : pièces protégées et heures calmes, expliquées](docs/garde.md)
 - [Étape 49 : l'écran de veille de la tablette murale, expliqué](docs/veille.md)
+- [Étape 50 : les notifications du navigateur, expliquées](docs/notifications-navigateur.md)
 - [Étape 5 : les automatisations, expliqué](docs/etape-5-automatisations.md)
 - [Modernisation du code, expliquée](docs/modernisation.md)
 - [Étape 6 : l'interface web, expliquée](docs/etape-6-interface-web.md)

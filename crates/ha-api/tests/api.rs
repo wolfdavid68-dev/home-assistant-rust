@@ -194,6 +194,11 @@ async fn every_route_requires_a_token() {
         ("PUT", "/api/home/images/jour"),
         ("DELETE", "/api/home/images/jour"),
         ("GET", "/api/approvals"),
+        ("GET", "/api/push"),
+        ("POST", "/api/push/subscriptions"),
+        ("PATCH", "/api/push/subscriptions/1"),
+        ("DELETE", "/api/push/subscriptions/1"),
+        ("POST", "/api/push/test"),
         ("POST", "/api/approvals/1"),
     ] {
         let (status, _) = app.request(method, uri, None, None).await;
@@ -606,6 +611,10 @@ async fn dashboard_files_are_served_with_security_headers() {
         ("/fonts/geist.woff2", "font/woff2"),
         ("/fonts/geist-mono.woff2", "font/woff2"),
         ("/fonts/bricolage-grotesque.woff2", "font/woff2"),
+        ("/sw.js", "text/javascript; charset=utf-8"),
+        ("/icon-192.png", "image/png"),
+        ("/icon-512.png", "image/png"),
+        ("/apple-touch-icon.png", "image/png"),
     ] {
         let response = app
             .router()
@@ -624,6 +633,14 @@ async fn dashboard_files_are_served_with_security_headers() {
         );
         assert_eq!(headers[header::X_CONTENT_TYPE_OPTIONS], "nosniff");
         assert_eq!(headers[header::X_FRAME_OPTIONS], "DENY");
+        // Le service worker des notifications, et rien d'autre.
+        assert!(
+            headers[header::CONTENT_SECURITY_POLICY]
+                .to_str()
+                .unwrap()
+                .contains("worker-src 'self';"),
+            "{uri}"
+        );
     }
 }
 
@@ -1565,6 +1582,205 @@ async fn a_guest_order_in_a_protected_room_waits_for_the_family() {
             ("visiteur", "held"),
         ]
     );
+}
+
+/// Un abonnement comme celui d'un navigateur (clés de l'exemple de la RFC 8291).
+fn browser_subscription(endpoint: &str) -> Value {
+    json!({
+        "endpoint": endpoint,
+        "expirationTime": null,
+        "keys": {
+            "p256dh": "BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4",
+            "auth": "BTBZMqHH6r4Tts7J_aSIgg",
+        },
+        "name": "Pixel de David",
+    })
+}
+
+#[tokio::test]
+async fn phones_subscribe_to_notifications() {
+    let app = TestApp::new().await;
+    let guest = app.login_as("visiteur", ha_auth::Role::Guest).await;
+    let alice = app.login_as("alice", ha_auth::Role::Family).await;
+    let david = app.login().await;
+    let fcm = "https://fcm.googleapis.com/fcm/send/abc:def";
+
+    // Un invité ne reçoit pas de notifications.
+    for (method, uri) in [("GET", "/api/push"), ("POST", "/api/push/test")] {
+        let (status, _) = app.request(method, uri, Some(&guest), None).await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{uri}");
+    }
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/push/subscriptions",
+            Some(&guest),
+            Some(browser_subscription(fcm)),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    // Le service n'est pas démarré : pas de clé.
+    let (_, body) = app.request("GET", "/api/push", Some(&david), None).await;
+    assert_eq!(body["available"], false);
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/push/subscriptions",
+            Some(&david),
+            Some(browser_subscription(fcm)),
+        )
+        .await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+
+    let vapid = ha_push::load_or_create_vapid(&app.state.store)
+        .await
+        .unwrap();
+    let (_, body) = app.request("GET", "/api/push", Some(&david), None).await;
+    assert_eq!(body["available"], true);
+    assert_eq!(body["public_key"], vapid.public_key());
+    assert_eq!(body["devices"], json!([]));
+
+    let (status, body) = app
+        .request(
+            "POST",
+            "/api/push/subscriptions",
+            Some(&david),
+            Some(browser_subscription(fcm)),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+    let id = body["id"].as_i64().unwrap();
+    let (_, body) = app.request("GET", "/api/push", Some(&david), None).await;
+    let device = &body["devices"][0];
+    assert_eq!(device["name"], "Pixel de David");
+    assert_eq!(device["endpoint"], fcm);
+    assert_eq!(device["categories"], 7);
+    assert!(
+        device.get("auth").is_none() && device.get("p256dh").is_none(),
+        "jamais les clés"
+    );
+
+    // Une adresse qui n'est pas un service de notifications est refusée :
+    // le serveur ne doit pas appeler une adresse choisie par la page.
+    for endpoint in [
+        "http://fcm.googleapis.com/fcm/send/x",
+        "https://192.168.1.1/admin",
+        "https://exemple.fr/push",
+    ] {
+        let (status, _) = app
+            .request(
+                "POST",
+                "/api/push/subscriptions",
+                Some(&david),
+                Some(browser_subscription(endpoint)),
+            )
+            .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{endpoint}");
+    }
+    let mut bad_keys = browser_subscription("https://fcm.googleapis.com/fcm/send/y");
+    bad_keys["keys"]["auth"] = json!("court");
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/push/subscriptions",
+            Some(&david),
+            Some(bad_keys),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    // Ce qu'il reçoit ; personne d'autre ne touche à ses appareils.
+    let uri = format!("/api/push/subscriptions/{id}");
+    let (status, _) = app
+        .request("PATCH", &uri, Some(&alice), Some(json!({"categories": 1})))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _) = app
+        .request("PATCH", &uri, Some(&david), Some(json!({"categories": 9})))
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let (status, body) = app
+        .request("PATCH", &uri, Some(&david), Some(json!({"categories": 1})))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let (status, _) = app.request("DELETE", &uri, Some(&alice), None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // Un essai : vers ses propres appareils seulement.
+    let mut events = app.state.core.bus.subscribe();
+    let (status, _) = app
+        .request("POST", "/api/push/test", Some(&david), None)
+        .await;
+    assert_eq!(status, StatusCode::ACCEPTED);
+    let event = events.recv().await.unwrap();
+    let ha_core::Event::CallService {
+        entity_id,
+        data,
+        origin,
+        ..
+    } = event.as_ref()
+    else {
+        panic!("un appel de service est attendu");
+    };
+    assert_eq!(entity_id.as_str(), "notify.appli");
+    assert_eq!(data["test"], true);
+    assert_eq!(*origin, ha_core::Origin::User("david".into()));
+
+    // Dix appareils au plus par compte.
+    for n in 0..9 {
+        let endpoint = format!("https://updates.push.services.mozilla.com/wpush/v2/{n}");
+        let (status, _) = app
+            .request(
+                "POST",
+                "/api/push/subscriptions",
+                Some(&alice),
+                Some(browser_subscription(&endpoint)),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED);
+    }
+    let last = "https://web.push.apple.com/dixieme";
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/push/subscriptions",
+            Some(&alice),
+            Some(browser_subscription(last)),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, body) = app
+        .request(
+            "POST",
+            "/api/push/subscriptions",
+            Some(&alice),
+            Some(browser_subscription("https://web.push.apple.com/onze")),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+    // Le même navigateur qui se réabonne ne compte pas deux fois.
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/push/subscriptions",
+            Some(&alice),
+            Some(browser_subscription(last)),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+
+    let (status, _) = app.request("DELETE", &uri, Some(&david), None).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, _) = app.request("DELETE", &uri, Some(&david), None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let journal = app.state.store.audit_log(50).await.unwrap();
+    assert!(
+        journal
+            .iter()
+            .any(|e| e.action == "push_subscribe" && e.actor == "david")
+    );
+    assert!(journal.iter().any(|e| e.action == "push_unsubscribe"));
 }
 
 #[tokio::test]

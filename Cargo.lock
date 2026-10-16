@@ -838,6 +838,7 @@ dependencies = [
  "ha-automation",
  "ha-core",
  "ha-energy",
+ "ha-push",
  "ha-storage",
  "jiff",
  "serde",
@@ -1062,6 +1063,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "ha-push"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "ha-core",
+ "ha-notices",
+ "ha-storage",
+ "ha-tls",
+ "jiff",
+ "reqwest",
+ "ring",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "url",
+ "zeroize",
+]
+
+[[package]]
 name = "ha-server"
 version = "0.1.0"
 dependencies = [
@@ -1082,6 +1103,7 @@ dependencies = [
  "ha-notices",
  "ha-notify",
  "ha-person",
+ "ha-push",
  "ha-somfy",
  "ha-storage",
  "ha-sun",

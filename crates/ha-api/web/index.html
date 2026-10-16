@@ -9,6 +9,9 @@
   <title>Maison</title>
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Maison">
   <link rel="stylesheet" href="/style.css">
   <!-- Tout le code est dans app.js : la politique de sécurité (CSP) interdit
        le JavaScript écrit directement dans la page. -->
@@ -126,6 +129,23 @@
         <label class="check"><input id="saver-mode" type="checkbox" checked> Écran de veille après 5 minutes</label>
         <p class="account">L'heure, la météo et la maison en grand, plus sombre la nuit. Un contact pour revenir.</p>
       </div>
+      <!-- Les notifications du navigateur (étape 50) : famille et administrateur. -->
+      <section id="push" class="push-option" aria-labelledby="push-title" hidden>
+        <h3 id="push-title">Notifications sur cet appareil</h3>
+        <p id="push-status" class="account" role="status"></p>
+        <div class="push-actions">
+          <button id="push-enable" class="primary small" type="button" hidden>Activer</button>
+          <button id="push-test" class="ghost small" type="button" hidden>Envoyer un essai</button>
+          <button id="push-disable" class="ghost small" type="button" hidden>Désactiver</button>
+        </div>
+        <fieldset id="push-categories" class="push-categories" hidden>
+          <legend>Recevoir sur cet appareil</legend>
+          <label class="check"><input type="checkbox" data-bit="1"> Les ordres à valider</label>
+          <label class="check"><input type="checkbox" data-bit="2"> Les alertes du serveur</label>
+          <label class="check"><input type="checkbox" data-bit="4"> Les messages des automatisations</label>
+        </fieldset>
+        <ul id="push-devices" class="push-devices" aria-label="Mes autres appareils"></ul>
+      </section>
       <!-- La santé des intégrations (étape 45) : réservée à ceux qui voient tout. -->
       <section id="integrations" class="integrations" aria-labelledby="integrations-title" hidden>
         <h3 id="integrations-title">Intégrations</h3>

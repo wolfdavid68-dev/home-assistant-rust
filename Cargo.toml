@@ -24,6 +24,10 @@ zeroize = "1.9.1"
 # XChaCha20-Poly1305, en Rust pur (RustCrypto). L'aléatoire vient de `getrandom`.
 chacha20poly1305 = { version = "0.11.0", default-features = false, features = ["alloc", "zeroize"] }
 rpassword = "7.5.4"
+# Notifications du navigateur (Web Push, RFC 8291 et 8292) : ECDH et ECDSA
+# P-256, HKDF, AES-128-GCM. `ring` est déjà là pour le HTTPS (rustls).
+ring = { version = "0.17.14", default-features = false, features = ["alloc"] }
+base64 = "0.22.1"
 # Serveur web : HTTP/1 et WebSocket uniquement.
 axum = { version = "0.8.9", default-features = false, features = ["http1", "json", "query", "tokio", "tracing", "ws"] }
 tower-http = { version = "0.7.1", features = ["set-header", "timeout"] }

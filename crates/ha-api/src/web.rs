@@ -17,6 +17,11 @@ const STYLE_CSS: &str = include_str!("../web/style.css");
 const ICON_SVG: &str = include_str!("../web/icon.svg");
 const HOUSE_SVG: &str = include_str!("../web/house.svg");
 const MANIFEST: &str = include_str!("../web/manifest.webmanifest");
+const SERVICE_WORKER: &str = include_str!("../web/sw.js");
+// Les icônes de l'appli installée (Android et iPhone ne prennent pas le SVG).
+const ICON_192: &[u8] = include_bytes!("../web/icon-192.png");
+const ICON_512: &[u8] = include_bytes!("../web/icon-512.png");
+const APPLE_TOUCH_ICON: &[u8] = include_bytes!("../web/apple-touch-icon.png");
 // Polices (licence SIL Open Font License, voir `web/fonts/OFL-*.txt`) :
 // intégrées elles aussi, pour ne rien charger depuis Internet.
 const FONT_GEIST: &[u8] = include_bytes!("../web/fonts/geist.woff2");
@@ -31,8 +36,11 @@ const FONT_BRICOLAGE: &[u8] = include_bytes!("../web/fonts/bricolage-grotesque.w
 /// `blob:` dans `img-src` : le dessin de la maison est lu avec le jeton
 /// (une balise `<img>` ne sait pas l'envoyer), puis affiché depuis la mémoire
 /// de la page. Une image ne peut pas exécuter de script.
+///
+/// `worker-src 'self'` : le service worker des notifications (`/sw.js`).
 pub const CONTENT_SECURITY_POLICY: &str = "default-src 'none'; script-src 'self'; style-src 'self'; \
      img-src 'self' blob:; font-src 'self'; connect-src 'self'; manifest-src 'self'; \
+     worker-src 'self'; \
      base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 
 fn file(content_type: &'static str, body: &'static str) -> impl IntoResponse {
@@ -78,6 +86,38 @@ pub(crate) async fn house_svg() -> impl IntoResponse {
 
 pub(crate) async fn manifest() -> impl IntoResponse {
     file("application/manifest+json", MANIFEST)
+}
+
+/// Le service worker des notifications. Toujours revalidé : le navigateur
+/// prend la nouvelle version à la mise à jour du serveur.
+pub(crate) async fn service_worker() -> impl IntoResponse {
+    file("text/javascript; charset=utf-8", SERVICE_WORKER)
+}
+
+/// Une image PNG fixe (les icônes de l'appli).
+fn png(body: &'static [u8]) -> impl IntoResponse {
+    (
+        [
+            (header::CONTENT_TYPE, HeaderValue::from_static("image/png")),
+            (
+                header::CACHE_CONTROL,
+                HeaderValue::from_static("public, max-age=604800"),
+            ),
+        ],
+        body,
+    )
+}
+
+pub(crate) async fn icon_192() -> impl IntoResponse {
+    png(ICON_192)
+}
+
+pub(crate) async fn icon_512() -> impl IntoResponse {
+    png(ICON_512)
+}
+
+pub(crate) async fn apple_touch_icon() -> impl IntoResponse {
+    png(APPLE_TOUCH_ICON)
 }
 
 /// Une police : elle ne change qu'avec une nouvelle version du serveur, le

@@ -77,6 +77,9 @@
 //!   `scripts.yaml` et `scenes.yaml`) ;
 //! - `HA_NTFY_URL`, `HA_NTFY_TOPIC`, `HA_NTFY_TOKEN_FILE` : notifications sur
 //!   le téléphone avec ntfy (entité `notify.telephone`) ;
+//! - `HA_PUSH` : `off` pour couper les notifications du navigateur (Web Push,
+//!   actives par défaut) ; `HA_PUSH_CONTACT` : contact donné aux services de
+//!   notifications (`mailto:toi@exemple.fr`) ;
 //! - `HA_AREAS_PATH` : fichier des pièces (par défaut `areas.yaml`) ;
 //! - `HA_AUTOMATIONS_PATH` : fichier d'automatisations (par défaut `automations.yaml`) ;
 //! - `HA_ALEXA_IP` : adresse de cette machine sur le réseau local, pour
@@ -381,6 +384,22 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     // Les notifications du tableau de bord et les alertes de réparation,
     // avant les automatisations (qui peuvent en créer).
     let notices = ha_notices::Notices::start(Arc::clone(&core));
+    // Les notifications du navigateur (Web Push), juste après : un ordre
+    // retenu par la garde doit arriver sur le téléphone.
+    let push = if std::env::var("HA_PUSH").is_ok_and(|value| value == "off") {
+        info!("notifications du navigateur désactivées (HA_PUSH=off)");
+        None
+    } else {
+        let contact = std::env::var("HA_PUSH_CONTACT")
+            .unwrap_or_else(|_| ha_push::DEFAULT_CONTACT.to_owned());
+        match ha_push::Push::start(store.clone(), Arc::clone(&core), contact).await {
+            Ok(push) => Some(push),
+            Err(error) => {
+                warn!("notifications du navigateur : démarrage impossible ({error})");
+                None
+            }
+        }
+    };
 
     // Les entrées sont créées AVANT les automatisations (leur création n'est
     // pas un changement qui déclenche), et démarrées APRÈS (un minuteur qui a
@@ -543,6 +562,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     }
     engine.stop().await;
     notices.stop().await;
+    if let Some(push) = push {
+        push.stop().await;
+    }
     logbook.stop().await;
     statistics.stop().await;
     if let Some(teleinfo) = teleinfo {

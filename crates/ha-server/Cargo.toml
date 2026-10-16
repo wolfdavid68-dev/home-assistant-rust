@@ -17,6 +17,7 @@ ha-freebox = { path = "../ha-freebox" }
 ha-hue = { path = "../ha-hue" }
 ha-mqtt = { path = "../ha-mqtt" }
 ha-notify = { path = "../ha-notify" }
+ha-push = { path = "../ha-push" }
 ha-person = { path = "../ha-person" }
 ha-agenda = { path = "../ha-agenda" }
 ha-derived = { path = "../ha-derived" }

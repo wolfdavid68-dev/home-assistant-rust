@@ -21,6 +21,10 @@
 //! | PUT | `/api/automations/{id}/layout` | Place des blocs dans le schéma |
 //! | GET / PUT | `/api/home/drawing` | Dessin de la maison (style « plan ») : assemblage |
 //! | GET / PUT / DELETE | `/api/home/images/{name}` | Ses images (fond, calques) |
+//! | GET | `/api/push` | Notifications du navigateur : clé et appareils du compte |
+//! | POST | `/api/push/subscriptions` | Abonne ce navigateur aux notifications |
+//! | PATCH / DELETE | `/api/push/subscriptions/{id}` | Change ce qu'il reçoit / le retire |
+//! | POST | `/api/push/test` | Envoie un essai à ses appareils |
 //! | GET | `/api/websocket` | API WebSocket (authentification dans le 1er message) |
 //! | GET | `/` | Tableau de bord web (page publique ; les données demandent un jeton) |
 
@@ -29,6 +33,7 @@ mod automations;
 mod drawing;
 mod error;
 mod json;
+mod push;
 mod rest;
 mod roles;
 mod system;
@@ -150,6 +155,13 @@ pub fn router(state: Arc<ApiState>) -> Router {
         .route("/api/approvals", get(rest::approvals))
         .route("/api/approvals/{id}", post(rest::answer_approval))
         .route("/api/system", get(system::system))
+        .route("/api/push", get(push::overview))
+        .route("/api/push/subscriptions", post(push::subscribe))
+        .route(
+            "/api/push/subscriptions/{id}",
+            axum::routing::patch(push::update).delete(push::remove),
+        )
+        .route("/api/push/test", post(push::test))
         .route("/api/home/drawing", get(drawing::get).put(drawing::put))
         .route(
             "/api/home/images/{name}",
@@ -174,6 +186,10 @@ pub fn router(state: Arc<ApiState>) -> Router {
         .route("/fonts/geist-mono.woff2", get(web::font_geist_mono))
         .route("/fonts/bricolage-grotesque.woff2", get(web::font_bricolage))
         .route("/manifest.webmanifest", get(web::manifest))
+        .route("/sw.js", get(web::service_worker))
+        .route("/icon-192.png", get(web::icon_192))
+        .route("/icon-512.png", get(web::icon_512))
+        .route("/apple-touch-icon.png", get(web::apple_touch_icon))
         .layer(DefaultBodyLimit::max(MAX_BODY_SIZE))
         // En-têtes de sécurité sur toutes les réponses.
         .layer(SetResponseHeaderLayer::overriding(

@@ -757,7 +757,10 @@ input[type="range"]::-moz-range-track { background: transparent; }
 #history-logbook { margin-top: 0.75rem; }
 
 .account-dialog { width: min(420px, calc(100vw - 2rem)); gap: 1rem; }
-.account-dialog[open] { display: grid; }
+.account-dialog[open] { display: grid; grid-template-columns: minmax(0, 1fr); }
+/* Un long libellé (« Maquette (fond sombre…) ») ne doit pas élargir la
+   fenêtre au-delà de l'écran du téléphone. */
+.account-dialog select { max-width: 100%; min-width: 0; }
 .account { margin: 0; color: var(--muted); }
 .tablet-option { display: grid; gap: 0.35rem; padding: 0.8rem 0; border-block: 1px solid var(--line); }
 .tablet-option .account { font-size: 0.85rem; }
@@ -2463,6 +2466,20 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 
 /* ---------- La santé des intégrations (étape 45), dans « Mon compte ». */
 .integrations { display: grid; gap: 0.5rem; margin: 0.4rem 0 1rem; }
+/* Notifications du navigateur (étape 50) */
+.push-option { display: grid; gap: 0.5rem; padding: 0.8rem 0; border-bottom: 1px solid var(--line); }
+.push-option h3 { margin: 0; font-size: 1rem; }
+.push-option .account { font-size: 0.85rem; }
+.push-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.push-actions:not(:has(button:not([hidden]))) { display: none; }
+.push-categories { display: grid; gap: 0.35rem; margin: 0; padding: 0.6rem 0.75rem; border: 1px solid var(--line); border-radius: 12px; }
+.push-categories legend { padding: 0 0.3rem; font-size: 0.82rem; color: var(--muted); }
+.push-devices { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.4rem; }
+.push-devices:empty { display: none; }
+.push-device { display: flex; align-items: center; justify-content: space-between; gap: 0.7rem; padding: 0.5rem 0.75rem; border-radius: 12px; background: var(--card-2); }
+.push-device span { display: grid; min-width: 0; }
+.push-device strong { overflow-wrap: anywhere; }
+.push-device small { color: var(--muted); }
 .integrations h3 { margin: 0; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
 .integration-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.4rem; }
 .integration { display: flex; align-items: center; gap: 0.7rem; padding: 0.55rem 0.75rem; border-radius: 12px; background: var(--card-2); }

@@ -2,6 +2,9 @@
 
 ![La tuile Téléphone et son bouton de test](images/notifications.png)
 
+> Depuis l'étape 50, le tableau de bord sait aussi prévenir le téléphone lui-même, sans appli à
+> installer : voir [les notifications du navigateur](notifications-navigateur.md).
+
 ## Le but
 
 Être **prévenu** quand quelque chose d'important arrive : fumée, intrusion, appareil inconnu

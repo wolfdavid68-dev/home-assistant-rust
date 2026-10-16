@@ -50,6 +50,9 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
   jamais de vérification TLS désactivée.
 - Notifications (ntfy) : HTTPS obligatoire hors réseau local, aucune redirection suivie, jeton lu dans un
   fichier et jamais journalisé, contenu jamais journalisé, au plus 10 notifications en 10 minutes.
+- Notifications du navigateur (Web Push) : envoi uniquement aux services de notifications des
+  navigateurs (liste fermée, HTTPS, port standard, sans redirection), contenu chiffré de bout en bout
+  (RFC 8291), clé VAPID et secrets des appareils chiffrés dans la base ; famille et administrateur seulement.
 - Alexa (faux pont Hue, sans authentification possible) : désactivée par défaut ; seuls les appareils listés
   dans `alexa.yaml` sont exposés, jamais serrure, alarme, portail ni porte de garage ; seules les adresses
   autorisées (les Echo, ou à défaut le réseau local) sont servies ; serveur séparé de l'API ; chaque ordre est
