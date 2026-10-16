@@ -163,5 +163,53 @@ async fn groups_averages_thresholds_and_meters() {
 #[test]
 fn the_example_file_is_understood() {
     let derived = parse(include_str!("../../../derived.example.yaml")).unwrap();
-    assert_eq!(derived.len(), 9);
+    assert_eq!(derived.len(), 11);
+}
+
+#[tokio::test]
+async fn an_integral_and_a_derivative() {
+    let core = Arc::new(Core::new());
+    // 3 600 000 W pendant une seconde font 1 kWh : le test reste court.
+    set(
+        &core,
+        "sensor.puissance",
+        "3600000",
+        &json!({"unit_of_measurement": "W", "device_class": "power"}),
+    );
+    set(
+        &core,
+        "sensor.chambre",
+        "20",
+        &json!({"unit_of_measurement": "°C"}),
+    );
+    let yaml = "integration:\n  energie: {source: sensor.puissance, unit_prefix: k, round: 0}\n\
+        derivative:\n  variation: {source: sensor.chambre, unit_time: s, time_window: \"00:01:00\", round: 0}\n";
+    let assistants = Assistants::start(parse(yaml).unwrap(), Arc::clone(&core));
+    wait_for(&core, "sensor.energie", "0").await;
+    let energy = core.states.get(&"sensor.energie".parse().unwrap()).unwrap();
+    assert_eq!(energy.attributes()["unit_of_measurement"], "kWh");
+    assert_eq!(energy.attributes()["device_class"], "energy");
+    tokio::time::sleep(Duration::from_millis(1100)).await;
+    // La puissance tombe : la seconde passée à 3,6 MW est comptée.
+    set(
+        &core,
+        "sensor.puissance",
+        "0",
+        &json!({"unit_of_measurement": "W", "device_class": "power"}),
+    );
+    wait_for(&core, "sensor.energie", "1").await;
+    // +1 °C en un peu plus d'une seconde : environ 1 °C/s.
+    set(
+        &core,
+        "sensor.chambre",
+        "21",
+        &json!({"unit_of_measurement": "°C"}),
+    );
+    wait_for(&core, "sensor.variation", "1").await;
+    let slope = core
+        .states
+        .get(&"sensor.variation".parse().unwrap())
+        .unwrap();
+    assert_eq!(slope.attributes()["unit_of_measurement"], "°C/s");
+    assistants.stop().await;
 }

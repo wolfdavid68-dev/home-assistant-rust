@@ -15,6 +15,10 @@
 //!   electricite_du_jour: {source: sensor.compteur, cycle: daily}
 //! history_stats:
 //!   chauffage_du_jour: {entity_id: switch.radiateur, state: "on", type: time, cycle: daily}
+//! integration:
+//!   lave_linge_energie: {source: sensor.lave_linge_puissance, unit_prefix: k}
+//! derivative:
+//!   chambre_variation: {source: sensor.temperature_chambre, time_window: "00:10:00"}
 //! ```
 //!
 //! Sécurité : le fichier est écrit par toi, mais on le vérifie comme s'il
@@ -23,10 +27,13 @@
 
 use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
+use std::time::Duration;
 
 use ha_core::EntityId;
 use jiff::civil::{Time, Weekday};
 use serde::Deserialize;
+
+pub use crate::compute::Method;
 
 const MAX_FILE_SIZE: u64 = 256 * 1024;
 const MAX_PER_KIND: usize = 50;
@@ -63,6 +70,43 @@ struct FileConfig {
     utility_meter: Option<BTreeMap<String, MeterConfig>>,
     #[serde(default)]
     history_stats: Option<BTreeMap<String, HistoryStatsConfig>>,
+    #[serde(default)]
+    integration: Option<BTreeMap<String, IntegrationConfig>>,
+    #[serde(default)]
+    derivative: Option<BTreeMap<String, DerivativeConfig>>,
+}
+
+/// L'intégrale d'une puissance (étape 65), comme `integration` dans Home
+/// Assistant.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct IntegrationConfig {
+    #[serde(default)]
+    name: Option<String>,
+    source: String,
+    #[serde(default)]
+    method: Option<String>,
+    #[serde(default)]
+    unit_prefix: Option<String>,
+    #[serde(default)]
+    unit_time: Option<String>,
+    #[serde(default)]
+    round: Option<u8>,
+}
+
+/// La dérivée (vitesse de variation) d'un capteur (étape 65).
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DerivativeConfig {
+    #[serde(default)]
+    name: Option<String>,
+    source: String,
+    #[serde(default)]
+    unit_time: Option<String>,
+    #[serde(default)]
+    time_window: Option<String>,
+    #[serde(default)]
+    round: Option<u8>,
 }
 
 #[derive(Deserialize)]
@@ -243,6 +287,53 @@ pub enum Kind {
         measure: Measure,
         cycle: Cycle,
     },
+    /// L'intégrale d'une source (une puissance devient une énergie), étape 65.
+    Integration {
+        source: EntityId,
+        method: Method,
+        /// « k » (÷ 1 000), « M » (÷ 1 000 000), ou rien.
+        prefix: &'static str,
+        unit_time: TimeUnit,
+        round_digits: u8,
+    },
+    /// La vitesse de variation d'une source, sur une fenêtre de temps.
+    Derivative {
+        source: EntityId,
+        unit_time: TimeUnit,
+        window: Duration,
+        round_digits: u8,
+    },
+}
+
+/// L'unité de temps d'une intégrale ou d'une dérivée.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TimeUnit {
+    Second,
+    Minute,
+    Hour,
+    Day,
+}
+
+impl TimeUnit {
+    #[must_use]
+    pub fn seconds(self) -> f64 {
+        match self {
+            Self::Second => 1.0,
+            Self::Minute => 60.0,
+            Self::Hour => 3600.0,
+            Self::Day => 86_400.0,
+        }
+    }
+
+    #[must_use]
+    pub fn symbol(self) -> &'static str {
+        match self {
+            Self::Second => "s",
+            Self::Minute => "min",
+            Self::Hour => "h",
+            Self::Day => "d",
+        }
+    }
 }
 
 /// Ce que mesure une statistique d'historique.
@@ -273,7 +364,9 @@ impl Derived {
             Kind::MinMax { sources, .. } => sources.iter().collect(),
             Kind::Threshold { source, .. }
             | Kind::Meter { source, .. }
-            | Kind::HistoryStats { source, .. } => vec![source],
+            | Kind::HistoryStats { source, .. }
+            | Kind::Integration { source, .. }
+            | Kind::Derivative { source, .. } => vec![source],
             Kind::Schedule { .. } => Vec::new(),
         }
     }
@@ -458,6 +551,55 @@ pub fn parse(yaml: &str) -> Result<Vec<Derived>, DerivedError> {
         all.push(derived("sensor", &id, config.name, kind)?);
     }
 
+    for (id, config) in section("integration", file.integration)? {
+        let place = format!("integration.{id}");
+        let method = match config.method.as_deref() {
+            None | Some("left") => Method::Left,
+            Some("trapezoidal") => Method::Trapezoidal,
+            Some(_) => return Err(invalid(&place, "method : left ou trapezoidal")),
+        };
+        let prefix = match config.unit_prefix.as_deref() {
+            None => "",
+            Some("k") => "k",
+            Some("M") => "M",
+            Some(_) => return Err(invalid(&place, "unit_prefix : k ou M")),
+        };
+        let kind = Kind::Integration {
+            source: entity(&place, &config.source)?,
+            method,
+            prefix,
+            unit_time: unit_time(&place, config.unit_time.as_deref())?,
+            round_digits: round_digits(&place, config.round, 3)?,
+        };
+        all.push(derived("sensor", &id, config.name, kind)?);
+    }
+
+    for (id, config) in section("derivative", file.derivative)? {
+        let place = format!("derivative.{id}");
+        let window = match config.time_window.as_deref() {
+            None => Duration::from_mins(10),
+            Some(text) => time(text)
+                .map(|t| {
+                    Duration::from_secs(
+                        u64::try_from(t.hour()).unwrap_or(0) * 3600
+                            + u64::try_from(t.minute()).unwrap_or(0) * 60
+                            + u64::try_from(t.second()).unwrap_or(0),
+                    )
+                })
+                .filter(|window| *window >= Duration::from_mins(1))
+                .ok_or_else(|| {
+                    invalid(&place, "time_window : de 00:01:00 à 23:59:59 (HH:MM:SS)")
+                })?,
+        };
+        let kind = Kind::Derivative {
+            source: entity(&place, &config.source)?,
+            unit_time: unit_time(&place, config.unit_time.as_deref())?,
+            window,
+            round_digits: round_digits(&place, config.round, 2)?,
+        };
+        all.push(derived("sensor", &id, config.name, kind)?);
+    }
+
     // Deux assistants ne peuvent pas porter le même identifiant, ni se
     // calculer l'un à partir de l'autre (pas de boucle).
     let mut seen = HashSet::new();
@@ -494,6 +636,24 @@ fn cycle(place: &str, text: &str) -> Result<Cycle, DerivedError> {
             ));
         }
     })
+}
+
+fn unit_time(place: &str, text: Option<&str>) -> Result<TimeUnit, DerivedError> {
+    Ok(match text {
+        None | Some("h") => TimeUnit::Hour,
+        Some("s") => TimeUnit::Second,
+        Some("min") => TimeUnit::Minute,
+        Some("d") => TimeUnit::Day,
+        Some(_) => return Err(invalid(place, "unit_time : s, min, h ou d")),
+    })
+}
+
+fn round_digits(place: &str, value: Option<u8>, default: u8) -> Result<u8, DerivedError> {
+    let digits = value.unwrap_or(default);
+    if digits > 6 {
+        return Err(invalid(place, "round : 6 décimales au plus"));
+    }
+    Ok(digits)
 }
 
 fn section<T>(
@@ -677,6 +837,12 @@ mod tests {
             "threshold:\n  a: {entity_id: sensor.a}",
             "threshold:\n  a: {entity_id: sensor.a, lower: 5, upper: 3}",
             "threshold:\n  a: {entity_id: sensor.a, upper: 3, hysteresis: -1}",
+            "integration:\n  a: {source: sensor.a, method: simpson}",
+            "integration:\n  a: {source: sensor.a, unit_prefix: G}",
+            "integration:\n  a: {source: sensor.a, unit_time: semaine}",
+            "integration:\n  a: {source: sensor.a, round: 9}",
+            "derivative:\n  a: {source: sensor.a, time_window: \"00:00:30\"}",
+            "derivative:\n  a: {source: sensor.a, time_window: dix minutes}",
             "utility_meter:\n  a: {source: sensor.a, cycle: daily}\n  b: {source: sensor.a, cycle: chaque_jour}",
             // Un assistant calculé à partir d'un autre.
             "min_max:\n  a: {entities: [sensor.b]}\nutility_meter:\n  b: {source: sensor.c, cycle: daily}",

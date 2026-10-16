@@ -72,6 +72,7 @@ Un noyau domotique en Rust, inspiré de Home Assistant.
 - [Étape 62 : le délestage, expliqué](docs/delestage.md)
 - [Étape 63 : la rapidité des appareils, mesurée de bout en bout, expliqué](docs/rapidite.md)
 - [Étape 64 : des modèles qui calculent, la condition template et les capteurs modèles, expliqué](docs/calculs.md)
+- [Étape 65 : l'intégrale et la dérivée, expliquées](docs/assistants.md#lintégrale-et-la-dérivée-étape-65)
 - [Étape 5 : les automatisations, expliqué](docs/etape-5-automatisations.md)
 - [Modernisation du code, expliquée](docs/modernisation.md)
 - [Étape 6 : l'interface web, expliquée](docs/etape-6-interface-web.md)

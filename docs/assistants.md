@@ -154,6 +154,79 @@ history_stats:
 Dans une automatisation : « si le chauffage a déjà tourné 6 heures aujourd'hui, baisse la
 consigne » (`numeric_state` sur `sensor.chauffage_du_jour`, `above: 6`).
 
+## L'intégrale et la dérivée (étape 65)
+
+Deux assistants de Home Assistant (`integration` et `derivative`) qui travaillent sur le temps.
+
+### L'intégrale : une puissance devient une énergie
+
+Une prise qui ne donne que sa **puissance** (en W) ne dit pas combien elle a consommé. Son
+intégrale, si : 1 000 W pendant une demi-heure font 0,5 kWh.
+
+```yaml
+integration:
+  lave_linge_energie:
+    name: Lave-linge, énergie
+    source: sensor.prise_lave_linge_puissance
+    unit_prefix: k          # k : kWh (÷ 1 000) ; M : MWh ; sans : Wh
+    unit_time: h            # s, min, h (par défaut) ou d
+    method: left            # left (par défaut) ou trapezoidal
+    round: 3
+```
+
+- **L'unité :** elle se compose toute seule, à partir de celle de la source (W donne kWh).
+  Une source de classe `power` donne un capteur de classe `energy`.
+- **Le bilan énergétique :** mets `sensor.lave_linge_energie` dans `energy.yaml`, avec un prix, pour
+  avoir les euros dans le bilan (étape 32).
+- **`left`, le calcul par défaut :** la puissance est comptée telle qu'elle a été mesurée, jusqu'à
+  la mesure suivante. C'est exact pour nos capteurs, qui ne publient qu'au changement.
+  `trapezoidal` prend la moyenne de deux mesures, comme Home Assistant par défaut : c'est mieux
+  pour une source qui varie en continu et qui est lue à intervalle régulier.
+- **Une puissance stable** compte quand même : le total avance **chaque minute**, même sans
+  nouvelle mesure.
+- **La source indisponible :** rien n'est compté jusqu'à son retour, car on ne sait pas ce
+  qu'elle a fait.
+- **Après un redémarrage :** le total repart de sa valeur d'avant. Le temps où le serveur était
+  arrêté n'est pas compté.
+
+### La dérivée : à quelle vitesse une valeur change
+
+```yaml
+derivative:
+  chambre_variation:
+    name: Variation de température de la chambre
+    source: sensor.temperature_chambre
+    time_window: "00:10:00"   # la fenêtre : 10 minutes par défaut (de 1 minute à 24 heures)
+    unit_time: h              # °C par heure
+    round: 2
+```
+
+- **Le calcul :** la pente entre la valeur au début de la fenêtre et la valeur actuelle. Une
+  température qui passe de 20 à 19,5 °C en 5 minutes donne « -6 °C/h ». Une valeur qui ne bouge plus
+  revient à 0.
+- **L'unité :** elle suit la source, « °C/h » ici.
+- **Les cas sans valeur :** `unknown` tant qu'il n'y a pas deux mesures, et la fenêtre repart de
+  zéro après une indisponibilité.
+
+Dans une automatisation : « si la chambre perd plus de 3 °C par heure, une fenêtre est sûrement
+ouverte : couper le radiateur » :
+
+```yaml
+- id: fenetre_chambre
+  alias: Fenêtre ouverte dans la chambre
+  triggers:
+    - trigger: numeric_state
+      entity_id: sensor.chambre_variation
+      below: -3
+  actions:
+    - action: climate.set_hvac_mode
+      target: {entity_id: climate.chambre}
+      data: {hvac_mode: "off"}
+```
+
+La source d'une intégrale ou d'une dérivée ne peut pas être un autre assistant de `derived.yaml`
+(comme pour les autres). Elle peut en revanche être un capteur modèle (étape 64).
+
 ## Comment c'est construit
 
 - `crates/ha-input` : les trois nouvelles entrées, sur le modèle des autres.
@@ -161,6 +234,10 @@ consigne » (`numeric_state` sur `sensor.chauffage_du_jour`, `above: 6`).
   (sans attente : l'heure et les états sont passés en paramètre, ce qui les rend faciles à tester),
   `lib.rs` est la tâche qui écoute les changements d'état et les commandes.
 - `crates/ha-automation` : le déclencheur `time` accepte une entrée `input_datetime`.
+- Étape 65 :
+  - `compute.rs` ajoute `Integral` (avec `feed`, `advance` et `resume`) et `Slope` (une fenêtre de
+    mesures) ;
+  - `lib.rs` les fait avancer à chaque mesure et chaque minute.
 
 ### Les concepts Rust
 
