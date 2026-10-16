@@ -17,7 +17,10 @@
 //!   texte) ;
 //! - **combiner** : `and`, `or`, `not`, `x if condition else y`, des
 //!   parenthèses ;
-//! - quelques **filtres** (`round`, `float`, `default`, `abs`…).
+//! - quelques **filtres** (`round`, `float`, `default`, `abs`…) ;
+//! - **le temps** (étape 68) : `now()` et ses champs (`now().hour`,
+//!   `now().weekday()`…), `states.binary_sensor.porte.last_changed`, et
+//!   `as_timestamp(…)` pour compter des secondes.
 //!
 //! Pas de boucles, pas de variables, pas d'accès aux fichiers : un modèle ne
 //! peut rien faire d'autre que produire une valeur courte. Chaque modèle est
@@ -105,6 +108,28 @@ enum Base {
     IsState(EntityId, String),
     /// `trigger.…` : ce qui a déclenché l'automatisation.
     Trigger(TriggerField),
+    /// `now()`, `now().hour`… : l'heure locale.
+    Now(NowField),
+    /// `states.sensor.x.state`, `.last_changed`, `.attributes.unit`… :
+    /// l'écriture de Home Assistant pour lire une entité.
+    Entity(EntityId, StateField),
+}
+
+/// Ce qu'on lit de `now()`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NowField {
+    /// `now()` seul : « 2026-10-16T22:31:00+02:00 ».
+    Whole,
+    Year,
+    Month,
+    Day,
+    Hour,
+    Minute,
+    Second,
+    /// `now().weekday()` : 0 le lundi, 6 le dimanche (comme Python).
+    Weekday,
+    /// `now().isoweekday()` : 1 le lundi, 7 le dimanche.
+    IsoWeekday,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -131,6 +156,10 @@ enum StateField {
     Name,
     EntityId,
     Attribute(String),
+    /// Quand l'état a changé (étape 68).
+    LastChanged,
+    /// Quand l'état ou un attribut a changé.
+    LastUpdated,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -144,6 +173,8 @@ enum Filter {
     Capitalize,
     Default(Val),
     Replace(String, String),
+    /// Une date (« 2026-10-16T22:31:00+02:00 ») en secondes depuis 1970.
+    AsTimestamp,
 }
 
 /// Une valeur calculée.
@@ -369,7 +400,12 @@ fn truncate(text: String) -> String {
 impl Node {
     fn entity_ids<'a>(&'a self, ids: &mut Vec<&'a EntityId>) {
         match self {
-            Self::Base(Base::States(id) | Base::StateAttr(id, _) | Base::IsState(id, _)) => {
+            Self::Base(
+                Base::States(id)
+                | Base::StateAttr(id, _)
+                | Base::IsState(id, _)
+                | Base::Entity(id, _),
+            ) => {
                 if !ids.contains(&id) {
                     ids.push(id);
                 }
@@ -543,6 +579,28 @@ impl Base {
             Self::IsState(id, expected) => {
                 Val::Bool(scope.states.get(id).is_some_and(|s| s.state() == expected))
             }
+            Self::Entity(id, field) => scope
+                .states
+                .get(id)
+                .map_or(Val::None, |state| state_field(&state, field)),
+            Self::Now(field) => {
+                let now = jiff::Zoned::now();
+                match field {
+                    NowField::Whole => Val::Text(local_text(&now)),
+                    NowField::Year => Val::Number(f64::from(now.year())),
+                    NowField::Month => Val::Number(f64::from(now.month())),
+                    NowField::Day => Val::Number(f64::from(now.day())),
+                    NowField::Hour => Val::Number(f64::from(now.hour())),
+                    NowField::Minute => Val::Number(f64::from(now.minute())),
+                    NowField::Second => Val::Number(f64::from(now.second())),
+                    NowField::Weekday => {
+                        Val::Number(f64::from(now.weekday().to_monday_zero_offset()))
+                    }
+                    NowField::IsoWeekday => {
+                        Val::Number(f64::from(now.weekday().to_monday_one_offset()))
+                    }
+                }
+            }
             Self::Trigger(field) => {
                 let Some(trigger) = scope.trigger else {
                     return Val::None;
@@ -589,6 +647,44 @@ fn state_field(state: &State, field: &StateField) -> Val {
             .attributes()
             .get(name)
             .map_or(Val::None, Val::from_json),
+        StateField::LastChanged => moment(state.last_changed()),
+        StateField::LastUpdated => moment(state.last_updated()),
+    }
+}
+
+/// « 2026-10-16T22:31:00+02:00 » : l'heure locale, avec son décalage.
+fn local_text(zoned: &jiff::Zoned) -> String {
+    zoned.strftime("%Y-%m-%dT%H:%M:%S%:z").to_string()
+}
+
+fn moment(time: std::time::SystemTime) -> Val {
+    jiff::Timestamp::try_from(time).map_or(Val::None, |timestamp| {
+        Val::Text(local_text(
+            &timestamp.to_zoned(jiff::tz::TimeZone::system()),
+        ))
+    })
+}
+
+/// Une date en secondes depuis 1970 : avec son décalage
+/// (« …+02:00 », « …Z »), ou en heure locale (« 2026-10-16 22:31:00 »).
+fn timestamp(value: &Val) -> Val {
+    match value {
+        Val::Number(seconds) => Val::Number(*seconds),
+        Val::Text(text) => {
+            let text = text.trim();
+            let parsed = text.parse::<jiff::Timestamp>().ok().or_else(|| {
+                text.parse::<jiff::civil::DateTime>()
+                    .ok()?
+                    .to_zoned(jiff::tz::TimeZone::system())
+                    .ok()
+                    .map(|zoned| zoned.timestamp())
+            });
+            #[expect(clippy::cast_precision_loss, reason = "des millisecondes depuis 1970")]
+            parsed.map_or(Val::None, |t| {
+                Val::Number(t.as_millisecond() as f64 / 1000.0)
+            })
+        }
+        _ => Val::None,
     }
 }
 
@@ -624,6 +720,7 @@ impl Filter {
                 other => other,
             },
             Self::Replace(from, to) => text_map(value, |t| t.replace(from.as_str(), to)),
+            Self::AsTimestamp => timestamp(&value),
         }
     }
 }
@@ -1016,6 +1113,20 @@ impl Parser {
                 Node::List(items)
             }
             Some(Token::Ident(name)) if name == "trigger" => Node::Base(parse_trigger(self)?),
+            Some(Token::Ident(name)) if name == "now" => Node::Base(self.now()?),
+            // `states.sensor.x.state` (sans parenthèse) ; `states('…')` plus bas.
+            Some(Token::Ident(name)) if name == "states" && self.peek() == Some(&Token::Dot) => {
+                Node::Base(self.entity()?)
+            }
+            // `as_timestamp(…)` : son argument est une expression (`now()`…).
+            Some(Token::Ident(name)) if name == "as_timestamp" => {
+                self.expect(&Token::Open, "« ( » après as_timestamp")?;
+                self.enter()?;
+                let inner = self.ternary()?;
+                self.depth -= 1;
+                self.expect(&Token::Close, "« ) »")?;
+                Node::Filter(Box::new(inner), Filter::AsTimestamp)
+            }
             Some(Token::Ident(name)) => {
                 if let Some(value) = literal(&name) {
                     Node::Base(Base::Literal(value))
@@ -1032,6 +1143,65 @@ impl Parser {
             }
         };
         self.node(node)
+    }
+
+    /// `now()`, puis éventuellement `.hour`, `.weekday()`…
+    fn now(&mut self) -> Result<Base, String> {
+        self.expect(&Token::Open, "« ( » après now")?;
+        self.expect(&Token::Close, "« ) » après now(")?;
+        if self.peek() != Some(&Token::Dot) {
+            return Ok(Base::Now(NowField::Whole));
+        }
+        self.next();
+        let field = match self.ident("champ de now()")?.as_str() {
+            "year" => NowField::Year,
+            "month" => NowField::Month,
+            "day" => NowField::Day,
+            "hour" => NowField::Hour,
+            "minute" => NowField::Minute,
+            "second" => NowField::Second,
+            method @ ("weekday" | "isoweekday") => {
+                self.expect(&Token::Open, &format!("« ( » après {method}"))?;
+                self.expect(&Token::Close, &format!("« ) » après {method}("))?;
+                if method == "weekday" {
+                    NowField::Weekday
+                } else {
+                    NowField::IsoWeekday
+                }
+            }
+            other => {
+                return Err(format!(
+                    "modèle : now().{other} inconnu (year, month, day, hour, minute, second,                      weekday(), isoweekday())"
+                ));
+            }
+        };
+        Ok(Base::Now(field))
+    }
+
+    /// `states.sensor.x.state`, `.name`, `.last_changed`, `.last_updated`,
+    /// `.attributes.nom` (le `states` est déjà lu).
+    fn entity(&mut self) -> Result<Base, String> {
+        const HELP: &str = "states.sensor.x.state, .name, .last_changed, .last_updated ou                             .attributes.nom";
+        self.expect(&Token::Dot, "« . » après states")?;
+        let domain = self.ident("domaine après states.")?;
+        self.expect(&Token::Dot, &format!("« . » après states.{domain}"))?;
+        let object = self.ident("entité")?;
+        let entity_id = EntityId::new(&format!("{domain}.{object}"))
+            .map_err(|error| format!("states.{domain}.{object} : {error}"))?;
+        if self.peek() != Some(&Token::Dot) {
+            return Err(format!("modèle : {HELP} attendu"));
+        }
+        self.next();
+        let field = match self.ident("champ")?.as_str() {
+            "state" => StateField::State,
+            "name" => StateField::Name,
+            "entity_id" => StateField::EntityId,
+            "last_changed" => StateField::LastChanged,
+            "last_updated" => StateField::LastUpdated,
+            "attributes" => StateField::Attribute(member(self, "attributes")?),
+            other => return Err(format!("modèle : champ {other} inconnu ({HELP})")),
+        };
+        Ok(Base::Entity(entity_id, field))
     }
 
     /// `states('…')`, `state_attr('…', '…')`, `is_state('…', '…')`.
@@ -1065,7 +1235,8 @@ impl Parser {
                 ))
             }
             other => Err(format!(
-                "modèle : fonction {other} inconnue (states, state_attr, is_state)"
+                "modèle : fonction {other} inconnue (states, state_attr, is_state, now, \
+                 as_timestamp)"
             )),
         }
     }
@@ -1169,6 +1340,8 @@ fn parse_trigger(parser: &mut Parser) -> Result<Base, String> {
                 "state" => StateField::State,
                 "name" => StateField::Name,
                 "entity_id" => StateField::EntityId,
+                "last_changed" => StateField::LastChanged,
+                "last_updated" => StateField::LastUpdated,
                 "attributes" => StateField::Attribute(member(parser, "attributes")?),
                 other => return Err(format!("modèle : champ {other} inconnu ({HELP})")),
             };
@@ -1241,10 +1414,11 @@ fn parse_filter(name: &str, args: Vec<Val>) -> Result<Filter, String> {
             at_most(1)?;
             Filter::Float(args.into_iter().next())
         }
-        "abs" | "lower" | "upper" | "capitalize" => {
+        "abs" | "lower" | "upper" | "capitalize" | "as_timestamp" => {
             at_most(0)?;
             match name {
                 "abs" => Filter::Abs,
+                "as_timestamp" => Filter::AsTimestamp,
                 "lower" => Filter::Lower,
                 "upper" => Filter::Upper,
                 _ => Filter::Capitalize,
@@ -1267,8 +1441,8 @@ fn parse_filter(name: &str, args: Vec<Val>) -> Result<Filter, String> {
         }
         other => {
             return Err(format!(
-                "modèle : filtre {other} inconnu (round, int, float, abs, lower, upper, \
-                 capitalize, default, replace)"
+                "modèle : filtre {other} inconnu (round, int, float, abs, as_timestamp, lower, \
+                 upper, capitalize, default, replace)"
             ));
         }
     })
@@ -1449,7 +1623,7 @@ mod tests {
             ("{{ }}", "vide"),
             ("{{ states(sensor.x) }}", "guillemets"),
             ("{{ states('pas une entité') }}", "states"),
-            ("{{ now() }}", "fonction now inconnue"),
+            ("{{ today_at('22:00') }}", "fonction today_at inconnue"),
             ("{{ states('sensor.x') | json }}", "filtre json inconnu"),
             ("{{ states('sensor.x') @ 2 }}", "caractère '@'"),
             ("{{ states('sensor.x') = 2 }}", "=="),
@@ -1589,6 +1763,75 @@ mod tests {
             ),
             true
         );
+    }
+
+    #[test]
+    fn time_in_templates() {
+        let core = machine();
+        let states = &core.states;
+        set(
+            states,
+            "binary_sensor.porte",
+            "on",
+            json!({"device_class": "door"}),
+        );
+        let r = |text: &str| render(text, states, None);
+        let now = jiff::Zoned::now();
+        // L'heure (ou la suivante, si le test passe pile au changement).
+        let hour = r("{{ now().hour }}").as_i64().unwrap();
+        assert!(
+            hour == i64::from(now.hour()) || hour == (i64::from(now.hour()) + 1) % 24,
+            "{hour}"
+        );
+        let weekday = r("{{ now().weekday() }}").as_i64().unwrap();
+        assert!((0..=6).contains(&weekday));
+        assert_eq!(r("{{ now().isoweekday() - now().weekday() }}"), 1);
+        assert_eq!(r("{{ now().year >= 2026 }}"), true);
+        // Une date, en secondes depuis 1970 : avec son décalage, ou locale.
+        assert_eq!(
+            r("{{ as_timestamp('2026-10-16T08:00:00+02:00') }}"),
+            1_792_130_400
+        );
+        assert_eq!(
+            r("{{ '2026-10-16T06:00:00Z' | as_timestamp }}"),
+            1_792_130_400
+        );
+        assert_eq!(r("{{ as_timestamp('pas une date') | default(0) }}"), 0);
+        // `now()` est une date : comparable à l'heure de la machine.
+        let gap = r("{{ as_timestamp(now()) }}").as_f64().unwrap()
+            - f64::from(i32::try_from(jiff::Timestamp::now().as_second()).unwrap_or(i32::MAX));
+        assert!(gap.abs() < 5.0, "{gap}");
+        // `states.<domaine>.<objet>.<champ>`, comme dans Home Assistant.
+        assert_eq!(r("{{ states.binary_sensor.porte.state }}"), "on");
+        assert_eq!(
+            r("{{ states.binary_sensor.porte.attributes.device_class }}"),
+            "door"
+        );
+        assert_eq!(r("{{ states.light.salon.attributes['brightness'] }}"), 128);
+        assert_eq!(r("{{ states.sensor.inconnu.state | default('?') }}"), "?");
+        // « Ouverte depuis combien de secondes ? » : à l'instant.
+        let since = r(
+            "{{ (as_timestamp(now()) - as_timestamp(states.binary_sensor.porte.last_changed)) | round(0) }}",
+        )
+        .as_i64()
+        .unwrap();
+        assert!((0..5).contains(&since), "{since}");
+        // Les entités lues sont connues (pour recalculer un capteur modèle).
+        let template = Template::parse("{{ states.binary_sensor.porte.last_changed }}")
+            .unwrap()
+            .unwrap();
+        let ids: Vec<&str> = template.entity_ids().map(EntityId::as_str).collect();
+        assert_eq!(ids, ["binary_sensor.porte"]);
+        for (bad, hint) in [
+            ("{{ now().decade }}", "now().decade inconnu"),
+            ("{{ now().weekday }}", "« ( » après weekday"),
+            ("{{ states.sensor.x }}", "states.sensor.x.state"),
+            ("{{ states.sensor.x.couleur }}", "champ couleur inconnu"),
+            ("{{ as_timestamp(now() }}", "« ) »"),
+        ] {
+            let error = Template::parse(bad).unwrap_err();
+            assert!(error.contains(hint), "{bad} : {error}");
+        }
     }
 
     #[test]

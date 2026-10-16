@@ -111,6 +111,57 @@ Essayé sur la démo :
 - **L'automatisation ci-dessus :** elle part quand l'humidité monte de 61,4 à 72,4 %.
   L'historique affiche : « le modèle … est vrai ».
 
+## Étape 68 : le temps dans les modèles
+
+Un modèle connaît maintenant l'heure, et le moment où un appareil a changé, comme dans Home
+Assistant.
+
+| Écriture | Exemple | Résultat |
+| --- | --- | --- |
+| `now()` | `{{ now() }}` | « 2026-10-16T22:31:00+02:00 », l'heure locale |
+| `now().hour`, `.minute`, `.second` | `{{ now().hour >= 22 }}` | l'heure, en nombre |
+| `now().day`, `.month`, `.year` | `{{ now().month in [12, 1, 2] }}` | « c'est l'hiver » |
+| `now().weekday()` | `{{ now().weekday() >= 5 }}` | 0 le lundi… 6 le dimanche : vrai le week-end |
+| `now().isoweekday()` | | 1 le lundi… 7 le dimanche |
+| `states.cover.garage.state` | | l'état, comme `states('cover.garage')` |
+| `states.cover.garage.last_changed` | | quand l'état a changé (`last_updated` : l'état ou un attribut) |
+| `states.cover.garage.attributes.x` | `states.light.salon.attributes['brightness']` | un attribut |
+| `as_timestamp(…)` ou `… \| as_timestamp` | `{{ as_timestamp(now()) }}` | une date en secondes depuis 1970, pour compter des durées |
+
+`last_changed` existe aussi sur `trigger.to_state` et `trigger.from_state`.
+
+```yaml
+# modeles.yaml
+sensor:
+  # Depuis combien de minutes le garage est ouvert (0 s'il est fermé).
+  - name: Garage ouvert depuis
+    unit_of_measurement: min
+    state: >-
+      {{ ((as_timestamp(now()) - as_timestamp(states.cover.garage.last_changed)) / 60) | round(0)
+         if is_state('cover.garage', 'open') else 0 }}
+  - name: Moment de la journée
+    state: >-
+      {{ 'nuit' if now().hour < 6 or now().hour >= 22
+         else 'matin' if now().hour < 12
+         else 'après-midi' if now().hour < 18 else 'soirée' }}
+binary_sensor:
+  - name: Week-end
+    state: "{{ now().weekday() >= 5 }}"
+```
+
+- **Le recalcul :** un capteur modèle qui lit l'heure se recalcule **chaque minute**, et aussi dès
+  qu'une entité qu'il lit change (ici `cover.garage`).
+- **Dans une condition** (`condition: template`) : l'heure est celle du moment où la condition est
+  vérifiée, par exemple `{{ now().hour >= 22 or now().hour < 6 }}`.
+- **Les dates :** `as_timestamp` lit une date avec son décalage (« …+02:00 », « …Z ») ou en heure
+  locale (« 2026-10-16 22:31:00 »). Une date illisible donne une valeur vide, que
+  `default(…)` remplace.
+
+Essayé sur la démo :
+- « Moment de la journée » a donné « nuit » à 22 h 42, et « Week-end » « off » un vendredi ;
+- « Garage ouvert depuis » est revenu à 0 minute en refermant puis rouvrant le garage. Il comptait
+  avant les minutes depuis la dernière ouverture, l'avant-veille.
+
 ## Sécurité
 
 - Un modèle reste un **calcul sans effet** : pas de boucles, pas de variables, pas de fichiers,
@@ -144,6 +195,8 @@ Essayé sur la démo :
   - `config.rs` ajoute `Condition::Template` ;
   - `evaluator.rs` passe ce qui a déclenché l'automatisation aux conditions, et remplit
     `trigger.event` pour un déclencheur `event`.
+- **Étape 68 :** `template.rs` ajoute `Base::Now`, `Base::Entity` (`states.x.y.champ`) et le
+  filtre `AsTimestamp`. `now()` lit l'horloge au moment du calcul (`jiff::Zoned::now()`).
 - `crates/ha-automation/src/entities.rs` (nouveau) : `modeles.yaml`, la recherche de boucles, et la
   tâche qui recalcule les capteurs.
 - **Le serveur et l'éditeur :**

@@ -378,7 +378,7 @@ binary_sensor:
         }
         let example =
             parse_template_entities(include_str!("../../../modeles.example.yaml")).unwrap();
-        assert_eq!(example.len(), 3);
+        assert_eq!(example.len(), 4);
     }
 
     #[tokio::test]

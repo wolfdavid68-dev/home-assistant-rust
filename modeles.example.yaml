@@ -24,6 +24,13 @@ sensor:
          else 'frais' if states('sensor.temperature_salon') | float(0) < 18
          else 'bien' }}
 
+  # Depuis combien de minutes le garage est ouvert (étape 68 : le temps).
+  - name: Garage ouvert depuis
+    unit_of_measurement: min
+    state: >-
+      {{ ((as_timestamp(now()) - as_timestamp(states.cover.garage.last_changed)) / 60) | round(0)
+         if is_state('cover.garage', 'open') else 0 }}
+
 binary_sensor:
   # Vrai si l'une des deux pièces est occupée.
   - name: Quelqu'un en bas
