@@ -163,7 +163,7 @@ async fn groups_averages_thresholds_and_meters() {
 #[test]
 fn the_example_file_is_understood() {
     let derived = parse(include_str!("../../../derived.example.yaml")).unwrap();
-    assert_eq!(derived.len(), 11);
+    assert_eq!(derived.len(), 12);
 }
 
 #[tokio::test]

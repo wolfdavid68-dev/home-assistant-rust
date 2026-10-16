@@ -19,6 +19,8 @@
 //!   lave_linge_energie: {source: sensor.lave_linge_puissance, unit_prefix: k}
 //! derivative:
 //!   chambre_variation: {source: sensor.temperature_chambre, time_window: "00:10:00"}
+//! appliance:
+//!   lave_linge: {source: sensor.lave_linge_puissance, energy: sensor.lave_linge_energie}
 //! ```
 //!
 //! Sécurité : le fichier est écrit par toi, mais on le vérifie comme s'il
@@ -74,6 +76,25 @@ struct FileConfig {
     integration: Option<BTreeMap<String, IntegrationConfig>>,
     #[serde(default)]
     derivative: Option<BTreeMap<String, DerivativeConfig>>,
+    #[serde(default)]
+    appliance: Option<BTreeMap<String, ApplianceConfig>>,
+}
+
+/// Un appareil à cycle (lave-linge…) suivi d'après sa puissance (étape 67).
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ApplianceConfig {
+    #[serde(default)]
+    name: Option<String>,
+    source: String,
+    #[serde(default)]
+    energy: Option<String>,
+    #[serde(default)]
+    start_above: Option<f64>,
+    #[serde(default)]
+    stop_below: Option<f64>,
+    #[serde(default)]
+    finished_after: Option<String>,
 }
 
 /// L'intégrale d'une puissance (étape 65), comme `integration` dans Home
@@ -303,6 +324,16 @@ pub enum Kind {
         window: Duration,
         round_digits: u8,
     },
+    /// Un appareil à cycle (lave-linge…) : arrêt, en marche, terminé, d'après
+    /// sa puissance (étape 67).
+    Appliance {
+        source: EntityId,
+        /// Son compteur d'énergie (kWh), pour l'énergie de chaque cycle.
+        energy: Option<EntityId>,
+        start_above: f64,
+        stop_below: f64,
+        finished_after: Duration,
+    },
 }
 
 /// L'unité de temps d'une intégrale ou d'une dérivée.
@@ -367,6 +398,9 @@ impl Derived {
             | Kind::HistoryStats { source, .. }
             | Kind::Integration { source, .. }
             | Kind::Derivative { source, .. } => vec![source],
+            Kind::Appliance { source, energy, .. } => {
+                std::iter::once(source).chain(energy.as_ref()).collect()
+            }
             Kind::Schedule { .. } => Vec::new(),
         }
     }
@@ -578,14 +612,7 @@ pub fn parse(yaml: &str) -> Result<Vec<Derived>, DerivedError> {
         let place = format!("derivative.{id}");
         let window = match config.time_window.as_deref() {
             None => Duration::from_mins(10),
-            Some(text) => time(text)
-                .map(|t| {
-                    Duration::from_secs(
-                        u64::try_from(t.hour()).unwrap_or(0) * 3600
-                            + u64::try_from(t.minute()).unwrap_or(0) * 60
-                            + u64::try_from(t.second()).unwrap_or(0),
-                    )
-                })
+            Some(text) => duration_hms(text)
                 .filter(|window| *window >= Duration::from_mins(1))
                 .ok_or_else(|| {
                     invalid(&place, "time_window : de 00:01:00 à 23:59:59 (HH:MM:SS)")
@@ -596,6 +623,41 @@ pub fn parse(yaml: &str) -> Result<Vec<Derived>, DerivedError> {
             unit_time: unit_time(&place, config.unit_time.as_deref())?,
             window,
             round_digits: round_digits(&place, config.round, 2)?,
+        };
+        all.push(derived("sensor", &id, config.name, kind)?);
+    }
+
+    for (id, config) in section("appliance", file.appliance)? {
+        let place = format!("appliance.{id}");
+        let start_above = config.start_above.unwrap_or(10.0);
+        let stop_below = config.stop_below.unwrap_or(5.0);
+        if !(start_above.is_finite() && stop_below.is_finite())
+            || stop_below < 0.0
+            || stop_below > start_above
+        {
+            return Err(invalid(
+                &place,
+                "seuils : 0 ≤ stop_below ≤ start_above (en W)",
+            ));
+        }
+        let finished_after = match config.finished_after.as_deref() {
+            None => Duration::from_mins(5),
+            Some(text) => duration_hms(text)
+                .filter(|d| *d >= Duration::from_mins(1))
+                .ok_or_else(|| {
+                    invalid(&place, "finished_after : de 00:01:00 à 23:59:59 (HH:MM:SS)")
+                })?,
+        };
+        let kind = Kind::Appliance {
+            source: entity(&place, &config.source)?,
+            energy: config
+                .energy
+                .as_deref()
+                .map(|text| entity(&place, text))
+                .transpose()?,
+            start_above,
+            stop_below,
+            finished_after,
         };
         all.push(derived("sensor", &id, config.name, kind)?);
     }
@@ -635,6 +697,17 @@ fn cycle(place: &str, text: &str) -> Result<Cycle, DerivedError> {
                 "cycle : hourly, daily, weekly, monthly ou yearly",
             ));
         }
+    })
+}
+
+/// « 00:10:00 » → 10 minutes.
+fn duration_hms(text: &str) -> Option<Duration> {
+    time(text).map(|t| {
+        Duration::from_secs(
+            u64::try_from(t.hour()).unwrap_or(0) * 3600
+                + u64::try_from(t.minute()).unwrap_or(0) * 60
+                + u64::try_from(t.second()).unwrap_or(0),
+        )
     })
 }
 
@@ -843,6 +916,10 @@ mod tests {
             "integration:\n  a: {source: sensor.a, round: 9}",
             "derivative:\n  a: {source: sensor.a, time_window: \"00:00:30\"}",
             "derivative:\n  a: {source: sensor.a, time_window: dix minutes}",
+            "appliance:\n  a: {source: sensor.a, start_above: 5, stop_below: 10}",
+            "appliance:\n  a: {source: sensor.a, stop_below: -1}",
+            "appliance:\n  a: {source: sensor.a, finished_after: \"00:00:10\"}",
+            "appliance:\n  a: {source: sensor.a, energy: pas une entité}",
             "utility_meter:\n  a: {source: sensor.a, cycle: daily}\n  b: {source: sensor.a, cycle: chaque_jour}",
             // Un assistant calculé à partir d'un autre.
             "min_max:\n  a: {entities: [sensor.b]}\nutility_meter:\n  b: {source: sensor.c, cycle: daily}",

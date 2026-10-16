@@ -74,6 +74,7 @@ Un noyau domotique en Rust, inspiré de Home Assistant.
 - [Étape 64 : des modèles qui calculent, la condition template et les capteurs modèles, expliqué](docs/calculs.md)
 - [Étape 65 : l'intégrale et la dérivée, expliquées](docs/assistants.md#lintégrale-et-la-dérivée-étape-65)
 - [Étape 66 : les prises et relais Shelly récents, sans réglage, expliqué](docs/shelly.md)
+- [Étape 67 : la fin du lave-linge, expliquée](docs/assistants.md#la-fin-du-lave-linge-étape-67)
 - [Étape 5 : les automatisations, expliqué](docs/etape-5-automatisations.md)
 - [Modernisation du code, expliquée](docs/modernisation.md)
 - [Étape 6 : l'interface web, expliquée](docs/etape-6-interface-web.md)

@@ -432,6 +432,117 @@ impl Slope {
     }
 }
 
+/// Où en est un appareil à cycle (lave-linge, lave-vaisselle…), étape 67.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Phase {
+    Off,
+    Running,
+    Finished,
+}
+
+impl Phase {
+    /// L'état publié.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Off => "Arrêt",
+            Self::Running => "En marche",
+            Self::Finished => "Terminé",
+        }
+    }
+}
+
+/// Un cycle qui vient de finir : sa durée, et son énergie si on la connaît.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Done {
+    pub duration: Duration,
+    pub energy: Option<f64>,
+}
+
+/// Le suivi d'un appareil d'après sa puissance : en marche au-dessus de
+/// `start_above`, terminé quand elle reste sous `stop_below` pendant
+/// `finished_after` (une pause de trempage ne compte pas pour une fin).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Appliance {
+    pub phase: Phase,
+    /// Début du cycle en cours (ou du dernier).
+    started: Option<Instant>,
+    /// L'énergie du compteur au début du cycle.
+    energy_at_start: Option<f64>,
+    /// Depuis quand la puissance est basse.
+    low_since: Option<Instant>,
+}
+
+impl Appliance {
+    #[must_use]
+    pub fn new(phase: Phase) -> Self {
+        Self {
+            phase,
+            started: None,
+            energy_at_start: None,
+            low_since: None,
+        }
+    }
+
+    /// Reprend après un redémarrage : un cycle en cours est compté depuis
+    /// maintenant (son début est perdu).
+    #[must_use]
+    pub fn resumed(phase: Phase, now: Instant) -> Self {
+        Self {
+            started: (phase == Phase::Running).then_some(now),
+            ..Self::new(phase)
+        }
+    }
+
+    /// Une mesure, ou le temps qui passe (`power` : la dernière connue).
+    /// Renvoie le cycle qui vient de se terminer.
+    pub fn step(
+        &mut self,
+        now: Instant,
+        power: Option<f64>,
+        energy: Option<f64>,
+        start_above: f64,
+        stop_below: f64,
+        finished_after: Duration,
+    ) -> Option<Done> {
+        let power = power?;
+        if power > start_above {
+            self.low_since = None;
+            if self.phase != Phase::Running {
+                self.phase = Phase::Running;
+                self.started = Some(now);
+                self.energy_at_start = energy;
+            }
+            return None;
+        }
+        if self.phase != Phase::Running {
+            return None;
+        }
+        if power >= stop_below {
+            // Entre les deux seuils : on ne décide rien.
+            self.low_since = None;
+            return None;
+        }
+        let since = *self.low_since.get_or_insert(now);
+        if now.saturating_duration_since(since) < finished_after {
+            return None;
+        }
+        self.phase = Phase::Finished;
+        self.low_since = None;
+        let duration = self.started.map_or(Duration::ZERO, |start| {
+            since.saturating_duration_since(start)
+        });
+        let used = match (energy, self.energy_at_start) {
+            (Some(end), Some(start)) if end >= start => Some(end - start),
+            _ => None,
+        };
+        Some(Done {
+            duration,
+            energy: used,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -621,5 +732,50 @@ mod tests {
         // Indisponible : on repart de zéro.
         slope.feed(None, at(26));
         assert_eq!(slope.per_second(at(27), window), None);
+    }
+
+    #[test]
+    fn a_washing_machine_cycle() {
+        let start = Instant::now();
+        let at = |minutes: u64| start + Duration::from_mins(minutes);
+        let finished_after = Duration::from_mins(5);
+        let mut machine = Appliance::new(Phase::Off);
+        let step = |m: &mut Appliance, minutes, power: f64, energy: f64| {
+            m.step(
+                at(minutes),
+                Some(power),
+                Some(energy),
+                10.0,
+                5.0,
+                finished_after,
+            )
+        };
+        // En veille : rien.
+        assert_eq!(step(&mut machine, 0, 0.8, 100.0), None);
+        assert_eq!(machine.phase, Phase::Off);
+        // Le cycle démarre.
+        assert_eq!(step(&mut machine, 1, 2000.0, 100.0), None);
+        assert_eq!(machine.phase, Phase::Running);
+        // Trempage : 3 minutes à 2 W, ce n'est pas une fin.
+        assert_eq!(step(&mut machine, 20, 2.0, 100.6), None);
+        assert_eq!(step(&mut machine, 23, 150.0, 100.6), None);
+        // Fin : sous 5 W pendant 5 minutes.
+        assert_eq!(step(&mut machine, 80, 1.0, 101.2), None);
+        let done = step(&mut machine, 85, 1.0, 101.2).unwrap();
+        assert_eq!(machine.phase, Phase::Finished);
+        // La durée va jusqu'au moment où la puissance est retombée.
+        assert_eq!(done.duration, Duration::from_mins(79));
+        assert!((done.energy.unwrap() - 1.2).abs() < 1e-9);
+        // Il reste « Terminé » en veille ; un nouveau cycle repart.
+        assert_eq!(step(&mut machine, 120, 0.5, 101.2), None);
+        assert_eq!(machine.phase, Phase::Finished);
+        assert_eq!(step(&mut machine, 300, 1800.0, 101.2), None);
+        assert_eq!(machine.phase, Phase::Running);
+        // Sans mesure, rien ne change.
+        assert_eq!(
+            machine.step(at(400), None, None, 10.0, 5.0, finished_after),
+            None
+        );
+        assert_eq!(machine.phase, Phase::Running);
     }
 }

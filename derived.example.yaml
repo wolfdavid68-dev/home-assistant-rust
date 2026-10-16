@@ -97,3 +97,18 @@ derivative:
     source: sensor.temperature_chambre
     time_window: "00:10:00"
     unit_time: h
+
+# Un appareil à cycle (étape 67) : lave-linge, lave-vaisselle, sèche-linge…
+# suivi d'après la puissance de sa prise. « En marche » au-dessus de
+# start_above (W), « Terminé » quand la puissance reste sous stop_below
+# pendant finished_after (une pause de trempage ne compte pas). L'événement
+# appareil_termine part à la fin de chaque cycle, avec sa durée et son
+# énergie (si energy est donné).
+appliance:
+  lave_linge:
+    name: Lave-linge
+    source: sensor.prise_lave_linge_puissance
+    energy: sensor.prise_lave_linge_energie
+    start_above: 10
+    stop_below: 5
+    finished_after: "00:05:00"

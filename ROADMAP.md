@@ -112,6 +112,7 @@ Les fonctions de Home Assistant les plus utiles au quotidien, une par une, dans 
 - [x] **64. Des modèles qui calculent** : calculs, comparaisons, `and` / `or` / `not`, `x if … else y`, `in`, et `trigger.event.data` dans les modèles ; la condition `template` ; les capteurs modèles (`modeles.yaml`, comme `template:` de Home Assistant), recalculés dès que ce qu'ils lisent change ([guide](docs/calculs.md))
 - [x] **65. L'intégrale et la dérivée** : une prise qui donne des watts a ses kWh (`integration`), utilisables dans le bilan énergétique avec leurs euros ; la vitesse de variation d'un capteur (`derivative`, « -6 °C/h » : une fenêtre ouverte), comme les assistants de Home Assistant ([guide](docs/assistants.md#lintégrale-et-la-dérivée-étape-65))
 - [x] **66. Les Shelly récents, sans réglage** : prises et relais Shelly Gen2 et plus reconnus tout seuls par MQTT (marche/arrêt, puissance, énergie en kWh pour le bilan, tension), sous le nom donné dans l'appli Shelly ; en plus, les prises Hue s'affichent comme des prises ([guide](docs/shelly.md))
+- [x] **67. La machine a fini** : lave-linge, lave-vaisselle, sèche-linge suivis d'après la puissance de leur prise (Arrêt, En marche, Terminé), sans confondre une pause de trempage avec la fin ; durée et énergie de chaque cycle ; événement `appareil_termine` pour la notification ([guide](docs/assistants.md#la-fin-du-lave-linge-étape-67))
 
 En parallèle, dès que tu me donnes les informations : commande du chauffage Somfy (résultat de
 `somfy devices`), puis de l'alarme (avec confirmation et journal).
