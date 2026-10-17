@@ -6,7 +6,7 @@
 //! commande que des appareils sans risque : lumières, prises, ventilateurs,
 //! scènes, et les volets (jamais un portail, une porte de garage ou une
 //! porte). Les interrupteurs du serveur lui-même (simulation de présence,
-//! délestage) lui sont cachés.
+//! délestage, protection solaire) lui sont cachés.
 
 use ha_auth::{Permission, User};
 use ha_core::{EntityId, State};
@@ -35,8 +35,13 @@ const HIDDEN_FROM_GUESTS: [&str; 11] = [
 ];
 /// Les interrupteurs du serveur lui-même, cachés aux invités : la simulation
 /// de présence dit quand la maison est vide (étape 58), le délestage protège
-/// le compteur (étape 62).
-const HIDDEN_SWITCHES: [&str; 2] = ["switch.simulation_presence", "switch.delestage"];
+/// le compteur (étape 62), la protection solaire garde la maison au frais
+/// (étape 70).
+const HIDDEN_SWITCHES: [&str; 3] = [
+    "switch.simulation_presence",
+    "switch.delestage",
+    "switch.protection_solaire",
+];
 /// Domaines qu'un invité peut commander.
 const GUEST_CONTROLS: [&str; 5] = ["light", "switch", "fan", "scene", "cover"];
 /// Volets qu'un invité ne commande jamais (comme Alexa).

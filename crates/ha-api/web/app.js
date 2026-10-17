@@ -653,7 +653,10 @@ function renderTileContent(state) {
     case "input_button": return inputButtonTile(state);
     case "timer": return timerTile(state);
     case "alert": return alertTile(state);
-    case "switch": return state.entity_id === SHEDDING ? switchTile(state, ICONS.bolt, sheddingLabels(state)) : switchTile(state);
+    case "switch":
+      if (state.entity_id === SHEDDING) return switchTile(state, ICONS.bolt, sheddingLabels(state));
+      if (state.entity_id === SHADE) return switchTile(state, ICONS.blinds, shadeLabels(state));
+      return switchTile(state);
     case "siren": return switchTile(state, ICONS.siren, { on: "Sonne !", off: "Au repos" });
     case "humidifier": return humidifierTile(state);
     case "lock": return lockTile(state);
@@ -775,6 +778,32 @@ function sheddingLabels(state) {
   if (typeof state.attributes.erreur === "string") on = "Armé, limite inconnue";
   else if (names.length > 0) on = `Coupé : ${joinNames(names)}`;
   return { on, off: "Désarmé" };
+}
+
+// La protection solaire (étape 70) : les volets qu'elle a baissés, et
+// pourquoi elle attend.
+const SHADE = "switch.protection_solaire";
+function shadeLabels(state) {
+  const a = state.attributes;
+  const names = (Array.isArray(a.baisses) ? a.baisses : [])
+    .map((item) => (typeof item?.entity_id === "string" ? entities.get(item.entity_id) : undefined))
+    .filter((device) => device !== undefined)
+    .map((device) => nameOf(device));
+  let on = "Armée, soleil couché";
+  if (names.length > 0) on = `Baissé : ${joinNames(names)}`;
+  else if (typeof a.soleil_hauteur === "number" && a.soleil_hauteur > 0) {
+    if (a.ensoleille === false) on = "Armée, pas de soleil";
+    else if (a.chaleur === false) on = "Armée, pas assez chaud";
+    else if (Array.isArray(a.soleil_sur) && a.soleil_sur.length === 0) on = "Armée, soleil sur aucune façade";
+    else on = "Armée";
+  }
+  // Les volets bougés à la main, laissés tranquilles un moment.
+  const paused = (Array.isArray(a.en_pause) ? a.en_pause : [])
+    .map((id) => entities.get(id))
+    .filter((device) => device !== undefined)
+    .map((device) => nameOf(device));
+  if (paused.length > 0) on = `${on} · à la main : ${joinNames(paused)}`;
+  return { on, off: "Désarmée" };
 }
 
 // ----- Serrure, vanne, aspirateur, humidificateur, chauffe-eau (MQTT)

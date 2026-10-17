@@ -1150,6 +1150,7 @@ dependencies = [
  "ha-notify",
  "ha-person",
  "ha-push",
+ "ha-shade",
  "ha-shedding",
  "ha-simulation",
  "ha-somfy",
@@ -1168,6 +1169,20 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "zeroize",
+]
+
+[[package]]
+name = "ha-shade"
+version = "0.1.0"
+dependencies = [
+ "ha-core",
+ "ha-sun",
+ "jiff",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

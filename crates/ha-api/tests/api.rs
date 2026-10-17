@@ -1488,6 +1488,7 @@ async fn a_guest_never_sees_nor_controls_the_server_switches() {
         ("switch.simulation_presence", json!({"en_cours": true})),
         ("switch.delestage", json!({"coupes": []})),
         ("alert.garage_ouvert", json!({"surveille": "cover.garage"})),
+        ("switch.protection_solaire", json!({"baisses": []})),
         ("switch.prise_salon", json!({})),
     ] {
         let Value::Object(attributes) = attributes else {
@@ -1512,6 +1513,7 @@ async fn a_guest_never_sees_nor_controls_the_server_switches() {
         "switch.simulation_presence",
         "switch.delestage",
         "alert.garage_ouvert",
+        "switch.protection_solaire",
     ] {
         let (status, _) = app
             .request("GET", &format!("/api/states/{hidden}"), Some(&guest), None)
