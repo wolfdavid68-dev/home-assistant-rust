@@ -42,9 +42,14 @@ use crate::roles;
 /// Taille maximale d'une image : de quoi garder un beau dessin, pas une
 /// photo de 20 mégapixels.
 pub(crate) const MAX_IMAGE_SIZE: usize = 3 * 1024 * 1024;
-const MAX_IMAGES: usize = 16;
+/// Les images : fonds, ambiances et calques de tous les onglets. Un calque
+/// (une lumière, un volet) pèse quelques Kio : une maison bien équipée en
+/// demande vite une trentaine.
+const MAX_IMAGES: usize = 64;
 const MAX_NAME_CHARS: usize = 40;
-const MAX_LAYERS: usize = 16;
+/// Les calques d'un onglet : une lumière éteinte, un volet fermé… chacun le
+/// sien.
+const MAX_LAYERS: usize = 40;
 const MAX_LABELS: usize = 30;
 const MAX_ACTIONS: usize = 12;
 const MAX_CHARTS: usize = 6;

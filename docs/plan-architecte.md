@@ -110,7 +110,7 @@ page s'élargit jusqu'à 1 760 px. Sur téléphone, les repères défilent sur u
 
 - **Seules des images PNG, JPEG ou WebP** sont acceptées, reconnues à leurs premiers octets : ce
   que le navigateur annonce ne compte pas. Un SVG (qui peut contenir du script) ou une page HTML
-  déguisée en image est refusé. 3 Mio par image, 16 images au plus, noms `a-z 0-9 _ -`.
+  déguisée en image est refusé. 3 Mio par image, 64 images au plus (40 calques par onglet), noms `a-z 0-9 _ -`.
 - Les images repartent avec `nosniff` et la politique de sécurité de toutes les réponses. Même une
   image piégée ne s'exécute pas.
 - Elles ne sont lisibles qu'avec un jeton. Une balise `<img>` ne sait pas l'envoyer, alors la page
