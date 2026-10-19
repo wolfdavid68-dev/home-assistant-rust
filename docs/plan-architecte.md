@@ -63,6 +63,32 @@ Un changement d'état fait apparaître ou disparaître le calque en fondu (sans 
 l'appareil demande de les réduire). Une valeur trop près du bord passe de l'autre côté de son point
 pour rester lisible.
 
+### Étape 71 : les volets à mi-hauteur
+
+Un volet n'est pas seulement ouvert ou fermé : à 25 %, il est aux trois quarts baissé. Pour le
+dessiner ainsi, coche **« Suit la position du volet »** sur son calque :
+
+- **l'image** est le volet **fermé** (une fenêtre par calque, ou plusieurs sur la même façade) ;
+- **les états** ne servent plus : le calque suit `current_position`, de 0 (fermé) à 100 (ouvert).
+  Un volet qui ne donne pas sa position est dessiné fermé ou caché, selon `closed` ou `open` ;
+- **le volet descend** depuis le haut de la fenêtre, et son bord du bas suit la pente de la
+  fenêtre, vue en perspective. Il glisse en 1,2 s quand la position change.
+
+| Position | Sur le dessin |
+| --- | --- |
+| 100 (ouvert) | rien |
+| 75 | le quart du haut |
+| 25 | les trois quarts |
+| 0 (fermé) | tout le volet |
+
+Avec la protection solaire ([étape 70](protection-solaire.md)), on voit donc chaque volet
+descendre à sa position.
+
+**Comment c'est fait :** à son premier affichage, le tableau de bord lit une seule fois l'image du
+volet, sur une copie réduite. Il repère où le volet commence et finit, à gauche et à droite. Le
+calque est ensuite découpé (`clip-path`) par une ligne parallèle au haut de la fenêtre. Le serveur
+refuse « suit la position » sur autre chose qu'un volet (`cover.…`).
+
 ### Faire les images
 
 Depuis l'[étape 44](images-ia.md), le réglage du dessin donne la demande à copier pour chaque

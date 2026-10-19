@@ -222,9 +222,14 @@ impl Page {
 struct Layer {
     image: String,
     entity_id: String,
+    #[serde(default)]
     states: Vec<String>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     not: bool,
+    /// Un volet (étape 71) : l'image est le volet fermé, dessinée à moitié
+    /// pour un volet à moitié baissé ; les états ne servent pas.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    position: bool,
     #[serde(default)]
     when: When,
 }
@@ -420,8 +425,13 @@ fn check_page(config: &Page, images: &HashSet<String>) -> Result<(), ApiError> {
     for (index, layer) in config.layers.iter().enumerate() {
         let n = index + 1;
         known(&layer.image)?;
-        check_entity(&layer.entity_id)?;
-        if layer.states.is_empty() || layer.states.len() > MAX_STATES {
+        let entity_id = check_entity(&layer.entity_id)?;
+        if layer.position && entity_id.domain() != "cover" {
+            return Err(ApiError::BadRequest(format!(
+                "calque {n} : « suit la position » seulement pour un volet (cover.…)"
+            )));
+        }
+        if (layer.states.is_empty() && !layer.position) || layer.states.len() > MAX_STATES {
             return Err(ApiError::BadRequest(format!(
                 "calque {n} : 1 à {MAX_STATES} états"
             )));
@@ -821,6 +831,14 @@ mod tests {
                 {"area":"Salon","x":10,"y":10,"w":20,"h":20}]}"#,
         );
         assert!(check_page(&zones, &images).is_ok());
+        // Un volet qui suit sa position : pas besoin d'états (étape 71).
+        let shutter =
+            config(r#"{"layers":[{"image":"garage","entity_id":"cover.salon","position":true}]}"#);
+        assert!(check_page(&shutter, &images).is_ok());
+        let not_a_cover =
+            config(r#"{"layers":[{"image":"garage","entity_id":"light.salon","position":true}]}"#);
+        let error = format!("{:?}", check_page(&not_a_cover, &images).unwrap_err());
+        assert!(error.contains("volet"), "{error}");
         let tidied = tidy(Drawing { pages: vec![good] });
         assert!((tidied.pages[0].labels[0].y - 8.3).abs() < 1e-9);
 
