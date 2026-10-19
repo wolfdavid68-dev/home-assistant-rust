@@ -78,6 +78,7 @@ Un noyau domotique en Rust, inspiré de Home Assistant.
 - [Étape 68 : le temps dans les modèles, expliqué](docs/calculs.md#étape-68--le-temps-dans-les-modèles)
 - [Étape 69 : les rappels insistants, expliqués](docs/rappels.md)
 - [Étape 70 : la protection solaire des volets, expliquée](docs/protection-solaire.md)
+- [Étape 71 : les volets à mi-hauteur sur le dessin](docs/plan-architecte.md#étape-71--les-volets-à-mi-hauteur)
 - [Étape 5 : les automatisations, expliqué](docs/etape-5-automatisations.md)
 - [Modernisation du code, expliquée](docs/modernisation.md)
 - [Étape 6 : l'interface web, expliquée](docs/etape-6-interface-web.md)

@@ -85,6 +85,7 @@ function cleanDrawing(config) {
       entity_id: text(layer.entity_id) ?? "",
       states: Array.isArray(layer.states) ? layer.states.filter((s) => typeof s === "string") : [],
       not: layer.not === true,
+      position: layer.position === true,
       when: ["day", "night"].includes(layer.when) ? layer.when : "always",
     });
   }
@@ -202,8 +203,98 @@ function backgroundFor(page, ambiance) {
 function layerShown(layer, night) {
   const state = entities.get(layer.entity_id);
   if (!state) return false;
-  if (layer.states.includes(state.state) === layer.not) return false;
+  if (layer.position) {
+    // Un volet (étape 71) : visible dès qu'il n'est plus grand ouvert.
+    const open = coverOpenPercent(state);
+    if (open === null || open >= 98) return false;
+  } else if (layer.states.includes(state.state) === layer.not) return false;
   return layer.when === "always" || (layer.when === "night") === night;
+}
+
+/** L'ouverture d'un volet, de 0 (fermé) à 100 (ouvert) ; `null` si on ne
+ *  sait pas (indisponible). */
+function coverOpenPercent(state) {
+  const position = Number(state.attributes.current_position);
+  if (state.attributes.current_position !== undefined && Number.isFinite(position)) return Math.min(100, Math.max(0, position));
+  if (state.state === "closed") return 0;
+  if (state.state === "open") return 100;
+  return null;
+}
+
+/** La forme du volet fermé dans son image : où commence et où finit la
+ *  partie dessinée, à gauche et à droite (en fraction de l'image). Lue une
+ *  fois, sur une copie réduite. */
+function shutterShape(img) {
+  if (img._shape !== undefined) return img._shape;
+  if (!img.complete || img.naturalWidth === 0) return null;
+  const width = Math.min(480, img.naturalWidth);
+  const height = Math.max(1, Math.round((img.naturalHeight * width) / img.naturalWidth));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  let data;
+  try {
+    context.drawImage(img, 0, 0, width, height);
+    data = context.getImageData(0, 0, width, height).data;
+  } catch {
+    img._shape = null;
+    return null;
+  }
+  const opaque = (x, y) => data[(y * width + x) * 4 + 3] > 128;
+  const column = (x) => {
+    let top = -1;
+    let bottom = -1;
+    for (let y = 0; y < height; y += 1) {
+      if (opaque(x, y)) {
+        if (top < 0) top = y;
+        bottom = y;
+      }
+    }
+    return top < 0 ? null : { top, bottom };
+  };
+  let left = -1;
+  let right = -1;
+  for (let x = 0; x < width; x += 1) {
+    if (column(x)) {
+      if (left < 0) left = x;
+      right = x;
+    }
+  }
+  if (left < 0) {
+    img._shape = null;
+    return null;
+  }
+  // Un peu à l'intérieur des bords, là où le volet a toute sa hauteur.
+  const inset = Math.max(1, Math.round((right - left) * 0.06));
+  const xl = Math.min(right, left + inset);
+  const xr = Math.max(left, right - inset);
+  const cl = column(xl);
+  const cr = column(xr);
+  img._shape = {
+    xl: xl / width, tl: cl.top / height, bl: (cl.bottom + 1) / height,
+    xr: xr / width, tr: cr.top / height, br: (cr.bottom + 1) / height,
+  };
+  return img._shape;
+}
+
+/** Dessine le volet descendu de ce qu'il faut : le haut de l'image, coupé
+ *  par une ligne qui suit la pente de la fenêtre. */
+function placeShutter(img, state) {
+  const open = state ? coverOpenPercent(state) : null;
+  const shape = shutterShape(img);
+  if (open === null || !shape || open <= 2) {
+    img.style.clipPath = "";
+    if (!shape && img.naturalWidth === 0) img.addEventListener("load", () => placeShutter(img, entities.get(img.dataset.entity)), { once: true });
+    return;
+  }
+  const closed = 1 - open / 100;
+  const yl = shape.tl + (shape.bl - shape.tl) * closed;
+  const yr = shape.tr + (shape.br - shape.tr) * closed;
+  const slope = shape.xr > shape.xl ? (yr - yl) / (shape.xr - shape.xl) : 0;
+  const y0 = (yl - slope * shape.xl) * 100;
+  const y1 = (yl + slope * (1 - shape.xl)) * 100;
+  img.style.clipPath = `polygon(0% 0%, 100% 0%, 100% ${y1.toFixed(2)}%, 0% ${y0.toFixed(2)}%)`;
 }
 
 /** « 21,4 °C », « 1 513 VA », « Ouvert »… */
@@ -240,6 +331,7 @@ function drawHouse(stage, config, { interactive }) {
   const layers = config.layers.map((layer) => {
     const url = houseUrl(layer.image);
     const img = el("img", { class: "house-layer", alt: "", draggable: "false" });
+    if (layer.position) img.dataset.entity = layer.entity_id;
     if (url) img.src = url;
     parts.push(img);
     return { layer, img };
@@ -297,7 +389,11 @@ function updateHouse(view) {
     if (url && view.ambiance.getAttribute("src") !== url) view.ambiance.src = url;
     view.ambiance.classList.toggle("off", url === null);
   }
-  for (const { layer, img } of view.layers) img.classList.toggle("off", !layerShown(layer, isNight));
+  for (const { layer, img } of view.layers) {
+    const shown = layerShown(layer, isNight);
+    img.classList.toggle("off", !shown);
+    if (layer.position && shown) placeShutter(img, entities.get(layer.entity_id));
+  }
   setFx(view.fx, effectOf(view.config), view.config.effects_level ?? "");
   for (const { zone, node } of view.zones) {
     if (node.tagName !== "BUTTON") continue;
@@ -1495,6 +1591,17 @@ function renderDrawingEditor() {
     const not = el("input", { type: "checkbox" });
     not.checked = layer.not;
     not.addEventListener("change", () => { layer.not = not.checked; renderDrawingPreview(); });
+    // Un volet qui suit sa position : l'image est le volet fermé.
+    const position = el("input", { type: "checkbox" });
+    position.checked = layer.position === true;
+    states.disabled = position.checked;
+    not.disabled = position.checked;
+    position.addEventListener("change", () => {
+      layer.position = position.checked;
+      states.disabled = position.checked;
+      not.disabled = position.checked;
+      renderDrawingPreview();
+    });
     const when = el("select", {}, ...WHEN_LABELS.map(([value, text]) => el("option", { value, text })));
     when.value = layer.when;
     when.addEventListener("change", () => { layer.when = when.value; renderDrawingPreview(); });
@@ -1507,7 +1614,8 @@ function renderDrawingEditor() {
       el("div", { class: "drawing-grid" },
         field("Image", image), field("Appareil", entity),
         field("Quand son état est (séparés par des virgules)", states), field("Moment", when)),
-      el("label", { class: "check" }, not, " Sauf ces états (visible pour tous les autres)"));
+      el("label", { class: "check" }, not, " Sauf ces états (visible pour tous les autres)"),
+      el("label", { class: "check" }, position, " Suit la position du volet (l'image est le volet fermé ; à 25 %, il est dessiné aux trois quarts)"));
   });
   const addLayer = el("button", { type: "button", class: "ghost small", text: "+ Ajouter un calque" });
   addLayer.disabled = house.images.length === 0;
