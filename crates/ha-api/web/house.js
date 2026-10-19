@@ -841,7 +841,7 @@ function renderGauges() {
   if (power && Number.isFinite(Number(power.state))) {
     items.push(gauge(ICONS.flame, "Puissance", `${number.format(Number(power.state))} ${power.attributes.unit_of_measurement ?? "VA"}`, "power"));
   }
-  const lights = [...entities.values()].filter((s) => domainOf(s) === "light" && s.state === "on").length;
+  const lights = [...entities.values()].filter((s) => isLight(s) && s.state === "on").length;
   items.push(gauge(ICONS.bulb, "Lumières", lights === 0 ? "éteintes" : `${lights} allumée${lights > 1 ? "s" : ""}`, "lights"));
   const zone = entities.get("zone.home");
   if (Array.isArray(zone?.attributes.persons)) {
@@ -1187,7 +1187,8 @@ function renderRoomHead() {
   }
 
   // Éteindre d'un coup les lumières allumées (celles que ce compte commande).
-  const lit = states.filter((s) => domainOf(s) === "light" && s.state === "on" && canControl(s));
+  // Une prise Hue n'est pas une lumière : un radiateur peut y être branché.
+  const lit = states.filter((s) => isLight(s) && s.state === "on" && canControl(s));
   const actions = $("#room-actions");
   actions.hidden = lit.length === 0;
   if (lit.length > 0) {

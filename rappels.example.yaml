@@ -1,0 +1,44 @@
+# Rappels insistants (étape 69) : copier en rappels.yaml, puis
+# « ha-server rappels check ». Voir docs/rappels.md.
+#
+# Tant que l'entité surveillée est dans l'état indiqué, le serveur prévient,
+# puis redit, jusqu'à ce que ce soit réglé ou que quelqu'un touche « Compris ».
+
+# La porte du garage ouverte : un message après 10 minutes, puis toutes les
+# 30 minutes ; « Garage fermé. » quand elle se referme.
+garage_ouvert:
+  name: Garage ouvert
+  entity_id: cover.garage
+  state: open
+  repeat: [10, 30]
+  skip_first: true
+  message: >-
+    Le garage est ouvert depuis
+    {{ ((as_timestamp(now()) - as_timestamp(states.cover.garage.last_changed)) / 60) | round(0) }} min.
+  done_message: Garage fermé.
+
+# Le congélateur trop chaud (un capteur modèle de modeles.yaml, par exemple
+# « {{ states('sensor.congelateur') | float(0) > -12 }} ») : tout de suite,
+# puis toutes les 5 minutes, sur l'appli et sur ntfy, sans « Compris » possible.
+congelateur:
+  name: Congélateur trop chaud
+  entity_id: binary_sensor.congelateur_chaud
+  repeat: 5
+  can_acknowledge: false
+  message: "Le congélateur est à {{ states('sensor.congelateur') }} °C."
+  done_message: Le congélateur est revenu au froid.
+  notifiers: [appli, telephone]
+  data:
+    priority: 5
+
+# La fenêtre de la chambre ouverte en hiver : seulement à David, après
+# 15 minutes, puis 15, puis toutes les heures.
+fenetre_chambre:
+  name: Fenêtre de la chambre
+  entity_id: binary_sensor.fenetre_chambre
+  repeat: [15, 15, 60]
+  skip_first: true
+  message: La fenêtre de la chambre est toujours ouverte.
+  done_message: Fenêtre de la chambre fermée.
+  data:
+    users: [david]

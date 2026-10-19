@@ -24,6 +24,7 @@ use tokio_rustls::rustls::ServerConfig;
 use tokio_rustls::rustls::pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer};
 
 const LIGHT_ID: &str = "3f8d6e6a-1b2c-4d5e-8f90-0123456789ab";
+const PLUG_ID: &str = "7a1c2e3f-4b5d-4e6f-8a9b-0c1d2e3f4a5b";
 const APP_KEY: &str = "cle-de-test-0123456789abcdefghijklmnop";
 
 /// État partagé du faux pont.
@@ -97,6 +98,11 @@ async fn start_fake_bridge() -> FakeBridge {
                         "id": LIGHT_ID, "type": "light",
                         "metadata": {"name": "Lampe salon", "archetype": "sultan_bulb"},
                         "on": {"on": true}, "dimming": {"brightness": 100.0, "min_dim_level": 0.2},
+                    }, {
+                        // Une prise Hue : le pont la présente comme une lampe sans variateur.
+                        "id": PLUG_ID, "type": "light",
+                        "metadata": {"name": "Prise bureau", "archetype": "plug"},
+                        "on": {"on": true},
                     }]}),
                     ["PUT", path] if path == format!("/clip/v2/resource/light/{LIGHT_ID}") => {
                         let command: Value = serde_json::from_str(&body).unwrap();
@@ -285,6 +291,21 @@ async fn lights_are_synced_controlled_and_updated_live() {
     // 1. La lampe apparaît, allumée à 100 %.
     wait_for(&core, "light.lampe_salon", |s| {
         s.state() == "on" && s.attributes()["brightness"] == 255
+    })
+    .await;
+    assert!(
+        core.states
+            .get(&"light.lampe_salon".parse().unwrap())
+            .unwrap()
+            .attributes()
+            .get("device_class")
+            .is_none()
+    );
+    // La prise Hue : une « lampe » de classe outlet, sans luminosité.
+    wait_for(&core, "light.prise_bureau", |s| {
+        s.state() == "on"
+            && s.attributes()["device_class"] == "outlet"
+            && s.attributes().get("brightness").is_none()
     })
     .await;
 

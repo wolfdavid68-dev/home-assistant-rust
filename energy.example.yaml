@@ -14,6 +14,12 @@ consumption:
   - entity: sensor.linky_heures_pleines
     price: 0.2146
 
+# Avec un contrat Tempo (étape 60), les six index à la place :
+# sensor.linky_tempo_bleu_creuses, sensor.linky_tempo_bleu_pleines,
+# sensor.linky_tempo_blanc_creuses, sensor.linky_tempo_blanc_pleines,
+# sensor.linky_tempo_rouge_creuses, sensor.linky_tempo_rouge_pleines,
+# chacun avec le prix de ta facture.
+
 # Ce que la maison produit et revend (panneaux solaires), facultatif.
 # production:
 #   - entity: sensor.linky_production

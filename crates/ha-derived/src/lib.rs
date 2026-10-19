@@ -12,7 +12,14 @@
 //!   compteur a compté depuis minuit, le début de la semaine, du mois… ;
 //! - **statistique d'historique** (`sensor.chauffage_du_jour`) : combien de
 //!   temps, ou combien de fois, une entité a été dans un état depuis le
-//!   début de la période (étape 59, voir [`history`]).
+//!   début de la période (étape 59, voir [`history`]) ;
+//! - **intégrale** (`sensor.lave_linge_energie`) : une puissance devient une
+//!   énergie (W → kWh), pour le bilan ; **dérivée**
+//!   (`sensor.chambre_variation`) : à quelle vitesse une valeur change
+//!   (°C/h), étape 65 ;
+//! - **appareil à cycle** (`sensor.lave_linge`) : arrêt, en marche, terminé,
+//!   d'après la puissance de sa prise ; l'événement `appareil_termine` à la
+//!   fin de chaque cycle (étape 67).
 
 mod compute;
 mod config;
@@ -30,11 +37,15 @@ use tokio::time::MissedTickBehavior;
 use tracing::{info, warn};
 
 pub use compute::{
-    Meter, Position, cover_group, on_off_group, period_start, rounded, schedule, statistic,
-    threshold,
+    Appliance, Done, Integral, Meter, Method, Phase, Position, Slope, cover_group, on_off_group,
+    period_start, rounded, schedule, statistic, threshold,
 };
+
+/// L'événement publié à la fin du cycle d'un appareil (étape 67).
+pub const APPLIANCE_FINISHED: &str = "appareil_termine";
 pub use config::{
-    Block, Cycle, Derived, DerivedError, GROUP_TYPES, Kind, Measure, Statistic, load, parse,
+    Block, Cycle, Derived, DerivedError, GROUP_TYPES, Kind, Measure, Statistic, TimeUnit, load,
+    parse,
 };
 
 /// La tâche des assistants calculés.
@@ -73,6 +84,12 @@ struct Item {
     threshold: Option<(bool, Position)>,
     /// Le compteur de consommation.
     meter: Option<Meter>,
+    /// L'intégrale (étape 65).
+    integral: Option<Integral>,
+    /// La dérivée (étape 65).
+    slope: Option<Slope>,
+    /// L'appareil à cycle, et son dernier cycle (étape 67).
+    appliance: Option<(Appliance, Option<Done>)>,
     /// Ce qui a été publié la dernière fois (pour ne republier qu'en cas de changement).
     published: Option<(String, Attributes)>,
 }
@@ -102,10 +119,46 @@ impl Live {
                     )),
                     _ => None,
                 };
+                // L'intégrale reprend son total d'avant l'arrêt.
+                let integral = matches!(derived.kind, Kind::Integration { .. }).then(|| {
+                    Integral::resume(
+                        core.states
+                            .get(&derived.entity_id)
+                            .and_then(|state| state.state().parse::<f64>().ok())
+                            .unwrap_or(0.0),
+                    )
+                });
+                let slope = matches!(derived.kind, Kind::Derivative { .. }).then(Slope::default);
+                // L'appareil reprend sa phase, et son dernier cycle.
+                let appliance = matches!(derived.kind, Kind::Appliance { .. }).then(|| {
+                    let previous = core.states.get(&derived.entity_id);
+                    let phase = match previous.as_ref().map(State::state) {
+                        Some("En marche") => Phase::Running,
+                        Some("Terminé") => Phase::Finished,
+                        _ => Phase::Off,
+                    };
+                    let last = previous.as_ref().and_then(|state| {
+                        let minutes = state
+                            .attributes()
+                            .get("dernier_cycle_minutes")
+                            .and_then(Value::as_f64)?;
+                        Some(Done {
+                            duration: Duration::from_secs_f64((minutes * 60.0).max(0.0)),
+                            energy: state
+                                .attributes()
+                                .get("dernier_cycle_kwh")
+                                .and_then(Value::as_f64),
+                        })
+                    });
+                    (Appliance::resumed(phase, std::time::Instant::now()), last)
+                });
                 Item {
                     derived,
                     threshold: None,
                     meter,
+                    integral,
+                    slope,
+                    appliance,
                     published: None,
                 }
             })
@@ -241,6 +294,139 @@ impl Live {
                 }
                 rounded(meter.value, 3)
             }
+            Kind::Integration {
+                source,
+                method,
+                prefix,
+                unit_time,
+                round_digits,
+            } => {
+                let Some(integral) = item.integral.as_mut() else {
+                    return;
+                };
+                let source_state = core.states.get(source);
+                let instant = std::time::Instant::now();
+                let divisor = match *prefix {
+                    "k" => 1_000.0,
+                    "M" => 1_000_000.0,
+                    _ => 1.0,
+                };
+                let scale = 1.0 / (divisor * unit_time.seconds());
+                match fed {
+                    Some(new) => integral.feed(number(Some(new)), instant, *method, scale),
+                    // Au démarrage : on part de la valeur actuelle.
+                    None if !integral.running() => {
+                        integral.feed(number(source_state.as_ref()), instant, *method, scale);
+                    }
+                    None => integral.advance(instant, *method, scale),
+                }
+                if let Some(unit) = source_unit(source_state.as_ref()) {
+                    attributes.insert(
+                        "unit_of_measurement".into(),
+                        json!(format!("{prefix}{unit}{}", unit_time.symbol())),
+                    );
+                }
+                let power = source_state
+                    .as_ref()
+                    .and_then(|s| s.attributes().get("device_class"))
+                    .and_then(Value::as_str)
+                    == Some("power");
+                if power {
+                    attributes.insert("device_class".into(), json!("energy"));
+                }
+                attributes.insert("state_class".into(), json!("total"));
+                attributes.insert("source".into(), json!(source.as_str()));
+                rounded(integral.total, *round_digits)
+            }
+            Kind::Derivative {
+                source,
+                unit_time,
+                window,
+                round_digits,
+            } => {
+                let Some(slope) = item.slope.as_mut() else {
+                    return;
+                };
+                let source_state = core.states.get(source);
+                let instant = std::time::Instant::now();
+                match fed {
+                    Some(new) => slope.feed(number(Some(new)), instant),
+                    None if slope.is_empty() => slope.feed(number(source_state.as_ref()), instant),
+                    None => {}
+                }
+                if let Some(unit) = source_unit(source_state.as_ref()) {
+                    attributes.insert(
+                        "unit_of_measurement".into(),
+                        json!(format!("{unit}/{}", unit_time.symbol())),
+                    );
+                }
+                attributes.insert("source".into(), json!(source.as_str()));
+                attributes.insert("time_window".into(), json!(window.as_secs()));
+                slope.per_second(instant, *window).map_or_else(
+                    || "unknown".to_owned(),
+                    |per_second| rounded(per_second * unit_time.seconds(), *round_digits),
+                )
+            }
+            Kind::Appliance {
+                source,
+                energy,
+                start_above,
+                stop_below,
+                finished_after,
+            } => {
+                let Some((appliance, last)) = item.appliance.as_mut() else {
+                    return;
+                };
+                let power = number(core.states.get(source).as_ref());
+                let counter = energy
+                    .as_ref()
+                    .and_then(|id| number(core.states.get(id).as_ref()));
+                let finished = appliance.step(
+                    std::time::Instant::now(),
+                    power,
+                    counter,
+                    *start_above,
+                    *stop_below,
+                    *finished_after,
+                );
+                if let Some(done) = finished {
+                    *last = Some(done);
+                    info!("{} : cycle terminé", item.derived.entity_id);
+                    let mut data = Attributes::new();
+                    data.insert("entity_id".into(), json!(item.derived.entity_id.as_str()));
+                    data.insert("name".into(), json!(item.derived.name));
+                    data.insert("duree_minutes".into(), json!(minutes(done.duration)));
+                    if let Some(kwh) = done.energy {
+                        data.insert("energie_kwh".into(), json!(round3(kwh)));
+                    }
+                    if let Err(error) = core.fire(APPLIANCE_FINISHED, data) {
+                        warn!("{} : événement refusé ({error})", item.derived.entity_id);
+                    }
+                }
+                attributes.insert("source".into(), json!(source.as_str()));
+                attributes.insert("device_class".into(), json!("enum"));
+                attributes.insert(
+                    "options".into(),
+                    json!([
+                        Phase::Off.name(),
+                        Phase::Running.name(),
+                        Phase::Finished.name()
+                    ]),
+                );
+                if let Some(power) = power {
+                    attributes.insert("puissance".into(), json!(power));
+                }
+                if let Some(done) = last {
+                    attributes.insert(
+                        "dernier_cycle_minutes".into(),
+                        json!(minutes(done.duration)),
+                    );
+                    if let Some(kwh) = done.energy {
+                        attributes.insert("dernier_cycle_kwh".into(), json!(round3(kwh)));
+                    }
+                }
+                appliance.phase.name().to_owned()
+            }
         };
         let published = (state, attributes);
         if item.published.as_ref() == Some(&published) {
@@ -335,13 +521,26 @@ async fn run(
     // Les plages horaires et les débuts de période : vérifiés toutes les 5 s.
     let mut ticker = tokio::time::interval(Duration::from_secs(5));
     ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    // Les intégrales et les dérivées avancent chaque minute même quand la
+    // source ne change pas (une puissance stable fournit quand même de
+    // l'énergie) : pas plus souvent, pour ne pas remplir l'historique.
+    let mut ticks: u32 = 0;
     loop {
         tokio::select! {
             () = token.cancelled() => break,
             _ = ticker.tick() => {
                 let now = local_now();
+                ticks = ticks.wrapping_add(1);
+                let minute = ticks.is_multiple_of(12);
                 for index in 0..live.items.len() {
-                    if matches!(live.items[index].derived.kind, Kind::Schedule { .. } | Kind::Meter { .. }) {
+                    let due = match live.items[index].derived.kind {
+                        // Un appareil à cycle : la fin arrive sans nouvelle
+                        // mesure (la puissance reste à zéro).
+                        Kind::Schedule { .. } | Kind::Meter { .. } | Kind::Appliance { .. } => true,
+                        Kind::Integration { .. } | Kind::Derivative { .. } => minute,
+                        _ => false,
+                    };
+                    if due {
                         live.refresh(index, &core, now, None);
                     }
                 }
@@ -399,6 +598,31 @@ fn restore_meter(restored: Option<&State>, cycle: Cycle, now: DateTime) -> Meter
     // Une période a commencé pendant l'arrêt.
     meter.roll(cycle, now);
     meter
+}
+
+/// Une durée en minutes entières.
+fn minutes(duration: Duration) -> u64 {
+    (duration.as_secs() + 30) / 60
+}
+
+fn round3(value: f64) -> f64 {
+    (value * 1000.0).round() / 1000.0
+}
+
+/// La valeur d'un capteur, s'il en donne une.
+fn number(state: Option<&State>) -> Option<f64> {
+    state
+        .filter(|s| !matches!(s.state(), "unavailable" | "unknown"))
+        .and_then(|s| s.state().trim().parse::<f64>().ok())
+        .filter(|v| v.is_finite())
+}
+
+fn source_unit(state: Option<&State>) -> Option<String> {
+    state?
+        .attributes()
+        .get("unit_of_measurement")?
+        .as_str()
+        .map(str::to_owned)
 }
 
 fn copy_unit(states: &[Option<State>], attributes: &mut Attributes) {

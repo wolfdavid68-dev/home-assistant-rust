@@ -44,6 +44,15 @@ impl Device {
         self.state.entity_id().domain()
     }
 
+    /// Le genre d'appareil, pour les mots de la phrase : une prise Hue
+    /// (`light` de classe `outlet`) est une **prise**, pas une lumière.
+    fn kind(&self) -> &str {
+        match self.domain() {
+            "light" if self.device_class() == Some("outlet") => "switch",
+            domain => domain,
+        }
+    }
+
     fn attr(&self, key: &str) -> Option<&Value> {
         self.state.attributes().get(key)
     }
@@ -347,7 +356,7 @@ fn find<'a>(
         let wanted = keywords(&normalize(text));
         !wanted.is_empty() && wanted.iter().all(|word| present.contains(word.as_str()))
     };
-    let allowed = |device: &&Device| hint.is_none_or(|domains| domains.contains(&device.domain()));
+    let allowed = |device: &&Device| hint.is_none_or(|domains| domains.contains(&device.kind()));
     // La pièce la plus précise nommée dans la phrase.
     let area = devices
         .iter()
@@ -405,7 +414,7 @@ fn find<'a>(
         let devices: Vec<&Device> = devices
             .iter()
             .filter(|device| device.area.as_deref() == Some(area))
-            .filter(|device| domains.contains(&device.domain()))
+            .filter(|device| domains.contains(&device.kind()))
             .collect();
         return if devices.is_empty() {
             Err(NotUnderstood::NoDevice)
@@ -418,7 +427,7 @@ fn find<'a>(
     if hint.is_some() {
         let devices: Vec<&Device> = devices
             .iter()
-            .filter(|device| domains.contains(&device.domain()))
+            .filter(|device| domains.contains(&device.kind()))
             .collect();
         return match devices.len() {
             0 => Err(NotUnderstood::NoDevice),
@@ -749,6 +758,16 @@ mod tests {
                 Some("Chambre"),
                 json!({}),
             ),
+            // Une prise Hue : une « lampe » de classe outlet (un radiateur
+            // d'appoint y est branché).
+            device(
+                &core,
+                "light.prise_bureau",
+                "on",
+                "Prise d'appoint",
+                Some("Salon"),
+                json!({"device_class": "outlet"}),
+            ),
             device(
                 &core,
                 "cover.chambre",
@@ -896,6 +915,15 @@ mod tests {
         );
         // La pièce seule : les lumières ; « ferme » : les volets.
         assert_eq!(orders("éteins le salon").len(), 2);
+        // Une prise Hue n'est pas une lumière : « la prise » la désigne.
+        assert_eq!(
+            one("éteins la prise du salon"),
+            (
+                "light.turn_off".into(),
+                "light.prise_bureau".into(),
+                json!({})
+            )
+        );
         assert_eq!(one("ferme la chambre").1, "cover.chambre");
         // « Salon » est aussi le nom du thermostat : avec le type, c'est lui.
         assert_eq!(

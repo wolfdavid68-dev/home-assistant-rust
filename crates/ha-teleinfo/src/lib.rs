@@ -1,6 +1,6 @@
 //! Le compteur **Linky** (télé-information client, TIC) : consommation par
 //! index (heures creuses, heures pleines, Tempo…), puissance, intensité,
-//! production solaire.
+//! production solaire, couleurs Tempo du jour et du lendemain.
 //!
 //! Deux façons de brancher le compteur :
 //!
@@ -34,7 +34,7 @@ use tokio::time::{Instant, MissedTickBehavior};
 use tracing::{info, warn};
 
 pub use frame::{Decoder, Frame, Mode};
-pub use meter::Reading;
+pub use meter::{Color, Reading, Tempo};
 
 /// Sans trame valide pendant ce temps, les capteurs passent « indisponible ».
 const SILENCE: Duration = Duration::from_mins(1);
@@ -395,6 +395,32 @@ impl Publisher {
             };
             self.set(&sensor, period.clone(), Attributes::new(), now);
         }
+        if let Some(tempo) = reading.tempo {
+            for (key, name, color) in [
+                ("tempo_aujourdhui", "Tempo aujourd'hui", tempo.today),
+                ("tempo_demain", "Tempo demain", tempo.tomorrow),
+            ] {
+                let sensor = Sensor {
+                    key,
+                    name: name.into(),
+                    unit: None,
+                    device_class: Some("enum"),
+                    state_class: None,
+                    every: Duration::ZERO,
+                };
+                let mut attributes = Attributes::new();
+                attributes.insert(
+                    "options".into(),
+                    [Color::Blue, Color::White, Color::Red]
+                        .map(Color::name)
+                        .to_vec()
+                        .into(),
+                );
+                // Pas encore annoncée : « unknown », comme dans Home Assistant.
+                let state = color.map_or("unknown", Color::name);
+                self.set(&sensor, state.into(), attributes, now);
+            }
+        }
     }
 
     fn set(
@@ -652,6 +678,46 @@ mod tests {
         publisher.publish(&reading(1_004, 800), start + Duration::from_secs(123));
         assert_eq!(state("sensor.linky_energie").as_deref(), Some("1.004"));
         assert_eq!(state("sensor.linky_puissance").as_deref(), Some("800"));
+    }
+
+    #[test]
+    fn tempo_colors_become_two_sensors() {
+        let core = Arc::new(Core::new());
+        let mut publisher = Publisher::new(Arc::clone(&core));
+        let reading = |tomorrow| Reading {
+            tempo: Some(Tempo {
+                today: Some(Color::Blue),
+                tomorrow,
+            }),
+            ..Reading::default()
+        };
+        let state = |id: &str| {
+            core.states
+                .get(&id.parse().unwrap())
+                .map(|s| (s.state().to_owned(), s.attributes().clone()))
+        };
+        let start = Instant::now();
+        publisher.publish(&reading(None), start);
+        let (today, attributes) = state("sensor.linky_tempo_aujourdhui").unwrap();
+        assert_eq!(today, "Bleu");
+        assert_eq!(attributes["device_class"], "enum");
+        assert_eq!(
+            attributes["options"].to_string(),
+            r#"["Bleu","Blanc","Rouge"]"#
+        );
+        assert_eq!(state("sensor.linky_tempo_demain").unwrap().0, "unknown");
+        // La couleur de demain arrive : publiée tout de suite.
+        publisher.publish(&reading(Some(Color::Red)), start + Duration::from_secs(1));
+        assert_eq!(state("sensor.linky_tempo_demain").unwrap().0, "Rouge");
+        // Sans contrat Tempo, pas de capteur.
+        let other = Arc::new(Core::new());
+        Publisher::new(Arc::clone(&other)).publish(&Reading::default(), start);
+        assert!(
+            other
+                .states
+                .get(&"sensor.linky_tempo_demain".parse().unwrap())
+                .is_none()
+        );
     }
 
     #[test]

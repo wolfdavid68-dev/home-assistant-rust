@@ -211,7 +211,6 @@ impl Library {
             alias: alias.clone().into(),
             core: Arc::clone(core),
             checker: self.checker.clone(),
-            trigger: None,
             trigger_data: None,
             origin: Origin::Script(alias.clone()),
             trace: None,
@@ -258,7 +257,6 @@ impl Library {
             alias: scene.name.clone().into(),
             core: Arc::clone(core),
             checker: self.checker.clone(),
-            trigger: None,
             trigger_data: None,
             origin: Origin::Scene(scene.name.clone()),
             trace: None,
@@ -486,10 +484,16 @@ impl Runner {
         // première fausse (comme `all`).
         let checker = self.evaluator.checker();
         let now = local_now();
+        // Pour les modèles : `trigger.id`, `trigger.to_state`…
+        let trigger_data = TriggerData {
+            id: trigger.clone(),
+            ..fired.data.unwrap_or_default()
+        };
         let mut checks = Vec::new();
         let mut conditions_pass = true;
         for condition in &automation.conditions {
-            conditions_pass = checker.passes(condition, &self.core.states, now, trigger.as_deref());
+            conditions_pass =
+                checker.passes(condition, &self.core.states, now, Some(&trigger_data));
             checks.push(Check {
                 description: condition.describe(&self.core.states),
                 passed: conditions_pass,
@@ -567,17 +571,11 @@ impl Runner {
         if let Err(error) = self.core.fire(AUTOMATION_TRIGGERED, data) {
             warn!("« {alias} » : événement refusé ({error})");
         }
-        // Pour les modèles : `trigger.id`, `trigger.to_state`…
-        let trigger_data = TriggerData {
-            id: trigger.clone(),
-            ..fired.data.unwrap_or_default()
-        };
         let mut context = Context {
             origin: Origin::Automation(alias.clone()),
             alias: alias.into(),
             core: Arc::clone(&self.core),
             checker,
-            trigger,
             trigger_data: Some(Arc::new(trigger_data)),
             trace: Some(recorder),
         };
@@ -627,9 +625,8 @@ pub(crate) struct Context {
     pub(crate) alias: Arc<str>,
     pub(crate) core: Arc<Core>,
     pub(crate) checker: Checker,
-    /// L'identifiant du déclencheur (pour la condition `trigger`).
-    pub(crate) trigger: Option<String>,
-    /// Ce qui a déclenché l'exécution, pour les modèles (`trigger.…`).
+    /// Ce qui a déclenché l'exécution : son identifiant (condition
+    /// `trigger`), et ce qu'il faut aux modèles (`trigger.…`).
     pub(crate) trigger_data: Option<Arc<TriggerData>>,
     /// Qui envoie les commandes (pour le journal de bord).
     pub(crate) origin: Origin,
@@ -747,7 +744,7 @@ pub(crate) fn run_actions<'a>(
                 conditions,
                 &context.core.states,
                 local_now(),
-                context.trigger.as_deref(),
+                context.trigger_data.as_deref(),
             )
         };
         for (index, action) in actions.iter().enumerate() {

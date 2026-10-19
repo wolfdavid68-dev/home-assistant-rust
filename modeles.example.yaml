@@ -1,0 +1,41 @@
+# Capteurs modèles (étape 64), comme « template: » dans Home Assistant : un
+# capteur (ou un détecteur) calculé à partir d'autres, recalculé dès que ce
+# qu'il lit change. Copie ce fichier en modeles.yaml (ou indique son chemin
+# dans HA_TEMPLATES_PATH). Vérifier : ha-server modeles check
+#
+# Dans un modèle : states('…'), state_attr('…', '…'), is_state('…', '…'),
+# les calculs (+ - * / // %), les comparaisons (== != < <= > >=, in), and,
+# or, not, « x if condition else y », et les filtres float, int, round, abs,
+# default, lower, upper, capitalize, replace.
+
+sensor:
+  # L'écart entre le salon et dehors : pour savoir quand aérer.
+  - name: Écart de température
+    unit_of_measurement: °C
+    device_class: temperature
+    state: >-
+      {{ (states('sensor.temperature_salon') | float
+          - states('sensor.meteo_temperature') | float) | round(1) }}
+
+  # Un texte selon une valeur.
+  - name: Confort du salon
+    state: >-
+      {{ 'trop chaud' if states('sensor.temperature_salon') | float(0) > 24
+         else 'frais' if states('sensor.temperature_salon') | float(0) < 18
+         else 'bien' }}
+
+  # Depuis combien de minutes le garage est ouvert (étape 68 : le temps).
+  - name: Garage ouvert depuis
+    unit_of_measurement: min
+    state: >-
+      {{ ((as_timestamp(now()) - as_timestamp(states.cover.garage.last_changed)) / 60) | round(0)
+         if is_state('cover.garage', 'open') else 0 }}
+
+binary_sensor:
+  # Vrai si l'une des deux pièces est occupée.
+  - name: Quelqu'un en bas
+    id: en_bas
+    device_class: occupancy
+    state: >-
+      {{ is_state('binary_sensor.mouvement_salon', 'on')
+         or is_state('binary_sensor.mouvement_cuisine', 'on') }}

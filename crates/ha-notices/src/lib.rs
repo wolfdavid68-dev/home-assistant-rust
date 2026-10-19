@@ -21,6 +21,9 @@
 //! fermée est seulement **ignorée** : elle disparaît pour de bon quand le
 //! problème est réglé.
 //!
+//! Les **piles faibles** (étape 61) ont aussi leur alerte : à 20 % ou moins,
+//! jusqu'à ce que la pile soit changée.
+//!
 //! Les ordres retenus par la garde (voir `ha_core::guard`) s'affichent aussi
 //! ici, en notifications « à valider » (`approval_<numéro>`) : les fermer
 //! revient à refuser l'ordre.
@@ -63,6 +66,16 @@ const UNAVAILABLE_PREFIX: &str = "repair_unavailable_";
 /// redémarrage du pont ou du broker ne doit pas déclencher d'alerte.
 pub const INTEGRATION_ALERT_AFTER: Duration = Duration::from_mins(5);
 const INTEGRATION_PREFIX: &str = "repair_integration_";
+/// Une pile est signalée faible à ce niveau (en %) ou en dessous…
+pub const BATTERY_LOW: f64 = 20.0;
+/// … et l'alerte reste jusqu'à ce qu'elle dépasse ce niveau (pile changée) :
+/// une mesure qui hésite entre 20 et 21 % ne fait pas clignoter l'alerte.
+pub const BATTERY_REPLACED: f64 = 30.0;
+/// Presque vide : l'alerte devient grave (et sonne sur le téléphone).
+pub const BATTERY_EMPTY: f64 = 5.0;
+const BATTERY_PREFIX: &str = "repair_battery_";
+/// Les appareils qui répondent lentement (étape 63).
+const SLOW_PREFIX: &str = "repair_slow_";
 /// Délai avant la première vérification : au démarrage, les appareils
 /// mettent un peu de temps à se reconnecter.
 const FIRST_CHECK: Duration = Duration::from_mins(2);
@@ -315,7 +328,11 @@ async fn run(
         tokio::select! {
             () = token.cancelled() => break,
             received = events.recv() => match received {
-                Ok(event) => match event.as_ref() {
+                Ok(event) => {
+                    // La rapidité des appareils (étape 63) : chaque ordre,
+                    // puis le changement d'état qui y répond.
+                    core.latencies.observe(&event, &core.states, std::time::Instant::now());
+                    match event.as_ref() {
                     Event::CallService { domain, service, entity_id, data, .. }
                         if domain == DOMAIN =>
                     {
@@ -325,7 +342,8 @@ async fn run(
                         approvals(&core);
                     }
                     _ => {}
-                },
+                    }
+                }
                 Err(RecvError::Lagged(missed)) => warn!("notifications : {missed} événements manqués"),
                 Err(RecvError::Closed) => break,
             },
@@ -339,6 +357,8 @@ async fn run(
                 core.expire_held();
                 reconcile(&core.states, INTEGRATION_PREFIX, &integration_issues(&core, now));
                 reconcile(&core.states, UNAVAILABLE_PREFIX, &unavailable(&core, now));
+                reconcile(&core.states, BATTERY_PREFIX, &low_batteries(&core.states));
+                reconcile(&core.states, SLOW_PREFIX, &slow_devices(&core));
             }
         }
     }
@@ -575,6 +595,129 @@ pub fn unavailable(core: &Core, now: SystemTime) -> Vec<Issue> {
         .collect()
 }
 
+/// Ce qu'un appareil dit de sa pile.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Battery {
+    /// Le niveau, en %.
+    Level(f64),
+    /// Un détecteur qui dit seulement « pile faible » (`binary_sensor` de
+    /// classe `battery`) : `true` quand elle l'est.
+    Low(bool),
+}
+
+/// La pile d'une entité, s'il y en a une :
+/// - un capteur de classe `battery` (en %), comme ceux de Zigbee2MQTT ;
+/// - un détecteur de classe `battery` (« pile faible » : `on`) ;
+/// - l'attribut `battery_level` d'un autre appareil (une serrure…).
+///
+/// Un aspirateur se recharge tout seul : sa batterie ne compte pas.
+#[must_use]
+pub fn battery(state: &State) -> Option<Battery> {
+    if matches!(state.state(), "unavailable" | "unknown") {
+        return None;
+    }
+    let domain = state.entity_id().domain();
+    let attributes = state.attributes();
+    let is_battery = text(attributes, "device_class") == Some("battery");
+    let level = |value: Option<f64>| {
+        value
+            .filter(|v| v.is_finite() && (0.0..=100.0).contains(v))
+            .map(Battery::Level)
+    };
+    match domain {
+        "sensor" if is_battery => level(state.state().trim().parse().ok()),
+        "binary_sensor" if is_battery => match state.state() {
+            "on" => Some(Battery::Low(true)),
+            "off" => Some(Battery::Low(false)),
+            _ => None,
+        },
+        "vacuum" | DOMAIN => None,
+        _ => level(attributes.get("battery_level").and_then(Value::as_f64)),
+    }
+}
+
+/// Les piles faibles. Une alerte déjà affichée reste jusqu'à ce que la pile
+/// dépasse [`BATTERY_REPLACED`].
+#[must_use]
+pub fn low_batteries(states: &StateMachine) -> Vec<Issue> {
+    states
+        .all()
+        .into_iter()
+        .filter_map(|state| {
+            let entity_id = state.entity_id();
+            let key = entity_id.as_str().replace('.', "_");
+            let shown = format!("{DOMAIN}.{BATTERY_PREFIX}{key}")
+                .parse::<EntityId>()
+                .is_ok_and(|id| states.get(&id).is_some());
+            let name = text(state.attributes(), "friendly_name").unwrap_or(entity_id.as_str());
+            let (title, message, severity) = match battery(&state)? {
+                Battery::Level(level) if level <= BATTERY_EMPTY => (
+                    format!("Pile presque vide : {name}"),
+                    format!(
+                        "{name} ({entity_id}) n'a plus que {level:.0} % de pile : \
+                         l'appareil peut s'arrêter à tout moment. Change la pile."
+                    ),
+                    Severity::Error,
+                ),
+                Battery::Level(level)
+                    if level <= BATTERY_LOW || (shown && level <= BATTERY_REPLACED) =>
+                {
+                    (
+                        format!("Pile faible : {name}"),
+                        format!(
+                            "{name} ({entity_id}) : {level:.0} % de pile. Prévois une pile \
+                             neuve."
+                        ),
+                        Severity::Warning,
+                    )
+                }
+                Battery::Low(true) => (
+                    format!("Pile faible : {name}"),
+                    format!(
+                        "{name} ({entity_id}) signale une pile faible. Prévois une pile neuve."
+                    ),
+                    Severity::Warning,
+                ),
+                _ => return None,
+            };
+            Some(Issue {
+                key,
+                title,
+                message,
+                severity,
+            })
+        })
+        .collect()
+}
+
+/// Les appareils dont les 3 derniers ordres ont mis plus de 3 secondes à
+/// aboutir (voir [`ha_core::latency`]). Souvent une pile qui faiblit, un
+/// appareil Zigbee trop loin, ou un réseau Wi-Fi saturé.
+#[must_use]
+pub fn slow_devices(core: &Core) -> Vec<Issue> {
+    core.latencies
+        .slow_devices()
+        .into_iter()
+        .filter_map(|(entity_id, fastest)| {
+            let state = core.states.get(&entity_id)?;
+            let name = text(state.attributes(), "friendly_name").unwrap_or(entity_id.as_str());
+            // « 3,5 s », à la française.
+            let seconds = format!("{:.1}", fastest.as_secs_f64()).replace('.', ",");
+            Some(Issue {
+                key: entity_id.as_str().replace('.', "_"),
+                title: format!("{name} répond lentement"),
+                message: format!(
+                    "Les {} derniers ordres envoyés à {name} ({entity_id}) ont tous mis plus de \
+                     {seconds} s à aboutir. Vérifie sa pile, sa distance au relais le plus \
+                     proche (Zigbee) ou au point d'accès (Wi-Fi).",
+                    ha_core::latency::DEVICE_SAMPLES
+                ),
+                severity: Severity::Warning,
+            })
+        })
+        .collect()
+}
+
 /// Les alertes affichées (non ignorées), pour un résumé.
 #[must_use]
 pub fn active_count(states: &StateMachine) -> usize {
@@ -743,6 +886,127 @@ mod tests {
         assert_eq!(issues[0].key, "light_salon");
         assert_eq!(issues[0].title, "Lampe du salon ne répond plus");
         assert!(issues[0].message.contains("(light.salon)"));
+    }
+
+    #[test]
+    fn low_batteries_are_found_until_replaced() {
+        let core = Core::new();
+        let states = &core.states;
+        let set = |entity: &str, value: &str, class: Option<&str>, level: Option<f64>| {
+            let mut attributes = Attributes::new();
+            attributes.insert("friendly_name".into(), format!("Appareil {entity}").into());
+            if let Some(class) = class {
+                attributes.insert("device_class".into(), class.into());
+            }
+            if let Some(level) = level {
+                attributes.insert("battery_level".into(), level.into());
+            }
+            states.set(id(entity), value, attributes).unwrap();
+        };
+        let keys = || {
+            let issues = low_batteries(states);
+            reconcile(states, BATTERY_PREFIX, &issues);
+            issues
+                .into_iter()
+                .map(|issue| (issue.key, issue.severity))
+                .collect::<Vec<_>>()
+        };
+        set("sensor.fumee_batterie", "18", Some("battery"), None);
+        set("sensor.porte_batterie", "64", Some("battery"), None);
+        set("sensor.cave_batterie", "3", Some("battery"), None);
+        set("binary_sensor.sonnette_pile", "on", Some("battery"), None);
+        set("binary_sensor.fenetre_pile", "off", Some("battery"), None);
+        set("lock.entree", "locked", None, Some(12.0));
+        // Un aspirateur se recharge seul ; une valeur absurde ou une
+        // température n'est pas une pile.
+        set("vacuum.robot", "docked", None, Some(4.0));
+        set("sensor.absurde", "180", Some("battery"), None);
+        set("sensor.temperature", "12", Some("temperature"), None);
+        set("sensor.muet", "unavailable", Some("battery"), None);
+        let mut found = keys();
+        found.sort_by(|a, b| a.0.cmp(&b.0));
+        assert_eq!(
+            found,
+            [
+                ("binary_sensor_sonnette_pile".into(), Severity::Warning),
+                ("lock_entree".into(), Severity::Warning),
+                ("sensor_cave_batterie".into(), Severity::Error),
+                ("sensor_fumee_batterie".into(), Severity::Warning),
+            ]
+        );
+        let alert = states
+            .get(&id(
+                "persistent_notification.repair_battery_sensor_fumee_batterie",
+            ))
+            .unwrap();
+        assert_eq!(
+            text(alert.attributes(), "title"),
+            Some("Pile faible : Appareil sensor.fumee_batterie")
+        );
+        assert!(
+            text(alert.attributes(), "message")
+                .unwrap()
+                .contains("18 %")
+        );
+
+        // 22 % : l'alerte déjà affichée reste (la mesure hésite) ; une pile
+        // à 22 % sans alerte n'en fait pas apparaître.
+        set("sensor.fumee_batterie", "22", Some("battery"), None);
+        set("sensor.porte_batterie", "22", Some("battery"), None);
+        let found = keys();
+        assert!(found.iter().any(|(key, _)| key == "sensor_fumee_batterie"));
+        assert!(!found.iter().any(|(key, _)| key == "sensor_porte_batterie"));
+        // Pile changée : l'alerte disparaît.
+        set("sensor.fumee_batterie", "100", Some("battery"), None);
+        assert!(!keys().iter().any(|(key, _)| key == "sensor_fumee_batterie"));
+        assert!(
+            states
+                .get(&id(
+                    "persistent_notification.repair_battery_sensor_fumee_batterie"
+                ))
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn a_device_that_answers_slowly_gets_an_alert() {
+        let core = Core::new();
+        let mut attributes = Attributes::new();
+        attributes.insert("friendly_name".into(), "Prise de la cave".into());
+        core.states
+            .set_by("mqtt", id("switch.cave"), "off", attributes)
+            .unwrap();
+        let start = std::time::Instant::now();
+        for (n, took_ms) in [(0_u64, 4_200_u64), (1, 3_600), (2, 5_000)] {
+            let sent = start + Duration::from_secs(n * 10);
+            let order = Event::CallService {
+                domain: "switch".into(),
+                service: "toggle".into(),
+                entity_id: id("switch.cave"),
+                data: Attributes::new(),
+                origin: ha_core::Origin::System,
+                command: None,
+                issued_at: sent,
+            };
+            core.latencies.observe(&order, &core.states, sent);
+            let answer = Event::StateChanged {
+                entity_id: id("switch.cave"),
+                old_state: None,
+                new_state: core.states.get(&id("switch.cave")),
+            };
+            core.latencies
+                .observe(&answer, &core.states, sent + Duration::from_millis(took_ms));
+        }
+        let issues = slow_devices(&core);
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].key, "switch_cave");
+        assert_eq!(issues[0].title, "Prise de la cave répond lentement");
+        assert!(
+            issues[0].message.contains("plus de 3,6 s"),
+            "{}",
+            issues[0].message
+        );
+        assert!(issues[0].message.contains("(switch.cave)"));
     }
 
     #[test]

@@ -343,6 +343,8 @@ pub(crate) enum ConditionConfig {
     Not { conditions: Vec<ConditionConfig> },
     /// L'automatisation a été lancée par ce déclencheur (son `id`).
     Trigger { id: OneOrMany },
+    /// Un modèle qui vaut « vrai » (étape 64).
+    Template { value_template: String },
 }
 
 /// Une action. Concept Rust : la lecture est écrite à la main (voir
@@ -620,6 +622,12 @@ pub enum Condition {
     Not(Vec<Condition>),
     /// Lancée par l'un de ces déclencheurs.
     Trigger(Vec<String>),
+    /// Un modèle qui vaut « vrai » : `{{ states('sensor.x') | float > 20 }}`
+    /// (étape 64). Le texte d'origine est gardé pour l'historique.
+    Template {
+        source: String,
+        template: Template,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1282,6 +1290,7 @@ impl Condition {
                 let ids: Vec<String> = ids.iter().map(|id| format!("« {id} »")).collect();
                 format!("lancée par le déclencheur {}", ids.join(" ou "))
             }
+            Self::Template { source, .. } => format!("le modèle {} est vrai", source.trim()),
         }
     }
 }
@@ -1369,6 +1378,7 @@ impl Condition {
                     condition.collect_entities(ids);
                 }
             }
+            Self::Template { template, .. } => ids.extend(template.entity_ids()),
             _ => {}
         }
     }
@@ -1504,6 +1514,15 @@ fn check_condition(
         ConditionConfig::And { conditions } => Condition::And(nested(conditions, "and")?),
         ConditionConfig::Or { conditions } => Condition::Or(nested(conditions, "or")?),
         ConditionConfig::Not { conditions } => Condition::Not(nested(conditions, "not")?),
+        ConditionConfig::Template { value_template } => {
+            let template = Template::parse(&value_template)
+                .map_err(|error| format!("condition template : {error}"))?
+                .ok_or("condition template : un modèle {{ … }} attendu dans value_template")?;
+            Condition::Template {
+                source: value_template,
+                template,
+            }
+        }
         ConditionConfig::Trigger { id } => Condition::Trigger(
             id.into_vec()
                 .iter()

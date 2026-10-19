@@ -1,0 +1,24 @@
+# Délestage (étape 62) : quand la maison tire plus que l'abonnement ne le
+# permet, ces appareils sont coupés un par un, avant que le disjoncteur du
+# compteur ne saute ; ils sont rallumés dans l'ordre inverse quand la
+# consommation est redescendue. On l'arme avec switch.delestage.
+# Copie ce fichier en delestage.yaml. Vérifier : ha-server delestage check
+
+# Ce qui est mesuré : l'intensité lue sur le Linky (par défaut), ou une
+# puissance (sensor.linky_puissance, en VA).
+mesure: sensor.linky_intensite
+
+# La limite, dans l'unité de la mesure. Sans elle : la puissance souscrite
+# lue sur le Linky (30 A, ou 6 kVA = 6000 VA).
+# limite: 30
+
+# Coupés dans cet ordre (le moins utile d'abord), rallumés dans l'ordre
+# inverse. Seulement des prises, lumières, ventilateurs, interrupteurs
+# virtuels et thermostats. Jamais un congélateur ni une pompe de relevage !
+appareils:
+  - switch.chauffe_eau
+  - climate.bureau
+  - switch.radiateur_salle_de_bain
+
+# Minutes sous 85 % de la limite avant de rallumer (de 1 à 60).
+retour_apres: 5

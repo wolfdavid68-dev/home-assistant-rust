@@ -360,7 +360,10 @@ async fn devices_become_entities_and_shutters_obey() {
         &json!({"name": "setClosure", "parameters": [70]})
     );
 
-    // Fermer complètement.
+    // Fermer complètement. Juste après un ordre, la box est relevée toutes
+    // les 0,5 s (étape 63) : le volet s'affiche fermé en 0,5 s environ, au
+    // lieu de 2 s (la marge couvre une machine de CI chargée).
+    let sent = std::time::Instant::now();
     core.call_service(
         "cover",
         "close_cover",
@@ -369,6 +372,11 @@ async fn devices_become_entities_and_shutters_obey() {
     )
     .unwrap();
     wait_for(&core, "cover.volet_salon", |s| s.state() == "closed").await;
+    assert!(
+        sent.elapsed() < Duration::from_millis(1_500),
+        "fermeture vue après {:?}",
+        sent.elapsed()
+    );
 
     // Rien n'est envoyé pour une position invalide ou un capteur.
     let before = box_state.lock().unwrap().commands.len();

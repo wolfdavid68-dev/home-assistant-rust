@@ -1,4 +1,4 @@
-//! Les **modèles** : des valeurs dans les textes des actions.
+//! Les **modèles** : des valeurs dans les textes des actions, et des calculs.
 //!
 //! ```yaml
 //! - action: notify.send_message
@@ -7,26 +7,46 @@
 //!     message: "Il fait {{ states('sensor.meteo_temperature') }} °C dehors."
 //! ```
 //!
-//! On reprend l'écriture de Home Assistant (Jinja), mais seulement une petite
-//! partie, faite pour **lire** : l'état d'une entité, un attribut, ce qui a
-//! déclenché l'automatisation, et quelques filtres (`round`, `float`,
-//! `default`…). Pas de boucles, pas de calculs, pas d'accès aux fichiers :
-//! un modèle ne peut rien faire d'autre que produire un texte court.
+//! On reprend l'écriture de Home Assistant (Jinja), mais seulement une
+//! partie :
 //!
-//! Chaque modèle est vérifié au chargement (fonctions et filtres connus,
-//! identifiants d'entités valides). À l'exécution, une valeur introuvable
-//! donne un texte vide, ou la valeur de `default(…)` : jamais d'erreur qui
-//! bloque l'automatisation.
+//! - **lire** : l'état d'une entité, un attribut, ce qui a déclenché
+//!   l'automatisation (`trigger.…`) ;
+//! - **calculer** (étape 64) : `+ - * / // %`, `~` pour coller deux textes ;
+//! - **comparer** : `== != < <= > >=`, `in` et `not in` (dans une liste ou un
+//!   texte) ;
+//! - **combiner** : `and`, `or`, `not`, `x if condition else y`, des
+//!   parenthèses ;
+//! - quelques **filtres** (`round`, `float`, `default`, `abs`…) ;
+//! - **le temps** (étape 68) : `now()` et ses champs (`now().hour`,
+//!   `now().weekday()`…), `states.binary_sensor.porte.last_changed`, et
+//!   `as_timestamp(…)` pour compter des secondes.
+//!
+//! Pas de boucles, pas de variables, pas d'accès aux fichiers : un modèle ne
+//! peut rien faire d'autre que produire une valeur courte. Chaque modèle est
+//! vérifié au chargement (fonctions et filtres connus, identifiants d'entités
+//! valides, taille et imbrication limitées). À l'exécution, une valeur
+//! introuvable ou un calcul impossible (diviser par zéro, additionner un texte
+//! et un nombre) donne une valeur vide, ou celle de `default(…)` : jamais
+//! d'erreur qui bloque l'automatisation.
 
-use ha_core::{EntityId, State, StateMachine};
+use std::cmp::Ordering;
+
+use ha_core::{Attributes, EntityId, State, StateMachine};
 use serde_json::{Number, Value};
 
 /// Longueur maximale d'un texte qui contient un modèle, et du résultat.
 const MAX_LEN: usize = 2000;
 /// Nombre maximal de `{{ … }}` dans un texte.
 const MAX_EXPRESSIONS: usize = 20;
-/// Nombre maximal de filtres dans une expression.
+/// Nombre maximal de filtres à la suite.
 const MAX_FILTERS: usize = 5;
+/// Imbrication maximale (parenthèses, `not`, `-`, `if … else`).
+const MAX_DEPTH: usize = 20;
+/// Morceaux (valeurs, opérations, filtres) au plus dans une expression.
+const MAX_NODES: usize = 200;
+/// Éléments d'une liste au plus (écrite, ou lue dans un attribut).
+const MAX_LIST: usize = 50;
 
 /// Un texte avec des `{{ … }}`, vérifié.
 #[derive(Debug, Clone, PartialEq)]
@@ -37,13 +57,44 @@ pub struct Template {
 #[derive(Debug, Clone, PartialEq)]
 enum Part {
     Text(String),
-    Expr(Expr),
+    Expr(Node),
 }
 
+/// Une expression, en arbre : `a + b * 2` donne `Add(a, Mul(b, 2))`.
 #[derive(Debug, Clone, PartialEq)]
-struct Expr {
-    base: Base,
-    filters: Vec<Filter>,
+enum Node {
+    Base(Base),
+    List(Vec<Node>),
+    Filter(Box<Node>, Filter),
+    Neg(Box<Node>),
+    Not(Box<Node>),
+    Binary(Op, Box<Node>, Box<Node>),
+    If {
+        condition: Box<Node>,
+        then: Box<Node>,
+        otherwise: Box<Node>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Op {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    FloorDiv,
+    Mod,
+    Concat,
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+    In,
+    NotIn,
+    And,
+    Or,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -57,6 +108,28 @@ enum Base {
     IsState(EntityId, String),
     /// `trigger.…` : ce qui a déclenché l'automatisation.
     Trigger(TriggerField),
+    /// `now()`, `now().hour`… : l'heure locale.
+    Now(NowField),
+    /// `states.sensor.x.state`, `.last_changed`, `.attributes.unit`… :
+    /// l'écriture de Home Assistant pour lire une entité.
+    Entity(EntityId, StateField),
+}
+
+/// Ce qu'on lit de `now()`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NowField {
+    /// `now()` seul : « 2026-10-16T22:31:00+02:00 ».
+    Whole,
+    Year,
+    Month,
+    Day,
+    Hour,
+    Minute,
+    Second,
+    /// `now().weekday()` : 0 le lundi, 6 le dimanche (comme Python).
+    Weekday,
+    /// `now().isoweekday()` : 1 le lundi, 7 le dimanche.
+    IsoWeekday,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -64,6 +137,10 @@ enum TriggerField {
     Id,
     EntityId,
     State(Side, StateField),
+    /// `trigger.event.event_type`.
+    EventType,
+    /// `trigger.event.data.nom`.
+    EventData(String),
 }
 
 /// L'état d'avant (`from_state`) ou d'après (`to_state`) le changement.
@@ -79,6 +156,10 @@ enum StateField {
     Name,
     EntityId,
     Attribute(String),
+    /// Quand l'état a changé (étape 68).
+    LastChanged,
+    /// Quand l'état ou un attribut a changé.
+    LastUpdated,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -86,21 +167,26 @@ enum Filter {
     Round(u8),
     Int(Option<Val>),
     Float(Option<Val>),
+    Abs,
     Lower,
     Upper,
     Capitalize,
     Default(Val),
     Replace(String, String),
+    /// Une date (« 2026-10-16T22:31:00+02:00 ») en secondes depuis 1970.
+    AsTimestamp,
 }
 
 /// Une valeur calculée.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Val {
-    /// Introuvable (entité ou attribut absent, nombre illisible…).
+    /// Introuvable (entité ou attribut absent, nombre illisible, calcul
+    /// impossible…).
     None,
     Text(String),
     Number(f64),
     Bool(bool),
+    List(Vec<Val>),
 }
 
 impl Val {
@@ -109,8 +195,12 @@ impl Val {
             Value::String(text) => Self::Text(text.clone()),
             Value::Number(number) => number.as_f64().map_or(Self::None, Self::Number),
             Value::Bool(flag) => Self::Bool(*flag),
-            // Listes et objets : trop gros pour un message.
-            Value::Null | Value::Array(_) | Value::Object(_) => Self::None,
+            // Une liste (les personnes de la maison…) : pour `in`.
+            Value::Array(items) => {
+                Self::List(items.iter().take(MAX_LIST).map(Self::from_json).collect())
+            }
+            // Les objets : trop gros pour un message.
+            Value::Null | Value::Object(_) => Self::None,
         }
     }
 
@@ -118,7 +208,7 @@ impl Val {
         match self {
             Self::Number(number) => Some(*number),
             Self::Text(text) => text.trim().parse::<f64>().ok().filter(|n| n.is_finite()),
-            Self::Bool(_) | Self::None => None,
+            Self::Bool(_) | Self::None | Self::List(_) => None,
         }
     }
 
@@ -129,6 +219,27 @@ impl Val {
             Self::Number(number) => number_text(*number),
             Self::Bool(true) => "True".into(),
             Self::Bool(false) => "False".into(),
+            Self::List(items) => {
+                let inner: Vec<String> = items
+                    .iter()
+                    .map(|item| match item {
+                        Self::Text(text) => format!("'{text}'"),
+                        other => other.text(),
+                    })
+                    .collect();
+                format!("[{}]", inner.join(", "))
+            }
+        }
+    }
+
+    /// Vrai ou faux, comme en Python : vide, zéro et `None` sont faux.
+    fn truthy(&self) -> bool {
+        match self {
+            Self::None => false,
+            Self::Bool(flag) => *flag,
+            Self::Number(number) => *number != 0.0,
+            Self::Text(text) => !text.is_empty(),
+            Self::List(items) => !items.is_empty(),
         }
     }
 }
@@ -150,12 +261,32 @@ pub struct TriggerData {
     pub entity_id: Option<EntityId>,
     pub from_state: Option<State>,
     pub to_state: Option<State>,
+    /// Pour un déclencheur `event` : son nom et ses détails
+    /// (`trigger.event.event_type`, `trigger.event.data.…`).
+    pub event_type: Option<String>,
+    pub event_data: Option<Attributes>,
 }
 
 /// De quoi calculer un modèle.
 pub(crate) struct Scope<'a> {
     pub(crate) states: &'a StateMachine,
     pub(crate) trigger: Option<&'a TriggerData>,
+}
+
+/// Le résultat d'un modèle vaut-il « vrai » ? Pour la condition `template`
+/// et les détecteurs modèles, comme Home Assistant : `true`, un nombre non
+/// nul, ou les textes `true`, `on`, `yes`, `open`, `home`, `1`.
+#[must_use]
+pub fn is_true(value: &Value) -> bool {
+    match value {
+        Value::Bool(flag) => *flag,
+        Value::Number(number) => number.as_f64().is_some_and(|n| n != 0.0),
+        Value::String(text) => matches!(
+            text.trim().to_lowercase().as_str(),
+            "true" | "on" | "yes" | "open" | "home" | "1"
+        ),
+        Value::Null | Value::Array(_) | Value::Object(_) => false,
+    }
 }
 
 impl Template {
@@ -207,21 +338,28 @@ impl Template {
 
     /// Les entités lues par le modèle.
     pub fn entity_ids(&self) -> impl Iterator<Item = &EntityId> {
-        self.parts.iter().filter_map(|part| match part {
-            Part::Expr(Expr {
-                base: Base::States(id) | Base::StateAttr(id, _) | Base::IsState(id, _),
-                ..
-            }) => Some(id),
-            _ => None,
-        })
+        let mut ids = Vec::new();
+        for part in &self.parts {
+            if let Part::Expr(node) = part {
+                node.entity_ids(&mut ids);
+            }
+        }
+        ids.into_iter()
+    }
+
+    /// Calcule le modèle hors d'une automatisation (capteurs modèles), ou
+    /// avec ce qui l'a déclenchée (condition `template`).
+    #[must_use]
+    pub fn evaluate(&self, states: &StateMachine, trigger: Option<&TriggerData>) -> Value {
+        self.render(&Scope { states, trigger })
     }
 
     /// Calcule le modèle. Un texte fait d'**une seule** expression donne une
     /// valeur typée (`{{ … | float }}` donne un nombre, utile pour une
     /// luminosité) ; sinon, un texte.
     pub(crate) fn render(&self, scope: &Scope<'_>) -> Value {
-        if let [Part::Expr(expr)] = self.parts.as_slice() {
-            return match expr.eval(scope) {
+        if let [Part::Expr(node)] = self.parts.as_slice() {
+            return match node.eval(scope) {
                 Val::Number(number) => Number::from_f64(number).map_or(Value::Null, |n| {
                     // Un entier s'écrit sans « .0 » (`brightness: 128`).
                     if number.fract() == 0.0 && number.abs() < 1e15 {
@@ -242,7 +380,7 @@ impl Template {
         for part in &self.parts {
             match part {
                 Part::Text(text) => out.push_str(text),
-                Part::Expr(expr) => out.push_str(&expr.eval(scope).text()),
+                Part::Expr(node) => out.push_str(&node.eval(scope).text()),
             }
             if out.len() > MAX_LEN * 4 {
                 break;
@@ -259,13 +397,167 @@ fn truncate(text: String) -> String {
     text.chars().take(MAX_LEN).collect()
 }
 
-impl Expr {
-    fn eval(&self, scope: &Scope<'_>) -> Val {
-        let mut value = self.base.eval(scope);
-        for filter in &self.filters {
-            value = filter.apply(value);
+impl Node {
+    fn entity_ids<'a>(&'a self, ids: &mut Vec<&'a EntityId>) {
+        match self {
+            Self::Base(
+                Base::States(id)
+                | Base::StateAttr(id, _)
+                | Base::IsState(id, _)
+                | Base::Entity(id, _),
+            ) => {
+                if !ids.contains(&id) {
+                    ids.push(id);
+                }
+            }
+            Self::Base(_) => {}
+            Self::List(items) => items.iter().for_each(|item| item.entity_ids(ids)),
+            Self::Filter(inner, _) | Self::Neg(inner) | Self::Not(inner) => inner.entity_ids(ids),
+            Self::Binary(_, left, right) => {
+                left.entity_ids(ids);
+                right.entity_ids(ids);
+            }
+            Self::If {
+                condition,
+                then,
+                otherwise,
+            } => {
+                then.entity_ids(ids);
+                condition.entity_ids(ids);
+                otherwise.entity_ids(ids);
+            }
         }
-        value
+    }
+
+    fn eval(&self, scope: &Scope<'_>) -> Val {
+        match self {
+            Self::Base(base) => base.eval(scope),
+            Self::List(items) => Val::List(items.iter().map(|item| item.eval(scope)).collect()),
+            Self::Filter(inner, filter) => filter.apply(inner.eval(scope)),
+            Self::Neg(inner) => match inner.eval(scope) {
+                Val::Number(number) => Val::Number(-number),
+                _ => Val::None,
+            },
+            Self::Not(inner) => Val::Bool(!inner.eval(scope).truthy()),
+            Self::If {
+                condition,
+                then,
+                otherwise,
+            } => {
+                if condition.eval(scope).truthy() {
+                    then.eval(scope)
+                } else {
+                    otherwise.eval(scope)
+                }
+            }
+            // `and` et `or` rendent l'une des deux valeurs, comme en Python :
+            // `states('x') or 'inconnu'`.
+            Self::Binary(Op::And, left, right) => {
+                let left = left.eval(scope);
+                if left.truthy() {
+                    right.eval(scope)
+                } else {
+                    left
+                }
+            }
+            Self::Binary(Op::Or, left, right) => {
+                let left = left.eval(scope);
+                if left.truthy() {
+                    left
+                } else {
+                    right.eval(scope)
+                }
+            }
+            Self::Binary(op, left, right) => binary(*op, left.eval(scope), right.eval(scope)),
+        }
+    }
+}
+
+/// Un nombre fini, ou rien (un calcul qui déborde).
+fn finite(number: f64) -> Val {
+    if number.is_finite() {
+        Val::Number(number)
+    } else {
+        Val::None
+    }
+}
+
+fn binary(op: Op, left: Val, right: Val) -> Val {
+    let numbers = match (&left, &right) {
+        (Val::Number(a), Val::Number(b)) => Some((*a, *b)),
+        _ => None,
+    };
+    match op {
+        Op::Add => match (left, right) {
+            (Val::Number(a), Val::Number(b)) => finite(a + b),
+            (Val::Text(a), Val::Text(b)) => Val::Text(truncate(a + &b)),
+            _ => Val::None,
+        },
+        Op::Sub => numbers.map_or(Val::None, |(a, b)| finite(a - b)),
+        Op::Mul => numbers.map_or(Val::None, |(a, b)| finite(a * b)),
+        Op::Div => match numbers {
+            Some((a, b)) if b != 0.0 => finite(a / b),
+            _ => Val::None,
+        },
+        Op::FloorDiv => match numbers {
+            Some((a, b)) if b != 0.0 => finite((a / b).floor()),
+            _ => Val::None,
+        },
+        // Le reste, du signe du diviseur, comme en Python : -7 % 3 = 2.
+        Op::Mod => match numbers {
+            Some((a, b)) if b != 0.0 => finite(a - b * (a / b).floor()),
+            _ => Val::None,
+        },
+        Op::Concat => Val::Text(truncate(left.text() + &right.text())),
+        Op::Eq => Val::Bool(equal(&left, &right)),
+        Op::Ne => Val::Bool(!equal(&left, &right)),
+        Op::Lt | Op::Le | Op::Gt | Op::Ge => {
+            let order = match (&left, &right) {
+                (Val::Number(a), Val::Number(b)) => a.partial_cmp(b),
+                (Val::Text(a), Val::Text(b)) => Some(a.cmp(b)),
+                _ => None,
+            };
+            order.map_or(Val::None, |order| {
+                Val::Bool(match op {
+                    Op::Lt => order == Ordering::Less,
+                    Op::Le => order != Ordering::Greater,
+                    Op::Gt => order == Ordering::Greater,
+                    _ => order != Ordering::Less,
+                })
+            })
+        }
+        Op::In => Val::Bool(contains(&right, &left)),
+        Op::NotIn => Val::Bool(!contains(&right, &left)),
+        // Traités dans `eval` (ils n'évaluent pas toujours les deux côtés).
+        Op::And | Op::Or => Val::None,
+    }
+}
+
+/// Égaux ? Un nombre n'est jamais égal à un texte : `states('x') == 21` est
+/// faux, il faut `states('x') | float == 21` (comme dans Home Assistant).
+#[expect(
+    clippy::float_cmp,
+    reason = "« == » dans un modèle : égalité exacte, comme en Jinja"
+)]
+fn equal(left: &Val, right: &Val) -> bool {
+    match (left, right) {
+        (Val::List(a), Val::List(b)) => {
+            a.len() == b.len() && a.iter().zip(b).all(|(x, y)| equal(x, y))
+        }
+        (Val::Number(a), Val::Number(b)) => a == b,
+        (Val::Text(a), Val::Text(b)) => a == b,
+        (Val::Bool(a), Val::Bool(b)) => a == b,
+        (Val::None, Val::None) => true,
+        _ => false,
+    }
+}
+
+/// `item in container` : dans une liste, ou un morceau d'un texte.
+fn contains(container: &Val, item: &Val) -> bool {
+    match (container, item) {
+        (Val::List(items), _) => items.iter().any(|x| equal(x, item)),
+        (Val::Text(text), Val::Text(part)) => text.contains(part.as_str()),
+        _ => false,
     }
 }
 
@@ -287,6 +579,28 @@ impl Base {
             Self::IsState(id, expected) => {
                 Val::Bool(scope.states.get(id).is_some_and(|s| s.state() == expected))
             }
+            Self::Entity(id, field) => scope
+                .states
+                .get(id)
+                .map_or(Val::None, |state| state_field(&state, field)),
+            Self::Now(field) => {
+                let now = jiff::Zoned::now();
+                match field {
+                    NowField::Whole => Val::Text(local_text(&now)),
+                    NowField::Year => Val::Number(f64::from(now.year())),
+                    NowField::Month => Val::Number(f64::from(now.month())),
+                    NowField::Day => Val::Number(f64::from(now.day())),
+                    NowField::Hour => Val::Number(f64::from(now.hour())),
+                    NowField::Minute => Val::Number(f64::from(now.minute())),
+                    NowField::Second => Val::Number(f64::from(now.second())),
+                    NowField::Weekday => {
+                        Val::Number(f64::from(now.weekday().to_monday_zero_offset()))
+                    }
+                    NowField::IsoWeekday => {
+                        Val::Number(f64::from(now.weekday().to_monday_one_offset()))
+                    }
+                }
+            }
             Self::Trigger(field) => {
                 let Some(trigger) = scope.trigger else {
                     return Val::None;
@@ -304,6 +618,14 @@ impl Base {
                         };
                         state.map_or(Val::None, |state| state_field(state, field))
                     }
+                    TriggerField::EventType => {
+                        trigger.event_type.clone().map_or(Val::None, Val::Text)
+                    }
+                    TriggerField::EventData(name) => trigger
+                        .event_data
+                        .as_ref()
+                        .and_then(|data| data.get(name))
+                        .map_or(Val::None, Val::from_json),
                 }
             }
         }
@@ -325,6 +647,44 @@ fn state_field(state: &State, field: &StateField) -> Val {
             .attributes()
             .get(name)
             .map_or(Val::None, Val::from_json),
+        StateField::LastChanged => moment(state.last_changed()),
+        StateField::LastUpdated => moment(state.last_updated()),
+    }
+}
+
+/// « 2026-10-16T22:31:00+02:00 » : l'heure locale, avec son décalage.
+fn local_text(zoned: &jiff::Zoned) -> String {
+    zoned.strftime("%Y-%m-%dT%H:%M:%S%:z").to_string()
+}
+
+fn moment(time: std::time::SystemTime) -> Val {
+    jiff::Timestamp::try_from(time).map_or(Val::None, |timestamp| {
+        Val::Text(local_text(
+            &timestamp.to_zoned(jiff::tz::TimeZone::system()),
+        ))
+    })
+}
+
+/// Une date en secondes depuis 1970 : avec son décalage
+/// (« …+02:00 », « …Z »), ou en heure locale (« 2026-10-16 22:31:00 »).
+fn timestamp(value: &Val) -> Val {
+    match value {
+        Val::Number(seconds) => Val::Number(*seconds),
+        Val::Text(text) => {
+            let text = text.trim();
+            let parsed = text.parse::<jiff::Timestamp>().ok().or_else(|| {
+                text.parse::<jiff::civil::DateTime>()
+                    .ok()?
+                    .to_zoned(jiff::tz::TimeZone::system())
+                    .ok()
+                    .map(|zoned| zoned.timestamp())
+            });
+            #[expect(clippy::cast_precision_loss, reason = "des millisecondes depuis 1970")]
+            parsed.map_or(Val::None, |t| {
+                Val::Number(t.as_millisecond() as f64 / 1000.0)
+            })
+        }
+        _ => Val::None,
     }
 }
 
@@ -343,6 +703,7 @@ impl Filter {
                 Some(n) => Val::Number(n),
                 None => default.clone().unwrap_or(Val::None),
             },
+            Self::Abs => value.number().map_or(Val::None, |n| Val::Number(n.abs())),
             Self::Lower => text_map(value, str::to_lowercase),
             Self::Upper => text_map(value, str::to_uppercase),
             Self::Capitalize => text_map(value, |t| {
@@ -359,6 +720,7 @@ impl Filter {
                 other => other,
             },
             Self::Replace(from, to) => text_map(value, |t| t.replace(from.as_str(), to)),
+            Self::AsTimestamp => timestamp(&value),
         }
     }
 }
@@ -366,7 +728,7 @@ impl Filter {
 fn text_map(value: Val, f: impl Fn(&str) -> String) -> Val {
     match value {
         Val::None => Val::None,
-        other => Val::Text(f(&other.text())),
+        other => Val::Text(truncate(f(&other.text()))),
     }
 }
 
@@ -384,6 +746,9 @@ enum Token {
     Close,
     OpenBracket,
     CloseBracket,
+    /// Un opérateur : `+`, `-`, `*`, `/`, `//`, `%`, `~`, `==`, `!=`, `<`,
+    /// `<=`, `>`, `>=`.
+    Symbol(&'static str),
 }
 
 /// Concept Rust : un `Peekable` permet de regarder le caractère suivant
@@ -392,40 +757,49 @@ fn tokenize(text: &str) -> Result<Vec<Token>, String> {
     let mut tokens = Vec::new();
     let mut chars = text.chars().peekable();
     while let Some(&c) = chars.peek() {
+        chars.next();
+        let next = chars.peek().copied();
         match c {
-            ' ' | '\t' | '\n' | '\r' => {
+            ' ' | '\t' | '\n' | '\r' => {}
+            '.' => tokens.push(Token::Dot),
+            ',' => tokens.push(Token::Comma),
+            '|' => tokens.push(Token::Pipe),
+            '(' => tokens.push(Token::Open),
+            ')' => tokens.push(Token::Close),
+            '[' => tokens.push(Token::OpenBracket),
+            ']' => tokens.push(Token::CloseBracket),
+            '+' => tokens.push(Token::Symbol("+")),
+            '-' => tokens.push(Token::Symbol("-")),
+            '*' => tokens.push(Token::Symbol("*")),
+            '%' => tokens.push(Token::Symbol("%")),
+            '~' => tokens.push(Token::Symbol("~")),
+            '/' if next == Some('/') => {
                 chars.next();
+                tokens.push(Token::Symbol("//"));
             }
-            '.' => {
+            '/' => tokens.push(Token::Symbol("/")),
+            '=' if next == Some('=') => {
                 chars.next();
-                tokens.push(Token::Dot);
+                tokens.push(Token::Symbol("=="));
             }
-            ',' => {
+            '!' if next == Some('=') => {
                 chars.next();
-                tokens.push(Token::Comma);
+                tokens.push(Token::Symbol("!="));
             }
-            '|' => {
-                chars.next();
-                tokens.push(Token::Pipe);
+            '<' | '>' => {
+                let with_equal = next == Some('=');
+                if with_equal {
+                    chars.next();
+                }
+                tokens.push(Token::Symbol(match (c, with_equal) {
+                    ('<', false) => "<",
+                    ('<', true) => "<=",
+                    ('>', false) => ">",
+                    _ => ">=",
+                }));
             }
-            '(' => {
-                chars.next();
-                tokens.push(Token::Open);
-            }
-            ')' => {
-                chars.next();
-                tokens.push(Token::Close);
-            }
-            '[' => {
-                chars.next();
-                tokens.push(Token::OpenBracket);
-            }
-            ']' => {
-                chars.next();
-                tokens.push(Token::CloseBracket);
-            }
+            '=' => return Err("modèle : « == » pour comparer (pas « = »)".into()),
             '\'' | '"' => {
-                chars.next();
                 let mut value = String::new();
                 loop {
                     match chars.next() {
@@ -436,10 +810,9 @@ fn tokenize(text: &str) -> Result<Vec<Token>, String> {
                 }
                 tokens.push(Token::Str(value));
             }
-            '-' | '0'..='9' => {
+            '0'..='9' => {
                 let mut number = String::new();
                 number.push(c);
-                chars.next();
                 while let Some(&d) = chars.peek() {
                     if d.is_ascii_digit() || d == '.' {
                         number.push(d);
@@ -457,6 +830,7 @@ fn tokenize(text: &str) -> Result<Vec<Token>, String> {
             }
             c if c.is_ascii_alphabetic() || c == '_' => {
                 let mut name = String::new();
+                name.push(c);
                 while let Some(&d) = chars.peek() {
                     if d.is_ascii_alphanumeric() || d == '_' {
                         name.push(d);
@@ -468,21 +842,24 @@ fn tokenize(text: &str) -> Result<Vec<Token>, String> {
                 tokens.push(Token::Ident(name));
             }
             other => {
-                return Err(format!(
-                    "modèle : caractère {other:?} non pris en charge (pas de calculs ni de \
-                     comparaisons, seulement des fonctions et des filtres)"
-                ));
+                return Err(format!("modèle : caractère {other:?} non pris en charge"));
             }
         }
     }
     Ok(tokens)
 }
 
-/// Une suite de jetons, lue de gauche à droite.
+/// Une suite de jetons, lue de gauche à droite, par priorité : `if … else`,
+/// puis `or`, `and`, `not`, les comparaisons, `+ - ~`, `* / // %`, le `-`
+/// devant un nombre, les filtres, et enfin les valeurs.
 struct Parser {
     tokens: Vec<Token>,
     position: usize,
+    depth: usize,
+    nodes: usize,
 }
+
+type Parsed = Result<Node, String>;
 
 impl Parser {
     fn next(&mut self) -> Option<Token> {
@@ -493,6 +870,21 @@ impl Parser {
 
     fn peek(&self) -> Option<&Token> {
         self.tokens.get(self.position)
+    }
+
+    fn peek_at(&self, offset: usize) -> Option<&Token> {
+        self.tokens.get(self.position + offset)
+    }
+
+    fn keyword(&self, word: &str) -> bool {
+        matches!(self.peek(), Some(Token::Ident(name)) if name == word)
+    }
+
+    fn symbol(&self) -> Option<&'static str> {
+        match self.peek() {
+            Some(Token::Symbol(symbol)) => Some(symbol),
+            _ => None,
+        }
     }
 
     fn expect(&mut self, token: &Token, what: &str) -> Result<(), String> {
@@ -509,6 +901,346 @@ impl Parser {
         }
     }
 
+    /// Compte un morceau de plus : une expression géante est refusée.
+    fn node(&mut self, node: Node) -> Parsed {
+        self.nodes += 1;
+        if self.nodes > MAX_NODES {
+            return Err(format!(
+                "modèle : expression trop longue ({MAX_NODES} morceaux au plus)"
+            ));
+        }
+        Ok(node)
+    }
+
+    /// Un niveau d'imbrication de plus.
+    fn enter(&mut self) -> Result<(), String> {
+        self.depth += 1;
+        if self.depth > MAX_DEPTH {
+            return Err(format!(
+                "modèle : {MAX_DEPTH} niveaux d'imbrication au plus"
+            ));
+        }
+        Ok(())
+    }
+
+    fn binary(&mut self, op: Op, left: Node, right: Node) -> Parsed {
+        self.node(Node::Binary(op, Box::new(left), Box::new(right)))
+    }
+
+    /// `x if condition else y`.
+    fn ternary(&mut self) -> Parsed {
+        self.enter()?;
+        let then = self.or()?;
+        let node = if self.keyword("if") {
+            self.next();
+            let condition = self.or()?;
+            if !self.keyword("else") {
+                return Err("modèle : « else » attendu (x if condition else y)".into());
+            }
+            self.next();
+            let otherwise = self.ternary()?;
+            self.node(Node::If {
+                condition: Box::new(condition),
+                then: Box::new(then),
+                otherwise: Box::new(otherwise),
+            })?
+        } else {
+            then
+        };
+        self.depth -= 1;
+        Ok(node)
+    }
+
+    fn or(&mut self) -> Parsed {
+        let mut left = self.and()?;
+        while self.keyword("or") {
+            self.next();
+            let right = self.and()?;
+            left = self.binary(Op::Or, left, right)?;
+        }
+        Ok(left)
+    }
+
+    fn and(&mut self) -> Parsed {
+        let mut left = self.not()?;
+        while self.keyword("and") {
+            self.next();
+            let right = self.not()?;
+            left = self.binary(Op::And, left, right)?;
+        }
+        Ok(left)
+    }
+
+    fn not(&mut self) -> Parsed {
+        if self.keyword("not") {
+            self.next();
+            self.enter()?;
+            let inner = self.not()?;
+            self.depth -= 1;
+            return self.node(Node::Not(Box::new(inner)));
+        }
+        self.comparison()
+    }
+
+    /// Une seule comparaison : `a < b < c` est refusé (écrire `a < b and b < c`).
+    fn comparison(&mut self) -> Parsed {
+        let left = self.additive()?;
+        let op = match self.symbol() {
+            Some("==") => Some(Op::Eq),
+            Some("!=") => Some(Op::Ne),
+            Some("<") => Some(Op::Lt),
+            Some("<=") => Some(Op::Le),
+            Some(">") => Some(Op::Gt),
+            Some(">=") => Some(Op::Ge),
+            _ if self.keyword("in") => Some(Op::In),
+            _ if self.keyword("not")
+                && matches!(self.peek_at(1), Some(Token::Ident(name)) if name == "in") =>
+            {
+                self.next();
+                Some(Op::NotIn)
+            }
+            _ => None,
+        };
+        let Some(op) = op else {
+            return Ok(left);
+        };
+        self.next();
+        let right = self.additive()?;
+        if matches!(self.symbol(), Some("==" | "!=" | "<" | "<=" | ">" | ">="))
+            || self.keyword("in")
+        {
+            return Err("modèle : une seule comparaison à la fois (relie-les avec and)".into());
+        }
+        self.binary(op, left, right)
+    }
+
+    fn additive(&mut self) -> Parsed {
+        let mut left = self.multiplicative()?;
+        loop {
+            let op = match self.symbol() {
+                Some("+") => Op::Add,
+                Some("-") => Op::Sub,
+                Some("~") => Op::Concat,
+                _ => return Ok(left),
+            };
+            self.next();
+            let right = self.multiplicative()?;
+            left = self.binary(op, left, right)?;
+        }
+    }
+
+    fn multiplicative(&mut self) -> Parsed {
+        let mut left = self.unary()?;
+        loop {
+            let op = match self.symbol() {
+                Some("*") => Op::Mul,
+                Some("/") => Op::Div,
+                Some("//") => Op::FloorDiv,
+                Some("%") => Op::Mod,
+                _ => return Ok(left),
+            };
+            self.next();
+            let right = self.unary()?;
+            left = self.binary(op, left, right)?;
+        }
+    }
+
+    fn unary(&mut self) -> Parsed {
+        if self.symbol() == Some("-") {
+            self.next();
+            self.enter()?;
+            let inner = self.unary()?;
+            self.depth -= 1;
+            // `-3` : un nombre, pas une opération.
+            if let Node::Base(Base::Literal(Val::Number(number))) = inner {
+                return Ok(Node::Base(Base::Literal(Val::Number(-number))));
+            }
+            return self.node(Node::Neg(Box::new(inner)));
+        }
+        self.filtered()
+    }
+
+    /// Une valeur suivie de ses filtres : `states('x') | float | round(1)`.
+    fn filtered(&mut self) -> Parsed {
+        let mut node = self.primary()?;
+        let mut count = 0;
+        while self.peek() == Some(&Token::Pipe) {
+            self.next();
+            let name = self.ident("nom de filtre")?;
+            let args = if self.peek() == Some(&Token::Open) {
+                self.next();
+                self.arguments()?
+            } else {
+                Vec::new()
+            };
+            count += 1;
+            if count > MAX_FILTERS {
+                return Err(format!("modèle : {MAX_FILTERS} filtres au plus"));
+            }
+            node = self.node(Node::Filter(Box::new(node), parse_filter(&name, args)?))?;
+        }
+        Ok(node)
+    }
+
+    fn primary(&mut self) -> Parsed {
+        let node = match self.next() {
+            Some(Token::Str(text)) => Node::Base(Base::Literal(Val::Text(text))),
+            Some(Token::Number(number)) => Node::Base(Base::Literal(Val::Number(number))),
+            Some(Token::Open) => {
+                let inner = self.ternary()?;
+                self.expect(&Token::Close, "« ) »")?;
+                return Ok(inner);
+            }
+            Some(Token::OpenBracket) => {
+                let mut items = Vec::new();
+                if self.peek() == Some(&Token::CloseBracket) {
+                    self.next();
+                } else {
+                    loop {
+                        items.push(self.ternary()?);
+                        if items.len() > MAX_LIST {
+                            return Err(format!(
+                                "modèle : {MAX_LIST} éléments au plus dans une liste"
+                            ));
+                        }
+                        match self.next() {
+                            Some(Token::Comma) => {}
+                            Some(Token::CloseBracket) => break,
+                            _ => return Err("modèle : « , » ou « ] » attendu".into()),
+                        }
+                    }
+                }
+                Node::List(items)
+            }
+            Some(Token::Ident(name)) if name == "trigger" => Node::Base(parse_trigger(self)?),
+            Some(Token::Ident(name)) if name == "now" => Node::Base(self.now()?),
+            // `states.sensor.x.state` (sans parenthèse) ; `states('…')` plus bas.
+            Some(Token::Ident(name)) if name == "states" && self.peek() == Some(&Token::Dot) => {
+                Node::Base(self.entity()?)
+            }
+            // `as_timestamp(…)` : son argument est une expression (`now()`…).
+            Some(Token::Ident(name)) if name == "as_timestamp" => {
+                self.expect(&Token::Open, "« ( » après as_timestamp")?;
+                self.enter()?;
+                let inner = self.ternary()?;
+                self.depth -= 1;
+                self.expect(&Token::Close, "« ) »")?;
+                Node::Filter(Box::new(inner), Filter::AsTimestamp)
+            }
+            Some(Token::Ident(name)) => {
+                if let Some(value) = literal(&name) {
+                    Node::Base(Base::Literal(value))
+                } else {
+                    Node::Base(self.function(&name)?)
+                }
+            }
+            _ => {
+                return Err(
+                    "modèle : valeur attendue (states(…), state_attr(…), trigger.…, un nombre, \
+                     un texte entre guillemets)"
+                        .into(),
+                );
+            }
+        };
+        self.node(node)
+    }
+
+    /// `now()`, puis éventuellement `.hour`, `.weekday()`…
+    fn now(&mut self) -> Result<Base, String> {
+        self.expect(&Token::Open, "« ( » après now")?;
+        self.expect(&Token::Close, "« ) » après now(")?;
+        if self.peek() != Some(&Token::Dot) {
+            return Ok(Base::Now(NowField::Whole));
+        }
+        self.next();
+        let field = match self.ident("champ de now()")?.as_str() {
+            "year" => NowField::Year,
+            "month" => NowField::Month,
+            "day" => NowField::Day,
+            "hour" => NowField::Hour,
+            "minute" => NowField::Minute,
+            "second" => NowField::Second,
+            method @ ("weekday" | "isoweekday") => {
+                self.expect(&Token::Open, &format!("« ( » après {method}"))?;
+                self.expect(&Token::Close, &format!("« ) » après {method}("))?;
+                if method == "weekday" {
+                    NowField::Weekday
+                } else {
+                    NowField::IsoWeekday
+                }
+            }
+            other => {
+                return Err(format!(
+                    "modèle : now().{other} inconnu (year, month, day, hour, minute, second,                      weekday(), isoweekday())"
+                ));
+            }
+        };
+        Ok(Base::Now(field))
+    }
+
+    /// `states.sensor.x.state`, `.name`, `.last_changed`, `.last_updated`,
+    /// `.attributes.nom` (le `states` est déjà lu).
+    fn entity(&mut self) -> Result<Base, String> {
+        const HELP: &str = "states.sensor.x.state, .name, .last_changed, .last_updated ou                             .attributes.nom";
+        self.expect(&Token::Dot, "« . » après states")?;
+        let domain = self.ident("domaine après states.")?;
+        self.expect(&Token::Dot, &format!("« . » après states.{domain}"))?;
+        let object = self.ident("entité")?;
+        let entity_id = EntityId::new(&format!("{domain}.{object}"))
+            .map_err(|error| format!("states.{domain}.{object} : {error}"))?;
+        if self.peek() != Some(&Token::Dot) {
+            return Err(format!("modèle : {HELP} attendu"));
+        }
+        self.next();
+        let field = match self.ident("champ")?.as_str() {
+            "state" => StateField::State,
+            "name" => StateField::Name,
+            "entity_id" => StateField::EntityId,
+            "last_changed" => StateField::LastChanged,
+            "last_updated" => StateField::LastUpdated,
+            "attributes" => StateField::Attribute(member(self, "attributes")?),
+            other => return Err(format!("modèle : champ {other} inconnu ({HELP})")),
+        };
+        Ok(Base::Entity(entity_id, field))
+    }
+
+    /// `states('…')`, `state_attr('…', '…')`, `is_state('…', '…')`.
+    fn function(&mut self, name: &str) -> Result<Base, String> {
+        self.expect(&Token::Open, &format!("« ( » après {name}"))?;
+        let args = self.arguments()?;
+        let count = |n: usize| {
+            if args.len() == n {
+                Ok(())
+            } else {
+                Err(format!("{name} : {n} argument(s) attendu(s)"))
+            }
+        };
+        match name {
+            "states" => {
+                count(1)?;
+                Ok(Base::States(entity_arg(args.first(), "states")?))
+            }
+            "state_attr" => {
+                count(2)?;
+                Ok(Base::StateAttr(
+                    entity_arg(args.first(), "state_attr")?,
+                    text_arg(args.get(1), "state_attr")?,
+                ))
+            }
+            "is_state" => {
+                count(2)?;
+                Ok(Base::IsState(
+                    entity_arg(args.first(), "is_state")?,
+                    text_arg(args.get(1), "is_state")?,
+                ))
+            }
+            other => Err(format!(
+                "modèle : fonction {other} inconnue (states, state_attr, is_state, now, \
+                 as_timestamp)"
+            )),
+        }
+    }
+
     /// Les arguments entre parenthèses (la `(` est déjà lue) : des textes et
     /// des nombres seulement.
     fn arguments(&mut self) -> Result<Vec<Val>, String> {
@@ -521,6 +1253,10 @@ impl Parser {
             values.push(match self.next() {
                 Some(Token::Str(text)) => Val::Text(text),
                 Some(Token::Number(number)) => Val::Number(number),
+                Some(Token::Symbol("-")) => match self.next() {
+                    Some(Token::Number(number)) => Val::Number(-number),
+                    _ => return Err("modèle : nombre attendu après « - »".into()),
+                },
                 Some(Token::Ident(name)) => literal(&name).ok_or_else(|| {
                     format!(
                         "modèle : {name} : les arguments sont des textes entre guillemets ou des nombres"
@@ -549,33 +1285,21 @@ fn literal(name: &str) -> Option<Val> {
     }
 }
 
-fn parse_expr(text: &str) -> Result<Expr, String> {
+fn parse_expr(text: &str) -> Parsed {
     let mut parser = Parser {
         tokens: tokenize(text)?,
         position: 0,
+        depth: 0,
+        nodes: 0,
     };
     if parser.tokens.is_empty() {
         return Err("modèle : {{ }} vide".into());
     }
-    let base = parse_base(&mut parser)?;
-    let mut filters = Vec::new();
-    while let Some(token) = parser.next() {
-        if token != Token::Pipe {
-            return Err("modèle : « | » (filtre) ou « }} » attendu".into());
-        }
-        let name = parser.ident("nom de filtre")?;
-        let args = if parser.peek() == Some(&Token::Open) {
-            parser.next();
-            parser.arguments()?
-        } else {
-            Vec::new()
-        };
-        filters.push(parse_filter(&name, args)?);
-        if filters.len() > MAX_FILTERS {
-            return Err(format!("modèle : {MAX_FILTERS} filtres au plus"));
-        }
+    let node = parser.ternary()?;
+    if parser.peek().is_some() {
+        return Err("modèle : « | » (filtre), une opération ou « }} » attendu".into());
     }
-    Ok(Expr { base, filters })
+    Ok(node)
 }
 
 fn entity_arg(value: Option<&Val>, function: &str) -> Result<EntityId, String> {
@@ -594,59 +1318,13 @@ fn text_arg(value: Option<&Val>, what: &str) -> Result<String, String> {
     }
 }
 
-fn parse_base(parser: &mut Parser) -> Result<Base, String> {
-    match parser.next() {
-        Some(Token::Str(text)) => Ok(Base::Literal(Val::Text(text))),
-        Some(Token::Number(number)) => Ok(Base::Literal(Val::Number(number))),
-        Some(Token::Ident(name)) if name == "trigger" => parse_trigger(parser),
-        Some(Token::Ident(name)) => {
-            if let Some(value) = literal(&name) {
-                return Ok(Base::Literal(value));
-            }
-            parser.expect(&Token::Open, &format!("« ( » après {name}"))?;
-            let args = parser.arguments()?;
-            let count = |n: usize| {
-                if args.len() == n {
-                    Ok(())
-                } else {
-                    Err(format!("{name} : {n} argument(s) attendu(s)"))
-                }
-            };
-            match name.as_str() {
-                "states" => {
-                    count(1)?;
-                    Ok(Base::States(entity_arg(args.first(), "states")?))
-                }
-                "state_attr" => {
-                    count(2)?;
-                    Ok(Base::StateAttr(
-                        entity_arg(args.first(), "state_attr")?,
-                        text_arg(args.get(1), "state_attr")?,
-                    ))
-                }
-                "is_state" => {
-                    count(2)?;
-                    Ok(Base::IsState(
-                        entity_arg(args.first(), "is_state")?,
-                        text_arg(args.get(1), "is_state")?,
-                    ))
-                }
-                other => Err(format!(
-                    "modèle : fonction {other} inconnue (states, state_attr, is_state)"
-                )),
-            }
-        }
-        _ => Err("modèle : valeur attendue (states(…), state_attr(…), trigger.…)".into()),
-    }
-}
-
 /// `trigger.id`, `trigger.entity_id`, `trigger.to_state.state`,
 /// `trigger.from_state.name`, `trigger.to_state.attributes.temperature`,
-/// `trigger.to_state.attributes['Vent violent']`.
+/// `trigger.to_state.attributes['Vent violent']`, `trigger.event.data.nom`.
 fn parse_trigger(parser: &mut Parser) -> Result<Base, String> {
     const HELP: &str = "trigger.id, trigger.entity_id, trigger.to_state.state, \
-                        trigger.from_state.state, trigger.to_state.name ou \
-                        trigger.to_state.attributes.…";
+                        trigger.from_state.state, trigger.to_state.name, \
+                        trigger.to_state.attributes.…, trigger.event.data.…";
     parser.expect(&Token::Dot, "« . » après trigger")?;
     let field = match parser.ident("champ de trigger")?.as_str() {
         "id" => TriggerField::Id,
@@ -662,24 +1340,44 @@ fn parse_trigger(parser: &mut Parser) -> Result<Base, String> {
                 "state" => StateField::State,
                 "name" => StateField::Name,
                 "entity_id" => StateField::EntityId,
-                "attributes" => StateField::Attribute(match parser.next() {
-                    Some(Token::Dot) => parser.ident("nom de l'attribut")?,
-                    Some(Token::OpenBracket) => {
-                        let Some(Token::Str(name)) = parser.next() else {
-                            return Err("modèle : attributes['nom'] attendu".into());
-                        };
-                        parser.expect(&Token::CloseBracket, "« ] »")?;
-                        name
-                    }
-                    _ => return Err("modèle : attributes.nom attendu".into()),
-                }),
+                "last_changed" => StateField::LastChanged,
+                "last_updated" => StateField::LastUpdated,
+                "attributes" => StateField::Attribute(member(parser, "attributes")?),
                 other => return Err(format!("modèle : champ {other} inconnu ({HELP})")),
             };
             TriggerField::State(side, field)
         }
+        "event" => {
+            parser.expect(&Token::Dot, "« . » après trigger.event")?;
+            match parser.ident("champ de trigger.event")?.as_str() {
+                "event_type" => TriggerField::EventType,
+                "data" => TriggerField::EventData(member(parser, "data")?),
+                other => {
+                    return Err(format!(
+                        "modèle : trigger.event.{other} inconnu (trigger.event.event_type, \
+                         trigger.event.data.…)"
+                    ));
+                }
+            }
+        }
         other => return Err(format!("modèle : trigger.{other} inconnu ({HELP})")),
     };
     Ok(Base::Trigger(field))
+}
+
+/// `.nom` ou `['nom']`, après `attributes` ou `data`.
+fn member(parser: &mut Parser, after: &str) -> Result<String, String> {
+    match parser.next() {
+        Some(Token::Dot) => parser.ident("nom"),
+        Some(Token::OpenBracket) => {
+            let Some(Token::Str(name)) = parser.next() else {
+                return Err(format!("modèle : {after}['nom'] attendu"));
+            };
+            parser.expect(&Token::CloseBracket, "« ] »")?;
+            Ok(name)
+        }
+        _ => Err(format!("modèle : {after}.nom attendu")),
+    }
 }
 
 fn parse_filter(name: &str, args: Vec<Val>) -> Result<Filter, String> {
@@ -716,9 +1414,11 @@ fn parse_filter(name: &str, args: Vec<Val>) -> Result<Filter, String> {
             at_most(1)?;
             Filter::Float(args.into_iter().next())
         }
-        "lower" | "upper" | "capitalize" => {
+        "abs" | "lower" | "upper" | "capitalize" | "as_timestamp" => {
             at_most(0)?;
             match name {
+                "abs" => Filter::Abs,
+                "as_timestamp" => Filter::AsTimestamp,
                 "lower" => Filter::Lower,
                 "upper" => Filter::Upper,
                 _ => Filter::Capitalize,
@@ -741,8 +1441,8 @@ fn parse_filter(name: &str, args: Vec<Val>) -> Result<Filter, String> {
         }
         other => {
             return Err(format!(
-                "modèle : filtre {other} inconnu (round, int, float, lower, upper, \
-                 capitalize, default, replace)"
+                "modèle : filtre {other} inconnu (round, int, float, abs, as_timestamp, lower, \
+                 upper, capitalize, default, replace)"
             ));
         }
     })
@@ -894,6 +1594,7 @@ mod tests {
             entity_id: Some(id.clone()),
             from_state: other.states.get(&id),
             to_state: after,
+            ..TriggerData::default()
         };
         let text = "{{ trigger.to_state.name }} : {{ trigger.from_state.state | lower }} → \
                     {{ trigger.to_state.state | lower }} (vent : \
@@ -922,9 +1623,18 @@ mod tests {
             ("{{ }}", "vide"),
             ("{{ states(sensor.x) }}", "guillemets"),
             ("{{ states('pas une entité') }}", "states"),
-            ("{{ now() }}", "fonction now inconnue"),
+            ("{{ today_at('22:00') }}", "fonction today_at inconnue"),
             ("{{ states('sensor.x') | json }}", "filtre json inconnu"),
-            ("{{ states('sensor.x') * 2 }}", "calculs"),
+            ("{{ states('sensor.x') @ 2 }}", "caractère '@'"),
+            ("{{ states('sensor.x') = 2 }}", "=="),
+            ("{{ 1 < 2 < 3 }}", "une seule comparaison"),
+            ("{{ 1 if true }}", "else"),
+            ("{{ (1 + 2 }}", "« ) »"),
+            ("{{ [1, 2 }}", "« ] »"),
+            (
+                "{{ trigger.event.payload }}",
+                "trigger.event.payload inconnu",
+            ),
             ("{{ trigger.platform }}", "trigger.platform inconnu"),
             ("{{ trigger.to_state.color }}", "champ color inconnu"),
             ("{{ states('sensor.x') | round(9) }}", "0 à 6"),
@@ -938,6 +1648,230 @@ mod tests {
         assert!(Template::parse(&many).is_err());
         let long = format!("{{{{ 1 }}}}{}", "x".repeat(MAX_LEN));
         assert!(Template::parse(&long).is_err());
+    }
+
+    #[test]
+    fn templates_can_calculate_and_compare() {
+        let core = machine();
+        let states = &core.states;
+        set(states, "sensor.dehors", "8.5", json!({}));
+        set(
+            states,
+            "zone.home",
+            "2",
+            json!({"persons": ["david", "alice"]}),
+        );
+        let r = |text: &str| render(text, states, None);
+        // Calculs : les filtres passent avant les opérations, comme en Jinja.
+        assert_eq!(
+            r(
+                "{{ (states('sensor.meteo_temperature') | float - states('sensor.dehors') | float) | round(1) }}"
+            ),
+            13.0
+        );
+        assert_eq!(r("{{ 1 + 2 * 3 }}"), 7);
+        assert_eq!(r("{{ (1 + 2) * 3 }}"), 9);
+        assert_eq!(r("{{ 7 / 2 }}"), 3.5);
+        assert_eq!(r("{{ 7 // 2 }}"), 3);
+        assert_eq!(r("{{ -7 % 3 }}"), 2, "le reste comme en Python");
+        assert_eq!(
+            r("{{ -(2 + 3) | abs }}"),
+            -5,
+            "le filtre passe avant le moins"
+        );
+        assert_eq!(r("{{ 'Il fait ' ~ 21 ~ ' °C' }}"), "Il fait 21 °C");
+        assert_eq!(r("{{ 'a' + 'b' }}"), "ab");
+        // Un calcul impossible : rien, ou la valeur par défaut.
+        assert_eq!(r("{{ 1 / 0 }}"), "");
+        assert_eq!(r("{{ (1 / 0) | default(0) }}"), 0);
+        assert_eq!(
+            r("{{ states('sensor.dehors') + 1 }}"),
+            "",
+            "un texte, sans | float"
+        );
+        // Comparaisons, et/ou/non, si/sinon.
+        assert_eq!(r("{{ states('sensor.dehors') | float < 10 }}"), true);
+        assert_eq!(r("{{ states('sensor.dehors') == '8.5' }}"), true);
+        assert_eq!(
+            r("{{ states('sensor.dehors') == 8.5 }}"),
+            false,
+            "texte et nombre"
+        );
+        assert_eq!(
+            r("{{ is_state('light.salon', 'on') and states('sensor.dehors') | float < 10 }}"),
+            true
+        );
+        assert_eq!(r("{{ not is_state('light.salon', 'on') or false }}"), false);
+        assert_eq!(
+            r("{{ state_attr('light.salon', 'couleur') or 'blanc' }}"),
+            "blanc"
+        );
+        assert_eq!(
+            r("{{ 'froid' if states('sensor.dehors') | float < 10 else 'doux' }}"),
+            "froid"
+        );
+        assert_eq!(r("{{ 'a' if false else 'b' if true else 'c' }}"), "b");
+        // `in` : dans une liste (écrite, ou un attribut), ou un texte.
+        assert_eq!(r("{{ states('light.salon') in ['on', 'off'] }}"), true);
+        assert_eq!(
+            r("{{ 'david' in state_attr('zone.home', 'persons') }}"),
+            true
+        );
+        assert_eq!(
+            r("{{ 'paul' not in state_attr('zone.home', 'persons') }}"),
+            true
+        );
+        assert_eq!(r("{{ 'Vent' in 'Vent violent' }}"), true);
+        assert_eq!(
+            r("{{ state_attr('zone.home', 'persons') }}"),
+            "['david', 'alice']"
+        );
+        // Les entités lues partout dans l'expression.
+        let template = Template::parse(
+            "{{ states('sensor.a') | float + (1 if is_state('light.b', 'on') else state_attr('sensor.c', 'x') | float) }}",
+        )
+        .unwrap()
+        .unwrap();
+        let ids: Vec<&str> = template.entity_ids().map(EntityId::as_str).collect();
+        assert_eq!(ids, ["sensor.a", "light.b", "sensor.c"]);
+    }
+
+    #[test]
+    fn the_event_that_triggered_is_available() {
+        let core = machine();
+        let mut data = ha_core::Attributes::new();
+        data.insert("action".into(), "coupe".into());
+        data.insert("mesure".into(), 33.into());
+        let trigger = TriggerData {
+            event_type: Some("delestage".into()),
+            event_data: Some(data),
+            ..TriggerData::default()
+        };
+        assert_eq!(
+            render(
+                "{{ trigger.event.event_type }} : {{ trigger.event.data.action }} à {{ trigger.event.data['mesure'] }} A",
+                &core.states,
+                Some(&trigger)
+            ),
+            "delestage : coupe à 33 A"
+        );
+        assert_eq!(
+            render(
+                "{{ trigger.event.data.mesure > 30 }}",
+                &core.states,
+                Some(&trigger)
+            ),
+            true
+        );
+    }
+
+    #[test]
+    fn time_in_templates() {
+        let core = machine();
+        let states = &core.states;
+        set(
+            states,
+            "binary_sensor.porte",
+            "on",
+            json!({"device_class": "door"}),
+        );
+        let r = |text: &str| render(text, states, None);
+        let now = jiff::Zoned::now();
+        // L'heure (ou la suivante, si le test passe pile au changement).
+        let hour = r("{{ now().hour }}").as_i64().unwrap();
+        assert!(
+            hour == i64::from(now.hour()) || hour == (i64::from(now.hour()) + 1) % 24,
+            "{hour}"
+        );
+        let weekday = r("{{ now().weekday() }}").as_i64().unwrap();
+        assert!((0..=6).contains(&weekday));
+        assert_eq!(r("{{ now().isoweekday() - now().weekday() }}"), 1);
+        assert_eq!(r("{{ now().year >= 2026 }}"), true);
+        // Une date, en secondes depuis 1970 : avec son décalage, ou locale.
+        assert_eq!(
+            r("{{ as_timestamp('2026-10-16T08:00:00+02:00') }}"),
+            1_792_130_400
+        );
+        assert_eq!(
+            r("{{ '2026-10-16T06:00:00Z' | as_timestamp }}"),
+            1_792_130_400
+        );
+        assert_eq!(r("{{ as_timestamp('pas une date') | default(0) }}"), 0);
+        // `now()` est une date : comparable à l'heure de la machine.
+        let gap = r("{{ as_timestamp(now()) }}").as_f64().unwrap()
+            - f64::from(i32::try_from(jiff::Timestamp::now().as_second()).unwrap_or(i32::MAX));
+        assert!(gap.abs() < 5.0, "{gap}");
+        // `states.<domaine>.<objet>.<champ>`, comme dans Home Assistant.
+        assert_eq!(r("{{ states.binary_sensor.porte.state }}"), "on");
+        assert_eq!(
+            r("{{ states.binary_sensor.porte.attributes.device_class }}"),
+            "door"
+        );
+        assert_eq!(r("{{ states.light.salon.attributes['brightness'] }}"), 128);
+        assert_eq!(r("{{ states.sensor.inconnu.state | default('?') }}"), "?");
+        // « Ouverte depuis combien de secondes ? » : à l'instant.
+        let since = r(
+            "{{ (as_timestamp(now()) - as_timestamp(states.binary_sensor.porte.last_changed)) | round(0) }}",
+        )
+        .as_i64()
+        .unwrap();
+        assert!((0..5).contains(&since), "{since}");
+        // Les entités lues sont connues (pour recalculer un capteur modèle).
+        let template = Template::parse("{{ states.binary_sensor.porte.last_changed }}")
+            .unwrap()
+            .unwrap();
+        let ids: Vec<&str> = template.entity_ids().map(EntityId::as_str).collect();
+        assert_eq!(ids, ["binary_sensor.porte"]);
+        for (bad, hint) in [
+            ("{{ now().decade }}", "now().decade inconnu"),
+            ("{{ now().weekday }}", "« ( » après weekday"),
+            ("{{ states.sensor.x }}", "states.sensor.x.state"),
+            ("{{ states.sensor.x.couleur }}", "champ couleur inconnu"),
+            ("{{ as_timestamp(now() }}", "« ) »"),
+        ] {
+            let error = Template::parse(bad).unwrap_err();
+            assert!(error.contains(hint), "{bad} : {error}");
+        }
+    }
+
+    #[test]
+    fn huge_or_deep_expressions_are_refused() {
+        let deep = format!(
+            "{{{{ {}1{} }}}}",
+            "(".repeat(MAX_DEPTH + 1),
+            ")".repeat(MAX_DEPTH + 1)
+        );
+        assert!(Template::parse(&deep).unwrap_err().contains("imbrication"));
+        let nots = format!("{{{{ {}true }}}}", "not ".repeat(MAX_DEPTH + 1));
+        assert!(Template::parse(&nots).unwrap_err().contains("imbrication"));
+        let long = format!("{{{{ 1{} }}}}", " + 1".repeat(MAX_NODES));
+        assert!(Template::parse(&long).unwrap_err().contains("trop longue"));
+        let list = format!("{{{{ [{}] }}}}", vec!["1"; MAX_LIST + 1].join(", "));
+        assert!(Template::parse(&list).is_err());
+    }
+
+    #[test]
+    fn true_or_false_like_home_assistant() {
+        for yes in [
+            json!(true),
+            json!(1),
+            json!(2.5),
+            json!("on"),
+            json!("True"),
+            json!(" yes "),
+        ] {
+            assert!(is_true(&yes), "{yes}");
+        }
+        for no in [
+            json!(false),
+            json!(0),
+            json!("off"),
+            json!(""),
+            json!("unknown"),
+            Value::Null,
+        ] {
+            assert!(!is_true(&no), "{no}");
+        }
     }
 
     #[test]

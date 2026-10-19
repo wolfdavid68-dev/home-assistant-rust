@@ -29,6 +29,9 @@ optimisée (`--release`) :
 « En propre » : la mémoire anonyme (tas et piles), sans les fichiers chargés (le programme lui-même,
 les bibliothèques), que le système peut partager ou relire.
 
+La rapidité des **appareils** eux-mêmes (du toucher à la lampe allumée) est mesurée à part, depuis
+l'[étape 63](rapidite.md).
+
 ## Voir les chiffres
 
 **Mon compte → Système** (administrateur) : la mémoire, le processeur depuis la dernière lecture, les

@@ -1,6 +1,9 @@
 //! Les calculs des assistants, sans attente ni réseau : l'heure et les états
 //! sont passés en paramètre, pour les tester facilement.
 
+use std::collections::VecDeque;
+use std::time::{Duration, Instant};
+
 use ha_core::State;
 use jiff::ToSpan;
 use jiff::civil::{Date, DateTime, Time};
@@ -311,6 +314,235 @@ fn period_before(cycle: Cycle, start: DateTime) -> DateTime {
     earlier.map_or(start, |moment| period_start(cycle, moment))
 }
 
+/// Comment l'intégrale compte entre deux mesures (étape 65).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Method {
+    /// La valeur reste celle de la mesure précédente jusqu'à la suivante :
+    /// exact pour nos capteurs, qui ne publient qu'au changement.
+    Left,
+    /// La moyenne des deux mesures (comme Home Assistant par défaut).
+    Trapezoidal,
+}
+
+/// Une intégrale : ce qu'une puissance a fourni (W → Wh), au fil du temps.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Integral {
+    /// Le total, dans l'unité de sortie (kWh…).
+    pub total: f64,
+    /// La dernière mesure, et quand elle a été prise en compte.
+    last: Option<(f64, Instant)>,
+}
+
+impl Integral {
+    /// Reprend le total d'avant l'arrêt du serveur (l'arrêt lui-même n'est
+    /// pas compté : on ne sait pas ce qui s'est passé).
+    #[must_use]
+    pub fn resume(total: f64) -> Self {
+        Self {
+            total: if total.is_finite() { total } else { 0.0 },
+            last: None,
+        }
+    }
+
+    /// Avance jusqu'à `now`, puis retient `value` comme nouvelle mesure
+    /// (`None` : la source est indisponible, rien n'est compté jusqu'à son
+    /// retour). `scale` convertit valeur × secondes en unité de sortie
+    /// (W·s → kWh : 1 / 3 600 000).
+    pub fn feed(&mut self, value: Option<f64>, now: Instant, method: Method, scale: f64) {
+        if let Some((previous, at)) = self.last {
+            let seconds = now.saturating_duration_since(at).as_secs_f64();
+            let height = match (method, value) {
+                (Method::Trapezoidal, Some(value)) => f64::midpoint(previous, value),
+                _ => previous,
+            };
+            let area = height * seconds * scale;
+            if area.is_finite() {
+                self.total += area;
+            }
+        }
+        self.last = value.filter(|v| v.is_finite()).map(|value| (value, now));
+    }
+
+    /// A-t-elle une mesure en cours ?
+    #[must_use]
+    pub fn running(&self) -> bool {
+        self.last.is_some()
+    }
+
+    /// Avance jusqu'à `now` sans nouvelle mesure (la valeur n'a pas changé).
+    pub fn advance(&mut self, now: Instant, method: Method, scale: f64) {
+        if let Some((value, _)) = self.last {
+            self.feed(Some(value), now, method, scale);
+        }
+    }
+}
+
+/// Une dérivée : à quelle vitesse une valeur change, sur une fenêtre de
+/// temps (étape 65).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Slope {
+    /// Les mesures de la fenêtre (et la dernière d'avant, qui donne la
+    /// valeur au début de la fenêtre).
+    samples: VecDeque<(Instant, f64)>,
+}
+
+/// Mesures gardées au plus dans la fenêtre d'une dérivée.
+const MAX_SAMPLES: usize = 500;
+
+impl Slope {
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.samples.is_empty()
+    }
+
+    /// Une nouvelle mesure (`None` : indisponible, la fenêtre repart de zéro).
+    pub fn feed(&mut self, value: Option<f64>, now: Instant) {
+        match value.filter(|v| v.is_finite()) {
+            Some(value) => {
+                if self.samples.len() == MAX_SAMPLES {
+                    self.samples.pop_front();
+                }
+                self.samples.push_back((now, value));
+            }
+            None => self.samples.clear(),
+        }
+    }
+
+    /// La pente à `now`, en unité par seconde : de la valeur au début de la
+    /// fenêtre à la valeur actuelle (une valeur reste la même jusqu'à la
+    /// mesure suivante). `None` tant qu'il n'y a pas deux mesures.
+    pub fn per_second(&mut self, now: Instant, window: Duration) -> Option<f64> {
+        let start = now.checked_sub(window)?;
+        // On garde une seule mesure d'avant la fenêtre : la valeur au début.
+        while self.samples.len() > 1 && self.samples.get(1).is_some_and(|(at, _)| *at <= start) {
+            self.samples.pop_front();
+        }
+        let (first_at, first) = *self.samples.front()?;
+        if self.samples.len() < 2 {
+            // Une seule mesure, d'avant la fenêtre : rien n'a bougé.
+            return (first_at <= start).then_some(0.0);
+        }
+        let (_, last) = *self.samples.back()?;
+        let from = first_at.max(start);
+        let seconds = now.saturating_duration_since(from).as_secs_f64();
+        if seconds < 1.0 {
+            return None;
+        }
+        Some((last - first) / seconds)
+    }
+}
+
+/// Où en est un appareil à cycle (lave-linge, lave-vaisselle…), étape 67.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Phase {
+    Off,
+    Running,
+    Finished,
+}
+
+impl Phase {
+    /// L'état publié.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Off => "Arrêt",
+            Self::Running => "En marche",
+            Self::Finished => "Terminé",
+        }
+    }
+}
+
+/// Un cycle qui vient de finir : sa durée, et son énergie si on la connaît.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Done {
+    pub duration: Duration,
+    pub energy: Option<f64>,
+}
+
+/// Le suivi d'un appareil d'après sa puissance : en marche au-dessus de
+/// `start_above`, terminé quand elle reste sous `stop_below` pendant
+/// `finished_after` (une pause de trempage ne compte pas pour une fin).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Appliance {
+    pub phase: Phase,
+    /// Début du cycle en cours (ou du dernier).
+    started: Option<Instant>,
+    /// L'énergie du compteur au début du cycle.
+    energy_at_start: Option<f64>,
+    /// Depuis quand la puissance est basse.
+    low_since: Option<Instant>,
+}
+
+impl Appliance {
+    #[must_use]
+    pub fn new(phase: Phase) -> Self {
+        Self {
+            phase,
+            started: None,
+            energy_at_start: None,
+            low_since: None,
+        }
+    }
+
+    /// Reprend après un redémarrage : un cycle en cours est compté depuis
+    /// maintenant (son début est perdu).
+    #[must_use]
+    pub fn resumed(phase: Phase, now: Instant) -> Self {
+        Self {
+            started: (phase == Phase::Running).then_some(now),
+            ..Self::new(phase)
+        }
+    }
+
+    /// Une mesure, ou le temps qui passe (`power` : la dernière connue).
+    /// Renvoie le cycle qui vient de se terminer.
+    pub fn step(
+        &mut self,
+        now: Instant,
+        power: Option<f64>,
+        energy: Option<f64>,
+        start_above: f64,
+        stop_below: f64,
+        finished_after: Duration,
+    ) -> Option<Done> {
+        let power = power?;
+        if power > start_above {
+            self.low_since = None;
+            if self.phase != Phase::Running {
+                self.phase = Phase::Running;
+                self.started = Some(now);
+                self.energy_at_start = energy;
+            }
+            return None;
+        }
+        if self.phase != Phase::Running {
+            return None;
+        }
+        if power >= stop_below {
+            // Entre les deux seuils : on ne décide rien.
+            self.low_since = None;
+            return None;
+        }
+        let since = *self.low_since.get_or_insert(now);
+        if now.saturating_duration_since(since) < finished_after {
+            return None;
+        }
+        self.phase = Phase::Finished;
+        self.low_since = None;
+        let duration = self.started.map_or(Duration::ZERO, |start| {
+            since.saturating_duration_since(start)
+        });
+        let used = match (energy, self.energy_at_start) {
+            (Some(end), Some(start)) if end >= start => Some(end - start),
+            _ => None,
+        };
+        Some(Done {
+            duration,
+            energy: used,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -450,5 +682,100 @@ mod tests {
             period_start(Cycle::Monthly, day.at(9, 0, 0, 0)),
             date(2026, 10, 1).at(0, 0, 0, 0)
         );
+    }
+
+    #[test]
+    fn an_integral_turns_power_into_energy() {
+        // W·s → kWh.
+        let scale = 1.0 / 3_600_000.0;
+        let start = Instant::now();
+        let at = |minutes: u64| start + Duration::from_mins(minutes);
+        let mut energy = Integral::resume(10.0);
+        // 1 000 W pendant 30 min, puis 2 000 W pendant 15 min : 0,5 + 0,5 kWh.
+        energy.feed(Some(1000.0), at(0), Method::Left, scale);
+        energy.advance(at(10), Method::Left, scale);
+        assert!(
+            (energy.total - (10.0 + 1.0 / 6.0)).abs() < 1e-9,
+            "{}",
+            energy.total
+        );
+        energy.feed(Some(2000.0), at(30), Method::Left, scale);
+        energy.advance(at(45), Method::Left, scale);
+        assert!((energy.total - 11.0).abs() < 1e-9, "{}", energy.total);
+        // Source indisponible : rien n'est compté jusqu'à son retour.
+        energy.feed(None, at(45), Method::Left, scale);
+        energy.advance(at(120), Method::Left, scale);
+        energy.feed(Some(500.0), at(120), Method::Left, scale);
+        assert!((energy.total - 11.0).abs() < 1e-9, "{}", energy.total);
+        // Trapèzes : la moyenne des deux mesures.
+        let mut trapezes = Integral::resume(0.0);
+        trapezes.feed(Some(0.0), at(0), Method::Trapezoidal, scale);
+        trapezes.feed(Some(2000.0), at(60), Method::Trapezoidal, scale);
+        assert!((trapezes.total - 1.0).abs() < 1e-9, "{}", trapezes.total);
+        assert_eq!(Integral::resume(f64::NAN).total, 0.0);
+    }
+
+    #[test]
+    fn a_slope_over_a_window() {
+        let start = Instant::now();
+        let at = |minutes: u64| start + Duration::from_mins(minutes);
+        let window = Duration::from_mins(10);
+        let mut slope = Slope::default();
+        slope.feed(Some(20.0), at(0));
+        assert_eq!(slope.per_second(at(5), window), None, "une seule mesure");
+        // La fenêtre est ouverte : 20 → 19,5 en 5 min, soit -6 °C/h.
+        slope.feed(Some(19.5), at(5));
+        let per_hour = slope.per_second(at(5), window).unwrap() * 3600.0;
+        assert!((per_hour + 6.0).abs() < 1e-9, "{per_hour}");
+        // 20 min plus tard, plus rien ne bouge : la pente revient à zéro.
+        assert_eq!(slope.per_second(at(25), window), Some(0.0));
+        // Indisponible : on repart de zéro.
+        slope.feed(None, at(26));
+        assert_eq!(slope.per_second(at(27), window), None);
+    }
+
+    #[test]
+    fn a_washing_machine_cycle() {
+        let start = Instant::now();
+        let at = |minutes: u64| start + Duration::from_mins(minutes);
+        let finished_after = Duration::from_mins(5);
+        let mut machine = Appliance::new(Phase::Off);
+        let step = |m: &mut Appliance, minutes, power: f64, energy: f64| {
+            m.step(
+                at(minutes),
+                Some(power),
+                Some(energy),
+                10.0,
+                5.0,
+                finished_after,
+            )
+        };
+        // En veille : rien.
+        assert_eq!(step(&mut machine, 0, 0.8, 100.0), None);
+        assert_eq!(machine.phase, Phase::Off);
+        // Le cycle démarre.
+        assert_eq!(step(&mut machine, 1, 2000.0, 100.0), None);
+        assert_eq!(machine.phase, Phase::Running);
+        // Trempage : 3 minutes à 2 W, ce n'est pas une fin.
+        assert_eq!(step(&mut machine, 20, 2.0, 100.6), None);
+        assert_eq!(step(&mut machine, 23, 150.0, 100.6), None);
+        // Fin : sous 5 W pendant 5 minutes.
+        assert_eq!(step(&mut machine, 80, 1.0, 101.2), None);
+        let done = step(&mut machine, 85, 1.0, 101.2).unwrap();
+        assert_eq!(machine.phase, Phase::Finished);
+        // La durée va jusqu'au moment où la puissance est retombée.
+        assert_eq!(done.duration, Duration::from_mins(79));
+        assert!((done.energy.unwrap() - 1.2).abs() < 1e-9);
+        // Il reste « Terminé » en veille ; un nouveau cycle repart.
+        assert_eq!(step(&mut machine, 120, 0.5, 101.2), None);
+        assert_eq!(machine.phase, Phase::Finished);
+        assert_eq!(step(&mut machine, 300, 1800.0, 101.2), None);
+        assert_eq!(machine.phase, Phase::Running);
+        // Sans mesure, rien ne change.
+        assert_eq!(
+            machine.step(at(400), None, None, 10.0, 5.0, finished_after),
+            None
+        );
+        assert_eq!(machine.phase, Phase::Running);
     }
 }

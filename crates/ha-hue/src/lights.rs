@@ -81,6 +81,17 @@ impl Lights {
             if !name.is_empty() {
                 attributes.insert("friendly_name".into(), json!(name));
             }
+            // Une prise Hue : « outlet », comme dans Home Assistant. Le tableau
+            // de bord la montre comme une prise, et « les lumières » ne
+            // l'éteignent pas (un radiateur peut y être branché).
+            let plug = resource
+                .metadata
+                .as_ref()
+                .and_then(|m| m.archetype.as_deref())
+                == Some("plug");
+            if plug {
+                attributes.insert("device_class".into(), json!("outlet"));
+            }
             let on = resource.on.is_some_and(|on| on.on);
             if let (true, Some(dimming)) = (on, resource.dimming) {
                 attributes.insert(

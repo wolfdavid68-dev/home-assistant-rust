@@ -118,6 +118,25 @@ Autres commandes : `ha-server hue status` (pont associé et empreinte), `ha-serv
 
 Si l'adresse du pont change, relance simplement `hue pair` avec la nouvelle adresse.
 
+## Les prises Hue
+
+Le pont présente une **prise Hue** (Hue Smart Plug) comme une lampe sans variateur. Le serveur
+la reconnaît à son genre (`archetype: plug`). Elle reste `light.prise_…`, avec
+`device_class: outlet` en plus, comme dans Home Assistant.
+
+- **Sur le tableau de bord :** une tuile de prise (icône de prise, sans curseur de luminosité),
+  dans « Prises et interrupteurs ».
+- **Pas une lumière :** elle n'est pas comptée dans les lumières allumées, et « Éteindre les
+  lumières » d'une pièce ne la coupe pas, puisqu'un radiateur peut y être branché.
+- **Avec Assist :** « éteins la prise du salon » la désigne, mais « éteins les lumières du salon »
+  ne la touche pas.
+- **Ce qui ne change pas :** automatisations, scènes, groupes, Alexa, simulation de présence et
+  délestage (`light.prise_…` peut aller dans `delestage.yaml`).
+
+Une prise Hue **ne mesure pas** sa consommation. Pour l'estimer, quand l'appareil branché a une
+puissance fixe, un capteur modèle donne la puissance (« 2000 W si la prise est allumée »), et une
+intégrale la change en kWh (étapes 64 et 65).
+
 ## Pas encore pris en charge
 
 Couleurs et température de blanc, pièces et zones (`grouped_light`), scènes, capteurs de

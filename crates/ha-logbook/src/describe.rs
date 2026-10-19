@@ -177,6 +177,17 @@ fn phrase(old: &State, new: &State) -> Option<String> {
         ),
         // Une plage horaire (« Chauffage du matin »).
         "schedule" => on_off("commence", "se termine"),
+        // Un rappel insistant (étape 69) : « Garage ouvert : compris par
+        // david ».
+        "alert" => Some(match value {
+            "on" => "rappel en cours".into(),
+            "off" => match text(attributes, "compris_par") {
+                Some(who) => format!("compris par {who}"),
+                None => "compris".into(),
+            },
+            "idle" => "c'est réglé".into(),
+            _ => format!("passe à « {value} »"),
+        }),
         "input_number" | "number" | "counter" => {
             Some(match text(attributes, "unit_of_measurement") {
                 Some(unit) => format!("réglé à {value} {unit}"),
@@ -574,6 +585,27 @@ mod tests {
                 "a été modifié",
             ),
             ("counter.lessives", "2", "3", none.clone(), "réglé à 3"),
+            (
+                "alert.garage_ouvert",
+                "idle",
+                "on",
+                none.clone(),
+                "rappel en cours",
+            ),
+            (
+                "alert.garage_ouvert",
+                "on",
+                "off",
+                json!({"compris_par": "david"}),
+                "compris par david",
+            ),
+            (
+                "alert.fenetre",
+                "off",
+                "idle",
+                json!({"friendly_name": "Fenêtre de la chambre"}),
+                "c'est réglé",
+            ),
             (
                 "calendar.maison",
                 "off",

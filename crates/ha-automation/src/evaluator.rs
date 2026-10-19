@@ -60,6 +60,7 @@ fn change(entity_id: &EntityId, old: Option<&State>, new: Option<&State>) -> Tri
         entity_id: Some(entity_id.clone()),
         from_state: old.cloned(),
         to_state: new.cloned(),
+        ..TriggerData::default()
     }
 }
 
@@ -80,7 +81,7 @@ impl Checker {
         condition: &Condition,
         states: &StateMachine,
         now: DateTime,
-        trigger: Option<&str>,
+        trigger: Option<&TriggerData>,
     ) -> bool {
         condition_passes(condition, states, now, self.sun.as_ref(), trigger)
     }
@@ -92,7 +93,7 @@ impl Checker {
         conditions: &[Condition],
         states: &StateMachine,
         now: DateTime,
-        trigger: Option<&str>,
+        trigger: Option<&TriggerData>,
     ) -> bool {
         conditions
             .iter()
@@ -294,7 +295,15 @@ impl Evaluator {
                         .iter()
                         .all(|(key, value)| data.get(key) == Some(value))
                 {
-                    fired.entry(a).or_insert((t, None));
+                    // Pour les modèles : `trigger.event.data.…`.
+                    fired.entry(a).or_insert((
+                        t,
+                        Some(TriggerData {
+                            event_type: Some(event_type.to_owned()),
+                            event_data: Some(data.clone()),
+                            ..TriggerData::default()
+                        }),
+                    ));
                 }
             }
         }
@@ -396,10 +405,13 @@ impl Evaluator {
         let Some(automation) = self.automations.get(automation) else {
             return false;
         };
-        automation
-            .conditions
-            .iter()
-            .all(|condition| condition_passes(condition, states, now, self.sun.as_ref(), trigger))
+        let trigger = TriggerData {
+            id: trigger.map(str::to_owned),
+            ..TriggerData::default()
+        };
+        automation.conditions.iter().all(|condition| {
+            condition_passes(condition, states, now, self.sun.as_ref(), Some(&trigger))
+        })
     }
 }
 
@@ -548,7 +560,7 @@ fn condition_passes(
     states: &StateMachine,
     now: DateTime,
     sun: Option<&Sun>,
-    trigger: Option<&str>,
+    trigger: Option<&TriggerData>,
 ) -> bool {
     let check = |c: &Condition| condition_passes(c, states, now, sun, trigger);
     match condition {
@@ -556,7 +568,14 @@ fn condition_passes(
         Condition::Or(list) => list.iter().any(check),
         // Comme dans Home Assistant : vrai si **aucune** n'est vraie.
         Condition::Not(list) => !list.iter().any(check),
-        Condition::Trigger(ids) => trigger.is_some_and(|t| ids.iter().any(|id| id == t)),
+        Condition::Trigger(ids) => trigger
+            .and_then(|t| t.id.as_deref())
+            .is_some_and(|t| ids.iter().any(|id| id == t)),
+        // Comme Home Assistant : vrai si le modèle donne `true`, un nombre
+        // non nul, ou « on », « yes »… ; un modèle qui n'aboutit pas est faux.
+        Condition::Template { template, .. } => {
+            crate::template::is_true(&template.evaluate(states, trigger))
+        }
         Condition::State {
             entity_ids,
             attribute,

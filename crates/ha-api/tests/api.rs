@@ -890,10 +890,49 @@ async fn the_system_page_measures_the_server() {
     assert!(body["database_bytes"].as_u64().unwrap() > 0);
     assert!(body["uptime_seconds"].is_u64());
     assert_eq!(body["budget"]["memory_mib"], 64);
+    assert_eq!(body["devices"], json!([]), "aucun ordre encore");
+    assert_eq!(body["slow_ms"], 3000);
     if cfg!(target_os = "linux") {
         assert!(body["memory"]["resident_bytes"].as_u64().unwrap() > 0);
         assert!(body["cpu_percent"].is_number());
     }
+
+    // Un ordre à une lampe Hue, et sa réponse 150 ms plus tard : la page
+    // donne la rapidité de Hue, sous son nom.
+    let core = &app.state.core;
+    core.report("hue", "Hue", ha_core::Health::Connected);
+    let lamp: ha_core::EntityId = "light.salon".parse().unwrap();
+    core.states
+        .set_by("hue", lamp.clone(), "off", ha_core::Attributes::new())
+        .unwrap();
+    let sent = std::time::Instant::now();
+    core.latencies.observe(
+        &ha_core::Event::CallService {
+            domain: "light".into(),
+            service: "turn_on".into(),
+            entity_id: lamp.clone(),
+            data: ha_core::Attributes::new(),
+            origin: ha_core::Origin::System,
+            command: None,
+            issued_at: sent,
+        },
+        &core.states,
+        sent,
+    );
+    core.latencies.observe(
+        &ha_core::Event::StateChanged {
+            entity_id: lamp.clone(),
+            old_state: None,
+            new_state: core.states.get(&lamp),
+        },
+        &core.states,
+        sent + std::time::Duration::from_millis(150),
+    );
+    let (_, body) = app.request("GET", "/api/system", Some(&token), None).await;
+    assert_eq!(
+        body["devices"],
+        json!([{"integration": "hue", "name": "Hue", "p50_ms": 150.0, "p95_ms": 150.0, "samples": 1, "slow": 0}])
+    );
 
     // Réservé à l'administrateur.
     let family = app.login_as("alice", ha_auth::Role::Family).await;
@@ -1437,6 +1476,80 @@ async fn a_guest_sees_and_controls_only_safe_devices() {
         )
         .await;
     assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn a_guest_never_sees_nor_controls_the_server_switches() {
+    // La simulation de présence dit quand la maison est vide ; le délestage
+    // protège le compteur : pas pour un invité, même si ce sont des
+    // « switch ». Un rappel (étape 69) dit que le garage est ouvert.
+    let app = TestApp::new().await;
+    for (entity, attributes) in [
+        ("switch.simulation_presence", json!({"en_cours": true})),
+        ("switch.delestage", json!({"coupes": []})),
+        ("alert.garage_ouvert", json!({"surveille": "cover.garage"})),
+        ("switch.protection_solaire", json!({"baisses": []})),
+        ("switch.prise_salon", json!({})),
+    ] {
+        let Value::Object(attributes) = attributes else {
+            panic!("un objet est attendu")
+        };
+        app.state
+            .core
+            .states
+            .set(entity.parse().unwrap(), "on", attributes)
+            .unwrap();
+    }
+    let guest = app.login_as("visiteur", ha_auth::Role::Guest).await;
+    let (_, listed) = app.request("GET", "/api/states", Some(&guest), None).await;
+    let ids: Vec<&str> = listed
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["entity_id"].as_str().unwrap())
+        .collect();
+    assert_eq!(ids, ["switch.prise_salon"]);
+    for hidden in [
+        "switch.simulation_presence",
+        "switch.delestage",
+        "alert.garage_ouvert",
+        "switch.protection_solaire",
+    ] {
+        let (status, _) = app
+            .request("GET", &format!("/api/states/{hidden}"), Some(&guest), None)
+            .await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{hidden}");
+        let domain = hidden.split('.').next().unwrap();
+        let (status, _) = app
+            .request(
+                "POST",
+                &format!("/api/services/{domain}/turn_off"),
+                Some(&guest),
+                Some(json!({"entity_id": hidden})),
+            )
+            .await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{hidden}");
+    }
+    // La famille, elle, les commande.
+    let family = app.login_as("alice", ha_auth::Role::Family).await;
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/services/switch/turn_off",
+            Some(&family),
+            Some(json!({"entity_id": "switch.delestage"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/services/alert/turn_off",
+            Some(&family),
+            Some(json!({"entity_id": "alert.garage_ouvert"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
 }
 
 #[tokio::test]

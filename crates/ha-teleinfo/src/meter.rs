@@ -3,6 +3,47 @@
 
 use crate::frame::{Frame, Mode};
 
+/// La couleur d'un jour Tempo.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Color {
+    Blue,
+    White,
+    Red,
+}
+
+impl Color {
+    /// L'état publié : « Bleu », « Blanc », « Rouge » (comme les niveaux de
+    /// vigilance, pour écrire `to: Rouge` dans une automatisation).
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Blue => "Bleu",
+            Self::White => "Blanc",
+            Self::Red => "Rouge",
+        }
+    }
+
+    /// Les deux bits d'une couleur dans le registre `STGE` (0 : pas
+    /// d'annonce).
+    fn from_bits(bits: u32) -> Option<Self> {
+        match bits & 0b11 {
+            1 => Some(Self::Blue),
+            2 => Some(Self::White),
+            3 => Some(Self::Red),
+            _ => None,
+        }
+    }
+}
+
+/// Les couleurs Tempo que le compteur annonce. Un jour Tempo va de 6 h à
+/// 6 h le lendemain.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Tempo {
+    pub today: Option<Color>,
+    /// `None` tant que le compteur n'a pas reçu la couleur de demain.
+    pub tomorrow: Option<Color>,
+}
+
 /// Un index de consommation (en Wh, comme le compteur l'envoie).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Index {
@@ -38,6 +79,8 @@ pub struct Reading {
     pub subscribed: Option<String>,
     /// Le numéro du compteur, masqué : seuls les 4 derniers chiffres.
     pub meter: Option<String>,
+    /// Les couleurs du jour et du lendemain, pour un contrat Tempo.
+    pub tempo: Option<Tempo>,
 }
 
 /// Les index du mode historique : étiquette, clé, nom.
@@ -113,6 +156,42 @@ fn historic_period(ptec: &str) -> String {
         "HPJR" => "Heures pleines, jour rouge".into(),
         other => other.to_owned(),
     }
+}
+
+/// La couleur du jour d'après la période (`HPJR` : heures pleines, jour
+/// rouge).
+fn historic_today(ptec: &str) -> Option<Color> {
+    match ptec.trim_end_matches('.').get(2..)? {
+        "JB" => Some(Color::Blue),
+        "JW" => Some(Color::White),
+        "JR" => Some(Color::Red),
+        _ => None,
+    }
+}
+
+/// La couleur de demain (`DEMAIN`) : `----` tant qu'elle n'est pas connue.
+fn historic_tomorrow(demain: &str) -> Option<Color> {
+    match demain.trim() {
+        "BLEU" => Some(Color::Blue),
+        "BLAN" => Some(Color::White),
+        "ROUG" => Some(Color::Red),
+        _ => None,
+    }
+}
+
+/// Les couleurs du registre d'état `STGE` (8 chiffres hexadécimaux) : bits
+/// 24-25 pour aujourd'hui, 26-27 pour demain. Hors contrat Tempo, ils
+/// restent à zéro : on ne publie alors rien.
+fn standard_tempo(stge: &str) -> Option<Tempo> {
+    let stge = stge.trim();
+    // `from_str_radix` accepterait un signe « + » : on veut 8 chiffres.
+    if stge.len() != 8 || !stge.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    let bits = u32::from_str_radix(stge, 16).ok()?;
+    let today = Color::from_bits(bits >> 24);
+    let tomorrow = Color::from_bits(bits >> 26);
+    (today.is_some() || tomorrow.is_some()).then_some(Tempo { today, tomorrow })
 }
 
 fn historic_tariff(optarif: &str) -> String {
@@ -192,6 +271,14 @@ impl Reading {
                 reading.tariff = frame.get("OPTARIF").map(historic_tariff);
                 reading.subscribed = frame.number("ISOUSC").map(|a| format!("{a} A"));
                 reading.meter = frame.get("ADCO").and_then(masked);
+                let tempo = frame.get("OPTARIF").is_some_and(|o| o.starts_with("BBR"));
+                let today = frame.get("PTEC").and_then(historic_today);
+                if tempo || today.is_some() {
+                    reading.tempo = Some(Tempo {
+                        today,
+                        tomorrow: frame.get("DEMAIN").and_then(historic_tomorrow),
+                    });
+                }
             }
             Mode::Standard => {
                 let tariff = frame.get("NGTF").unwrap_or_default();
@@ -223,6 +310,7 @@ impl Reading {
                 reading.tariff = sentence(tariff);
                 reading.subscribed = frame.number("PREF").map(|kva| format!("{kva} kVA"));
                 reading.meter = frame.get("ADSC").and_then(masked);
+                reading.tempo = frame.get("STGE").and_then(standard_tempo);
             }
         }
         if reading.total_wh.is_none() && !reading.indexes.is_empty() {
@@ -338,5 +426,57 @@ mod tests {
         ));
         assert_eq!(tempo.tariff.as_deref(), Some("Tempo"));
         assert_eq!(tempo.period.as_deref(), Some("Heures pleines, jour rouge"));
+    }
+
+    #[test]
+    fn tempo_colors_in_historic_mode() {
+        let colors =
+            |groups: &[(&str, &str)]| Reading::from_frame(&frame(Mode::Historic, groups)).tempo;
+        assert_eq!(
+            colors(&[("OPTARIF", "BBR("), ("PTEC", "HCJB"), ("DEMAIN", "ROUG")]),
+            Some(Tempo {
+                today: Some(Color::Blue),
+                tomorrow: Some(Color::Red)
+            })
+        );
+        // Demain pas encore annoncé.
+        assert_eq!(
+            colors(&[("OPTARIF", "BBR("), ("PTEC", "HPJW"), ("DEMAIN", "----")]),
+            Some(Tempo {
+                today: Some(Color::White),
+                tomorrow: None
+            })
+        );
+        // Un autre contrat : pas de Tempo.
+        assert_eq!(colors(&[("OPTARIF", "HC.."), ("PTEC", "HC..")]), None);
+        assert_eq!(colors(&[("OPTARIF", "BASE"), ("PTEC", "TH..")]), None);
+    }
+
+    #[test]
+    fn tempo_colors_in_standard_mode() {
+        let colors = |stge: &str| {
+            Reading::from_frame(&frame(Mode::Standard, &[("NGTF", "TEMPO"), ("STGE", stge)])).tempo
+        };
+        // Bits 24-25 : 01 (bleu) ; bits 26-27 : 11 (rouge) ; le reste (contact
+        // sec, coupure…) ne compte pas.
+        assert_eq!(
+            colors("0D0A0001"),
+            Some(Tempo {
+                today: Some(Color::Blue),
+                tomorrow: Some(Color::Red)
+            })
+        );
+        assert_eq!(
+            colors("02000000"),
+            Some(Tempo {
+                today: Some(Color::White),
+                tomorrow: None
+            })
+        );
+        // Hors Tempo, les bits restent à zéro ; une valeur abîmée est ignorée.
+        assert_eq!(colors("003A0001"), None);
+        assert_eq!(colors("0D0A00"), None);
+        assert_eq!(colors("0D0A00ZZ"), None);
+        assert_eq!(colors("+D0A0001"), None);
     }
 }

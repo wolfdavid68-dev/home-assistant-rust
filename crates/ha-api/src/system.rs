@@ -152,6 +152,33 @@ pub(crate) async fn system(
     let cpu = process.map(|(_, _, ticks)| state.metrics.cpu_percent(ticks));
     let latency = state.metrics.percentiles();
     let database = state.store.database_size().await.ok();
+    // La rapidité des appareils (étape 63), par intégration, sous son nom.
+    let names: Vec<(&str, &str)> = state
+        .core
+        .integrations()
+        .iter()
+        .map(|status| (status.id, status.name))
+        .collect();
+    let devices: Vec<Value> = state
+        .core
+        .latencies
+        .summaries()
+        .into_iter()
+        .map(|summary| {
+            let name = names
+                .iter()
+                .find(|(id, _)| *id == summary.owner)
+                .map_or(summary.owner.as_str(), |(_, name)| name);
+            json!({
+                "integration": summary.owner,
+                "name": name,
+                "p50_ms": summary.p50_ms,
+                "p95_ms": summary.p95_ms,
+                "samples": summary.samples,
+                "slow": summary.slow,
+            })
+        })
+        .collect();
     Ok(Json(json!({
         "version": ha_core::VERSION,
         "uptime_seconds": state.metrics.started.elapsed().as_secs(),
@@ -159,6 +186,8 @@ pub(crate) async fn system(
         "cpu_percent": cpu,
         "api": latency.map(|(p50, p95, samples)| json!({"p50_ms": p50, "p95_ms": p95, "samples": samples})),
         "database_bytes": database,
+        "devices": devices,
+        "slow_ms": u64::try_from(ha_core::latency::SLOW.as_millis()).unwrap_or(u64::MAX),
         "entities": state.core.states.all().len(),
         "budget": {
             "memory_mib": BUDGET_MEMORY_MIB,

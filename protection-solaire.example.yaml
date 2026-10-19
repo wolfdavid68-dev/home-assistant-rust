@@ -1,0 +1,35 @@
+# Protection solaire (étape 70) : copier en protection-solaire.yaml, puis
+# « ha-server protection-solaire check ». Voir docs/protection-solaire.md.
+#
+# Quand le soleil tape sur une façade, qu'il fait chaud et qu'il y a du
+# soleil, ses volets descendent ; quand le soleil est passé, ils remontent là
+# où ils étaient. Un volet bougé à la main est laissé tranquille.
+
+# La chaleur qui décide : la température dehors (ou celle d'une pièce).
+temperature: sensor.meteo_temperature
+seuil: 24          # °C : protéger au-dessus
+ecart: 2           # °C : arrêter sous 22 °C (pas à chaque dixième de degré)
+
+# Seulement par temps ensoleillé ou voilé (pas sous les nuages).
+meteo: weather.maison
+
+# Un volet bougé à la main n'est plus touché pendant 2 heures.
+pause_manuelle: 2
+
+volets:
+  # La baie du salon, plein sud : baissée aux trois quarts.
+  - entity_id: cover.salon
+    orientation: sud
+    position: 25
+
+  # La chambre à l'ouest : fermée l'après-midi, seulement quand le soleil
+  # est bien en face (±70°) et au-dessus des arbres (15°).
+  - entity_id: cover.chambre
+    orientation: ouest
+    ouverture: 70
+    hauteur_min: 15
+    position: 0
+
+  # Le bureau au sud-est : le soleil du matin.
+  - entity_id: cover.bureau
+    orientation: 135

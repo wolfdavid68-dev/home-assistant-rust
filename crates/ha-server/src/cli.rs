@@ -43,6 +43,10 @@ utilisation :
   ha-server areas check           vérifie le fichier des pièces
   ha-server calendriers check     vérifie le fichier des agendas en ligne (ICS)
   ha-server simulation check      vérifie la simulation de présence
+  ha-server delestage check       vérifie le délestage
+  ha-server modeles check         vérifie les capteurs modèles
+  ha-server rappels check         vérifie les rappels insistants
+  ha-server protection-solaire check  vérifie la protection solaire des volets
   ha-server guard check           vérifie la garde (pièces protégées, heures calmes)
   ha-server alexa check           vérifie le fichier des appareils pour Alexa
   ha-server thermostats check     vérifie le fichier des thermostats
@@ -847,6 +851,138 @@ pub fn check_simulation(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
                 "{} : simulation valide, rejoue il y a {} jours :",
                 path.display(),
                 config.days_ago
+            );
+            for device in &config.devices {
+                println!("  - {device}");
+            }
+        }
+    }
+    Ok(())
+}
+
+/// `ha-server modeles check` : vérifie `modeles.yaml`.
+pub fn check_templates(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
+    let entities = ha_automation::load_template_entities(path)?;
+    if entities.is_empty() {
+        println!(
+            "{} : absent ou vide (pas de capteur modèle)",
+            path.display()
+        );
+        return Ok(());
+    }
+    println!(
+        "{} : {} capteur(s) modèle(s) valide(s)",
+        path.display(),
+        entities.len()
+    );
+    for entity in &entities {
+        let reads: Vec<&str> = entity
+            .template
+            .entity_ids()
+            .map(ha_core::EntityId::as_str)
+            .collect();
+        println!(
+            "  - {} ({}) : lit {}",
+            entity.entity_id,
+            entity.name,
+            if reads.is_empty() {
+                "rien".to_owned()
+            } else {
+                reads.join(", ")
+            }
+        );
+    }
+    Ok(())
+}
+
+/// `ha-server protection-solaire check` : vérifie `protection-solaire.yaml`.
+pub fn check_shade(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
+    let Some(config) = ha_shade::load(path)? else {
+        println!(
+            "{} : fichier absent (pas de protection solaire)",
+            path.display()
+        );
+        return Ok(());
+    };
+    let heat = config.temperature.as_ref().map_or_else(
+        || "sans mesure de température".to_owned(),
+        |sensor| {
+            format!(
+                "au-dessus de {} °C ({sensor}), jusqu'à {} °C",
+                config.threshold,
+                config.threshold - config.hysteresis
+            )
+        },
+    );
+    println!(
+        "{} : protection solaire valide, {heat} ; {} ; pause de {} h après un geste à la main",
+        path.display(),
+        config.weather.as_ref().map_or_else(
+            || "quel que soit le temps".to_owned(),
+            |w| format!("par soleil ({w})")
+        ),
+        config.manual_pause.as_secs_f64() / 3600.0
+    );
+    for cover in &config.covers {
+        println!(
+            "  - {} : façade à {}° (soleil à ±{}°, au moins {}° de haut), descend à {} % d'ouverture",
+            cover.entity_id,
+            cover.orientation,
+            cover.half_angle,
+            cover.min_elevation,
+            cover.position
+        );
+    }
+    Ok(())
+}
+
+/// `ha-server rappels check` : vérifie `rappels.yaml`.
+pub fn check_alerts(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
+    let alerts = ha_alert::load(path)?;
+    if alerts.is_empty() {
+        println!("{} : absent ou vide (pas de rappel)", path.display());
+        return Ok(());
+    }
+    println!("{} : {} rappel(s) valide(s)", path.display(), alerts.len());
+    for alert in &alerts {
+        let notifiers: Vec<&str> = alert
+            .notifiers
+            .iter()
+            .map(ha_core::EntityId::as_str)
+            .collect();
+        println!(
+            "  - {} ({}) : quand {} est « {} » ; {} ; vers {}{}",
+            alert.entity_id,
+            alert.name,
+            alert.watched,
+            alert.state,
+            alert.rhythm(),
+            notifiers.join(", "),
+            if alert.can_acknowledge {
+                ""
+            } else {
+                " (sans « Compris »)"
+            }
+        );
+    }
+    Ok(())
+}
+
+/// `ha-server delestage check` : vérifie `delestage.yaml`.
+pub fn check_shedding(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
+    match ha_shedding::load(path)? {
+        None => println!("{} : fichier absent (pas de délestage)", path.display()),
+        Some(config) => {
+            let limit = config.limit.map_or_else(
+                || "la puissance souscrite du Linky".to_owned(),
+                |limit| format!("{limit}"),
+            );
+            println!(
+                "{} : délestage valide, mesure {}, limite {limit}, retour après {} min ; \
+                 coupés dans cet ordre :",
+                path.display(),
+                config.measure,
+                config.restore_after.as_secs() / 60
             );
             for device in &config.devices {
                 println!("  - {device}");

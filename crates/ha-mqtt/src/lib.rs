@@ -4,12 +4,14 @@
 //! - [`discovery`] : lecture des descriptions `homeassistant/…/config` ;
 //! - [`template`] : extraction des valeurs (`{{ value_json.temperature }}`) ;
 //! - [`bridge`] : messages MQTT ⇄ états des entités et appels de service ;
+//! - [`shelly`] : les Shelly récents (Gen2 et plus), reconnus sans découverte ;
 //! - [`Mqtt`] : la connexion au broker.
 
 pub mod bridge;
 mod client;
 pub mod discovery;
 pub mod profile;
+pub mod shelly;
 pub mod template;
 
 use zeroize::Zeroizing;

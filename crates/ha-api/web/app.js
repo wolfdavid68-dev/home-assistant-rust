@@ -250,14 +250,16 @@ function unmarkPending(entityId) {
 
 // ---------------------------------------------------------------- Affichage
 const SECTIONS = [
+  { title: "Rappels", domains: ["alert"] },
   { title: "Agenda et listes", domains: ["calendar", "todo"] },
   { title: "Entrées", domains: ["input_boolean", "input_number", "input_select", "input_button", "timer", "counter", "input_text", "input_datetime", "schedule"] },
   // Les capteurs de la météo (sensor.meteo_…) vont avec la météo.
   { title: "Météo, présence et soleil", domains: ["weather", "zone", "person", "device_tracker", "sun", "notify"], extra: (s) => s.entity_id.startsWith("sensor.meteo_") || s.entity_id === VIGILANCE_TODAY },
   { title: "Chauffage", domains: ["climate"] },
-  { title: "Lumières", domains: ["light"] },
+  // Fonctions appelées plus tard : isLight est défini plus bas.
+  { title: "Lumières", domains: [], extra: (s) => isLight(s) },
   { title: "Volets", domains: ["cover"] },
-  { title: "Prises et interrupteurs", domains: ["switch", "fan"] },
+  { title: "Prises et interrupteurs", domains: ["switch", "fan"], extra: (s) => isOutlet(s) },
   { title: "Alarme, serrures et sirènes", domains: ["alarm_control_panel", "lock", "siren"] },
   { title: "Boutons et réglages", domains: ["button", "number", "select", "text", "event"] },
   { title: "Eau et air", domains: ["valve", "humidifier", "water_heater"] },
@@ -334,8 +336,8 @@ function renderAll() {
   // … puis, par type, les appareils qui ne sont dans aucune pièce. Les scènes
   // et les scripts sont déjà en haut, en boutons.
   // Les notifications ont leur cloche, en haut.
-  // Demain est dans la tuile de la vigilance du jour.
-  const loose = sorted.filter((s) => !used.has(s.entity_id) && s.entity_id !== VIGILANCE_TOMORROW
+  // Demain est dans la tuile de la vigilance (ou de Tempo) du jour.
+  const loose = sorted.filter((s) => !used.has(s.entity_id) && s.entity_id !== VIGILANCE_TOMORROW && s.entity_id !== TEMPO_TOMORROW
     && !["scene", "script", "persistent_notification"].includes(domainOf(s)));
   const groups = SECTIONS.map(({ title, domains, extra }) => {
     const items = loose.filter((s) => !used.has(s.entity_id) && (domains.includes(domainOf(s)) || extra?.(s)));
@@ -390,6 +392,14 @@ function alertText(state) {
   if (domain === "siren" && state.state === "on") return "sonne";
   if (domain === "alarm_control_panel" && state.state === "triggered") return "intrusion";
   if (state.entity_id === VIGILANCE_TODAY && vigilanceRank(state.state) >= 2) return vigilanceSummary(state);
+  // Un jour rouge Tempo : l'électricité coûte bien plus cher en heures pleines.
+  if ((state.entity_id === TEMPO_TODAY || state.entity_id === TEMPO_TOMORROW) && state.state === "Rouge") return "jour rouge";
+  // Un rappel en cours (étape 69), sauf si ce qu'il surveille est déjà
+  // signalé (le garage ouvert) : on ne le compte pas deux fois.
+  if (domain === "alert" && state.state === "on") {
+    const watched = entities.get(state.attributes.surveille);
+    return watched !== undefined && domainOf(watched) !== "alert" && alertText(watched) !== null ? null : "rappel en cours";
+  }
   return null;
 }
 
@@ -419,7 +429,8 @@ function renderHome() {
   if (found.length === 0) {
     greeting.replaceChildren(`${hello}${who}. Tout est calme.`);
   } else if (found.length === 1) {
-    const target = found[0].state.entity_id;
+    // Demain est dans la tuile de Tempo aujourd'hui.
+    const target = found[0].state.entity_id === TEMPO_TOMORROW ? TEMPO_TODAY : found[0].state.entity_id;
     const link = el("a", { href: `#${tileId(target)}`, text: nameOf(found[0].state) });
     link.addEventListener("click", (event) => {
       event.preventDefault();
@@ -473,7 +484,7 @@ function renderHome() {
 /** Ce qu'on sait d'une pièce : lumières, température, alertes. */
 function roomInfo(area) {
   const states = area.entities.map((e) => entities.get(e.entity_id)).filter((s) => s !== undefined);
-  const lights = states.filter((s) => domainOf(s) === "light" && s.state === "on").length;
+  const lights = states.filter((s) => isLight(s) && s.state === "on").length;
   const temperature = states
     .map((s) => (domainOf(s) === "climate" ? s.attributes.current_temperature
       : s.attributes.device_class === "temperature" ? Number(s.state) : NaN))
@@ -623,8 +634,9 @@ function makeReadOnly(tile) {
 
 function renderTileContent(state) {
   if (state.entity_id === VIGILANCE_TODAY) return vigilanceTile(state);
+  if (state.entity_id === TEMPO_TODAY) return tempoTile(state);
   switch (domainOf(state)) {
-    case "light": return lightTile(state);
+    case "light": return isOutlet(state) ? switchTile(state) : lightTile(state);
     case "cover": return coverTile(state);
     case "device_tracker":
     case "person": return presenceTile(state);
@@ -640,7 +652,11 @@ function renderTileContent(state) {
     case "input_select": return inputSelectTile(state);
     case "input_button": return inputButtonTile(state);
     case "timer": return timerTile(state);
-    case "switch": return switchTile(state);
+    case "alert": return alertTile(state);
+    case "switch":
+      if (state.entity_id === SHEDDING) return switchTile(state, ICONS.bolt, sheddingLabels(state));
+      if (state.entity_id === SHADE) return switchTile(state, ICONS.blinds, shadeLabels(state));
+      return switchTile(state);
     case "siren": return switchTile(state, ICONS.siren, { on: "Sonne !", off: "Au repos" });
     case "humidifier": return humidifierTile(state);
     case "lock": return lockTile(state);
@@ -748,6 +764,46 @@ function switchTile(state, icon = ICONS.plug, labels = null) {
     callService(domainOf(state), "toggle", { entity_id: state.entity_id });
   });
   return el("div", { id: tileId(state.entity_id), class: `${tileClass(state, "switch")} has-knob` }, toggle);
+}
+
+// Le délestage (étape 62) : ce qu'il a coupé, sous son nom.
+const SHEDDING = "switch.delestage";
+function sheddingLabels(state) {
+  const cut = Array.isArray(state.attributes.coupes) ? state.attributes.coupes : [];
+  const names = cut
+    .map((item) => (typeof item?.entity_id === "string" ? entities.get(item.entity_id) : undefined))
+    .filter((device) => device !== undefined)
+    .map((device) => nameOf(device));
+  let on = "Armé, rien de coupé";
+  if (typeof state.attributes.erreur === "string") on = "Armé, limite inconnue";
+  else if (names.length > 0) on = `Coupé : ${joinNames(names)}`;
+  return { on, off: "Désarmé" };
+}
+
+// La protection solaire (étape 70) : les volets qu'elle a baissés, et
+// pourquoi elle attend.
+const SHADE = "switch.protection_solaire";
+function shadeLabels(state) {
+  const a = state.attributes;
+  const names = (Array.isArray(a.baisses) ? a.baisses : [])
+    .map((item) => (typeof item?.entity_id === "string" ? entities.get(item.entity_id) : undefined))
+    .filter((device) => device !== undefined)
+    .map((device) => nameOf(device));
+  let on = "Armée, soleil couché";
+  if (names.length > 0) on = `Baissé : ${joinNames(names)}`;
+  else if (typeof a.soleil_hauteur === "number" && a.soleil_hauteur > 0) {
+    if (a.ensoleille === false) on = "Armée, pas de soleil";
+    else if (a.chaleur === false) on = "Armée, pas assez chaud";
+    else if (Array.isArray(a.soleil_sur) && a.soleil_sur.length === 0) on = "Armée, soleil sur aucune façade";
+    else on = "Armée";
+  }
+  // Les volets bougés à la main, laissés tranquilles un moment.
+  const paused = (Array.isArray(a.en_pause) ? a.en_pause : [])
+    .map((id) => entities.get(id))
+    .filter((device) => device !== undefined)
+    .map((device) => nameOf(device));
+  if (paused.length > 0) on = `${on} · à la main : ${joinNames(paused)}`;
+  return { on, off: "Désarmée" };
 }
 
 // ----- Serrure, vanne, aspirateur, humidificateur, chauffe-eau (MQTT)
@@ -1411,6 +1467,42 @@ function vigilanceTile(state) {
   return el("div", { id: tileId(state.entity_id), class: `${tileClass(state, "vigilance")} wide level-${level}` }, ...parts);
 }
 
+// Tempo (étape 60) : la couleur du jour et du lendemain, lue sur le Linky.
+const TEMPO_TODAY = "sensor.linky_tempo_aujourdhui";
+const TEMPO_TOMORROW = "sensor.linky_tempo_demain";
+// La couleur, sa classe CSS et l'adjectif (« jour rouge »).
+const TEMPO_COLORS = { Bleu: ["blue", "bleu"], Blanc: ["white", "blanc"], Rouge: ["red", "rouge"] };
+
+function tempoBadge(color) {
+  const [css, adjective] = lookup(TEMPO_COLORS, color) ?? ["unknown", ""];
+  // Comme pour la vigilance, la couleur est toujours écrite.
+  return el("span", { class: `tempo-badge tempo-${css}`, text: `Jour ${adjective}` });
+}
+
+/** « Demain : jour rouge », ou pas encore annoncé. */
+function tempoTomorrowText(tomorrow) {
+  if (lookup(TEMPO_COLORS, tomorrow.state)) return `Demain : jour ${TEMPO_COLORS[tomorrow.state][1]}`;
+  if (tomorrow.state === "unknown") return "Demain : pas encore annoncé";
+  return `Demain : ${statusText(tomorrow)}`;
+}
+
+function tempoTile(state) {
+  const color = lookup(TEMPO_COLORS, state.state);
+  const parts = [
+    tileHead(state, ICONS.bolt, "D'après le compteur"),
+    el("div", { class: "value small-value" }, color ? tempoBadge(state.state) : statusText(state)),
+  ];
+  const tomorrow = entities.get(TEMPO_TOMORROW);
+  if (tomorrow) {
+    // Demain annoncé : sa couleur aussi, pour la voir d'un coup d'œil.
+    const line = lookup(TEMPO_COLORS, tomorrow.state) ? ["Demain : ", tempoBadge(tomorrow.state)] : [tempoTomorrowText(tomorrow)];
+    parts.push(el("p", { class: "vigilance-tomorrow" }, ...line));
+  }
+  // Le jour Tempo commence à 6 h : à 3 h du matin, c'est encore celui de la veille.
+  parts.push(el("p", { class: "sub", text: "Un jour Tempo va de 6 h à 6 h." }));
+  return el("div", { id: tileId(state.entity_id), class: `${tileClass(state, "tempo")} tempo-${color?.[0] ?? "unknown"}` }, ...parts);
+}
+
 // Le thermostat : consigne (− / +), marche / arrêt, préréglages.
 // ---------------------------------------------------------------- Entrées
 // Interrupteurs, nombres, listes, boutons et minuteurs virtuels (inputs.yaml).
@@ -1486,6 +1578,38 @@ function inputButtonTile(state) {
   const button = el("button", { type: "button", class: "action-button", text: "Appuyer" });
   button.addEventListener("click", () => inputCommand(state, "press"));
   return el("div", { id: tileId(state.entity_id), class: "tile action" }, tileHead(state, ICONS.button, subtitle), button);
+}
+
+/** Un rappel insistant (étape 69) : calme, en cours (avec « Compris »), ou
+ *  compris (avec « Reprendre »). */
+function alertTile(state) {
+  const a = state.attributes;
+  const sent = Number.isInteger(a.rappels) ? a.rappels : 0;
+  const next = typeof a.prochain_rappel === "string" ? Date.parse(a.prochain_rappel) : NaN;
+  let subtitle;
+  let button = null;
+  if (state.state === "on") {
+    const parts = ["En cours"];
+    if (sent > 0) parts.push(`${sent} message${sent > 1 ? "s" : ""}`);
+    if (!Number.isNaN(next)) parts.push(`${sent === 0 ? "premier message" : "prochain"} à ${hourMinute.format(new Date(next))}`);
+    subtitle = parts.join(" · ");
+    if (a.acquittable !== false) {
+      button = el("button", { type: "button", class: "action-button", text: "Compris" });
+      button.addEventListener("click", () => inputCommand(state, "turn_off"));
+    }
+  } else if (state.state === "off") {
+    subtitle = typeof a.compris_par === "string" ? `Compris par ${a.compris_par}` : "Compris";
+    button = el("button", { type: "button", class: "action-button", text: "Reprendre" });
+    button.addEventListener("click", () => inputCommand(state, "turn_on"));
+  } else {
+    subtitle = state.state === "idle" ? "Rien à signaler" : statusText(state);
+  }
+  return el(
+    "div",
+    { id: tileId(state.entity_id), class: `${tileClass(state, "reminder")} action${state.state === "on" ? " alert" : ""}` },
+    tileHead(state, ICONS.bell, subtitle),
+    ...(button ? [button] : []),
+  );
 }
 
 const TIMER_LABELS = { idle: "Arrêté", active: "En marche", paused: "En pause" };
@@ -1820,6 +1944,10 @@ const BINARY_LABELS = {
  *  obtiendrait des objets internes de JavaScript au lieu d'un libellé. */
 const lookup = (table, key) => (typeof key === "string" && Object.hasOwn(table, key) ? table[key] : undefined);
 const domainOf = (state) => state.entity_id.split(".")[0];
+// Une prise Hue est une « lampe » de classe outlet pour le pont : sur le
+// tableau de bord, c'est une prise, et « les lumières » ne la comptent pas.
+const isOutlet = (state) => domainOf(state) === "light" && state.attributes.device_class === "outlet";
+const isLight = (state) => domainOf(state) === "light" && !isOutlet(state);
 const nameOf = (state) =>
   customNames.get(state.entity_id) || state.attributes.friendly_name || state.entity_id.split(".")[1].replaceAll("_", " ");
 const tileId = (entityId) => `tile-${entityId}`;
@@ -1925,6 +2053,7 @@ Object.assign(ICONS, {
   arrowUp: ["M12 19V5", "M6 11l6-6 6 6"],
   arrowDown: ["M12 5v14", "M18 13l-6 6-6-6"],
   square: ["M8 8h8v8H8z"],
+  bolt: ["M13 2L4 14h7l-1 8 9-12h-7z"],
 });
 const BINARY_ICONS = { motion: ICONS.motion, connectivity: ICONS.globe };
 
@@ -2362,6 +2491,7 @@ const CONDITION_KINDS = {
   and: ["Toutes ces conditions (et)", () => ({ condition: "and", conditions: [] })],
   not: ["Aucune de ces conditions (non)", () => ({ condition: "not", conditions: [] })],
   trigger: ["Selon le déclencheur", () => ({ condition: "trigger", id: "" })],
+  template: ["Un calcul est vrai (modèle)", () => ({ condition: "template", value_template: "{{ states('sensor.temperature_salon') | float(0) > 24 }}" })],
 };
 const ACTION_KINDS = {
   service: ["Commander un appareil", () => ({ action: "light.turn_on", target: { entity_id: "" } })],
@@ -2385,6 +2515,7 @@ const SERVICES = {
   input_number: [["set_value", "Régler la valeur"], ["increment", "Augmenter d'un pas"], ["decrement", "Diminuer d'un pas"]],
   input_select: [["select_option", "Choisir"], ["select_next", "Choix suivant"], ["select_previous", "Choix précédent"], ["select_first", "Premier choix"]],
   input_button: [["press", "Appuyer"]],
+  alert: [["turn_off", "Compris (faire taire)"], ["turn_on", "Reprendre les rappels"]],
   timer: [["start", "Démarrer"], ["pause", "Mettre en pause"], ["cancel", "Annuler"], ["finish", "Terminer"]],
   lock: [["lock", "Verrouiller"], ["unlock", "Déverrouiller"], ["open", "Ouvrir la porte"]],
   siren: [["turn_on", "Faire sonner"], ["turn_off", "Arrêter"]],
@@ -2562,6 +2693,10 @@ function renderEnergyNow() {
     parts.push(el("span", { class: "energy-power" }, el("strong", { text: kwhFormat.format(Number(power.state)) }), " VA en ce moment"));
   }
   if (period && period.state !== "unavailable") parts.push(el("span", { class: "badge", text: period.state }));
+  const tempo = entities.get(TEMPO_TODAY);
+  if (tempo && lookup(TEMPO_COLORS, tempo.state)) parts.push(tempoBadge(tempo.state));
+  const tomorrow = entities.get(TEMPO_TOMORROW);
+  if (tempo && tomorrow) parts.push(el("span", { class: "sub", text: tempoTomorrowText(tomorrow) }));
   box.hidden = parts.length === 0;
   box.replaceChildren(...parts);
 }
@@ -2833,6 +2968,8 @@ function describeCondition(c) {
       return `pas (${list(c.conditions).join(" ou ")})`;
     case "trigger":
       return `déclenchée par « ${asList(c.id).join(" » ou « ")} »`;
+    case "template":
+      return `${String(c.value_template ?? "").trim()} est vrai`;
     case "state":
       return `${entityNames(c.entity_id)} est « ${asList(c.state).join(" » ou « ")} »`;
     case "numeric_state":
@@ -3224,6 +3361,8 @@ function conditionFields(c) {
       return [nested(itemsBlock("Conditions", lookup(CONDITION_KINDS, c.condition)?.[0] ?? "", c, "conditions", CONDITION_KINDS, "condition", conditionFields))];
     case "trigger":
       return [textField("Identifiant du déclencheur", c, "id", { placeholder: "arrivee", list: true })];
+    case "template":
+      return [textField("Modèle (vrai ou faux)", c, "value_template", { placeholder: "{{ states('sensor.x') | float(0) > 20 }}" })];
     case "state":
       return [
         entityField(c, "entity_id"),
@@ -4183,12 +4322,56 @@ async function loadIntegrations() {
   }));
 }
 
+// ---------------------------------------------------------------- Piles
+// Toutes les piles de la maison, la plus faible d'abord (étape 61). Les mêmes
+// règles que les alertes du serveur (crates/ha-notices) : les garder pareilles.
+const BATTERY_LOW = 20;
+const BATTERY_EMPTY = 5;
+
+/** Le niveau en %, `"low"` / `"ok"` pour un détecteur « pile faible », ou null. */
+function batteryOf(state) {
+  if (["unavailable", "unknown"].includes(state.state)) return null;
+  const domain = domainOf(state);
+  const isBattery = state.attributes.device_class === "battery";
+  const percent = (value) => (Number.isFinite(value) && value >= 0 && value <= 100 ? value : null);
+  if (domain === "sensor" && isBattery) return state.state.trim() === "" ? null : percent(Number(state.state));
+  if (domain === "binary_sensor" && isBattery) return state.state === "on" ? "low" : state.state === "off" ? "ok" : null;
+  if (domain === "vacuum" || domain === "persistent_notification") return null;
+  return typeof state.attributes.battery_level === "number" ? percent(state.attributes.battery_level) : null;
+}
+
+function renderBatteries() {
+  const box = $("#batteries");
+  if (account.permissions.all_devices === false) { box.hidden = true; return; }
+  // Un détecteur « pile faible » compte comme une pile à 20 % (après une
+  // pile presque vide), un « pile bonne » passe après toutes les autres.
+  const rank = (level) => (level === "low" ? BATTERY_LOW : level === "ok" ? 101 : level);
+  const list = [...entities.values()]
+    .map((state) => ({ state, level: batteryOf(state) }))
+    .filter((item) => item.level !== null)
+    .sort((a, b) => rank(a.level) - rank(b.level) || nameOf(a.state).localeCompare(nameOf(b.state), "fr"));
+  box.hidden = list.length === 0;
+  $("#battery-list").replaceChildren(...list.map(({ state, level }) => {
+    const numeric = typeof level === "number";
+    const kind = numeric && level <= BATTERY_EMPTY ? "crashed"
+      : level === "low" || (numeric && level <= BATTERY_LOW) ? "retrying" : "connected";
+    const advice = kind === "crashed" ? "à changer tout de suite" : kind === "retrying" ? "à changer bientôt" : "bonne";
+    return el("li", { class: `integration i-${kind}` },
+      el("span", { class: "integration-dot", "aria-hidden": "true" }),
+      el("span", { class: "integration-text" },
+        el("b", { text: nameOf(state) }),
+        el("span", { text: level === "low" ? "Pile faible : à changer bientôt" : `Pile ${advice}` })),
+      el("span", { class: "integration-count", text: numeric ? `${Math.round(level)}\u202f%` : "" }));
+  }));
+}
+
 function watchIntegrations() {
+  renderBatteries();
   loadIntegrations();
   loadSystem();
   clearInterval(integrationTimer);
   integrationTimer = setInterval(() => {
-    if ($("#account-dialog").open) { loadIntegrations(); loadSystem(); } else clearInterval(integrationTimer);
+    if ($("#account-dialog").open) { renderBatteries(); loadIntegrations(); loadSystem(); } else clearInterval(integrationTimer);
   }, 10_000);
 }
 
@@ -4226,6 +4409,23 @@ async function loadSystem() {
     el("div", { class: ok ? "system-row" : "system-row over" },
       el("dt", { text: label }),
       el("dd", {}, el("b", { text: value }), note ? el("span", { text: ok ? note : `au-delà du budget (${note})` }) : ""))));
+  // La rapidité des appareils (étape 63) : du toucher au changement d'état,
+  // intégration par intégration.
+  const slowMs = Number(data.slow_ms) || 3000;
+  for (const device of Array.isArray(data.devices) ? data.devices : []) {
+    const late = device.p95_ms > slowMs;
+    const orders = `${device.samples} ordre${device.samples > 1 ? "s" : ""}`;
+    const slow = device.slow > 0 ? `, dont ${device.slow} au-delà de ${milliseconds(slowMs)}` : "";
+    $("#system-list").append(el("div", { class: late ? "system-row over" : "system-row" },
+      el("dt", { text: `Réponse ${device.name}` }),
+      el("dd", {}, el("b", { text: `${milliseconds(device.p50_ms)} (95 % sous ${milliseconds(device.p95_ms)})` }),
+        el("span", { text: `${orders}${slow}` }))));
+  }
+}
+
+/** « 120 ms », « 1,8 s ». */
+function milliseconds(ms) {
+  return ms < 1000 ? `${Math.round(ms)} ms` : `${number.format(Math.round(ms / 100) / 10)} s`;
 }
 
 // ---------------------------------------------------------------- Mode tablette
