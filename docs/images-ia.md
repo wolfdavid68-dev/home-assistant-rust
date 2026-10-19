@@ -123,7 +123,8 @@ les lumières et les volets de l'onglet, avec le nom de leur pièce :
 garage door »). Une lumière se fait sur le fond de **nuit** (on la voit mieux) ; une porte, sur le
 fond de **jour**, puis sur celui de nuit si tu veux les deux.
 
-Ensuite, dans **GIMP** (gratuit) ou Photoshop :
+Ensuite, le plus simple : **la découpe automatique** (étape 72, juste en dessous). Sinon, à la
+main, dans **GIMP** (gratuit) ou Photoshop :
 
 1. ouvre le fond, puis la variante en calque par-dessus ;
 2. mode de fusion **Différence** : tout devient noir, sauf ce qui a changé. Si tout le dessin
@@ -131,6 +132,35 @@ Ensuite, dans **GIMP** (gratuit) ou Photoshop :
 3. repasse en mode Normal, ajoute un masque, et ne garde que la zone qui change (une gomme douce
    pour un halo de lumière) ;
 4. exporte **à la taille du fond, sans recadrer**, en **WebP transparent**, qualité 80 à 85.
+
+### Étape 72 : la découpe automatique
+
+Dans le réglage du dessin, la partie **« Découper des calques »** fait la découpe à ta place :
+
+1. envoie les deux images dans « Images » : **avant** (tout éteint, volets ouverts) et **après**
+   (les lumières allumées, ou les volets fermés), à la même taille ;
+2. choisis-les, puis **« Chercher les différences »** : chaque endroit qui change est encadré et
+   numéroté sur un aperçu ;
+3. pour chaque endroit à garder :
+   - donne-lui un **nom d'image** et son **appareil** ;
+   - choisis sa **sorte** : lumière allumée (visible sur `on`), volet (il suit sa position, étape
+     71) ou autre ;
+4. **« Créer les calques cochés »** : les images sont envoyées et les calques ajoutés. Vérifie-les
+   dans l'aperçu, puis « Enregistrer ».
+
+Deux réglages :
+- **Sensibilité** : plus haute, elle trouve des halos plus faibles (et un peu de bruit) ;
+- **Regrouper les endroits proches** : plus haut, une lampe et la lumière qu'elle projette sur le
+  sol font un seul endroit ; plus bas, chaque tache est à part.
+
+Une **lumière** garde un bord en fondu (son halo se mêle au fond). Un **volet** est plein : les
+joints sombres entre les lames, aussi sombres que la vitre derrière, sont bouchés.
+
+Tout se passe dans le navigateur : les images ne partent que découpées, par le même chemin que
+l'envoi d'une image (taille, type et droits vérifiés par le serveur). Les deux images doivent
+venir de la même retouche : la moindre différence de cadrage ferait de toute la maison un
+« endroit qui change ». Photoshop (remplissage génératif) garde le cadrage au pixel près ; une
+IA d'images, rarement.
 
 ### Si l'IA se trompe
 

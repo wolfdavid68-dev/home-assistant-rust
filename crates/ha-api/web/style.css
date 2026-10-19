@@ -1855,6 +1855,8 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
   transition: opacity 0.6s ease, clip-path 1.2s ease;
 }
 .house-stage .house-layer.off { opacity: 0; }
+/* La découpe des calques (étape 72) : l'aperçu des endroits qui changent. */
+.cut-preview { display: block; max-width: 100%; height: auto; margin: 10px 0; border-radius: 10px; }
 /* Le dessin d'exemple en tirage de nuit : l'encre devient blanche. */
 [data-theme="plan-nuit"] .house-stage.default-drawing .house-base,
 [data-theme="maquette"] .house-stage.default-drawing .house-base { filter: invert(1) hue-rotate(180deg) brightness(1.15); mix-blend-mode: screen; }
