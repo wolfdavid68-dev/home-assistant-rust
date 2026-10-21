@@ -2852,6 +2852,32 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
   mask-image: radial-gradient(closest-side, #000 84%, transparent 100%);
 }
 [data-theme="maquette"] .hub-house .house-stage img, [data-theme="dark"] .hub-house .house-stage img, [data-theme="plan-nuit"] .hub-house .house-stage img { mix-blend-mode: lighten; }
+/* La maquette 3D détourée (house.js, makeCutout) : sur un thème clair, et
+   dans la vue hub quel que soit le thème, la maison flotte sur la page avec
+   une ombre douce, au lieu d'un rectangle de fond noir. */
+:root:is([data-theme="light"], [data-theme="plan"]) .house-stage.cutout,
+.hub-house .house-stage.cutout { isolation: isolate; overflow: visible; }
+:root:is([data-theme="light"], [data-theme="plan"]) .house-stage.cutout img,
+.hub-house .house-stage.cutout img {
+  -webkit-mask-image: var(--house-cut);
+  mask-image: var(--house-cut);
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  mix-blend-mode: normal;
+}
+:root:is([data-theme="light"], [data-theme="plan"]) .house-stage.cutout::before,
+.hub-house .house-stage.cutout::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 -8% 0;
+  z-index: -1;
+  background: var(--house-shadow) center / 100% 100% no-repeat;
+  pointer-events: none;
+}
+/* Plus besoin du fondu en cercle : il rognait les coins du socle. */
+:root .hub-house #house-stage.cutout { -webkit-mask-image: none; mask-image: none; }
 .hub-views { position: absolute; z-index: 2; left: 14px; top: 12px; display: flex; padding: 3px; border-radius: 12px; background: var(--card); border: 1px solid var(--line, transparent); }
 .hub-views button { border: 0; background: none; padding: 6px 14px; border-radius: 9px; font-size: 0.85rem; color: var(--muted); cursor: pointer; }
 .hub-views button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }

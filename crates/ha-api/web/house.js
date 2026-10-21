@@ -371,12 +371,119 @@ function drawHouse(stage, config, { interactive }) {
   const view = { stage, config, ambiance, layers, fx, zones, labels };
   // La taille du dessin n'est connue qu'une fois l'image chargée : ses
   // proportions servent à le faire tenir dans la hauteur de l'écran.
+  stage.classList.remove("cutout");
   base.addEventListener("load", () => {
     if (base.naturalWidth > 0 && base.naturalHeight > 0) stage.style.setProperty("--ratio", String(base.naturalWidth / base.naturalHeight));
     fitLabels(view);
     fxSchedule();
+    if (custom) applyCutout(stage, base);
   });
   return view;
+}
+
+// ---------------------------------------------------------------- Détourage
+// Une maquette 3D est rendue sur un fond uni (noir, le plus souvent). Sur un
+// thème clair, ce fond fait un grand rectangle noir. Le navigateur détoure
+// la maison une fois : tout ce qui touche le bord de l'image et a la couleur
+// du fond devient transparent (un « pot de peinture » parti des bords). Le
+// masque et une ombre douce sont gardés pour chaque image ; le CSS décide où
+// s'en servir (thèmes clairs, vue hub).
+
+const houseCutouts = new Map();
+
+function applyCutout(stage, base) {
+  const key = base.currentSrc || base.src;
+  if (!houseCutouts.has(key)) houseCutouts.set(key, makeCutout(base).catch(() => null));
+  houseCutouts.get(key).then((cut) => {
+    // Le dessin a pu changer entre-temps (autre vue, autre image).
+    if (!cut || !stage.contains(base)) return;
+    stage.style.setProperty("--house-cut", `url("${cut.mask}")`);
+    stage.style.setProperty("--house-shadow", `url("${cut.shadow}")`);
+    stage.classList.add("cutout");
+  });
+}
+
+async function makeCutout(img) {
+  const scale = Math.min(1, 1024 / img.naturalWidth);
+  const w = Math.max(1, Math.round(img.naturalWidth * scale));
+  const h = Math.max(1, Math.round(img.naturalHeight * scale));
+  const source = document.createElement("canvas");
+  source.width = w;
+  source.height = h;
+  const ctx = source.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(img, 0, 0, w, h);
+  const pixels = ctx.getImageData(0, 0, w, h);
+  const keep = cutoutMask(pixels.data, w, h);
+  if (!keep) return null;
+  // Le masque : opaque sur la maison, transparent sur le fond.
+  const out = new ImageData(w, h);
+  for (let i = 0; i < w * h; i += 1) out.data[i * 4 + 3] = keep[i] ? 255 : 0;
+  const mask = document.createElement("canvas");
+  mask.width = w;
+  mask.height = h;
+  mask.getContext("2d").putImageData(out, 0, 0);
+  // L'ombre : la même silhouette, floue, un peu plus bas, bleu-gris léger.
+  // Elle déborde sous l'image : 8 % de hauteur en plus (le CSS en tient
+  // compte). La silhouette est dessinée hors du canevas, seule son ombre
+  // (shadowBlur) y tombe : le flou n'est jamais rogné.
+  const shadow = document.createElement("canvas");
+  shadow.width = w;
+  shadow.height = Math.round(h * 1.08);
+  const sctx = shadow.getContext("2d");
+  sctx.shadowColor = "rgb(30 40 70 / 0.32)";
+  sctx.shadowBlur = Math.round(w / 35);
+  sctx.shadowOffsetX = w;
+  sctx.shadowOffsetY = Math.round(h * 0.025);
+  sctx.drawImage(mask, -w, 0);
+  const [maskBlob, shadowBlob] = await Promise.all([toBlob(mask), toBlob(shadow)]);
+  if (!maskBlob || !shadowBlob) return null;
+  return { mask: URL.createObjectURL(maskBlob), shadow: URL.createObjectURL(shadowBlob) };
+}
+
+const toBlob = (canvas) => new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+
+/**
+ * Les pixels à garder (1) et le fond (0), ou null si l'image n'a pas de fond
+ * uni (une photo, un dessin qui touche les bords) : on n'y touche pas.
+ */
+function cutoutMask(data, w, h) {
+  const border = [];
+  for (let x = 0; x < w; x += 1) border.push(x, (h - 1) * w + x);
+  for (let y = 1; y < h - 1; y += 1) border.push(y * w, y * w + w - 1);
+  const median = (channel) => {
+    const values = border.map((i) => data[i * 4 + channel]).sort((a, b) => a - b);
+    return values[values.length >> 1];
+  };
+  const ref = [median(0), median(1), median(2)];
+  const distance = (i) => Math.max(Math.abs(data[i * 4] - ref[0]), Math.abs(data[i * 4 + 1] - ref[1]), Math.abs(data[i * 4 + 2] - ref[2]));
+  const spread = border.map(distance).sort((a, b) => a - b);
+  // Au moins 90 % du bord de la même couleur, sinon ce n'est pas un fond uni.
+  if (spread[Math.floor(spread.length * 0.9)] > 12) return null;
+  // Assez serré pour ne pas manger une clôture sombre, assez large pour le
+  // léger bruit d'une image compressée.
+  const tolerance = Math.min(28, Math.max(8, spread[Math.floor(spread.length * 0.98)] + 8));
+  const keep = new Uint8Array(w * h).fill(1);
+  const stack = new Int32Array(w * h);
+  let top = 0;
+  for (const i of border) {
+    if (keep[i] && distance(i) <= tolerance) {
+      keep[i] = 0;
+      stack[top++] = i;
+    }
+  }
+  while (top > 0) {
+    const i = stack[--top];
+    const x = i % w;
+    for (const n of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, i - w, i + w]) {
+      if (n >= 0 && n < w * h && keep[n] && distance(n) <= tolerance) {
+        keep[n] = 0;
+        stack[top++] = n;
+      }
+    }
+  }
+  // Presque rien, ou presque tout : le détourage s'est trompé.
+  const kept = keep.reduce((sum, v) => sum + v, 0) / (w * h);
+  return kept > 0.08 && kept < 0.97 ? keep : null;
 }
 
 function updateHouse(view) {

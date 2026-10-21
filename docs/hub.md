@@ -38,8 +38,12 @@ La tablette **à l'horizontale** :
 Chaque bouton n'apparaît que si la maison a ce qu'il faut : pas de carte météo sans météo, pas
 d'annonce sans enceinte ni voix.
 
-**Le dessin 3D** (une image faite avec l'IA, sur fond noir, [étape 44](images-ia.md)) se fond dans le fond
-sombre des thèmes Maquette, Sombre et Plan d'architecte de nuit : pas de rectangle noir autour de la maison.
+**Le dessin 3D** (une image faite avec l'IA, sur fond uni, noir le plus souvent,
+[étape 44](images-ia.md)) est **détouré** par le navigateur : la maison flotte sur la page avec une
+ombre douce, sans rectangle noir autour. C'est fait dans la vue hub quel que soit le thème, et
+partout dans les thèmes clairs (Clair, Plan d'architecte), écran de veille compris. Une image sans
+fond uni (une photo) reste telle quelle ; sur les thèmes sombres, son fond se fond alors dans le
+décor comme avant.
 
 ## Revenir à la vue hub
 
@@ -78,6 +82,7 @@ l'annonce est envoyé tel quel au service `tts.speak`, comme depuis une automati
 | [web/hub.js](../crates/ha-api/web/hub.js) | Nouveau : quand afficher la vue hub (`hubShouldShow`), `showHub` / `hideHub`, le contenu de chaque carte, le choix des scènes (`hubScenes`, `renderHubPick`, gardé dans le navigateur sous `ha-hub-scenes`) et les rendez-vous en double réunis (`hubMergeSame`) |
 | [web/index.html](../crates/ha-api/web/index.html) | Le bloc `#hub`, la fenêtre d'annonce, la case dans Mon compte |
 | [web/style.css](../crates/ha-api/web/style.css) | La grille en trois colonnes, les couleurs de chaque thème, le dessin 3D fondu dans le fond |
+| [web/house.js](../crates/ha-api/web/house.js) | Le détourage du dessin 3D (`applyCutout`, `makeCutout`, `cutoutMask`) : le masque de la maison et son ombre, faits une fois par image |
 | [web/start.js](../crates/ha-api/web/start.js) | L'écran de veille rend le dessin à la vue hub au réveil |
 | [web/account.js](../crates/ha-api/web/account.js) | Le retour à l'accueil (2 minutes) ramène la vue hub |
 | [web/tiles.js](../crates/ha-api/web/tiles.js) | Chaque mise à jour de l'accueil met aussi la vue hub à jour (toutes les 30 secondes au moins, pour l'horloge) |
@@ -99,6 +104,13 @@ JavaScript.
 **`matchMedia`** : la même question qu'une règle CSS `@media` (« l'écran fait-il au moins 900 pixels
 de large, à l'horizontale ? »), posée depuis JavaScript. Son évènement `change` prévient quand la
 tablette tourne : la vue hub apparaît ou disparaît aussitôt.
+
+**Le détourage, comme le « pot de peinture »** d'un logiciel de dessin : on part des bords de
+l'image et on avance tant que la couleur est celle du fond (à quelques nuances près). Ce qui est
+atteint devient transparent ; ce qui ne l'est pas (la maison, même ses parties sombres, comme la
+clôture) reste. Le résultat sert de **masque** CSS (`mask-image`) posé sur les images du dessin,
+et son ombre est la même silhouette, floue (`shadowBlur` du canevas). Si le bord de l'image n'est
+pas d'une seule couleur, on ne détoure pas : mieux vaut un rectangle qu'une maison grignotée.
 
 **CSS `:has()`** : « une ligne d'agenda **qui contient** « dans 37 min » ». Le titre de cette
 ligne seulement passe sur deux lignes, sans classe à ajouter en JavaScript.
