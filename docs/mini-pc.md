@@ -102,8 +102,13 @@ ton compte (le mot de passe est demandé deux fois, 12 caractères au moins) :
 sudo ha-maison user add david
 ```
 
-Ouvre <http://192.168.1.20:8123/> sur le téléphone : c'est prêt. Le serveur redémarrera tout seul
-à chaque allumage, et **se mettra à jour tout seul** chaque nuit (voir plus bas).
+Le tableau de bord est en **HTTPS** (étape 79) : les mots de passe ne circulent jamais en clair sur
+le Wi-Fi. Sur chaque téléphone, tablette ou PC, installe une fois le **certificat de la maison** :
+ouvre <http://192.168.1.20:8123/maison-ca.crt>, puis suis [le guide du HTTPS](https-maison.md)
+(deux minutes par appareil).
+
+Ouvre ensuite <https://192.168.1.20:8123/> : c'est prêt. Le serveur redémarrera tout seul à chaque
+allumage, et **se mettra à jour tout seul** chaque nuit (voir plus bas).
 
 ## Au quotidien
 
@@ -279,8 +284,8 @@ programme sans aucune protection).
 **Les réglages** (`/etc/ha-maison`) appartiennent à `root` : le service les lit, mais ne peut pas
 les modifier. Même un serveur piraté ne pourrait pas changer ses propres réglages.
 
-**Le réseau** : le tableau de bord écoute sur le réseau de la maison (`HA_BIND=0.0.0.0:8123`),
-puisqu'il n'y a pas d'écran sur la machine. La box le protège d'Internet : **ne redirige jamais**
+**Le réseau** : le tableau de bord écoute sur le réseau de la maison (`HA_BIND=0.0.0.0:8123`), en
+HTTPS ([étape 79](https-maison.md)), puisqu'il n'y a pas d'écran sur la machine. La box le protège d'Internet : **ne redirige jamais**
 le port 8123 depuis la box. Pour l'accès à distance, un VPN (voir l'[étape 7](etape-7-deploiement.md)).
 SSH (port 22) ne sert qu'à l'administration ; pour aller plus loin, une clé SSH à la place du mot de
 passe.

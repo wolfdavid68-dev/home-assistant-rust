@@ -31,6 +31,10 @@ services:
     environment:
       TZ: ${TZ:-Europe/Paris}
       RUST_LOG: ${RUST_LOG:-info}
+      # HTTPS sur le réseau de la maison (voir docs/https-maison.md) : l'adresse
+      # de cette machine dans HA_TLS_NOMS (le conteneur ne la voit pas).
+      # HA_TLS: "on"
+      # HA_TLS_NOMS: 192.168.1.20
       # Éditeur d'automatisations en lecture seule (voir docs/editeur-automatisations.md) :
       # HA_AUTOMATION_EDITOR: "off"
       # Notifications sur le téléphone avec ntfy (voir docs/notifications.md) :

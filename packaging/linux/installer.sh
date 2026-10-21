@@ -91,11 +91,18 @@ if [ "$pret" != true ]; then
 fi
 
 adresse=$(hostname -I 2>/dev/null | awk '{ print $1 }')
+adresse=${adresse:-<adresse du mini-PC>}
 echo "Le serveur tourne, et redémarrera tout seul à chaque allumage."
 if systemctl is-enabled --quiet ha-maison-maj.timer; then
   echo "Il se met à jour tout seul, chaque nuit vers 4 h."
 fi
-echo "Tableau de bord : http://${adresse:-<adresse du mini-PC>}:8123/"
+if grep -q '^HA_TLS=on' /etc/ha-maison/ha-maison.env; then
+  echo "Tableau de bord : https://${adresse}:8123/"
+  echo "Sur chaque appareil, installe d'abord le certificat de la maison :"
+  echo "  http://${adresse}:8123/maison-ca.crt   (voir docs/https-maison.md)"
+else
+  echo "Tableau de bord : http://${adresse}:8123/"
+fi
 if [ "$premiere_fois" = true ]; then
   echo
   echo "Crée maintenant ton compte (le mot de passe est demandé deux fois) :"

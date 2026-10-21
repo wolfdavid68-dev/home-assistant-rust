@@ -9,6 +9,10 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+jiff.workspace = true
+# Le HTTPS de la maison (étape 79) : l'autorité locale et le certificat du
+# serveur. `x509-parser` relit l'autorité rangée sur le disque.
+rcgen = { workspace = true, features = ["x509-parser"] }
 reqwest.workspace = true
 rustls.workspace = true
 rustls-platform-verifier = "0.7.1"

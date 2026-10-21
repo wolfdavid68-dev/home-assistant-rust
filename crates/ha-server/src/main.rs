@@ -104,6 +104,10 @@
 //!   `HA_SONOS_AUDIO` : adresse de ce PC vue par les enceintes (devinée par
 //!   défaut, port 8124) ; `HA_PIPER` : la voix des annonces, programme
 //!   `piper` ou service `tcp://hôte:10200` ; `HA_PIPER_VOIX` : la voix ;
+//! - `HA_TLS` : `on` pour le tableau de bord en HTTPS sur le réseau de la
+//!   maison (étape 79) ; `HA_TLS_NOMS` : noms ou adresses en plus dans le
+//!   certificat (`.local` ou adresses privées) ; `HA_TLS_DIR` : dossier de
+//!   l'autorité (par défaut, celui de la clé) ;
 //! - `HA_AUTOMATION_EDITOR` : `on` (par défaut) ou `off` pour un éditeur
 //!   d'automatisations en lecture seule dans le tableau de bord ;
 //! - `RUST_LOG` : niveau de détail des logs (par défaut `info`).
@@ -111,6 +115,7 @@
 mod backup;
 mod cli;
 mod health;
+mod https;
 
 use std::error::Error;
 use std::io::IsTerminal;
@@ -206,6 +211,7 @@ async fn main() -> ExitCode {
         },
         ["audit", rest @ ..] => cli::audit_command(rest).await,
         ["backup", rest @ ..] => backup::command(rest).await,
+        ["https"] => https::command(),
         ["healthcheck"] => match parse_bind() {
             Ok(bind) => health::check(bind).await,
             Err(error) => Err(error.into()),
@@ -331,6 +337,7 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     let history_days = history_days()?;
     let audit_days = days_from_env("HA_AUDIT_DAYS", DEFAULT_AUDIT_DAYS)?;
     let bind = bind_address()?;
+    let tls = https::enabled()?;
     let mqtt_config = mqtt_config()?;
     // Un fichier d'automatisations invalide empêche le démarrage, avec un
     // message clair : mieux vaut corriger que de tourner à moitié.
@@ -436,7 +443,15 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
 
     // API HTTP / WebSocket.
     let listener = tokio::net::TcpListener::bind(bind).await?;
-    info!("API sur http://{bind}/api/");
+    let https = if tls {
+        let setup = https::prepare(bind)?;
+        setup.announce(bind);
+        setup.spawn_renewal(bind);
+        Some(setup.https)
+    } else {
+        info!("API sur http://{bind}/api/");
+        None
+    };
     // L'éditeur d'automatisations : celles du fichier, plus celles créées
     // depuis le tableau de bord. Chaque modification recharge le moteur.
     let (reloader, reloads) = ha_automation::reload_channel();
@@ -462,7 +477,15 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         }),
         energy_config,
     );
-    let api = tokio::spawn(ha_api::serve(listener, Arc::clone(&api_state)));
+    let api = tokio::spawn({
+        let state = Arc::clone(&api_state);
+        async move {
+            match https {
+                Some(https) => ha_api::serve_https(listener, state, https).await,
+                None => ha_api::serve(listener, state).await,
+            }
+        }
+    });
 
     // On s'abonne AVANT de créer les entités, pour ne rater aucun événement.
     let logger = tokio::spawn(log_state_changes(core.bus.subscribe()));

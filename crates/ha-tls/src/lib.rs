@@ -18,6 +18,8 @@
 //! premier usage » (TOFU), le même que SSH quand il demande « The
 //! authenticity of host … ».
 
+pub mod local_ca;
+
 use std::sync::{Arc, Mutex, PoisonError};
 
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};

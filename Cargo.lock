@@ -882,11 +882,14 @@ dependencies = [
  "ha-notices",
  "ha-push",
  "ha-storage",
+ "ha-tls",
  "jiff",
+ "rustls",
  "serde",
  "serde_json",
  "sha2 0.11.1",
  "tokio",
+ "tokio-rustls",
  "tokio-tungstenite 0.30.0",
  "tower",
  "tower-http 0.7.1",
@@ -1343,6 +1346,8 @@ dependencies = [
 name = "ha-tls"
 version = "0.1.0"
 dependencies = [
+ "jiff",
+ "rcgen",
  "reqwest",
  "rustls",
  "rustls-platform-verifier",
