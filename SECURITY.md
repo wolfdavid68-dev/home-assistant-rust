@@ -63,6 +63,10 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
   ce jeton ne marche que pour MCP (refusé par le tableau de bord, l'API et le WebSocket) ; ses ordres sont
   retenus par la garde quel que soit son rôle ; jamais serrure, alarme, sirène, garage, portail ni porte ;
   60 appels par minute ; en-tête `Origin` d'un autre site refusé ; chaque appel audité.
+- TimeTree (pas d'accès officiel) : un compte **dédié à la maison**, invité en lecture dans l'agenda partagé,
+  jamais le compte personnel ; mot de passe chiffré dans la base, absent des logs, des erreurs et de `Debug` ;
+  HTTPS vers `timetreeapp.com` seulement, sans redirection, réponses limitées à 2 Mio ; lecture seule ; une heure
+  d'attente après un refus, pour ne pas faire bloquer le compte.
 - Agendas en ligne (ICS) : HTTPS seulement, sans redirection, 2 Mio au plus ; l'adresse (qui peut contenir une
   clé secrète) n'est jamais journalisée ni publiée, seulement le nom du site ; lecture seule.
 - Alexa (faux pont Hue, sans authentification possible) : désactivée par défaut ; seuls les appareils listés

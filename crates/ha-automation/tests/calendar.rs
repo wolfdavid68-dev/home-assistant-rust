@@ -89,3 +89,40 @@ fn calendar_triggers_are_checked() {
         assert!(one(bad).is_err(), "{bad}");
     }
 }
+
+#[test]
+fn the_appointment_is_given_to_templates() {
+    let yaml = r#"
+- id: annonce
+  triggers: [{trigger: calendar, event: start, entity_id: calendar.maison, offset: "-00:30:00"}]
+  actions: [{delay: 1s}]
+"#;
+    let core = Core::new();
+    calendar(
+        &core,
+        &json!([{"uid": "1", "summary": "Piscine", "start": "2026-10-15T17:00:00", "end": "2026-10-15T18:00:00"},
+                {"uid": "2", "summary": "Dentiste", "description": "Cabinet du centre",
+                 "start": "2026-10-15T18:30:00", "end": "2026-10-15T19:00:00"}]),
+    );
+    let mut evaluator = Evaluator::new(parse(yaml).unwrap());
+    let day = date(2026, 10, 15);
+    let fired = evaluator.fire_on_tick(
+        day.at(17, 59, 59, 0),
+        day.at(18, 0, 0, 0),
+        Instant::now(),
+        &core.states,
+    );
+    assert_eq!(fired.len(), 1);
+    let data = fired[0].data.clone().expect("le rendez-vous");
+    let message = ha_automation::Template::parse(
+        "{{ trigger.calendar_event.summary }} dans 30 minutes ({{ trigger.calendar_event.description }})",
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(
+        message.evaluate(&core.states, Some(&data)),
+        json!("Dentiste dans 30 minutes (Cabinet du centre)")
+    );
+    assert_eq!(data.entity_id.unwrap().as_str(), "calendar.maison");
+    assert!(ha_automation::Template::parse("{{ trigger.calendar_event }}").is_err());
+}

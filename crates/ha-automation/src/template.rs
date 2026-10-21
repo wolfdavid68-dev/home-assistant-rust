@@ -141,6 +141,8 @@ enum TriggerField {
     EventType,
     /// `trigger.event.data.nom`.
     EventData(String),
+    /// `trigger.calendar_event.summary`.
+    CalendarEvent(String),
 }
 
 /// L'état d'avant (`from_state`) ou d'après (`to_state`) le changement.
@@ -265,6 +267,9 @@ pub struct TriggerData {
     /// (`trigger.event.event_type`, `trigger.event.data.…`).
     pub event_type: Option<String>,
     pub event_data: Option<Attributes>,
+    /// Pour un déclencheur `calendar` : le rendez-vous
+    /// (`trigger.calendar_event.summary`, `.start`, `.end`…).
+    pub calendar_event: Option<Attributes>,
 }
 
 /// De quoi calculer un modèle.
@@ -623,6 +628,11 @@ impl Base {
                     }
                     TriggerField::EventData(name) => trigger
                         .event_data
+                        .as_ref()
+                        .and_then(|data| data.get(name))
+                        .map_or(Val::None, Val::from_json),
+                    TriggerField::CalendarEvent(name) => trigger
+                        .calendar_event
                         .as_ref()
                         .and_then(|data| data.get(name))
                         .map_or(Val::None, Val::from_json),
@@ -1320,11 +1330,13 @@ fn text_arg(value: Option<&Val>, what: &str) -> Result<String, String> {
 
 /// `trigger.id`, `trigger.entity_id`, `trigger.to_state.state`,
 /// `trigger.from_state.name`, `trigger.to_state.attributes.temperature`,
-/// `trigger.to_state.attributes['Vent violent']`, `trigger.event.data.nom`.
+/// `trigger.to_state.attributes['Vent violent']`, `trigger.event.data.nom`,
+/// `trigger.calendar_event.summary`.
 fn parse_trigger(parser: &mut Parser) -> Result<Base, String> {
     const HELP: &str = "trigger.id, trigger.entity_id, trigger.to_state.state, \
                         trigger.from_state.state, trigger.to_state.name, \
-                        trigger.to_state.attributes.…, trigger.event.data.…";
+                        trigger.to_state.attributes.…, trigger.event.data.…, \
+                        trigger.calendar_event.summary";
     parser.expect(&Token::Dot, "« . » après trigger")?;
     let field = match parser.ident("champ de trigger")?.as_str() {
         "id" => TriggerField::Id,
@@ -1360,6 +1372,9 @@ fn parse_trigger(parser: &mut Parser) -> Result<Base, String> {
                 }
             }
         }
+        // Le rendez-vous d'un déclencheur `calendar`, comme dans Home
+        // Assistant : summary, description, start, end, all_day.
+        "calendar_event" => TriggerField::CalendarEvent(member(parser, "calendar_event")?),
         other => return Err(format!("modèle : trigger.{other} inconnu ({HELP})")),
     };
     Ok(Base::Trigger(field))

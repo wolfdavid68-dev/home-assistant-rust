@@ -22,6 +22,7 @@
 //! ha-server freebox pair          associe la Freebox (lecture seule)
 //! ha-server freebox devices       liste les appareils du réseau
 //! ha-server freebox track <MAC> <nom>  suit la présence d'un appareil
+//! ha-server timetree pair         associe le compte TimeTree de la maison
 //! ha-server sonos                 liste les enceintes Sonos trouvées
 //! ha-server voix "<phrase>"       essaie la voix des annonces (essai-voix.wav)
 //! ha-server automations check     vérifie automatisations, scripts et scènes
@@ -169,6 +170,7 @@ async fn main() -> ExitCode {
         ["hue", rest @ ..] => cli::hue_command(rest).await,
         ["somfy", rest @ ..] => cli::somfy_command(rest).await,
         ["freebox", rest @ ..] => cli::freebox_command(rest).await,
+        ["timetree", rest @ ..] => cli::timetree_command(rest).await,
         ["sonos"] => match sonos_hosts() {
             Ok(hosts) => cli::list_sonos(&hosts).await,
             Err(error) => Err(error.into()),
@@ -518,10 +520,19 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         Arc::clone(&core),
     );
     let sun = location.map(|location| SunTracker::start(location, Arc::clone(&core)));
+    // Le compte TimeTree de la maison (étape 74), pour ses agendas : un
+    // compte illisible n'empêche pas le reste.
+    let timetree_account = match store.timetree_account().await {
+        Ok(account) => account,
+        Err(error) => {
+            warn!("TimeTree : compte illisible ({error}). Refais « ha-server timetree pair ».");
+            None
+        }
+    };
     // Agendas en ligne (étape 57) : collecte des déchets, vacances…
     let calendars = match ha_ics::load(&calendars_path()) {
         Ok(list) if list.is_empty() => None,
-        Ok(list) => match ha_ics::Calendars::start(list, Arc::clone(&core)) {
+        Ok(list) => match ha_ics::Calendars::start(list, timetree_account, Arc::clone(&core)) {
             Ok(calendars) => Some(calendars),
             Err(error) => {
                 warn!("agendas en ligne : démarrage impossible ({error})");

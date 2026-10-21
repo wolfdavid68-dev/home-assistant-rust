@@ -1008,6 +1008,8 @@ dependencies = [
 name = "ha-ics"
 version = "0.1.0"
 dependencies = [
+ "axum",
+ "getrandom 0.4.3",
  "ha-agenda",
  "ha-core",
  "ha-storage",
@@ -1021,6 +1023,7 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+ "zeroize",
 ]
 
 [[package]]
