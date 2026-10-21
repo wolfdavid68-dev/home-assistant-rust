@@ -1349,7 +1349,7 @@ $("#theme").addEventListener("change", (event) => {
 // Rien n'est enregistré avant « Enregistrer », sauf l'envoi d'une image.
 
 // `pages` : la copie de tous les onglets ; `draft` : celui qu'on règle.
-const drawingEdit = { pages: null, draft: null, placing: -1, tracing: -1, view: null };
+const drawingEdit = { pages: null, draft: null, placing: -1, tracing: -1, view: null, cut: null };
 
 async function openDrawingEditor() {
   $("#account-dialog").close();
@@ -1359,6 +1359,7 @@ async function openDrawingEditor() {
   drawingEdit.draft = drawingEdit.pages.find((page) => page.id === house.config?.id) ?? drawingEdit.pages[0];
   drawingEdit.placing = -1;
   drawingEdit.tracing = -1;
+  drawingEdit.cut = null;
   drawingStatus("");
   renderDrawingEditor();
   $("#drawing").showModal();
@@ -1398,6 +1399,308 @@ function imageOptions(selected, empty) {
 
 function drawingFieldset(title, hint, ...children) {
   return el("fieldset", { class: "drawing-part" }, el("legend", { text: title }), hint ? el("p", { class: "auto-meta", text: hint }) : "", ...children);
+}
+
+// ---------------------------------------------------------------- Découpe
+// Étape 72 : découper les calques tout seul. Deux images de la même taille,
+// « tout éteint » et « allumé » (ou « volets fermés ») : ce qui change devient
+// un calque par endroit, à nommer et à relier à un appareil. Tout se fait dans
+// le navigateur ; seules les images finies sont envoyées.
+
+/** Les pixels d'une image du dessin (déjà chargée). */
+async function imagePixels(name) {
+  const url = houseUrl(name) ?? (await houseImage(name));
+  if (!url) throw new Error(`image « ${name} » introuvable`);
+  const img = new Image();
+  img.src = url;
+  await img.decode();
+  const canvas = document.createElement("canvas");
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  context.drawImage(img, 0, 0);
+  return { width: canvas.width, height: canvas.height, data: context.getImageData(0, 0, canvas.width, canvas.height).data };
+}
+
+/** Ce qui change entre deux images : des régions sur une grille de
+ *  `cell` pixels, regroupées à `gap` cases près. */
+function findChanges(before, after, { threshold, gap, cell = 4 }) {
+  const { width, height } = before;
+  const diff = new Uint8Array(width * height);
+  for (let i = 0, p = 0; p < diff.length; p += 1, i += 4) {
+    diff[p] = Math.max(
+      Math.abs(before.data[i] - after.data[i]),
+      Math.abs(before.data[i + 1] - after.data[i + 1]),
+      Math.abs(before.data[i + 2] - after.data[i + 2]),
+    );
+  }
+  const gw = Math.ceil(width / cell);
+  const gh = Math.ceil(height / cell);
+  const marked = new Uint8Array(gw * gh);
+  for (let gy = 0; gy < gh; gy += 1) {
+    for (let gx = 0; gx < gw; gx += 1) {
+      let hits = 0;
+      let count = 0;
+      for (let y = gy * cell; y < Math.min(height, (gy + 1) * cell); y += 1) {
+        for (let x = gx * cell; x < Math.min(width, (gx + 1) * cell); x += 1) {
+          count += 1;
+          if (diff[y * width + x] > threshold) hits += 1;
+        }
+      }
+      marked[gy * gw + gx] = hits * 4 > count ? 1 : 0;
+    }
+  }
+  // Regrouper : on élargit, puis on cherche les morceaux d'un seul tenant.
+  const grown = new Uint8Array(marked);
+  for (let gy = 0; gy < gh; gy += 1) {
+    for (let gx = 0; gx < gw; gx += 1) {
+      if (!marked[gy * gw + gx]) continue;
+      for (let dy = -gap; dy <= gap; dy += 1) {
+        for (let dx = -gap; dx <= gap; dx += 1) {
+          const x = gx + dx;
+          const y = gy + dy;
+          if (x >= 0 && y >= 0 && x < gw && y < gh) grown[y * gw + x] = 1;
+        }
+      }
+    }
+  }
+  const label = new Int32Array(gw * gh).fill(-1);
+  const regions = [];
+  for (let start = 0; start < grown.length; start += 1) {
+    if (!grown[start] || label[start] >= 0) continue;
+    const id = regions.length;
+    const cells = [];
+    const stack = [start];
+    label[start] = id;
+    let minX = gw; let minY = gh; let maxX = 0; let maxY = 0; let core = 0;
+    while (stack.length > 0) {
+      const at = stack.pop();
+      cells.push(at);
+      if (marked[at]) core += 1;
+      const x = at % gw;
+      const y = (at - x) / gw;
+      minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+      minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+      for (const next of [x > 0 ? at - 1 : -1, x < gw - 1 ? at + 1 : -1, y > 0 ? at - gw : -1, y < gh - 1 ? at + gw : -1]) {
+        if (next >= 0 && grown[next] && label[next] < 0) {
+          label[next] = id;
+          stack.push(next);
+        }
+      }
+    }
+    regions.push({ id, cells, core, box: { x: minX * cell, y: minY * cell, w: (maxX - minX + 1) * cell, h: (maxY - minY + 1) * cell } });
+  }
+  // Les miettes (moins de 40 pixels changés) ne font pas un calque.
+  const kept = regions.filter((region) => region.core * cell * cell >= 40 * 4).sort((a, b) => b.core - a.core).slice(0, 30);
+  return { width, height, cell, gw, label, diff, regions: kept };
+}
+
+/** Le calque d'une région : les pixels de l'image « après », opaques là où
+ *  ça change franchement, en fondu là où ça change peu (un halo). */
+async function cutLayer(found, after, region, threshold, solid) {
+  const { width, height, cell, gw, label, diff } = found;
+  // Un volet est plein : on bouche les petits trous (les joints sombres des
+  // lames, aussi sombres que la vitre derrière) par une fermeture de 2 px.
+  const filled = solid ? closeMask(found, region, Math.max(2, threshold / 3)) : null;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  const out = context.createImageData(width, height);
+  const soft = Math.max(2, threshold / 3);
+  const { x: bx, y: by, w: bw, h: bh } = region.box;
+  for (let y = by; y < Math.min(height, by + bh); y += 1) {
+    for (let x = bx; x < Math.min(width, bx + bw); x += 1) {
+      if (label[Math.floor(y / cell) * gw + Math.floor(x / cell)] !== region.id) continue;
+      const p = y * width + x;
+      const alpha = filled
+        ? filled[(y - by) * bw + (x - bx)]
+        : Math.min(1, Math.max(0, (diff[p] - soft) / (threshold * 1.5 - soft)));
+      if (alpha <= 0) continue;
+      const i = p * 4;
+      out.data[i] = after.data[i];
+      out.data[i + 1] = after.data[i + 1];
+      out.data[i + 2] = after.data[i + 2];
+      out.data[i + 3] = Math.round(alpha * 255);
+    }
+  }
+  context.putImageData(out, 0, 0);
+  const webp = await new Promise((resolve) => canvas.toBlob(resolve, "image/webp", 0.85));
+  if (webp && webp.type === "image/webp") return webp;
+  return new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+}
+
+/** Le masque plein d'une région (dilatation puis érosion de 2 px), sur
+ *  son cadre. */
+function closeMask(found, region, soft) {
+  const { width, cell, gw, label, diff } = found;
+  const { x: bx, y: by, w: bw, h: bh } = region.box;
+  let mask = new Uint8Array(bw * bh);
+  for (let y = 0; y < bh; y += 1) {
+    for (let x = 0; x < bw; x += 1) {
+      const gx = Math.floor((bx + x) / cell);
+      const gy = Math.floor((by + y) / cell);
+      const p = (by + y) * width + bx + x;
+      if (label[gy * gw + gx] === region.id && diff[p] > soft) mask[y * bw + x] = 1;
+    }
+  }
+  const pass = (source, grow) => {
+    const out = new Uint8Array(source.length);
+    for (let y = 0; y < bh; y += 1) {
+      for (let x = 0; x < bw; x += 1) {
+        let any = false;
+        let all = true;
+        for (let dy = -2; dy <= 2; dy += 1) {
+          for (let dx = -2; dx <= 2; dx += 1) {
+            const xx = x + dx;
+            const yy = y + dy;
+            const on = xx >= 0 && yy >= 0 && xx < bw && yy < bh && source[yy * bw + xx] === 1;
+            any ||= on;
+            all &&= on;
+          }
+        }
+        out[y * bw + x] = (grow ? any : all) ? 1 : 0;
+      }
+    }
+    return out;
+  };
+  mask = pass(pass(mask, true), false);
+  return mask;
+}
+
+/** Un aperçu réduit de l'image « après », avec les régions numérotées. */
+function cutPreview(found, after) {
+  const scale = Math.min(1, 720 / found.width);
+  const full = document.createElement("canvas");
+  full.width = found.width;
+  full.height = found.height;
+  full.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(after.data), found.width, found.height), 0, 0);
+  const canvas = el("canvas", { class: "cut-preview" });
+  canvas.width = Math.round(found.width * scale);
+  canvas.height = Math.round(found.height * scale);
+  const context = canvas.getContext("2d");
+  context.drawImage(full, 0, 0, canvas.width, canvas.height);
+  context.lineWidth = 2;
+  context.font = "bold 14px sans-serif";
+  found.regions.forEach((region, index) => {
+    const { x, y, w, h } = region.box;
+    context.strokeStyle = "#00e5ff";
+    context.strokeRect(x * scale, y * scale, w * scale, h * scale);
+    context.fillStyle = "#00e5ff";
+    context.fillRect(x * scale, y * scale - 16, 22, 16);
+    context.fillStyle = "#000";
+    context.fillText(String(index + 1), x * scale + 4, y * scale - 3);
+  });
+  return canvas;
+}
+
+function cutPart(draft, refresh) {
+  const cut = drawingEdit.cut ?? (drawingEdit.cut = { before: draft.background ?? "", after: "", threshold: 24, gap: 3, found: null, entries: [] });
+  const before = imageOptions(cut.before, "— choisir —");
+  before.addEventListener("change", () => { cut.before = before.value; });
+  const after = imageOptions(cut.after, "— choisir —");
+  after.addEventListener("change", () => { cut.after = after.value; });
+  const threshold = el("input", { type: "range", min: "8", max: "80", value: String(cut.threshold), "aria-label": "Sensibilité" });
+  threshold.addEventListener("change", () => { cut.threshold = Number(threshold.value); });
+  const gap = el("input", { type: "range", min: "0", max: "10", value: String(cut.gap), "aria-label": "Regrouper" });
+  gap.addEventListener("change", () => { cut.gap = Number(gap.value); });
+  const search = el("button", { type: "button", class: "ghost small", text: "Chercher les différences" });
+  search.addEventListener("click", async () => {
+    if (!cut.before || !cut.after || cut.before === cut.after) return drawingStatus("Choisis deux images différentes.", "error");
+    search.disabled = true;
+    drawingStatus("Comparaison…");
+    try {
+      const [a, b] = await Promise.all([imagePixels(cut.before), imagePixels(cut.after)]);
+      if (a.width !== b.width || a.height !== b.height) {
+        throw new Error(`les deux images n'ont pas la même taille (${a.width}×${a.height} et ${b.width}×${b.height})`);
+      }
+      // Une sensibilité haute = un seuil bas.
+      cut.found = findChanges(a, b, { threshold: 88 - cut.threshold, gap: cut.gap });
+      cut.pixels = b;
+      cut.entries = cut.found.regions.map((_, index) => ({ keep: true, name: `${cut.after}_${index + 1}`.slice(0, 40), kind: "light", entity_id: "" }));
+      drawingStatus(cut.found.regions.length === 0 ? "Aucune différence trouvée : augmente la sensibilité." : `${cut.found.regions.length} endroit(s) qui changent.`, "ok");
+    } catch (error) {
+      drawingStatus(`Comparaison impossible : ${error.message}.`, "error");
+    }
+    search.disabled = false;
+    refresh();
+  });
+  const children = [
+    el("div", { class: "drawing-grid" },
+      field("Avant (tout éteint, volets ouverts)", before),
+      field("Après (allumé, ou volets fermés)", after),
+      field("Sensibilité", threshold),
+      field("Regrouper les endroits proches", gap)),
+    search,
+  ];
+  if (cut.found && cut.found.regions.length > 0) {
+    children.push(cutPreview(cut.found, cut.pixels));
+    const rows = cut.entries.map((entry, index) => {
+      const keep = el("input", { type: "checkbox" });
+      keep.checked = entry.keep;
+      keep.addEventListener("change", () => { entry.keep = keep.checked; });
+      const name = el("input", { type: "text", value: entry.name, maxlength: "40", autocapitalize: "none", spellcheck: "false", "aria-label": `Nom du calque ${index + 1}` });
+      name.addEventListener("change", () => { entry.name = name.value.trim(); });
+      const kind = el("select", { "aria-label": `Sorte du calque ${index + 1}` },
+        el("option", { value: "light", text: "Lumière allumée" }),
+        el("option", { value: "cover", text: "Volet (suit sa position)" }),
+        el("option", { value: "other", text: "Autre (état « on »)" }));
+      kind.value = entry.kind;
+      kind.addEventListener("change", () => { entry.kind = kind.value; });
+      const entity = el("input", { type: "text", list: "entity-list", value: entry.entity_id, placeholder: "light.porche", autocapitalize: "none", spellcheck: "false", "aria-label": `Appareil du calque ${index + 1}` });
+      entity.addEventListener("change", () => { entry.entity_id = entity.value.trim(); });
+      return el("li", { class: "drawing-item" },
+        el("label", { class: "check" }, keep, el("b", { text: ` Endroit ${index + 1}` })),
+        el("div", { class: "drawing-grid" }, field("Nom de l'image", name), field("Sorte", kind), field("Appareil", entity)));
+    });
+    const create = el("button", { type: "button", class: "ghost small", text: "Créer les calques cochés" });
+    create.addEventListener("click", async () => {
+      const chosen = cut.entries.map((entry, index) => ({ entry, region: cut.found.regions[index] })).filter(({ entry }) => entry.keep);
+      for (const { entry } of chosen) {
+        if (!/^[a-z0-9_-]{1,40}$/.test(entry.name)) return drawingStatus(`Nom « ${entry.name} » : lettres minuscules, chiffres, _ et - (40 au plus).`, "error");
+        if (entry.entity_id === "") return drawingStatus(`Choisis l'appareil de « ${entry.name} ».`, "error");
+        if (entry.kind === "cover" && !entry.entity_id.startsWith("cover.")) return drawingStatus(`« ${entry.name} » suit un volet : un cover.… est attendu.`, "error");
+      }
+      create.disabled = true;
+      let done = 0;
+      for (const { entry, region } of chosen) {
+        drawingStatus(`Découpe ${done + 1} sur ${chosen.length}…`);
+        const blob = await cutLayer(cut.found, cut.pixels, region, 88 - cut.threshold, entry.kind === "cover");
+        if (!blob || blob.size > MAX_HOUSE_IMAGE) {
+          create.disabled = false;
+          return drawingStatus(`« ${entry.name} » : image trop grosse.`, "error");
+        }
+        const response = await fetch(`/api/home/images/${encodeURIComponent(entry.name)}`, {
+          method: "PUT",
+          headers: { Authorization: `Bearer ${token.get()}`, "Content-Type": blob.type },
+          body: blob,
+        }).catch(() => null);
+        if (!response?.ok) {
+          const data = await response?.json().catch(() => ({}));
+          create.disabled = false;
+          return drawingStatus(data?.error ?? `Envoi de « ${entry.name} » impossible.`, "error");
+        }
+        const layer = entry.kind === "cover"
+          ? { image: entry.name, entity_id: entry.entity_id, states: [], not: false, position: true, when: "always" }
+          : { image: entry.name, entity_id: entry.entity_id, states: ["on"], not: false, when: "always" };
+        draft.layers = draft.layers.filter((other) => other.image !== entry.name);
+        draft.layers.push(layer);
+        done += 1;
+      }
+      await loadHouse(true);
+      await Promise.all(house.images.map((image) => houseImage(image.name)));
+      cut.found = null;
+      cut.entries = [];
+      drawingStatus(`${done} calque(s) créé(s) : vérifie-les dans l'aperçu, puis « Enregistrer ».`, "ok");
+      refresh();
+    });
+    children.push(el("ol", { class: "drawing-items" }, ...rows), create);
+  }
+  return drawingFieldset(
+    "Découper des calques",
+    "Deux images de la même taille : « avant » (tout éteint, volets ouverts) et « après » (lumières allumées, ou volets fermés). Ce qui change devient un calque par endroit : donne-lui un nom et son appareil.",
+    ...children,
+  );
 }
 
 function renderDrawingEditor() {
@@ -1784,7 +2087,7 @@ function renderDrawingEditor() {
     addChart,
   );
 
-  $("#drawing-form").replaceChildren(pagesPart(), ai, images, backgrounds, effects, layers, labels, zones, actions, charts);
+  $("#drawing-form").replaceChildren(pagesPart(), ai, images, cutPart(draft, refresh), backgrounds, effects, layers, labels, zones, actions, charts);
 }
 
 /** Un identifiant d'onglet à partir de son nom (« Salle de jeux » → salle-de-jeux). */
