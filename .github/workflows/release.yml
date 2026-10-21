@@ -1,12 +1,14 @@
 name: Publication
 
 # Publier une version : pousser une étiquette `vX.Y.Z` égale à la version
-# de Cargo.toml. Trois jobs :
+# de Cargo.toml. Quatre jobs :
 #
 #   1. la version GitHub, avec ses notes ;
 #   2. Windows : `ha-server.exe` et ses fichiers, dans un zip joint à la
 #      version ;
-#   3. Docker : l'image, testée comme dans docker.yml, publiée sur
+#   3. Linux (mini-PC) : `ha-server`, l'installateur et le service systemd,
+#      dans une archive jointe à la version ;
+#   4. Docker : l'image, testée comme dans docker.yml, publiée sur
 #      ghcr.io/wolfdavid68-dev/home-assistant-rust (`X.Y.Z` et `latest`).
 #
 # Aucune action tierce en dehors de checkout et rust-cache (épinglées) :
@@ -54,6 +56,7 @@ jobs:
           Installation : [docs/installation.md](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/docs/installation.md).
 
           - **Windows** : télécharge \`ha-maison-${TAG}-windows.zip\` ci-dessous.
+          - **Mini-PC sous Debian** : télécharge \`ha-maison-linux-x86_64.tar.gz\` ci-dessous, puis \`sudo ./installer.sh\` ([guide](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/docs/mini-pc.md)).
           - **Linux (Docker)** : télécharge \`compose.yaml\` ci-dessous, puis \`docker compose up -d\` (image \`ghcr.io/${GITHUB_REPOSITORY}:${TAG#v}\`).
           NOTES
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Version ${TAG#v}" \
@@ -99,6 +102,50 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: gh release upload "$env:TAG" "ha-maison-$env:TAG-windows.zip" --repo "$env:GITHUB_REPOSITORY"
+
+  linux:
+    name: Linux (mini-PC)
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Compilé dans Debian 12 (la même image que le Dockerfile) : le
+      # programme tourne sur Debian 12 et 13, et sur les Ubuntu récents. Garder
+      # la même empreinte que dans le Dockerfile, que Dependabot met à jour.
+      - name: Build
+        run: |
+          docker run --rm -v "$PWD":/src -w /src \
+            rust:1.99-slim-bookworm@sha256:2c3a22f0a5533ea2dd5a16627bc841228151faa2d4de2644ac9987e4a2f1f2fa \
+            sh -c 'rm rust-toolchain.toml && cargo build --release --locked -p ha-server'
+
+      - name: Le programme démarre
+        run: target/release/ha-server --version
+
+      - name: Archive
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          dir="ha-maison-${TAG}-linux-x86_64"
+          mkdir "$dir"
+          cp target/release/ha-server LICENSE *.example.yaml "$dir"/
+          cp packaging/linux/installer.sh packaging/linux/ha-maison \
+            packaging/linux/ha-maison.service packaging/linux/ha-maison.env "$dir"/
+          chmod 0755 "$dir"/ha-server "$dir"/installer.sh "$dir"/ha-maison
+          # Un nom fixe : « releases/latest/download/… » mène toujours à la
+          # dernière version (le dossier dedans porte le numéro).
+          tar -czf ha-maison-linux-x86_64.tar.gz --owner=0 --group=0 "$dir"
+          ls -l ha-maison-linux-x86_64.tar.gz
+
+      - name: Joindre à la version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: gh release upload "$TAG" ha-maison-linux-x86_64.tar.gz --repo "$GITHUB_REPOSITORY"
 
   docker:
     name: image Docker

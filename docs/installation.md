@@ -1,16 +1,20 @@
 # Installer le serveur chez soi
 
-Deux façons, selon le PC :
+Trois façons, selon la machine :
 
-| PC | Ce qu'on télécharge | Mise à jour |
+| Machine | Ce qu'on télécharge | Mise à jour |
 | --- | --- | --- |
 | **Windows** | `ha-maison-vX.Y.Z-windows.zip` : le programme et ses fichiers | remplacer `ha-server.exe` |
 | **Linux** (Ubuntu, Debian…) | `compose.yaml` : Docker télécharge l'image tout seul | `docker compose pull && docker compose up -d` |
+| **Mini-PC dédié** sous Debian | `ha-maison-linux-x86_64.tar.gz` : le programme et son installateur | relancer `sudo ./installer.sh` |
 
-Les deux sont sur la page des versions :
+Tous sont sur la page des versions :
 <https://github.com/wolfdavid68-dev/home-assistant-rust/releases>.
 
-Dans les deux cas, le tableau de bord s'ouvre à l'adresse <http://127.0.0.1:8123/>, sur le PC
+Le **mini-PC dédié** (une machine qui ne fait que la maison et démarre toute seule) a son propre
+guide, de l'installation de Debian à la première connexion : [mini-pc.md](mini-pc.md).
+
+Avec Windows ou Docker, le tableau de bord s'ouvre à l'adresse <http://127.0.0.1:8123/>, sur le PC
 lui-même. Pour l'ouvrir depuis un téléphone de la maison, voir « Depuis le téléphone » plus bas.
 
 ## Windows

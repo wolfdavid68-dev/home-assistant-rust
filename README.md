@@ -5,7 +5,8 @@ Un noyau domotique en Rust, inspiré de Home Assistant.
 ![Tableau de bord](docs/images/tableau-de-bord-ordinateur.png)
 
 - **[Installer chez soi (Windows ou Linux)](docs/installation.md)** : le programme tout prêt est
-  sur la [page des versions](https://github.com/wolfdavid68-dev/home-assistant-rust/releases)
+  sur la [page des versions](https://github.com/wolfdavid68-dev/home-assistant-rust/releases) ;
+  ou un [mini-PC dédié à la maison](docs/mini-pc.md), qui démarre tout seul
 - [Feuille de route](ROADMAP.md)
 - [Règles de sécurité](SECURITY.md)
 - Licence [MIT](LICENSE) : libre d'utiliser, modifier et redistribuer, en gardant la mention de
@@ -88,6 +89,7 @@ Un noyau domotique en Rust, inspiré de Home Assistant.
 - [Étape 74 : l'agenda TimeTree de la famille, expliqué](docs/timetree.md)
 - [Étape 75 : l'agenda façon Google Agenda, expliqué](docs/agenda-semaine.md)
 - [Étape 76 : le tableau de bord plus léger, expliqué](docs/tableau-leger.md)
+- [Étape 77 : le mini-PC dédié à la maison, expliqué](docs/mini-pc.md)
 - [Étape 5 : les automatisations, expliqué](docs/etape-5-automatisations.md)
 - [Modernisation du code, expliquée](docs/modernisation.md)
 - [Étape 6 : l'interface web, expliquée](docs/etape-6-interface-web.md)
