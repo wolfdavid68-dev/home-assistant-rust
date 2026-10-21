@@ -61,6 +61,8 @@ tracing = "0.1.44"
 nix = { version = "0.31.3", default-features = false, features = ["term", "fs"] }
 # Arrêt propre des tâches de fond (`CancellationToken`).
 tokio-util = { version = "0.7.20", default-features = false }
+# Compression gzip des fichiers du tableau de bord, en Rust pur (miniz_oxide).
+flate2 = { version = "1.1.10", default-features = false, features = ["rust_backend"] }
 # Uniquement pour les tests (sauf futures-util, aussi utilisé par ha-hue).
 futures-util = { version = "0.3.34", default-features = false, features = ["sink"] }
 rcgen = "0.14.10"

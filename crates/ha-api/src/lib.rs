@@ -189,23 +189,8 @@ pub fn router(state: Arc<ApiState>) -> Router {
         )
         .route("/api/services/{domain}/{service}", post(rest::call_service))
         .route("/api/websocket", get(ws::handler))
-        // Tableau de bord web.
-        .route("/", get(web::index))
-        .route("/app.js", get(web::app_js))
-        .route("/canvas.js", get(web::canvas_js))
-        .route("/house.js", get(web::house_js))
-        .route("/agenda.js", get(web::agenda_js))
-        .route("/style.css", get(web::style_css))
-        .route("/icon.svg", get(web::icon_svg))
-        .route("/house.svg", get(web::house_svg))
-        .route("/fonts/geist.woff2", get(web::font_geist))
-        .route("/fonts/geist-mono.woff2", get(web::font_geist_mono))
-        .route("/fonts/bricolage-grotesque.woff2", get(web::font_bricolage))
-        .route("/manifest.webmanifest", get(web::manifest))
-        .route("/sw.js", get(web::service_worker))
-        .route("/icon-192.png", get(web::icon_192))
-        .route("/icon-512.png", get(web::icon_512))
-        .route("/apple-touch-icon.png", get(web::apple_touch_icon))
+        // Tableau de bord web (compressé, avec empreinte).
+        .merge(web::router())
         .layer(DefaultBodyLimit::max(MAX_BODY_SIZE))
         // En-têtes de sécurité sur toutes les réponses.
         .layer(SetResponseHeaderLayer::overriding(

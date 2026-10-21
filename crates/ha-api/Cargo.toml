@@ -10,6 +10,7 @@ repository.workspace = true
 
 [dependencies]
 axum.workspace = true
+flate2.workspace = true
 ha-areas = { path = "../ha-areas" }
 ha-assist = { path = "../ha-assist" }
 ha-auth = { path = "../ha-auth" }
@@ -22,6 +23,7 @@ jiff.workspace = true
 ha-storage = { path = "../ha-storage" }
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 tokio = { workspace = true, features = ["sync", "rt", "macros", "time", "net"] }
 tower-http.workspace = true
 tracing.workspace = true

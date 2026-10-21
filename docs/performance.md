@@ -30,7 +30,8 @@ optimisée (`--release`) :
 les bibliothèques), que le système peut partager ou relire.
 
 La rapidité des **appareils** eux-mêmes (du toucher à la lampe allumée) est mesurée à part, depuis
-l'[étape 63](rapidite.md).
+l'[étape 63](rapidite.md). Le poids du **tableau de bord** dans le navigateur (162 Kio compressés,
+puis presque rien tant que rien ne change) est expliqué à l'[étape 76](tableau-leger.md).
 
 ## Voir les chiffres
 
