@@ -1,0 +1,151 @@
+name: Publication
+
+# Publier une version : pousser une étiquette `vX.Y.Z` égale à la version
+# de Cargo.toml. Trois jobs :
+#
+#   1. la version GitHub, avec ses notes ;
+#   2. Windows : `ha-server.exe` et ses fichiers, dans un zip joint à la
+#      version ;
+#   3. Docker : l'image, testée comme dans docker.yml, publiée sur
+#      ghcr.io/wolfdavid68-dev/home-assistant-rust (`X.Y.Z` et `latest`).
+#
+# Aucune action tierce en dehors de checkout et rust-cache (épinglées) :
+# `gh` et `docker` sont déjà sur les machines de GitHub.
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publication-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    name: version GitHub
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: L'étiquette suit Cargo.toml
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)
+          echo "Cargo.toml : $version, étiquette : $TAG"
+          test "v$version" = "$TAG"
+
+      - name: Créer la version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          cat > notes.md <<NOTES
+          Installation : [docs/installation.md](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/docs/installation.md).
+
+          - **Windows** : télécharge \`ha-maison-${TAG}-windows.zip\` ci-dessous.
+          - **Linux (Docker)** : télécharge \`compose.yaml\` ci-dessous, puis \`docker compose up -d\` (image \`ghcr.io/${GITHUB_REPOSITORY}:${TAG#v}\`).
+          NOTES
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Version ${TAG#v}" \
+            --notes-file notes.md --generate-notes --verify-tag \
+            packaging/linux/compose.yaml
+
+  windows:
+    name: Windows (zip)
+    needs: release
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install toolchain
+        run: rustup toolchain install
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+
+      - name: Build
+        run: cargo build --release --locked -p ha-server
+
+      - name: Le programme démarre
+        run: target/release/ha-server.exe --version
+
+      - name: Zip
+        shell: pwsh
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          $dir = "ha-maison-$env:TAG-windows"
+          New-Item -ItemType Directory $dir | Out-Null
+          Copy-Item target/release/ha-server.exe, LICENSE, packaging/windows/* $dir
+          Copy-Item *.example.yaml $dir
+          Compress-Archive -Path $dir -DestinationPath "$dir.zip"
+          Get-Item "$dir.zip" | Select-Object Name, Length
+
+      - name: Joindre à la version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: gh release upload "$env:TAG" "ha-maison-$env:TAG-windows.zip" --repo "$env:GITHUB_REPOSITORY"
+
+  docker:
+    name: image Docker
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          docker build \
+            --label org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY} \
+            --label org.opencontainers.image.version=${TAG#v} \
+            --label org.opencontainers.image.licenses=MIT \
+            -t ha-server:release .
+
+      - name: Smoke test
+        run: |
+          docker run -d --name ha --read-only --tmpfs /tmp \
+            --cap-drop ALL --security-opt no-new-privileges:true \
+            -p 127.0.0.1:8123:8123 ha-server:release
+          status=starting
+          for _ in $(seq 1 60); do
+            status=$(docker inspect --format '{{.State.Health.Status}}' ha)
+            [ "$status" = healthy ] && break
+            sleep 2
+          done
+          docker logs ha
+          test "$status" = healthy
+          docker stop ha
+
+      - name: Publier sur ghcr.io
+        env:
+          TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          image=ghcr.io/${GITHUB_REPOSITORY}
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker tag ha-server:release "$image:${TAG#v}"
+          docker tag ha-server:release "$image:latest"
+          docker push "$image:${TAG#v}"
+          docker push "$image:latest"
+          docker logout ghcr.io
