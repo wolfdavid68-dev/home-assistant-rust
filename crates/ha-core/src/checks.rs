@@ -219,6 +219,25 @@ pub fn check(domain: &str, service: &str, data: &Attributes, state: &State) -> R
         ("select" | "input_select", "select_option") => {
             one_of(state, data, "option", "options", "choix", true)
         }
+        ("media_player", "volume_set") => {
+            in_range(data, "volume_level", "volume (0 à 1)", (0.0, 1.0), true)
+        }
+        // Une annonce (étape 73) : le volume en %, un message court.
+        ("tts", "speak") => {
+            in_range(
+                data,
+                "volume",
+                "volume de l'annonce (%)",
+                (0.0, 100.0),
+                false,
+            )?;
+            if let Some(message) = data.get("message").and_then(Value::as_str)
+                && message.chars().count() > 500
+            {
+                return Err("annonce : 500 caractères au plus".to_owned());
+            }
+            Ok(())
+        }
         ("text" | "input_text", "set_value") => {
             let value = data
                 .get("value")
@@ -432,6 +451,49 @@ mod tests {
                 "select_option",
                 &data(json!({"option": 3})),
                 &libre
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn speaker_volume_and_announcements() {
+        let speaker = device("media_player.salon", json!({}));
+        assert!(
+            check(
+                "media_player",
+                "volume_set",
+                &data(json!({"volume_level": 0.4})),
+                &speaker
+            )
+            .is_ok()
+        );
+        let error = check(
+            "media_player",
+            "volume_set",
+            &data(json!({"volume_level": 40})),
+            &speaker,
+        )
+        .unwrap_err();
+        assert!(error.contains("entre 0 et 1"), "{error}");
+        assert!(check("media_player", "volume_set", &data(json!({})), &speaker).is_err());
+        let tts = device("tts.annonces", json!({}));
+        assert!(
+            check(
+                "tts",
+                "speak",
+                &data(json!({"message": "Bonjour", "volume": 40})),
+                &tts
+            )
+            .is_ok()
+        );
+        assert!(check("tts", "speak", &data(json!({"volume": 140})), &tts).is_err());
+        assert!(
+            check(
+                "tts",
+                "speak",
+                &data(json!({"message": "a".repeat(501)})),
+                &tts
             )
             .is_err()
         );

@@ -38,6 +38,8 @@ utilisation :
   ha-server freebox track <MAC> <nom>  suit la présence d'un appareil
   ha-server freebox untrack <nom>      arrête de le suivre
   ha-server freebox forget             oublie la Freebox
+  ha-server sonos                 liste les enceintes Sonos trouvées
+  ha-server voix \"<phrase>\"       essaie la voix des annonces (écrit essai-voix.wav)
   ha-server automations check     vérifie automatisations, scripts et scènes
   ha-server automations list      liste les automatisations (fichier et éditeur)
   ha-server automations delete <id>  supprime une automatisation de l'éditeur
@@ -1368,5 +1370,53 @@ pub async fn test_vigilance(
             }
         }
     }
+    Ok(())
+}
+
+/// `sonos` : les enceintes trouvées, par groupe, et le nom de leur entité.
+pub(crate) async fn list_sonos(hosts: &[String]) -> Result<(), Box<dyn Error>> {
+    if hosts.is_empty() {
+        println!("recherche des enceintes Sonos sur le réseau local (3 s)…");
+    }
+    let groups = ha_sonos::find(hosts).await?;
+    for group in &groups {
+        let names: Vec<String> = group
+            .members
+            .iter()
+            .map(|m| {
+                let slug = ha_core::slugify(&m.name);
+                format!("{} (media_player.{slug}, {})", m.name, m.host)
+            })
+            .collect();
+        if names.len() == 1 {
+            println!("- {}", names[0]);
+        } else {
+            println!("- groupe : {}", names.join(" + "));
+        }
+    }
+    println!(
+        "{} enceinte(s). Pour le serveur : HA_SONOS={}",
+        groups.iter().map(|g| g.members.len()).sum::<usize>(),
+        groups
+            .first()
+            .and_then(|g| g.coordinator())
+            .map_or("auto", |m| m.host.trim_end_matches(":1400"))
+    );
+    Ok(())
+}
+
+/// `voix "<phrase>"` : fait dire la phrase à Piper, et l'écrit dans
+/// `essai-voix.wav` (avec le carillon), à écouter sur le PC.
+pub(crate) async fn test_voice(tts: &ha_tts::Tts, phrase: &str) -> Result<(), Box<dyn Error>> {
+    println!("voix : {}", tts.describe());
+    let started = std::time::Instant::now();
+    let voice = tts.speak(phrase).await?;
+    let sound = ha_tts::announcement(true, Some(&voice));
+    std::fs::write("essai-voix.wav", &sound.wav)?;
+    println!(
+        "essai-voix.wav écrit : {:.1} s de son, préparé en {:.1} s",
+        sound.duration.as_secs_f64(),
+        started.elapsed().as_secs_f64()
+    );
     Ok(())
 }

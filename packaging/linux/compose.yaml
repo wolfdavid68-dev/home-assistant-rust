@@ -25,6 +25,9 @@ services:
       # fichier .env à côté de ce fichier. Ne redirige JAMAIS ce port depuis
       # ta box Internet : pour l'accès à distance, voir le guide (VPN).
       - "${HA_PUBLISH:-127.0.0.1}:8123:8123"
+      # Enceintes Sonos (voir docs/sonos.md) : elles viennent chercher les
+      # annonces sur ce port, qui ne sert que les annonces en cours.
+      # - "8124:8124"
     environment:
       TZ: ${TZ:-Europe/Paris}
       RUST_LOG: ${RUST_LOG:-info}
@@ -55,6 +58,12 @@ services:
       # HA_MQTT_HOST: 192.168.1.20
       # HA_MQTT_USER: ha-server
       # HA_MQTT_PASSWORD_FILE: /run/secrets/mqtt_password
+      # Enceintes Sonos et annonces vocales (voir docs/sonos.md) : l'adresse
+      # d'une enceinte, celle de cette machine, et la voix (service « piper »
+      # plus bas, et le port 8124 plus haut) :
+      # HA_SONOS: 192.168.1.30
+      # HA_SONOS_AUDIO: 192.168.1.20
+      # HA_PIPER: tcp://piper:10200
       # Compteur Linky (voir docs/energie.md) : module USB (avec « devices »
       # et « group_add » plus bas), ou module réseau :
       # HA_TELEINFO: /dev/ttyUSB0
@@ -102,6 +111,17 @@ services:
         max-size: 10m
         max-file: "3"
 
+  # La voix des annonces (Piper, voir docs/sonos.md) : enlève les « # » de ce
+  # service et de « piper-voix » plus bas. Il télécharge la voix une seule
+  # fois ; ensuite, tout reste sur cette machine. Pas de port publié : seul
+  # ha-server lui parle.
+  # piper:
+  #   image: rhasspy/wyoming-piper
+  #   command: --voice fr_FR-siwis-medium
+  #   restart: unless-stopped
+  #   volumes:
+  #     - piper-voix:/data
+
   # Outil de sauvegarde et de restauration de la base, lancé seulement à la
   # demande (voir le guide). Il ne démarre jamais avec « docker compose up ».
   sauvegarde:
@@ -118,6 +138,7 @@ volumes:
   ha-data:
   ha-cle:
   ha-sauvegardes:
+  # piper-voix:
 
 # secrets:
 #   mqtt_password:
