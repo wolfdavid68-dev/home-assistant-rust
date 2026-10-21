@@ -51,6 +51,11 @@ décor comme avant.
 **retour à l'accueil** du mode tablette, après 2 minutes sans contact. L'[écran de
 veille](veille.md) prend le dessin de la maison après 5 minutes, et le rend à la vue hub au réveil.
 
+**Le thème clair** est un beige chaud, sans blanc pur (« Pierre »,
+[mise en forme](mise-en-forme.md#clair-le-jour-sombre-le-soir)) : moins éblouissant au mur. Le soir,
+le thème **Automatique** suit le mode sombre de la tablette (Android peut l'activer seul au coucher
+du soleil).
+
 ## La régler
 
 Dans **Mon compte**, sous **Mode tablette murale** : **Vue hub, la maison au centre** (cochée par

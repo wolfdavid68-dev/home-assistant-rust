@@ -25,34 +25,37 @@
 /* Mise en page : une colonne sur téléphone ; à partir de 1000 px, la vue
    d'ensemble (plan, scènes) reste à gauche et les appareils défilent à droite. */
 :root {
-  --bg: #f2f4f7;
-  --sky-1: #d7e0ee;
-  --sky-2: #e9edf4;
-  --card: #ffffff;
-  --card-2: #f2f4f7;
-  --line: #e1e6ed;
-  --text: #141b2b;
-  --text-2: #2b3446;
-  --muted: #4a5568;
-  --accent: #2643c4;
+  /* « Pierre » : pas de blanc pur, un beige chaud et des cartes ivoire, avec
+     un accent indigo. Moins éblouissant, surtout sur une tablette allumée
+     toute la journée, et accordé à la lumière chaude des maquettes 3D. */
+  --bg: #e8e5df;
+  --sky-1: #ddd8cf;
+  --sky-2: #e4e0d9;
+  --card: #f4f2ee;
+  --card-2: #eae6df;
+  --line: #d8d2c8;
+  --text: #1f1b17;
+  --text-2: #3b352f;
+  --muted: #5d564e;
+  --accent: #4b44c8;
   --accent-ink: #ffffff;
-  --accent-soft: #eaeffc;
+  --accent-soft: #e2dff4;
   --glow: #ffd666;
   --glow-ink: #3b2a05;
-  --glow-soft: #fff6dc;
-  --glow-line: #f3dc9a;
+  --glow-soft: #f4e7c6;
+  --glow-line: #ecd598;
   --glow-bar: #d9a00d;
   --heat: #f0703a;
   --heat-ink: #9a3a0e;
-  --heat-soft: #ffe7da;
+  --heat-soft: #f3dccd;
   --ok: #1d7f53;
-  --ok-soft: #ddf3e8;
+  --ok-soft: #d8e7da;
   --alert: #c2361f;
   --alert-ink: #7a1e0e;
-  --alert-soft: #fde7e1;
-  --alert-stripe: #fbd3ca;
-  --shadow: 0 1px 2px rgb(20 27 43 / 0.06), 0 10px 28px rgb(20 27 43 / 0.07);
-  --shadow-float: 0 1px 2px rgb(20 27 43 / 0.08), 0 14px 34px rgb(20 27 43 / 0.16);
+  --alert-soft: #f2dbd2;
+  --alert-stripe: #eac4b9;
+  --shadow: 0 1px 2px rgb(31 27 23 / 0.06), 0 10px 28px rgb(31 27 23 / 0.07);
+  --shadow-float: 0 1px 2px rgb(31 27 23 / 0.08), 0 14px 34px rgb(31 27 23 / 0.16);
   --radius: 22px;
   --font: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-display: "Bricolage Grotesque", "Geist", ui-sans-serif, system-ui, sans-serif;
@@ -80,7 +83,7 @@
   --tempo-blue-ink: #ffffff;
   --tempo-white: #ffffff;
   /* La barre du navigateur, sur téléphone. */
-  --bar: #d7e0ee;
+  --bar: #ddd8cf;
   color-scheme: light;
 }
 
@@ -1626,12 +1629,12 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .house, .gauges, .title-block, .room-hum, .room-line, .board-covers, .house-actions, .board-people, .board-charts { display: none; }
 
 :root[data-theme="plan"] {
-  --bar: #f3f5f9;
-  --bg: #f3f5f9;
-  --sky-1: #f3f5f9;
-  --sky-2: #f3f5f9;
-  --card: #fdfdfe;
-  --card-2: #edf1f8;
+  --bar: #e4e8ef;
+  --bg: #e4e8ef;
+  --sky-1: #e4e8ef;
+  --sky-2: #e4e8ef;
+  --card: #f0f2f6;
+  --card-2: #e1e6ee;
   --line: #c3cde0;
   --ink: #24418f;
   --ink-line: #9fb0d3;
@@ -1642,13 +1645,13 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
   --muted: #54638a;
   --accent: #24418f;
   --accent-ink: #ffffff;
-  --accent-soft: #e3e9f7;
+  --accent-soft: #d9e0f1;
   --glow: #f5d25c;
   --glow-ink: #3f3108;
-  --glow-soft: #fbf3d2;
+  --glow-soft: #f3e8c4;
   --glow-line: #e3c76d;
   --glow-bar: #c99a12;
-  --heat-soft: #fde6da;
+  --heat-soft: #f4dccf;
   --shadow: none;
   --shadow-float: 0 0 0 1.5px var(--ink), 0 22px 48px rgb(36 65 143 / 0.18);
   --radius: 5px;
@@ -2838,6 +2841,9 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .hub-event:has(.hub-event-when) .hub-event-text b { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
 .hub-event-when { margin-left: auto; color: #03a9f4; font-weight: 600; font-size: 0.82rem; white-space: nowrap; }
 .hub-event-when.now { color: #66bb6a; }
+:root:is([data-theme="light"], [data-theme="plan"]) .hub-event.next { background: var(--accent-soft); }
+:root:is([data-theme="light"], [data-theme="plan"]) .hub-event-when { color: var(--accent); }
+:root:is([data-theme="light"], [data-theme="plan"]) .hub-event-when.now { color: var(--ok); }
 .hub-empty { margin: 4px; color: var(--muted); font-size: 0.9rem; }
 
 /* Au centre : la maison. */
@@ -2930,7 +2936,7 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .hub-dock button[hidden] { display: none; }
 .hub-dock svg { width: 22px; height: 22px; }
 .hub-dock .hub-say-button { background: rgb(3 169 244 / 0.18); color: #bfe9ff; }
-:root:not([data-theme="maquette"]):not([data-theme="dark"]):not([data-theme="plan-nuit"]) .hub-dock .hub-say-button { color: var(--accent); }
+:root:not([data-theme="maquette"]):not([data-theme="dark"]):not([data-theme="plan-nuit"]) .hub-dock .hub-say-button { color: var(--accent); background: var(--accent-soft); }
 .hub-say form { display: grid; gap: 14px; min-width: min(480px, 80vw); }
 .hub-say h2 { margin: 0; font-size: 1.1rem; }
 .hub-say input { font-size: 1.1rem; padding: 12px 14px; }

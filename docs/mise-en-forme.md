@@ -71,12 +71,18 @@ automatique le soir, le tableau de bord passe en sombre en même temps. Rien à 
 Depuis l'étape 36, on peut aussi le choisir dans **Mon compte → Apparence** (clair, sombre, ou le
 style [« plan d'architecte »](plan-architecte.md)), pour un appareil seulement.
 
+**Le thème clair « Pierre »** (étape 80) : pas de blanc pur, qui fatigue les yeux sur un écran
+allumé toute la journée. Le fond est un beige chaud (`#e8e5df`), les cartes sont ivoire
+(`#f4f2ee`) et l'accent est indigo (`#4b44c8`), accordés à la lumière chaude des maquettes 3D. Le
+texte garde un contraste confortable. Le style « plan d'architecte » a aussi un papier un peu moins
+blanc.
+
 Techniquement, toutes les couleurs sont des **variables CSS** déclarées une seule fois :
 
 ```css
 :root {
-  --bg: #f2f4f7;
-  --accent: #2643c4;
+  --bg: #e8e5df;
+  --accent: #4b44c8;
 }
 @media (prefers-color-scheme: dark) {
   :root {
