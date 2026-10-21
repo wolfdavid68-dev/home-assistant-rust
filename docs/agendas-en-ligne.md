@@ -28,6 +28,8 @@ Crée `calendriers.yaml` à côté des autres fichiers (ou indique son chemin av
 - `nom` donne l'entité : « Vacances scolaires » devient `calendar.vacances_scolaires`.
 - `url` : une adresse `https://` ou `webcal://` (les deux sont acceptées).
 - 10 agendas au plus.
+- Un agenda **TimeTree** se met ici aussi, avec `timetree:` au lieu de `url:` : voir
+  [l'étape 74](timetree.md).
 
 Vérifie le fichier, puis redémarre le serveur :
 

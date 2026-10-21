@@ -20,6 +20,7 @@ mod recorder;
 mod secrets;
 mod statistics;
 mod store;
+mod timetree;
 
 pub use agenda::{CalendarEvent, DueChange, NewCalendarEvent, TodoItem};
 pub use audit::{AuditCheck, AuditEntry, AuditRecord, MAX_AUDIT_LIMIT, clean_field};
@@ -37,3 +38,4 @@ pub use store::{
     HistoryEntry, HistorySeries, MAX_HISTORY_LIMIT, MAX_SERIES_BUCKETS, MAX_SERIES_CHANGES,
     SeriesPoint, StateChange, Store, StoredState, from_micros, to_micros,
 };
+pub use timetree::TimeTreeAccount;

@@ -94,9 +94,10 @@ Ce qui donne sur le téléphone : « Vigilance orange — Vigilance météo : ja
 | `trigger.to_state.name`                      | son nom (« Vigilance météo »)                          |
 | `trigger.to_state.attributes.brightness`     | un attribut ; avec des espaces : `attributes['Vent violent']` |
 | `trigger.entity_id`, `trigger.id`            | l'entité, l'identifiant du déclencheur                 |
+| `trigger.calendar_event.summary`             | le rendez-vous d'un déclencheur `calendar` (aussi `description`, `start`, `end`, `all_day`, étape 74) |
 
-`trigger.…` vient d'un déclencheur `state` ou `numeric_state`. Avec un autre déclencheur (une heure,
-le soleil…), il est vide.
+`trigger.…` vient d'un déclencheur `state` ou `numeric_state`, et `trigger.calendar_event` d'un
+déclencheur `calendar`. Avec un autre déclencheur (une heure, le soleil…), il est vide.
 
 ### Les filtres
 

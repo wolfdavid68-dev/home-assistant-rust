@@ -21,15 +21,24 @@
 //!   jamais écrite dans les logs ni dans l'état de l'agenda, seulement le
 //!   nom du site ;
 //! - relu toutes les 6 heures (15 minutes après un échec).
+//!
+//! Un agenda **TimeTree** (étape 74) se déclare de la même façon, avec son
+//! nom dans TimeTree au lieu d'une adresse (voir [`timetree`]) :
+//!
+//! ```yaml
+//! - nom: Famille
+//!   timetree: Famille
+//! ```
 
 pub mod ics;
+pub mod timetree;
 
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use ha_core::{Attributes, Background, CancellationToken, Core, EntityId};
-use ha_storage::CalendarEvent;
+use ha_storage::{CalendarEvent, TimeTreeAccount};
 use jiff::ToSpan;
 use jiff::civil::DateTime;
 use jiff::tz::TimeZone;
@@ -43,6 +52,10 @@ pub const MAX_CALENDARS: usize = 10;
 pub const MAX_BYTES: usize = 2 << 20;
 const REFRESH: Duration = Duration::from_hours(6);
 const RETRY: Duration = Duration::from_mins(15);
+/// L'agenda de la famille change souvent : relu toutes les 15 minutes.
+const TIMETREE_REFRESH: Duration = Duration::from_mins(15);
+/// Mot de passe refusé, trop de connexions : on attend une heure.
+const TIMETREE_LASTING_RETRY: Duration = Duration::from_hours(1);
 /// Les événements publiés : la semaine passée et les deux mois à venir.
 const PAST_DAYS: i64 = 7;
 const FUTURE_DAYS: i64 = 62;
@@ -60,12 +73,43 @@ pub enum ConfigError {
     Invalid(String),
 }
 
+/// D'où vient l'agenda.
+#[derive(Clone, PartialEq, Eq)]
+pub enum Source {
+    /// Un fichier ICS en ligne.
+    Ics(url::Url),
+    /// Un agenda TimeTree, par son nom.
+    TimeTree(String),
+}
+
+/// Jamais l'adresse complète : elle peut contenir une clé.
+impl std::fmt::Debug for Source {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Ics(url) => write!(f, "Ics({})", url.host_str().unwrap_or_default()),
+            Self::TimeTree(name) => write!(f, "TimeTree({name})"),
+        }
+    }
+}
+
+impl Source {
+    /// Ce qu'on peut afficher : le site (jamais l'adresse complète, qui
+    /// peut contenir une clé), ou « TimeTree ».
+    #[must_use]
+    pub fn label(&self) -> String {
+        match self {
+            Self::Ics(url) => url.host_str().unwrap_or_default().to_owned(),
+            Self::TimeTree(_) => "TimeTree".to_owned(),
+        }
+    }
+}
+
 /// Un agenda en ligne.
 #[derive(Clone, PartialEq, Eq)]
 pub struct RemoteCalendar {
     pub name: String,
     pub entity_id: EntityId,
-    pub url: url::Url,
+    pub source: Source,
 }
 
 /// Pas d'adresse dans les affichages de débogage : elle peut contenir une
@@ -75,7 +119,7 @@ impl std::fmt::Debug for RemoteCalendar {
         f.debug_struct("RemoteCalendar")
             .field("name", &self.name)
             .field("entity_id", &self.entity_id)
-            .field("host", &self.url.host_str())
+            .field("source", &self.source.label())
             .finish_non_exhaustive()
     }
 }
@@ -84,7 +128,10 @@ impl std::fmt::Debug for RemoteCalendar {
 #[serde(deny_unknown_fields)]
 struct Entry {
     nom: String,
-    url: String,
+    #[serde(default)]
+    url: Option<String>,
+    #[serde(default)]
+    timetree: Option<String>,
 }
 
 /// Vérifie le contenu de `calendriers.yaml`.
@@ -121,26 +168,49 @@ pub fn parse_config(text: &str) -> Result<Vec<RemoteCalendar>, ConfigError> {
                 "deux agendas s'appellent « {name} »"
             )));
         }
-        let raw = entry.url.trim();
-        let raw = raw
-            .strip_prefix("webcal://")
-            .map_or_else(|| raw.to_owned(), |rest| format!("https://{rest}"));
-        let url = url::Url::parse(&raw)
-            .ok()
-            .filter(|url| url.scheme() == "https" && url.host_str().is_some())
-            .filter(|url| url.username().is_empty() && url.password().is_none())
-            .ok_or_else(|| {
-                ConfigError::Invalid(format!(
-                    "« {name} » : adresse invalide (https:// ou webcal://, sans identifiants)"
-                ))
-            })?;
+        let source = match (entry.url, entry.timetree) {
+            (Some(url), None) => Source::Ics(parse_url(&name, &url)?),
+            (None, Some(calendar)) => {
+                let calendar = calendar.trim().to_owned();
+                if calendar.is_empty()
+                    || calendar.chars().count() > 100
+                    || calendar.chars().any(char::is_control)
+                {
+                    return Err(ConfigError::Invalid(format!(
+                        "« {name} » : nom de l'agenda TimeTree invalide"
+                    )));
+                }
+                Source::TimeTree(calendar)
+            }
+            _ => {
+                return Err(ConfigError::Invalid(format!(
+                    "« {name} » : indique soit url, soit timetree (le nom de l'agenda TimeTree)"
+                )));
+            }
+        };
         calendars.push(RemoteCalendar {
             name,
             entity_id,
-            url,
+            source,
         });
     }
     Ok(calendars)
+}
+
+fn parse_url(name: &str, raw: &str) -> Result<url::Url, ConfigError> {
+    let raw = raw.trim();
+    let raw = raw
+        .strip_prefix("webcal://")
+        .map_or_else(|| raw.to_owned(), |rest| format!("https://{rest}"));
+    url::Url::parse(&raw)
+        .ok()
+        .filter(|url| url.scheme() == "https" && url.host_str().is_some())
+        .filter(|url| url.username().is_empty() && url.password().is_none())
+        .ok_or_else(|| {
+            ConfigError::Invalid(format!(
+                "« {name} » : adresse invalide (https:// ou webcal://, sans identifiants)"
+            ))
+        })
 }
 
 /// Lit `calendriers.yaml` ; un fichier absent ne donne aucun agenda.
@@ -211,7 +281,7 @@ pub fn calendar_state(
     let (state, mut attributes) =
         ha_agenda::calendar_state(&calendar.name, &window(events, now, local), now);
     attributes.insert("read_only".into(), json!(true));
-    attributes.insert("source".into(), json!(calendar.url.host_str()));
+    attributes.insert("source".into(), json!(calendar.source.label()));
     if let Some(error) = error {
         attributes.insert("erreur".into(), json!(error));
     }
@@ -258,6 +328,8 @@ struct Slot {
     events: Option<Vec<ics::Event>>,
     error: Option<String>,
     next_fetch: Instant,
+    /// L'agenda TimeTree trouvé par son nom.
+    timetree_id: Option<i64>,
 }
 
 /// Le service : relit les agendas et publie leur état chaque minute.
@@ -265,14 +337,35 @@ struct Slot {
 pub struct Calendars(Background);
 
 impl Calendars {
+    /// `timetree` : le compte TimeTree de la maison, s'il y en a un.
     pub fn start(
         calendars: Vec<RemoteCalendar>,
+        timetree: Option<TimeTreeAccount>,
+        core: Arc<Core>,
+    ) -> Result<Self, ha_tls::TlsError> {
+        Self::start_with(calendars, timetree, timetree::API, core)
+    }
+
+    /// Comme [`Calendars::start`], avec l'adresse de l'API TimeTree (pour
+    /// les tests).
+    pub fn start_with(
+        calendars: Vec<RemoteCalendar>,
+        timetree: Option<TimeTreeAccount>,
+        timetree_api: &str,
         core: Arc<Core>,
     ) -> Result<Self, ha_tls::TlsError> {
         let http = ha_tls::public_client()?;
+        // L'API de test est en HTTP, sur ce PC.
+        let timetree_http = if timetree_api.starts_with("http://127.0.0.1") {
+            ha_tls::web_client(false)?
+        } else {
+            http.clone()
+        };
+        let timetree = timetree
+            .map(|account| Arc::new(timetree::Client::new(timetree_http, timetree_api, account)));
         Ok(Self(Background::spawn(
             "les agendas en ligne",
-            move |token| run(calendars, core, http, token),
+            move |token| run(calendars, timetree, core, http, token),
         )))
     }
 
@@ -281,8 +374,58 @@ impl Calendars {
     }
 }
 
+/// Lit un agenda : le fichier ICS, ou les événements TimeTree mis en ICS.
+/// Rend aussi le délai avant la prochaine lecture.
+async fn read_source(
+    source: &Source,
+    http: &reqwest::Client,
+    timetree: Option<&timetree::Client>,
+    found: &mut Option<i64>,
+) -> Result<(String, Duration), (String, Duration)> {
+    match source {
+        Source::Ics(url) => fetch(http, url)
+            .await
+            .map(|text| (text, REFRESH))
+            .map_err(|error| (error, RETRY)),
+        Source::TimeTree(name) => {
+            let Some(client) = timetree else {
+                return Err((
+                    "compte TimeTree non associé (ha-server timetree pair)".into(),
+                    TIMETREE_LASTING_RETRY,
+                ));
+            };
+            let wait = |error: &timetree::TimeTreeError| {
+                if error.is_lasting() {
+                    TIMETREE_LASTING_RETRY
+                } else {
+                    RETRY
+                }
+            };
+            let id = if let Some(id) = *found {
+                id
+            } else {
+                let calendar = client
+                    .find(name)
+                    .await
+                    .map_err(|e| (e.to_string(), wait(&e)))?;
+                *found = Some(calendar.id);
+                calendar.id
+            };
+            match client.events(id).await {
+                Ok(events) => Ok((timetree::to_ics(&events), TIMETREE_REFRESH)),
+                Err(error) => {
+                    // L'agenda a peut-être été recréé : on le recherchera.
+                    *found = None;
+                    Err((error.to_string(), wait(&error)))
+                }
+            }
+        }
+    }
+}
+
 async fn run(
     calendars: Vec<RemoteCalendar>,
+    timetree: Option<Arc<timetree::Client>>,
     core: Arc<Core>,
     http: reqwest::Client,
     token: CancellationToken,
@@ -295,6 +438,7 @@ async fn run(
             events: None,
             error: None,
             next_fetch: Instant::now(),
+            timetree_id: None,
         })
         .collect();
     info!("agendas en ligne : {} agenda(s)", slots.len());
@@ -306,10 +450,17 @@ async fn run(
         }
         for slot in &mut slots {
             if Instant::now() >= slot.next_fetch {
-                let host = slot.calendar.url.host_str().unwrap_or_default().to_owned();
+                let host = slot.calendar.source.label();
                 // L'adresse n'est jamais écrite : seulement le site.
-                match fetch(&http, &slot.calendar.url).await {
-                    Ok(text) => {
+                match read_source(
+                    &slot.calendar.source,
+                    &http,
+                    timetree.as_deref(),
+                    &mut slot.timetree_id,
+                )
+                .await
+                {
+                    Ok((text, refresh)) => {
                         let parsed = ics::parse(&text, &local);
                         info!(
                             "agenda « {} » ({host}) : {} événement(s){}",
@@ -323,12 +474,12 @@ async fn run(
                         );
                         slot.events = Some(parsed.events);
                         slot.error = None;
-                        slot.next_fetch = Instant::now() + REFRESH;
+                        slot.next_fetch = Instant::now() + refresh;
                     }
-                    Err(error) => {
+                    Err((error, retry)) => {
                         warn!("agenda « {} » ({host}) : {error}", slot.calendar.name);
                         slot.error = Some(error);
-                        slot.next_fetch = Instant::now() + RETRY;
+                        slot.next_fetch = Instant::now() + retry;
                     }
                 }
             }
@@ -369,7 +520,16 @@ mod tests {
             calendars[0].entity_id.as_str(),
             "calendar.collecte_des_dechets"
         );
-        assert_eq!(calendars[1].url.as_str(), "https://exemple.fr/zone-b.ics");
+        assert_eq!(
+            calendars[1].source,
+            Source::Ics(url::Url::parse("https://exemple.fr/zone-b.ics").unwrap())
+        );
+        let family = parse_config("- nom: Famille\n  timetree: Agenda de la famille\n").unwrap();
+        assert_eq!(
+            family[0].source,
+            Source::TimeTree("Agenda de la famille".into())
+        );
+        assert_eq!(family[0].entity_id.as_str(), "calendar.famille");
         assert!(
             !format!("{calendars:?}").contains("secret"),
             "pas d'adresse affichée"
@@ -382,6 +542,9 @@ mod tests {
             "- nom: Maison\n  url: https://exemple.fr/a.ics\n",
             "- nom: X\n  url: https://a.fr/1.ics\n- nom: x\n  url: https://a.fr/2.ics\n",
             "- nom: X\n  url: https://a.fr/1.ics\n  couleur: bleu\n",
+            "- nom: X\n",
+            "- nom: X\n  url: https://a.fr/1.ics\n  timetree: X\n",
+            "- nom: X\n  timetree: \"\"\n",
         ] {
             assert!(parse_config(bad).is_err(), "{bad}");
         }

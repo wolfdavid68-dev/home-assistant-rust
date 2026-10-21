@@ -1,6 +1,7 @@
 # Agendas en ligne (étape 57) : chaque fichier ICS devient un agenda en
 # lecture seule, calendar.<nom>. Copie ce fichier en calendriers.yaml.
-# Adresses en https:// ou webcal://. 10 agendas au plus. Voir docs/agendas-en-ligne.md.
+# Adresses en https:// ou webcal://, ou un agenda TimeTree. 10 agendas au plus.
+# Voir docs/agendas-en-ligne.md.
 
 # Les vacances scolaires (zone B : Alsace, Lorraine, Hauts-de-France…).
 - nom: Vacances scolaires
@@ -9,3 +10,9 @@
 # Le calendrier de collecte de ta commune (cherche « collecte ICS » sur son site).
 # - nom: Collecte des déchets
 #   url: https://www.ta-commune.fr/collecte.ics
+
+# L'agenda partagé TimeTree de la famille (étape 74) : d'abord
+# « ha-server timetree pair » avec un compte dédié à la maison, puis le nom de
+# l'agenda tel qu'il apparaît dans TimeTree. Voir docs/timetree.md.
+# - nom: Famille
+#   timetree: Famille

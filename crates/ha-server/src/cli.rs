@@ -38,6 +38,9 @@ utilisation :
   ha-server freebox track <MAC> <nom>  suit la présence d'un appareil
   ha-server freebox untrack <nom>      arrête de le suivre
   ha-server freebox forget             oublie la Freebox
+  ha-server timetree pair         associe le compte TimeTree de la maison (lecture seule)
+  ha-server timetree status       affiche le compte et ses agendas
+  ha-server timetree forget       oublie le compte
   ha-server sonos                 liste les enceintes Sonos trouvées
   ha-server voix \"<phrase>\"       essaie la voix des annonces (écrit essai-voix.wav)
   ha-server automations check     vérifie automatisations, scripts et scènes
@@ -541,7 +544,10 @@ async fn audit_cli(store: &Store, domain: &str, args: &[&str]) {
         ),
         ("freebox", ["track", mac, _]) => ("freebox_track".to_owned(), Some(*mac)),
         ("freebox", ["untrack", name]) => ("freebox_untrack".to_owned(), Some(*name)),
-        ("hue" | "somfy" | "freebox", ["forget"]) => (format!("{domain}_forget"), None),
+        ("hue" | "somfy" | "freebox" | "timetree", ["forget"]) => {
+            (format!("{domain}_forget"), None)
+        }
+        ("timetree", ["pair"]) => ("timetree_pair".to_owned(), None),
         ("automations", ["delete", id]) => ("automation_delete".to_owned(), Some(*id)),
         _ => return,
     };
@@ -836,7 +842,7 @@ pub fn check_calendars(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
             "  - {} → {} ({})",
             calendar.name,
             calendar.entity_id,
-            calendar.url.host_str().unwrap_or_default()
+            calendar.source.label()
         );
     }
     Ok(())
@@ -1419,4 +1425,90 @@ pub(crate) async fn test_voice(tts: &ha_tts::Tts, phrase: &str) -> Result<(), Bo
         started.elapsed().as_secs_f64()
     );
     Ok(())
+}
+
+/// `timetree pair|status|forget` : le compte TimeTree de la maison
+/// (étape 74).
+pub(crate) async fn timetree_command(args: &[&str]) -> Result<(), Box<dyn Error>> {
+    let store = crate::open_store().await?;
+    let result = timetree_inner(args, &store).await;
+    if result.is_ok() {
+        audit_cli(&store, "timetree", args).await;
+    }
+    store.close().await;
+    result
+}
+
+fn timetree_client(
+    account: ha_storage::TimeTreeAccount,
+) -> Result<ha_ics::timetree::Client, Box<dyn Error>> {
+    Ok(ha_ics::timetree::Client::new(
+        ha_tls::public_client()?,
+        ha_ics::timetree::API,
+        account,
+    ))
+}
+
+fn print_timetree_calendars(calendars: &[ha_ics::timetree::CalendarInfo]) {
+    println!("agendas visibles par ce compte :");
+    for calendar in calendars {
+        println!("  - {}", calendar.name);
+    }
+    println!();
+    println!("Pour en lire un, ajoute dans calendriers.yaml :");
+    println!("  - nom: Famille");
+    println!(
+        "    timetree: {}",
+        calendars.first().map_or("Famille", |c| c.name.as_str())
+    );
+}
+
+async fn timetree_inner(args: &[&str], store: &Store) -> Result<(), Box<dyn Error>> {
+    match args {
+        ["pair"] => {
+            println!(
+                "TimeTree n'a pas d'accès officiel : le serveur se connecte comme le site web,"
+            );
+            println!(
+                "en lecture seule. Utilise un compte DÉDIÉ à la maison, invité dans ton agenda"
+            );
+            println!("partagé, jamais ton compte personnel. Le mot de passe est gardé chiffré.");
+            println!();
+            let email = ask_line("e-mail du compte TimeTree de la maison : ")?;
+            if !(3..=254).contains(&email.len())
+                || !email.contains('@')
+                || email.chars().any(char::is_control)
+            {
+                return Err("adresse e-mail invalide".into());
+            }
+            let password = ask_secret("mot de passe : ")?;
+            let account = ha_storage::TimeTreeAccount { email, password };
+            let client = timetree_client(account.clone())?;
+            let calendars = client.calendars().await?;
+            store.save_timetree_account(&account).await?;
+            println!("associé !");
+            print_timetree_calendars(&calendars);
+            println!("puis relance « ha-server ».");
+            Ok(())
+        }
+        ["status"] => {
+            let Some(account) = store.timetree_account().await? else {
+                println!("aucun compte TimeTree associé (ha-server timetree pair)");
+                return Ok(());
+            };
+            println!("compte : {}", account.email);
+            let calendars = timetree_client(account)?.calendars().await?;
+            print_timetree_calendars(&calendars);
+            Ok(())
+        }
+        ["forget"] => {
+            if store.forget_timetree_account().await? {
+                println!("compte TimeTree oublié (pense à changer son mot de passe s'il a fuité)");
+            } else {
+                println!("aucun compte TimeTree associé");
+            }
+            Ok(())
+        }
+        _ => Err(USAGE.into()),
+    }
 }

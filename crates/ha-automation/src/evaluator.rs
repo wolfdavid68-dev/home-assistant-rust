@@ -353,7 +353,23 @@ impl Evaluator {
                         entity_id,
                         edge,
                         offset,
-                    } => calendar_crossed(states, entity_id, *edge, *offset, previous, now),
+                    } => {
+                        // Le rendez-vous en cause, pour les modèles
+                        // (`trigger.calendar_event.summary`).
+                        if let Some(event) =
+                            calendar_crossed(states, entity_id, *edge, *offset, previous, now)
+                        {
+                            fired.entry(a).or_insert((
+                                t,
+                                Some(TriggerData {
+                                    entity_id: Some(entity_id.clone()),
+                                    calendar_event: Some(event),
+                                    ..TriggerData::default()
+                                }),
+                            ));
+                        }
+                        false
+                    }
                     _ => false,
                 };
                 if crossed_now {
@@ -426,25 +442,24 @@ fn calendar_crossed(
     offset: SignedDuration,
     previous: DateTime,
     now: DateTime,
-) -> bool {
-    let Some(calendar) = states.get(entity_id) else {
-        return false;
-    };
-    let Some(events) = calendar
+) -> Option<Attributes> {
+    let calendar = states.get(entity_id)?;
+    let events = calendar
         .attributes()
         .get("events")
-        .and_then(Value::as_array)
-    else {
-        return false;
-    };
-    events.iter().any(|event| {
-        event
-            .get(edge.field())
-            .and_then(Value::as_str)
-            .and_then(|text| text.parse::<DateTime>().ok())
-            .and_then(|moment| moment.checked_add(offset).ok())
-            .is_some_and(|moment| previous < moment && moment <= now)
-    })
+        .and_then(Value::as_array)?;
+    events
+        .iter()
+        .find(|event| {
+            event
+                .get(edge.field())
+                .and_then(Value::as_str)
+                .and_then(|text| text.parse::<DateTime>().ok())
+                .and_then(|moment| moment.checked_add(offset).ok())
+                .is_some_and(|moment| previous < moment && moment <= now)
+        })
+        .and_then(Value::as_object)
+        .cloned()
 }
 
 fn to_fired(map: FiredMap) -> Vec<Fired> {
