@@ -1,0 +1,23 @@
+# La mise à jour automatique du serveur de la maison : lancée chaque nuit
+# par ha-maison-maj.timer. Guide : docs/mini-pc.md
+#
+#   sudo systemctl start ha-maison-maj         la lancer tout de suite
+#   sudo journalctl -u ha-maison-maj           ce qu'elle a fait
+#   sudo systemctl disable --now ha-maison-maj.timer   l'arrêter
+
+[Unit]
+Description=Mise à jour du serveur de la maison
+Documentation=https://github.com/wolfdavid68-dev/home-assistant-rust/blob/main/docs/mini-pc.md
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/ha-maison/mise-a-jour.sh
+# Ce qu'elle retient (la dernière version vue, l'ancien programme) : à root seul.
+StateDirectory=ha-maison-maj
+StateDirectoryMode=0700
+UMask=0077
+PrivateTmp=yes
+ProtectHome=yes
+TimeoutStartSec=15min

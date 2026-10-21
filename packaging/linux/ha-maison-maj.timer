@@ -1,0 +1,13 @@
+# Chaque nuit vers 4 h (après la sauvegarde de 3 h 30) : la mise à jour
+# automatique du serveur. Si la machine était éteinte, au prochain allumage.
+
+[Unit]
+Description=Mise à jour du serveur de la maison, chaque nuit
+
+[Timer]
+OnCalendar=*-*-* 04:00
+RandomizedDelaySec=45min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
