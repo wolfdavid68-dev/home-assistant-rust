@@ -128,6 +128,8 @@ function renderHome() {
   if (typeof renderHouse === "function") renderHouse();
   // L'agenda, s'il est ouvert (agenda.js).
   if (typeof renderAgendaView === "function") renderAgendaView();
+  // La vue hub de la tablette murale (hub.js).
+  if (typeof updateHub === "function") updateHub();
 }
 
 /** Ce qu'on sait d'une pièce : lumières, température, alertes. */

@@ -2756,3 +2756,138 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 [data-theme="maquette"] .agenda-event { background: #1c1b22; }
 /* Le style « plan » : à l'encre. */
 [data-theme|="plan"] .agenda-card { box-shadow: 0 0 0 1.25px var(--ink); border-radius: 6px; }
+
+/* ---------------------------------------------------------------- La vue hub (étape 80)
+   La tablette murale, à l'horizontale : le dessin de la maison au centre,
+   l'heure, la météo et l'agenda à gauche, les scènes et les pièces à droite.
+   Par-dessus le tableau de bord (les fenêtres s'ouvrent au-dessus). */
+:root[data-hub="on"] body { overflow: hidden; }
+.hub {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  grid-template-columns: minmax(260px, 25%) minmax(0, 1fr) minmax(280px, 27%);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 16px 18px;
+  padding: 18px 22px 20px;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+}
+.hub[hidden] { display: none; }
+[data-theme="maquette"] .hub {
+  background:
+    radial-gradient(1100px 760px at 8% 8%, rgb(10 70 86 / 0.55), transparent 65%),
+    radial-gradient(1100px 760px at 10% 100%, rgb(70 24 110 / 0.6), transparent 65%),
+    radial-gradient(1300px 900px at 100% 45%, rgb(110 14 52 / 0.62), transparent 68%),
+    radial-gradient(900px 700px at 60% 100%, rgb(60 14 80 / 0.5), transparent 70%),
+    #12101c;
+}
+.hub button { font: inherit; color: inherit; }
+.hub-card { background: var(--card); border-radius: 18px; padding: 14px 16px; }
+.hub-card h2 { display: flex; justify-content: space-between; align-items: baseline; margin: 0 4px 8px; font: 600 1rem var(--font); letter-spacing: normal; text-transform: none; color: var(--text); }
+.hub-card h2 small { font-size: 0.8rem; font-weight: 500; color: var(--muted); }
+
+/* En haut : qui est là, l'alerte, la connexion. */
+.hub-top { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; min-width: 0; }
+.hub-top p { margin: 0; }
+.hub-people { display: flex; gap: 6px; }
+.hub-avatar { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 0.9rem; color: #fff; background: var(--person); box-shadow: 0 0 0 2px var(--bg); }
+.hub-avatar.away { opacity: 0.35; }
+.hub-pill { background: var(--card); border-radius: 999px; padding: 7px 14px; font-size: 0.88rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hub-alert { display: flex; align-items: center; gap: 8px; background: rgb(255 152 0 / 0.18); color: #ffd08a; padding-block: 5px; }
+.hub-alert b { color: var(--text); font-weight: 600; }
+.hub-alert svg { width: 20px; height: 20px; flex: none; }
+.hub-alert-action { border: 0; border-radius: 999px; padding: 5px 14px; background: rgb(255 255 255 / 0.16); font-weight: 600; cursor: pointer; }
+:root:not([data-theme="maquette"]):not([data-theme="dark"]):not([data-theme="plan-nuit"]) .hub-alert { color: #8a4b00; }
+.hub-live { margin-left: auto !important; display: flex; align-items: center; gap: 7px; font-size: 0.82rem; color: var(--muted); }
+.hub-live i { width: 8px; height: 8px; border-radius: 50%; background: #9e9e9e; }
+.hub-live i.on { background: #66bb6a; box-shadow: 0 0 8px #66bb6a; }
+
+/* À gauche : l'heure, la météo, l'agenda. */
+.hub-left, .hub-right { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+.hub-time p { margin: 0; }
+.hub-clock { font-family: var(--font-display); font-weight: 300; font-size: clamp(4rem, 7.4vw, 6.6rem); line-height: 0.95; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
+.hub-date { margin-top: 6px !important; font-size: 1.2rem; color: var(--muted); }
+.hub-greeting { margin-top: 10px !important; font-size: 1rem; line-height: 1.45; color: var(--muted); }
+.hub-greeting a { color: var(--text); font-weight: 600; }
+.hub-weather-now { display: flex; align-items: center; gap: 12px; }
+.hub-weather-now svg { width: 42px; height: 42px; color: #ffb74d; stroke-width: 1.5; flex: none; }
+.hub-weather-now strong { font-family: var(--font-display); font-weight: 300; font-size: 2.6rem; }
+.hub-weather-now span { display: grid; font-size: 0.92rem; }
+.hub-weather-now small { color: var(--muted); }
+.hub-forecast { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.hub-forecast:empty { display: none; }
+.hub-forecast li { display: grid; justify-items: center; gap: 3px; padding: 7px 0; border-radius: 12px; background: var(--card-2); font-size: 0.75rem; color: var(--muted); }
+.hub-forecast li::first-letter { text-transform: uppercase; }
+.hub-forecast svg { width: 18px; height: 18px; }
+.hub-forecast b { color: var(--text); font-size: 0.95rem; }
+.hub-agenda { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 2px; }
+.hub-event { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 6px; border: 0; border-radius: 12px; background: none; text-align: left; cursor: pointer; }
+.hub-event.next { background: rgb(3 169 244 / 0.13); }
+.hub-event-bar { width: 4px; align-self: stretch; border-radius: 4px; background: var(--ev); flex: none; }
+.hub-event-time { width: 44px; flex: none; font-family: var(--font-mono, monospace); font-size: 0.85rem; color: var(--muted); }
+.hub-event-text { display: grid; min-width: 0; }
+.hub-event-text b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-event-text small { color: var(--muted); font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-event-text small:empty { display: none; }
+.hub-event-when { margin-left: auto; color: #03a9f4; font-weight: 600; font-size: 0.82rem; white-space: nowrap; }
+.hub-empty { margin: 4px; color: var(--muted); font-size: 0.9rem; }
+
+/* Au centre : la maison. */
+.hub-center { position: relative; min-height: 0; border-radius: 22px; overflow: hidden; background: var(--card-2); }
+[data-theme="maquette"] .hub-center, [data-theme="dark"] .hub-center, [data-theme="plan-nuit"] .hub-center { background: radial-gradient(70% 70% at 50% 55%, rgb(255 190 120 / 0.06), transparent 70%), rgb(0 0 0 / 0.18); }
+.hub-house { position: absolute; inset: 0; container-type: size; display: grid; place-items: center; }
+.hub-house #house-stage { width: min(96cqw, calc(96cqh * var(--ratio, 1.35))); }
+/* Sur fond sombre, le fond noir d'une maquette 3D se fond dans le décor : on
+   garde le plus clair des deux, et les bords s'effacent. */
+[data-theme="maquette"] .hub-house #house-stage, [data-theme="dark"] .hub-house #house-stage, [data-theme="plan-nuit"] .hub-house #house-stage {
+  -webkit-mask-image: radial-gradient(closest-side, #000 84%, transparent 100%);
+  mask-image: radial-gradient(closest-side, #000 84%, transparent 100%);
+}
+[data-theme="maquette"] .hub-house .house-stage img, [data-theme="dark"] .hub-house .house-stage img, [data-theme="plan-nuit"] .hub-house .house-stage img { mix-blend-mode: lighten; }
+.hub-views { position: absolute; z-index: 2; left: 14px; top: 12px; display: flex; padding: 3px; border-radius: 12px; background: var(--card); border: 1px solid var(--line, transparent); }
+.hub-views button { border: 0; background: none; padding: 6px 14px; border-radius: 9px; font-size: 0.85rem; color: var(--muted); cursor: pointer; }
+.hub-views button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+[data-theme="maquette"] .hub-views { background: rgb(0 0 0 / 0.4); }
+[data-theme="maquette"] .hub-views button.on { background: rgb(255 255 255 / 0.12); color: #fff; }
+.hub-hint { position: absolute; z-index: 2; right: 16px; bottom: 12px; margin: 0; font-size: 0.8rem; color: var(--muted); }
+
+/* À droite : les scènes, les pièces. */
+.hub-scenes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.hub-scene { display: grid; gap: 8px; justify-items: start; min-height: 82px; padding: 13px; border: 0; border-radius: 18px; background: var(--card); text-align: left; cursor: pointer; }
+.hub-scene b { font-size: 1rem; font-weight: 600; }
+.hub-scene-icon { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; }
+.hub-scene-icon svg { width: 20px; height: 20px; }
+.hub-scene.t-go .hub-scene-icon { background: rgb(3 169 244 / 0.2); color: #03a9f4; }
+.hub-scene.t-home .hub-scene-icon { background: rgb(102 187 106 / 0.2); color: #66bb6a; }
+.hub-scene.t-night .hub-scene-icon { background: rgb(149 117 205 / 0.25); color: #b39ddb; }
+.hub-scene.t-cine .hub-scene-icon { background: rgb(255 183 77 / 0.2); color: #ffb74d; }
+.hub-scene.pending { opacity: 0.6; }
+.hub-scene.on { box-shadow: inset 0 0 0 2px #03a9f4; }
+.hub-rooms { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-auto-rows: min-content; gap: 8px; }
+.hub-room { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 58px; padding: 9px 12px; border: 0; border-radius: 16px; background: var(--card); text-align: left; cursor: pointer; }
+.hub-room-icon { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; flex: none; background: var(--card-2); color: var(--muted); }
+.hub-room-icon svg { width: 20px; height: 20px; }
+.hub-room.lit .hub-room-icon { background: #ffb74d; color: #1a1205; box-shadow: 0 0 18px rgb(255 183 77 / 0.45); }
+.hub-room.alert .hub-room-icon { background: rgb(255 152 0 / 0.25); color: #ffb74d; }
+.hub-room.alert small { color: #ffb74d; }
+.hub-room-text { display: grid; min-width: 0; }
+.hub-room-text b { font-weight: 600; }
+.hub-room-text small { color: var(--muted); font-size: 0.8rem; }
+.hub-room-text small:empty { display: none; }
+.hub-room-temp { margin-left: auto; font-family: var(--font-mono, monospace); font-size: 0.95rem; color: var(--muted); }
+
+/* En bas. */
+.hub-dock { grid-column: 1 / -1; display: flex; gap: 10px; }
+.hub-dock button { flex: 1; display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 52px; border: 0; border-radius: 16px; background: var(--card); font-weight: 600; cursor: pointer; }
+.hub-dock button[hidden] { display: none; }
+.hub-dock svg { width: 22px; height: 22px; }
+.hub-dock .hub-say-button { background: rgb(3 169 244 / 0.18); color: #bfe9ff; }
+:root:not([data-theme="maquette"]):not([data-theme="dark"]):not([data-theme="plan-nuit"]) .hub-dock .hub-say-button { color: var(--accent); }
+.hub-say form { display: grid; gap: 14px; min-width: min(480px, 80vw); }
+.hub-say h2 { margin: 0; font-size: 1.1rem; }
+.hub-say input { font-size: 1.1rem; padding: 12px 14px; }
+.hub-say-actions { display: flex; justify-content: flex-end; gap: 10px; }
+:root[data-hub="on"] .flash { z-index: 45; }

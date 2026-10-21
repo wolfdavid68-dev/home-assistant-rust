@@ -44,8 +44,11 @@ Sur la tablette, ouvre l'adresse du serveur (par exemple `http://192.168.1.20:81
 3. donne-lui un nom (« Couloir », « Cuisine »), puis **Se connecter**.
 
 La tablette passe tout de suite en **mode tablette murale** : plein écran, retour à l'accueil après
-2 minutes, et l'[écran de veille](veille.md) après 5 minutes. Dans **Mon compte**, elle affiche
-« Tablette murale « Couloir » : reste connectée tant qu'elle sert ».
+2 minutes, et l'[écran de veille](veille.md) après 5 minutes. À l'horizontale, elle affiche la
+[vue hub](hub.md) : le dessin de la maison au centre, l'heure, la météo, l'agenda, les scènes et
+les pièces autour.
+
+Dans **Mon compte**, elle affiche « Tablette murale « Couloir » : reste connectée tant qu'elle sert ».
 
 **Combien de temps ?** Chaque jour où elle sert, sa connexion est prolongée de 90 jours. Elle
 n'expire que si elle reste **90 jours** éteinte ou débranchée.

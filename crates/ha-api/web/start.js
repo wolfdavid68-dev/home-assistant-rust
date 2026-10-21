@@ -37,8 +37,10 @@ function showSaver() {
   saver.on = true;
   // Le dessin lui-même (avec ses effets : pluie, neige…) passe dans l'écran
   // de veille ; il retrouve sa place au réveil.
+  // (Avec la vue hub, il est au centre de celle-ci : il y retournera.)
   const stage = $("#house-stage");
-  if (!$("#house").hidden && stage.childElementCount > 0) $("#saver-house").append(stage);
+  const hubOn = typeof hub !== "undefined" && hub.on;
+  if ((!$("#house").hidden || hubOn) && stage.childElementCount > 0) $("#saver-house").append(stage);
   $("#saver").hidden = false;
   renderSaver();
   saver.refresh = setInterval(renderSaver, 20_000);
@@ -51,7 +53,8 @@ function hideSaver() {
   $("#saver").hidden = true;
   const stage = $("#saver-house #house-stage");
   if (stage) {
-    $("#house .house-frame").append(stage);
+    const hubOn = typeof hub !== "undefined" && hub.on;
+    (hubOn ? $("#hub-house") : $("#house .house-frame")).append(stage);
     if (typeof house !== "undefined" && house.view) fitLabels(house.view);
   }
   saverLater();
