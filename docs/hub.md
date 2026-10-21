@@ -19,14 +19,18 @@ La tablette **à l'horizontale** :
   premier, avec **Voir** ;
 - **à gauche** : la grande horloge, la date, une phrase (« Bonsoir. Dentiste — Tom dans 37 min. »),
   la **météo** avec les 4 jours suivants, et l'**agenda** d'aujourd'hui et de demain
-  ([TimeTree](timetree.md), l'agenda de la maison…) : le prochain rendez-vous est mis en avant,
-  un contact l'ouvre avec ses détails ;
+  ([TimeTree](timetree.md), l'agenda de la maison…) : le prochain rendez-vous est mis en avant
+  (« dans 37 min »), celui qui a commencé dit « en cours », un contact l'ouvre avec ses détails.
+  Le même évènement dans deux agendas (les vacances dans l'agenda de la famille et dans celui des
+  vacances scolaires) n'est montré qu'une fois, avec les deux noms ;
 - **au centre** : le **dessin de la maison**, le vrai, avec ses calques (lumières, volets, pluie).
   Une pièce du dessin se touche pour s'ouvrir, comme d'habitude. Si le dessin a plusieurs vues
   (« Devant », « Jardin »), des boutons en haut passent de l'une à l'autre ;
-- **à droite** : les **scènes et scripts** (6 au plus : « Bonne nuit », « Je pars »…), puis la
-  liste des **pièces**, avec leur température et ce qui y est allumé ou ouvert. Un contact ouvre
-  la pièce par-dessus la vue hub ;
+- **à droite** : les **scènes et scripts** (6 au plus : « Bonne nuit », « Je pars »…), avec une
+  icône devinée d'après leur nom (une lune pour la nuit, une porte pour un départ, un canapé pour
+  le cinéma, un soleil pour le matin, une maison pour le retour), puis les **pièces**, avec leur
+  température et ce qui y est allumé ou ouvert. Au-delà de 6 pièces, elles passent sur deux
+  colonnes : toutes visibles, sans faire défiler. Un contact ouvre la pièce par-dessus la vue hub ;
 - **en bas** : **Toute la maison** (le tableau de bord complet), **Agenda** (l'agenda en grand),
   **Énergie** (avec la puissance du moment, « 1,2 kW ») et **Annonce à la maison** : une phrase
   tapée sur la tablette, lue sur les enceintes ([étape 73](sonos.md)).
@@ -47,7 +51,11 @@ veille](veille.md) prend le dessin de la maison après 5 minutes, et le rend à 
 
 Dans **Mon compte**, sous **Mode tablette murale** : **Vue hub, la maison au centre** (cochée par
 défaut). Comme le mode tablette et l'écran de veille, c'est un réglage **de cet appareil
-seulement**.
+seulement**. Sur la tablette, on y arrive par **Toute la maison**, puis l'avatar en haut.
+
+Juste en dessous, **Les scènes du hub (6 au plus)** : coche celles à montrer. Sans choix, ce sont
+les 6 premières par ordre alphabétique. Une scène supprimée disparaît du choix ; si plus aucune
+scène choisie n'existe, le choix par défaut revient.
 
 La vue hub ne s'affiche que :
 
@@ -67,7 +75,7 @@ l'annonce est envoyé tel quel au service `tts.speak`, comme depuis une automati
 
 | Fichier | Rôle |
 | ------- | ---- |
-| [web/hub.js](../crates/ha-api/web/hub.js) | Nouveau : quand afficher la vue hub (`hubShouldShow`), `showHub` / `hideHub`, et le contenu de chaque carte |
+| [web/hub.js](../crates/ha-api/web/hub.js) | Nouveau : quand afficher la vue hub (`hubShouldShow`), `showHub` / `hideHub`, le contenu de chaque carte, le choix des scènes (`hubScenes`, `renderHubPick`, gardé dans le navigateur sous `ha-hub-scenes`) et les rendez-vous en double réunis (`hubMergeSame`) |
 | [web/index.html](../crates/ha-api/web/index.html) | Le bloc `#hub`, la fenêtre d'annonce, la case dans Mon compte |
 | [web/style.css](../crates/ha-api/web/style.css) | La grille en trois colonnes, les couleurs de chaque thème, le dessin 3D fondu dans le fond |
 | [web/start.js](../crates/ha-api/web/start.js) | L'écran de veille rend le dessin à la vue hub au réveil |
@@ -82,13 +90,18 @@ continuent sans être recréés.
 Essayé dans le navigateur (tablette 1280 × 800) dans les thèmes Maquette, Clair et Plan : la vue
 hub à l'horizontale, le dessin au centre, une pièce ouverte par-dessus, l'écran de veille et le
 retour, « Toute la maison » puis le retour à l'accueil, l'agenda, la vue Jardin, le réglage
-décoché, et un téléphone (jamais de vue hub). Aucune erreur JavaScript.
+décoché, et un téléphone (jamais de vue hub) ; 12 pièces toutes visibles ; les vacances en double
+réunies ; le choix d'une seule scène dans Mon compte, gardé après rechargement. Aucune erreur
+JavaScript.
 
 ### Concepts utilisés
 
 **`matchMedia`** : la même question qu'une règle CSS `@media` (« l'écran fait-il au moins 900 pixels
 de large, à l'horizontale ? »), posée depuis JavaScript. Son évènement `change` prévient quand la
 tablette tourne : la vue hub apparaît ou disparaît aussitôt.
+
+**CSS `:has()`** : « une ligne d'agenda **qui contient** « dans 37 min » ». Le titre de cette
+ligne seulement passe sur deux lignes, sans classe à ajouter en JavaScript.
 
 **`mix-blend-mode: lighten`** : pour chaque pixel, la couleur la plus claire entre l'image et ce
 qu'il y a derrière. Le noir de l'image 3D disparaît dans le fond, la maison éclairée reste.

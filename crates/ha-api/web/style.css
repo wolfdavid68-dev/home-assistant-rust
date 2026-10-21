@@ -2832,11 +2832,12 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .hub-event-text b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hub-event-text small { color: var(--muted); font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hub-event-text small:empty { display: none; }
-/* Le prochain rendez-vous partage sa ligne avec « dans 23 min » : son titre
+/* Un rendez-vous qui partage sa ligne avec « dans 23 min » ou « en cours » : son titre
    passe sur deux lignes plutôt que d'être coupé. */
-.hub-event.next .hub-event-text { flex: 1; }
-.hub-event.next .hub-event-text b { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
+.hub-event:has(.hub-event-when) .hub-event-text { flex: 1; }
+.hub-event:has(.hub-event-when) .hub-event-text b { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
 .hub-event-when { margin-left: auto; color: #03a9f4; font-weight: 600; font-size: 0.82rem; white-space: nowrap; }
+.hub-event-when.now { color: #66bb6a; }
 .hub-empty { margin: 4px; color: var(--muted); font-size: 0.9rem; }
 
 /* Au centre : la maison. */
@@ -2859,7 +2860,9 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .hub-hint { position: absolute; z-index: 2; right: 16px; bottom: 12px; margin: 0; font-size: 0.8rem; color: var(--muted); }
 
 /* À droite : les scènes, les pièces. */
-.hub-scenes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.hub-scenes { display: grid; grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr)); gap: 10px; }
+.hub-scenes.narrow .hub-scene { min-height: 74px; padding: 11px; }
+.hub-scenes.narrow .hub-scene b { font-size: 0.92rem; line-height: 1.2; }
 .hub-scene { display: grid; gap: 8px; justify-items: start; min-height: 82px; padding: 13px; border: 0; border-radius: 18px; background: var(--card); text-align: left; cursor: pointer; }
 .hub-scene b { font-size: 1rem; font-weight: 600; }
 .hub-scene-icon { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; }
@@ -2868,6 +2871,7 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .hub-scene.t-home .hub-scene-icon { background: rgb(102 187 106 / 0.2); color: #66bb6a; }
 .hub-scene.t-night .hub-scene-icon { background: rgb(149 117 205 / 0.25); color: #b39ddb; }
 .hub-scene.t-cine .hub-scene-icon { background: rgb(255 183 77 / 0.2); color: #ffb74d; }
+.hub-scene.t-morning .hub-scene-icon { background: rgb(255 213 79 / 0.2); color: #f9a825; }
 .hub-scene.pending { opacity: 0.6; }
 .hub-scene.on { box-shadow: inset 0 0 0 2px #03a9f4; }
 .hub-rooms { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-auto-rows: min-content; gap: 8px; }
@@ -2882,6 +2886,17 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .hub-room-text small { color: var(--muted); font-size: 0.8rem; }
 .hub-room-text small:empty { display: none; }
 .hub-room-temp { margin-left: auto; font-family: var(--font-mono, monospace); font-size: 0.95rem; color: var(--muted); }
+/* Plus de 6 pièces : deux colonnes, pour tout voir sans faire défiler. */
+.hub-rooms.compact { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.hub-rooms.compact .hub-room { gap: 9px; min-height: 52px; padding: 7px 9px; border-radius: 14px; }
+.hub-rooms.compact .hub-room-icon { width: 32px; height: 32px; }
+.hub-rooms.compact .hub-room-icon svg { width: 17px; height: 17px; }
+.hub-rooms.compact .hub-room-text b { font-size: 0.92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-rooms.compact .hub-room-text small { font-size: 0.74rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Le choix des scènes du hub, dans Mon compte. */
+.hub-pick summary { cursor: pointer; color: var(--text); font-size: 0.92rem; }
+.hub-pick-list { display: grid; gap: 0.3rem; padding: 0.3rem 0 0.2rem 0.6rem; max-height: 14rem; overflow-y: auto; }
+.hub-pick-list label:has(input:disabled) { opacity: 0.55; }
 
 /* En bas. */
 .hub-dock { grid-column: 1 / -1; display: flex; gap: 10px; }

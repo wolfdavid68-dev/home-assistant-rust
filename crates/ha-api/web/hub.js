@@ -219,18 +219,18 @@ function renderHubAgenda(now) {
   // Aujourd'hui d'abord, puis demain ; dans chaque jour, les heures avant les
   // journées entières (on les voit déjà dans l'agenda).
   const day = (e) => Number(e.startDate >= tomorrow);
-  const events = agendaEvents(now, addDays(tomorrow, 1), calendars)
+  const events = hubMergeSame(agendaEvents(now, addDays(tomorrow, 1), calendars))
     .sort((a, b) => day(a) - day(b) || Number(a.allDay) - Number(b.allDay) || a.startDate - b.startDate)
     .slice(0, 5);
   const next = events.find((e) => !e.allDay && e.startDate > now);
   const rows = events.map((e) => {
     const later = e.startDate >= tomorrow;
-    const sub = [later ? "demain" : "", e.location || "", e.calendar.name].filter(Boolean).join(" · ");
+    const sub = [later ? "demain" : "", e.location || "", ...(e.calendarNames ?? [e.calendar.name])].filter(Boolean).join(" · ");
     const row = el("button", { type: "button", class: e === next ? "hub-event next" : "hub-event" },
       el("span", { class: "hub-event-bar" }),
       el("span", { class: "hub-event-time", text: e.allDay ? "jour" : hourMinute.format(e.startDate) }),
       el("span", { class: "hub-event-text" }, el("b", { text: e.summary }), el("small", { text: sub })),
-      e === next && !later ? el("span", { class: "hub-event-when", text: inMinutes(e.startDate) }) : "");
+      hubEventWhen(e, next, later, now));
     row.style.setProperty("--ev", e.color);
     row.addEventListener("click", () => openEventDetails(e));
     return row;
@@ -239,6 +239,35 @@ function renderHubAgenda(now) {
     el("h2", {}, "Agenda", el("small", { text: "aujourd'hui et demain" })),
     ...(rows.length > 0 ? rows : [el("p", { class: "hub-empty", text: "Rien de prévu d'ici demain soir." })]),
   );
+}
+
+/** « dans 23 min » pour le prochain, « en cours » pour celui qui a commencé. */
+function hubEventWhen(e, next, later, now) {
+  if (!e.allDay && e.startDate <= now && e.endDate > now) return el("span", { class: "hub-event-when now", text: "en cours" });
+  if (e === next && !later) return el("span", { class: "hub-event-when", text: inMinutes(e.startDate) });
+  return "";
+}
+
+/** Le même rendez-vous dans deux agendas (les vacances dans l'agenda de la
+ *  famille et dans celui des vacances scolaires) : une seule ligne, avec les
+ *  deux noms d'agenda. */
+function hubMergeSame(events) {
+  const seen = new Map();
+  const out = [];
+  for (const e of events) {
+    // Sur deux jours, deux journées entières du même nom sont la même chose,
+    // même si l'une commence un jour plus tôt.
+    const key = `${e.allDay ? "jour" : e.startDate.getTime()}|${String(e.summary ?? "").trim().toLowerCase()}`;
+    const first = seen.get(key);
+    if (first) {
+      if (!first.calendarNames.includes(e.calendar.name)) first.calendarNames.push(e.calendar.name);
+      continue;
+    }
+    const copy = { ...e, calendarNames: [e.calendar.name] };
+    seen.set(key, copy);
+    out.push(copy);
+  }
+  return out;
 }
 
 /** « Devant », « Jardin »… : les onglets du dessin. */
@@ -256,19 +285,67 @@ function renderHubViews() {
 }
 
 const HUB_SCENE_TONES = ["go", "home", "night", "cine"];
+const HUB_SCENES_KEY = "ha-hub-scenes";
+const HUB_SCENES_MAX = 6;
+// L'icône et la couleur d'une scène, devinées d'après son nom.
+const HUB_SCENE_LOOKS = [
+  [/nuit|coucher|dodo/i, "moon", "night"],
+  [/pars|d[ée]part|absen|quitt|vacances/i, "door", "go"],
+  [/cin[ée]|film|t[ée]l[ée]|\btv\b/i, "sofa", "cine"],
+  [/matin|r[ée]veil|lever/i, "illuminance", "morning"],
+  [/retour|arriv|rentr|bienvenue/i, "home", "home"],
+  [/repas|d[îi]ner|d[ée]jeuner|cuisine/i, "pot", "morning"],
+  [/lecture|calme|d[ée]tente/i, "bulb", "cine"],
+];
+
+function hubSceneLook(state, index) {
+  const found = HUB_SCENE_LOOKS.find(([pattern]) => pattern.test(nameOf(state)));
+  if (found) return { icon: ICONS[found[1]], tone: found[2] };
+  return {
+    icon: domainOf(state) === "script" ? ICONS.play : ICONS.sparkle,
+    tone: HUB_SCENE_TONES[index % HUB_SCENE_TONES.length],
+  };
+}
+
+/** Les scènes et scripts qu'on peut lancer depuis ce compte. */
+function hubSceneChoices() {
+  return [...entities.values()]
+    .filter((s) => ["scene", "script"].includes(domainOf(s)) && canControl(s))
+    .sort((a, b) => nameOf(a).localeCompare(nameOf(b), "fr"));
+}
+
+/** Le choix de cet appareil (Mon compte), ou null s'il n'y en a pas. */
+function hubChosenScenes() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(HUB_SCENES_KEY) ?? "null");
+    return Array.isArray(saved) ? saved.filter((id) => typeof id === "string").slice(0, HUB_SCENES_MAX) : null;
+  } catch {
+    return null;
+  }
+}
+
+function hubScenes() {
+  const choices = hubSceneChoices();
+  const chosen = hubChosenScenes();
+  const picked = chosen ? choices.filter((s) => chosen.includes(s.entity_id)) : [];
+  // Un choix dont plus rien n'existe (scène supprimée) : le choix par défaut.
+  return picked.length > 0 ? picked : choices.slice(0, HUB_SCENES_MAX);
+}
 
 function renderHubScenes() {
-  const list = [...entities.values()]
-    .filter((s) => ["scene", "script"].includes(domainOf(s)) && canControl(s))
-    .sort((a, b) => nameOf(a).localeCompare(nameOf(b), "fr"))
-    .slice(0, 6);
+  const list = hubScenes();
   const box = $("#hub-scenes");
   box.hidden = list.length === 0;
+  // Pas de case vide : 3 colonnes pour 3, 5 ou 6 scènes, 2 pour 2 ou 4.
+  const columns = list.length === 1 ? 1 : list.length % 3 === 0 || list.length === 5 ? 3 : 2;
+  box.style.setProperty("--cols", String(columns));
+  box.classList.toggle("narrow", columns === 3);
   box.replaceChildren(...list.map((state, index) => {
     const isScript = domainOf(state) === "script";
     const running = isScript && state.state === "on";
-    const button = el("button", { type: "button", class: `hub-scene t-${HUB_SCENE_TONES[index % HUB_SCENE_TONES.length]}${running ? " on" : ""}` },
-      el("span", { class: "hub-scene-icon" }, svgIcon(isScript ? (running ? ICONS.stop : ICONS.play) : ICONS.sparkle)),
+    const look = hubSceneLook(state, index);
+    const button = el("button", { type: "button", class: `hub-scene t-${look.tone}${running ? " on" : ""}` },
+      el("span", { class: "hub-scene-icon" }, svgIcon(running ? ICONS.stop : look.icon)),
       el("b", { text: nameOf(state) }));
     button.addEventListener("click", () => {
       button.classList.add("pending");
@@ -283,19 +360,25 @@ function renderHubRooms() {
   const areas = shownAreas();
   const box = $("#hub-rooms");
   box.hidden = areas.length === 0;
+  // Plus de 6 pièces : deux colonnes plus serrées, pour tout voir sans faire
+  // défiler. La température passe alors sous le nom.
+  const compact = areas.length > 6;
+  box.classList.toggle("compact", compact);
   box.replaceChildren(...areas.map((area) => {
     const info = roomInfo(area);
     const detail = info.alert ? info.alert
       : info.lights > 0 ? `${info.lights} lumière${info.lights > 1 ? "s" : ""}`
       : info.open > 0 ? `${info.open} ouverture${info.open > 1 ? "s" : ""}`
       : info.heating ? "chauffe" : "";
+    const temperature = Number.isFinite(info.temperature) ? `${number.format(info.temperature)}°` : "";
     const classes = ["hub-room"];
     if (info.alert) classes.push("alert");
     else if (info.lights > 0) classes.push("lit");
-    const room = el("button", { type: "button", class: classes.join(" ") },
+    const room = el("button", { type: "button", class: classes.join(" "), title: [area.name, detail].filter(Boolean).join(" : ") },
       el("span", { class: "hub-room-icon" }, svgIcon(roomIcon(area.name))),
-      el("span", { class: "hub-room-text" }, el("b", { text: area.name }), el("small", { text: detail })),
-      el("span", { class: "hub-room-temp", text: Number.isFinite(info.temperature) ? `${number.format(info.temperature)}°` : "" }));
+      el("span", { class: "hub-room-text" }, el("b", { text: area.name }),
+        el("small", { text: compact ? [temperature, detail].filter(Boolean).join(" · ") : detail })),
+      compact ? "" : el("span", { class: "hub-room-temp", text: temperature }));
     room.addEventListener("click", () => openRoom(area.name));
     return room;
   }));
@@ -379,6 +462,38 @@ $("#hub-mode").addEventListener("change", (event) => {
   }
   hub.away = false;
   updateHub();
+});
+
+// Le choix des scènes, dans Mon compte : une case par scène ou script.
+function renderHubPick() {
+  const chosen = new Set(hubScenes().map((s) => s.entity_id));
+  const full = chosen.size >= HUB_SCENES_MAX;
+  const choices = hubSceneChoices();
+  $("#hub-pick-list").replaceChildren(...(choices.length === 0
+    ? [el("p", { class: "account", text: "Aucune scène ni script pour l'instant." })]
+    : choices.map((state) => {
+      const box = el("input", { type: "checkbox", value: state.entity_id });
+      box.checked = chosen.has(state.entity_id);
+      box.disabled = full && !box.checked;
+      box.addEventListener("change", saveHubPick);
+      return el("label", { class: "check" }, box, ` ${nameOf(state)}`);
+    })));
+}
+
+function saveHubPick() {
+  const ids = [...document.querySelectorAll("#hub-pick-list input:checked")].map((box) => box.value);
+  try {
+    if (ids.length === 0) localStorage.removeItem(HUB_SCENES_KEY);
+    else localStorage.setItem(HUB_SCENES_KEY, JSON.stringify(ids.slice(0, HUB_SCENES_MAX)));
+  } catch {
+    // Stockage bloqué : rien à garder.
+  }
+  renderHubPick();
+  if (hub.on) renderHubScenes();
+}
+
+$("#hub-pick").addEventListener("toggle", () => {
+  if ($("#hub-pick").open) renderHubPick();
 });
 $("#tablet-mode").addEventListener("change", () => {
   hub.away = false;
