@@ -67,6 +67,12 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
   jamais le compte personnel ; mot de passe chiffré dans la base, absent des logs, des erreurs et de `Debug` ;
   HTTPS vers `timetreeapp.com` seulement, sans redirection, réponses limitées à 2 Mio ; lecture seule ; une heure
   d'attente après un refus, pour ne pas faire bloquer le compte.
+- Iglou (liste de courses, Firebase) : un compte **dédié à la maison**, membre d'une seule maison Iglou sous le
+  prénom « Maison » (retirable depuis l'appli), jamais le compte personnel ; mot de passe chiffré dans la base,
+  absent des logs, des erreurs et de `Debug` ; les règles de sécurité de l'appli s'appliquent ; projet, clé,
+  maison et articles vérifiés avant d'entrer dans une adresse ; HTTPS vers Google seulement, sans redirection,
+  réponses limitées à 4 Mio ; n'écrit que « dans le panier » et les articles libres, jamais les quantités ;
+  30 minutes d'attente après un refus.
 - Agendas en ligne (ICS) : HTTPS seulement, sans redirection, 2 Mio au plus ; l'adresse (qui peut contenir une
   clé secrète) n'est jamais journalisée ni publiée, seulement le nom du site ; lecture seule.
 - Alexa (faux pont Hue, sans authentification possible) : désactivée par défaut ; seuls les appareils listés

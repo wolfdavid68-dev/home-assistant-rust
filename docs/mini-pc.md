@@ -119,6 +119,7 @@ sudo ha-maison user list            # les comptes
 sudo ha-maison hue pair 192.168.1.10
 sudo ha-maison somfy pair 192.168.1.11
 sudo ha-maison timetree pair
+sudo ha-maison iglou pair           # la liste de courses de l'appli Iglou
 sudo ha-maison sonos                # les enceintes trouvées
 sudo ha-maison backup list          # les sauvegardes
 ```
@@ -230,7 +231,7 @@ les noms des fichiers.)
 
 Puis, depuis le Terminal de ton PC : `scp "david@192.168.1.20:ha-*.db" .`
 
-**La clé** qui chiffre les jetons des appareils (Hue, Somfy, TimeTree) n'est volontairement pas
+**La clé** qui chiffre les jetons des appareils (Hue, Somfy, TimeTree, Iglou) n'est volontairement pas
 dans les sauvegardes. Garde-la une fois pour toutes dans ton gestionnaire de mots de passe :
 
 ```bash
