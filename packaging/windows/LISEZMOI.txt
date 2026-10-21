@@ -1,0 +1,24 @@
+Serveur domotique home-assistant-rust pour Windows
+==================================================
+
+1. Range ce dossier dans ton profil, par exemple :
+   C:\Users\<toi>\AppData\Local\ha-maison
+   (ton profil est protégé : la base et la clé de chiffrement y sont à l'abri)
+
+2. Crée ton compte (une seule fois), dans une invite de commandes ouverte
+   dans ce dossier :
+       ha-server.exe user add <ton-nom>
+
+3. Double-clique sur demarrer.bat, puis ouvre http://127.0.0.1:8123/
+
+4. Pour qu'il démarre tout seul à chaque ouverture de session :
+   double-clique sur demarrage-automatique.bat
+
+Les fichiers *.example.yaml sont des modèles : copie-en un sans « .example »
+(par exemple areas.yaml) pour l'utiliser. Chacun se vérifie avec
+« ha-server.exe <nom> check » (voir le guide).
+
+Guide complet : docs/installation.md sur
+https://github.com/wolfdavid68-dev/home-assistant-rust
+
+Licence MIT (fichier LICENSE).

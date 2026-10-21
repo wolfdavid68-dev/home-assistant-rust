@@ -193,6 +193,14 @@ async fn main() -> ExitCode {
             Ok(bind) => health::check(bind).await,
             Err(error) => Err(error.into()),
         },
+        ["--help" | "-h" | "aide"] => {
+            println!("{}", cli::USAGE);
+            Ok(())
+        }
+        ["--version" | "-V" | "version"] => {
+            println!("ha-server {}", env!("CARGO_PKG_VERSION"));
+            Ok(())
+        }
         _ => Err(cli::USAGE.into()),
     };
     // On affiche le message lisible de l'erreur (`Display`), pas sa forme

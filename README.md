@@ -4,8 +4,12 @@ Un noyau domotique en Rust, inspiré de Home Assistant.
 
 ![Tableau de bord](docs/images/tableau-de-bord-ordinateur.png)
 
+- **[Installer chez soi (Windows ou Linux)](docs/installation.md)** : le programme tout prêt est
+  sur la [page des versions](https://github.com/wolfdavid68-dev/home-assistant-rust/releases)
 - [Feuille de route](ROADMAP.md)
 - [Règles de sécurité](SECURITY.md)
+- Licence [MIT](LICENSE) : libre d'utiliser, modifier et redistribuer, en gardant la mention de
+  licence
 
 ## Guides
 

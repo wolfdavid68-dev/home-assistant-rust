@@ -16,6 +16,7 @@ use zeroize::Zeroizing;
 pub const USAGE: &str = "\
 utilisation :
   ha-server                       démarre le serveur
+  ha-server --version             affiche la version
   ha-server user add <nom> [rôle] crée un compte (admin, famille ou invité)
   ha-server user role <nom> <rôle> change le rôle d'un compte
   ha-server user passwd <nom>     change un mot de passe

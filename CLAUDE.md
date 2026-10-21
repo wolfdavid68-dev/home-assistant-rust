@@ -36,5 +36,9 @@ décide de ce qui entre dans `main`.
 maison ni de photo privée (comme les images de la maison de David) dans un
 commit, une PR ou un commentaire. Ses fichiers personnels restent hors du dépôt.
 
+**Publier une version** (étiquette `vX.Y.Z`, workflow `release.yml`) seulement avec l'accord
+explicite de David : la version est publique et téléchargée telle quelle. Voir
+`docs/installation.md`.
+
 Ajouter l'étiquette `windows` à une PR qui touche aux chemins de fichiers, au
 port série ou aux permissions : c'est elle qui lance la vérification Windows.

@@ -1,0 +1,126 @@
+# Lancement avec Docker Compose, avec l'image publiée (rien à compiler).
+# Guide : docs/installation.md ; détails : docs/etape-7-deploiement.md
+#
+#   docker compose up -d                             démarrer
+#   docker compose pull && docker compose up -d      mettre à jour
+#   docker compose run --rm ha-server user add <nom> créer un compte
+#   docker compose logs -f                           voir les logs
+#   docker compose down                              arrêter
+#   docker compose run --rm sauvegarde …             sauvegarder (voir le guide)
+#
+# Les données (base ha.db : comptes, historique, associations Hue et Somfy)
+# sont dans le volume « ha-data », et la clé qui chiffre les jetons dans
+# « ha-cle ». Les deux sont conservés entre les mises à jour.
+
+services:
+  ha-server:
+    # « latest » suit la dernière version ; pour rester sur une version,
+    # remplace-le par son numéro (par exemple 0.1.0).
+    image: ghcr.io/wolfdavid68-dev/home-assistant-rust:latest
+    restart: unless-stopped
+    ports:
+      # Par défaut, le tableau de bord n'est joignable QUE depuis cette
+      # machine (127.0.0.1). Pour l'ouvrir à ton réseau local, mets par
+      # exemple HA_PUBLISH=192.168.1.20 (l'adresse de cette machine) dans un
+      # fichier .env à côté de ce fichier. Ne redirige JAMAIS ce port depuis
+      # ta box Internet : pour l'accès à distance, voir le guide (VPN).
+      - "${HA_PUBLISH:-127.0.0.1}:8123:8123"
+    environment:
+      TZ: ${TZ:-Europe/Paris}
+      RUST_LOG: ${RUST_LOG:-info}
+      # Éditeur d'automatisations en lecture seule (voir docs/editeur-automatisations.md) :
+      # HA_AUTOMATION_EDITOR: "off"
+      # Notifications sur le téléphone avec ntfy (voir docs/notifications.md) :
+      # HA_NTFY_URL: https://ntfy.sh
+      # HA_NTFY_TOPIC: maison-un-sujet-long-et-aleatoire
+      # HA_NTFY_TOKEN_FILE: /run/secrets/ntfy_token
+      # Position de la maison, pour le soleil (deux décimales suffisent) :
+      # Sauvegardes automatiques (déjà actives dans l'image) : heure et nombre gardé.
+      # HA_BACKUP_TIME: "03:30"
+      # HA_BACKUP_KEEP: "7"
+      # HA_LATITUDE: "48.85"
+      # HA_LONGITUDE: "2.35"
+      # Météo locale avec Open-Meteo (voir docs/meteo.md), il faut la position :
+      # HA_METEO: "on"
+      # Alexa en local (voir docs/alexa.md) : Linux uniquement, avec
+      # « network_mode: host » plus bas. Adresse de cette machine, et
+      # adresses de tes Echo :
+      # HA_ALEXA_IP: 192.168.1.20
+      # HA_ALEXA_ALLOWED: 192.168.1.40,192.168.1.41
+      # Vigilance Météo-France (voir docs/vigilance.md) : ton département, et la
+      # clé de l'API dans secrets/meteofrance.txt (avec « secrets » plus bas) :
+      # HA_VIGILANCE_DEPARTEMENT: "67"
+      # HA_VIGILANCE_KEY_FILE: /run/secrets/meteofrance
+      # Broker MQTT (étape 4), facultatif :
+      # HA_MQTT_HOST: 192.168.1.20
+      # HA_MQTT_USER: ha-server
+      # HA_MQTT_PASSWORD_FILE: /run/secrets/mqtt_password
+      # Compteur Linky (voir docs/energie.md) : module USB (avec « devices »
+      # et « group_add » plus bas), ou module réseau :
+      # HA_TELEINFO: /dev/ttyUSB0
+      # HA_TELEINFO: tcp://192.168.1.50:3333
+    volumes:
+      - ha-data:/data
+      # La clé qui chiffre les jetons Hue et Somfy, à part de la base.
+      - ha-cle:/cle
+      # Sauvegardes automatiques de chaque nuit (voir docs/sauvegardes.md).
+      - ha-sauvegardes:/sauvegardes
+      # Tes fichiers d'automatisations et de pièces : config/automations.yaml et
+      # config/areas.yaml (lecture seule).
+      - ./config:/config:ro
+    # secrets:
+    #   - mqtt_password
+    #   - meteofrance
+    # Alexa : la découverte (multicast) exige le réseau de la machine. La
+    # ligne « ports » ci-dessus ne sert alors plus : mets HA_BIND sur
+    # l'adresse voulue (voir docs/alexa.md).
+    # network_mode: host
+    # Compteur Linky sur un module USB : le conteneur ne voit que ce port, et
+    # le groupe du port lui donne le droit de le lire. Ce groupe est un
+    # numéro : celui que donne « ls -ln /dev/ttyUSB0 » (souvent 20, dialout).
+    # devices:
+    #   - /dev/ttyUSB0:/dev/ttyUSB0
+    # group_add:
+    #   - "20"
+
+    # Durcissement : le programme n'a besoin d'aucun privilège.
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    pids_limit: 128
+    # Laisse le temps d'enregistrer les derniers états à l'arrêt.
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  # Outil de sauvegarde et de restauration de la base, lancé seulement à la
+  # demande (voir le guide). Il ne démarre jamais avec « docker compose up ».
+  sauvegarde:
+    image: busybox:1.37@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e
+    profiles: [outils]
+    network_mode: none
+    volumes:
+      - ha-data:/data
+      - ha-cle:/cle
+      - ha-sauvegardes:/automatiques
+      - ./sauvegardes:/sauvegardes
+
+volumes:
+  ha-data:
+  ha-cle:
+  ha-sauvegardes:
+
+# secrets:
+#   mqtt_password:
+#     file: ./secrets/mqtt_password
+#   meteofrance:
+#     file: ./secrets/meteofrance.txt
