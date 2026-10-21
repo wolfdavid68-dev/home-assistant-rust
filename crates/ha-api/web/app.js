@@ -67,11 +67,17 @@ function showLogin(message = "") {
   $("#login-form [name=username]").focus();
 }
 
+// « Tablette murale » (étape 78) : le nom de la tablette n'apparaît que coché.
+$("#login-form [name=wall]").addEventListener("change", (event) => {
+  $("#wall-label-field").hidden = !event.currentTarget.checked;
+});
+
 $("#login-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
   const button = form.querySelector("button");
   button.disabled = true;
+  const wall = form.wall.checked;
   try {
     const response = await fetch("/api/auth/login", {
       method: "POST",
@@ -81,14 +87,23 @@ $("#login-form").addEventListener("submit", async (event) => {
         password: form.password.value,
         // Le code n'est envoyé que s'il a été saisi.
         ...(form.code.value.trim() && { code: form.code.value.trim() }),
+        ...(wall && { wall_label: form.wall_label.value.trim() || "Tablette murale" }),
       }),
     });
     form.password.value = "";
     form.code.value = "";
     if (response.status === 429) return showLogin("Trop de tentatives. Réessaie dans 15 minutes.");
+    // Refus propre à la tablette murale (compte administrateur, nom invalide).
+    if (response.status === 400 || response.status === 403) {
+      const { error } = await response.json().catch(() => ({}));
+      return showLogin(typeof error === "string" ? error.charAt(0).toUpperCase() + error.slice(1) : "Connexion refusée.");
+    }
     if (!response.ok) return showLogin("Nom d'utilisateur, mot de passe ou code incorrect.");
     token.set((await response.json()).access_token);
     showDashboard();
+    // Une tablette murale passe tout de suite en mode tablette (plein écran,
+    // écran de veille) : c'est pour ça qu'on l'associe.
+    if (wall) setTablet(true, true);
   } catch {
     showLogin("Serveur injoignable.");
   } finally {

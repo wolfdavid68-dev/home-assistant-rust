@@ -31,6 +31,15 @@ pub enum AuthError {
     #[error("c'est le dernier administrateur : il en faut toujours au moins un")]
     LastAdmin,
 
+    #[error("nom de tablette invalide : 1 à {max} caractères, sans caractère de contrôle")]
+    InvalidWallLabel { max: usize },
+
+    #[error(
+        "un compte administrateur ne reste pas connecté sur une tablette murale : \
+         connecte-la avec un compte « famille » ou « invité »"
+    )]
+    AdminOnWall,
+
     #[error("erreur de base de données : {0}")]
     Database(#[from] sqlx::Error),
 

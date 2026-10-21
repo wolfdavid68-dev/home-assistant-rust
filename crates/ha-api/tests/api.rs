@@ -3366,3 +3366,123 @@ async fn the_house_drawing_is_assembled_from_checked_images() {
     assert!(actions.contains(&"drawing_set"), "{actions:?}");
     assert!(actions.contains(&"drawing_image"), "{actions:?}");
 }
+
+#[tokio::test]
+async fn a_wall_tablet_logs_in_once_and_the_administrator_can_disconnect_it() {
+    let app = TestApp::new().await;
+    let admin = app.login().await;
+    app.state
+        .auth
+        .create_user_as("tablette", PASSWORD, ha_auth::Role::Family)
+        .await
+        .unwrap();
+
+    let wall_login = |username: &'static str, label: &'static str| json!({"username": username, "password": PASSWORD, "wall_label": label});
+    // Un compte administrateur ne reste pas connecté au mur.
+    let (status, body) = app
+        .request(
+            "POST",
+            "/api/auth/login",
+            None,
+            Some(wall_login("david", "Couloir")),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+    assert!(
+        body["error"].as_str().unwrap().contains("famille"),
+        "{body}"
+    );
+    // Un nom vide est refusé.
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/auth/login",
+            None,
+            Some(wall_login("tablette", " ")),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    let (status, body) = app
+        .request(
+            "POST",
+            "/api/auth/login",
+            None,
+            Some(wall_login("tablette", "Couloir")),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["wall"], true);
+    let tablet = body["access_token"].as_str().unwrap().to_owned();
+
+    // La tablette sait qu'elle est une tablette murale ; une session ordinaire non.
+    let (_, root) = app.request("GET", "/api/", Some(&tablet), None).await;
+    assert_eq!(root["wall_label"], "Couloir");
+    assert_eq!(root["permissions"]["tablets"], false);
+    let (_, root) = app.request("GET", "/api/", Some(&admin), None).await;
+    assert_eq!(root["wall_label"], Value::Null);
+    assert_eq!(root["permissions"]["tablets"], true);
+
+    // Seul l'administrateur voit et déconnecte les tablettes.
+    let (status, _) = app
+        .request("GET", "/api/auth/tablets", Some(&tablet), None)
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, list) = app
+        .request("GET", "/api/auth/tablets", Some(&admin), None)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(list.as_array().unwrap().len(), 1);
+    assert_eq!(list[0]["label"], "Couloir");
+    assert_eq!(list[0]["user"], "tablette");
+    let id = list[0]["id"].as_i64().unwrap();
+    let (status, _) = app
+        .request(
+            "DELETE",
+            &format!("/api/auth/tablets/{id}"),
+            Some(&tablet),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, _) = app
+        .request(
+            "DELETE",
+            &format!("/api/auth/tablets/{id}"),
+            Some(&admin),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, _) = app.request("GET", "/api/", Some(&tablet), None).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    let (status, _) = app
+        .request(
+            "DELETE",
+            &format!("/api/auth/tablets/{id}"),
+            Some(&admin),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // Le journal d'audit garde la connexion et la déconnexion, avec le nom.
+    let (_, audit) = app.request("GET", "/api/audit", Some(&admin), None).await;
+    let actions: Vec<(String, String)> = audit["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| {
+            (
+                e["action"].as_str().unwrap_or_default().to_owned(),
+                e["target"].as_str().unwrap_or_default().to_owned(),
+            )
+        })
+        .collect();
+    for expected in ["login_wall", "tablet_forget"] {
+        assert!(
+            actions.contains(&(expected.to_owned(), "Couloir".to_owned())),
+            "{expected} : {actions:?}"
+        );
+    }
+}

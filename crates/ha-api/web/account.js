@@ -19,6 +19,10 @@ async function loadAccount() {
   account.roleLabel = typeof data.role_label === "string" ? data.role_label : "";
   account.permissions = data.permissions ?? {};
   $("#account").replaceChildren(el("strong", { text: account.user }), account.roleLabel ? ` · ${account.roleLabel}` : "");
+  // Sur une tablette murale (étape 78) : son nom, et pourquoi elle reste connectée.
+  if (typeof data.wall_label === "string") {
+    $("#account").append(el("br"), `Tablette murale « ${data.wall_label} » : reste connectée tant qu'elle sert.`);
+  }
   $("#open-account").textContent = account.user.charAt(0);
   $("#open-logbook").hidden = !account.permissions.history;
   $("#dock-logbook").hidden = !account.permissions.history;
@@ -408,10 +412,45 @@ function watchIntegrations() {
   renderBatteries();
   loadIntegrations();
   loadSystem();
+  loadTablets();
   clearInterval(integrationTimer);
   integrationTimer = setInterval(() => {
     if ($("#account-dialog").open) { renderBatteries(); loadIntegrations(); loadSystem(); } else clearInterval(integrationTimer);
   }, 10_000);
+}
+
+// ---------------------------------------------------------------- Tablettes murales
+// Les tablettes connectées pour de bon (étape 78), et de quoi les déconnecter
+// à distance (tablette volée, déménagée…) : pour l'administrateur.
+
+/** « aujourd'hui », « hier », « il y a 12 jours » (l'usage est noté une fois par jour). */
+function daysAgo(iso) {
+  const days = Math.floor((Date.now() - Date.parse(iso)) / 86_400_000);
+  return days <= 0 ? "aujourd'hui" : days === 1 ? "hier" : `il y a ${days} jours`;
+}
+
+async function loadTablets() {
+  const box = $("#tablets");
+  if (account.permissions.tablets !== true) { box.hidden = true; return; }
+  const { status, data } = await api("GET", "/api/auth/tablets").catch(() => ({ status: 0, data: [] }));
+  box.hidden = status !== 200;
+  if (status !== 200 || !Array.isArray(data)) return;
+  $("#tablet-list").replaceChildren(...data.map((tablet) => {
+    const forget = el("button", { type: "button", class: "ghost small", text: "Déconnecter" });
+    forget.addEventListener("click", async () => {
+      if (!window.confirm(`Déconnecter « ${tablet.label} » ? Il faudra la reconnecter avec le mot de passe de son compte.`)) return;
+      forget.disabled = true;
+      const { status: done } = await api("DELETE", `/api/auth/tablets/${tablet.id}`).catch(() => ({ status: 0 }));
+      if (done !== 204 && done !== 404) flash("Déconnexion impossible.");
+      loadTablets();
+    });
+    return el("li", { class: "push-device" },
+      el("span", {},
+        el("strong", { text: tablet.label }),
+        el("small", { text: `compte ${tablet.user} · active ${daysAgo(tablet.last_used_at)}` })),
+      forget);
+  }));
+  if (data.length === 0) $("#tablet-list").append(el("li", { class: "push-device" }, el("small", { text: "Aucune tablette murale pour l'instant." })));
 }
 
 // ---------------------------------------------------------------- Système

@@ -67,6 +67,10 @@ struct LoginRequest {
     /// Code de double authentification, si elle est activée pour ce compte.
     #[serde(default)]
     code: Option<String>,
+    /// Le nom d'une tablette murale (étape 78) : la session reste alors
+    /// ouverte tant que la tablette sert.
+    #[serde(default)]
+    wall_label: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -139,15 +143,21 @@ pub(crate) async fn login(
     // Le mot de passe sera effacé de la mémoire à la fin de la fonction.
     let password = Zeroizing::new(request.password);
 
-    let result = state
-        .auth
-        .login(
-            &request.username,
-            &password,
-            request.code.as_deref(),
-            client.ip(),
-        )
-        .await;
+    let code = request.code.as_deref();
+    let result = match request.wall_label.as_deref() {
+        Some(label) => {
+            state
+                .auth
+                .login_wall(&request.username, &password, code, client.ip(), label)
+                .await
+        }
+        None => {
+            state
+                .auth
+                .login(&request.username, &password, code, client.ip())
+                .await
+        }
+    };
     let issued = match result {
         Ok(issued) => issued,
         Err(error) => {
@@ -168,13 +178,87 @@ pub(crate) async fn login(
             return Err(error.into());
         }
     };
-    audit(&state, &request.username, "login", None, None, client).await;
-    tracing::info!("connexion de {} depuis {}", request.username, client.ip());
+    let wall = request.wall_label.as_deref().map(str::trim);
+    if let Some(label) = wall {
+        audit(
+            &state,
+            &request.username,
+            "login_wall",
+            Some(label),
+            None,
+            client,
+        )
+        .await;
+        tracing::info!(
+            "tablette murale « {label} » connectée ({}) depuis {}",
+            request.username,
+            client.ip()
+        );
+    } else {
+        audit(&state, &request.username, "login", None, None, client).await;
+        tracing::info!("connexion de {} depuis {}", request.username, client.ip());
+    }
     Ok(Json(json!({
         "access_token": issued.token.as_str(),
         "token_type": "Bearer",
         "expires_at": format_timestamp(issued.expires_at),
+        "wall": wall.is_some(),
     })))
+}
+
+/// `GET /api/auth/tablets` : les tablettes murales connectées (étape 78),
+/// pour un administrateur.
+pub(crate) async fn list_tablets(
+    State(state): State<Arc<ApiState>>,
+    auth: Authenticated,
+) -> Result<Json<Value>, ApiError> {
+    roles::require(&auth.user, Permission::ManageTablets)?;
+    let tablets: Vec<Value> = state
+        .auth
+        .wall_tablets()
+        .await?
+        .into_iter()
+        .map(|tablet| {
+            json!({
+                "id": tablet.id,
+                "label": tablet.label,
+                "user": tablet.username,
+                "created_at": format_timestamp(tablet.created_at),
+                "last_used_at": format_timestamp(tablet.last_used_at),
+            })
+        })
+        .collect();
+    Ok(Json(Value::Array(tablets)))
+}
+
+/// `DELETE /api/auth/tablets/{id}` : déconnecte une tablette murale. Son
+/// tableau de bord se ferme dans la minute (le WebSocket revérifie le jeton).
+pub(crate) async fn forget_tablet(
+    State(state): State<Arc<ApiState>>,
+    ConnectInfo(client): ConnectInfo<SocketAddr>,
+    auth: Authenticated,
+    Path(id): Path<i64>,
+) -> Result<StatusCode, ApiError> {
+    roles::require(&auth.user, Permission::ManageTablets)?;
+    let label = state
+        .auth
+        .forget_wall_tablet(id)
+        .await?
+        .ok_or(ApiError::NotFound)?;
+    audit(
+        &state,
+        &auth.user.username,
+        "tablet_forget",
+        Some(&label),
+        None,
+        client,
+    )
+    .await;
+    tracing::info!(
+        "tablette murale « {label} » déconnectée par {}",
+        auth.user.username
+    );
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// `POST /api/auth/logout` : révoque le jeton utilisé pour cette requête.
@@ -191,15 +275,20 @@ pub(crate) async fn logout(
 }
 
 /// `GET /api/` : vérifie que l'API répond et que le jeton est valide.
-pub(crate) async fn root(auth: Authenticated) -> Json<Value> {
-    Json(json!({
+pub(crate) async fn root(
+    State(state): State<Arc<ApiState>>,
+    auth: Authenticated,
+) -> Result<Json<Value>, ApiError> {
+    Ok(Json(json!({
         "message": "API en marche",
         "version": ha_core::VERSION,
         "user": auth.user.username,
         "role": auth.user.role.as_str(),
         "role_label": auth.user.role.label(),
         "permissions": roles::permissions_json(&auth.user),
-    }))
+        // Cette session est-elle celle d'une tablette murale ? (son nom)
+        "wall_label": state.auth.wall_label_of(&auth.token).await?,
+    })))
 }
 
 /// `GET /api/states` : tous les états.

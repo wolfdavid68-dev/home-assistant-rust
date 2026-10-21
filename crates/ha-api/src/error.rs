@@ -93,6 +93,8 @@ impl From<ha_auth::AuthError> for ApiError {
         match error {
             AuthError::InvalidCredentials => Self::InvalidCredentials,
             AuthError::TooManyAttempts { retry_after } => Self::TooManyRequests { retry_after },
+            error @ AuthError::InvalidWallLabel { .. } => Self::BadRequest(error.to_string()),
+            error @ AuthError::AdminOnWall => Self::Forbidden(error.to_string()),
             other => Self::Internal(other.to_string()),
         }
     }
