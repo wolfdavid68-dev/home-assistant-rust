@@ -110,6 +110,9 @@ pub struct RemoteCalendar {
     pub name: String,
     pub entity_id: EntityId,
     pub source: Source,
+    /// La couleur de l'agenda dans le tableau de bord (`#rrggbb`), si
+    /// elle est choisie.
+    pub color: Option<String>,
 }
 
 /// Pas d'adresse dans les affichages de débogage : elle peut contenir une
@@ -132,6 +135,8 @@ struct Entry {
     url: Option<String>,
     #[serde(default)]
     timetree: Option<String>,
+    #[serde(default)]
+    couleur: Option<String>,
 }
 
 /// Vérifie le contenu de `calendriers.yaml`.
@@ -188,10 +193,20 @@ pub fn parse_config(text: &str) -> Result<Vec<RemoteCalendar>, ConfigError> {
                 )));
             }
         };
+        let color = match entry.couleur.map(|c| c.trim().to_ascii_lowercase()) {
+            None => None,
+            Some(color) if ics::is_hex_color(&color) => Some(color),
+            Some(color) => {
+                return Err(ConfigError::Invalid(format!(
+                    "« {name} » : couleur « {color} » invalide (exemple : \"#4caf50\")"
+                )));
+            }
+        };
         calendars.push(RemoteCalendar {
             name,
             entity_id,
             source,
+            color,
         });
     }
     Ok(calendars)
@@ -256,6 +271,7 @@ pub fn window(events: &[ics::Event], now: DateTime, local: &TimeZone) -> Vec<Cal
             end: occurrence.end.strftime("%Y-%m-%dT%H:%M:%S").to_string(),
             all_day: occurrence.all_day,
             created_by: None,
+            extra: occurrence.extra,
         })
         .collect()
 }
@@ -282,6 +298,9 @@ pub fn calendar_state(
         ha_agenda::calendar_state(&calendar.name, &window(events, now, local), now);
     attributes.insert("read_only".into(), json!(true));
     attributes.insert("source".into(), json!(calendar.source.label()));
+    if let Some(color) = &calendar.color {
+        attributes.insert("couleur".into(), json!(color));
+    }
     if let Some(error) = error {
         attributes.insert("erreur".into(), json!(error));
     }
@@ -329,7 +348,7 @@ struct Slot {
     error: Option<String>,
     next_fetch: Instant,
     /// L'agenda TimeTree trouvé par son nom.
-    timetree_id: Option<i64>,
+    timetree_id: Option<timetree::CalendarInfo>,
 }
 
 /// Le service : relit les agendas et publie leur état chaque minute.
@@ -380,7 +399,7 @@ async fn read_source(
     source: &Source,
     http: &reqwest::Client,
     timetree: Option<&timetree::Client>,
-    found: &mut Option<i64>,
+    found: &mut Option<timetree::CalendarInfo>,
 ) -> Result<(String, Duration), (String, Duration)> {
     match source {
         Source::Ics(url) => fetch(http, url)
@@ -401,18 +420,25 @@ async fn read_source(
                     RETRY
                 }
             };
-            let id = if let Some(id) = *found {
-                id
+            let calendar = if let Some(calendar) = found.clone() {
+                calendar
             } else {
                 let calendar = client
                     .find(name)
                     .await
                     .map_err(|e| (e.to_string(), wait(&e)))?;
-                *found = Some(calendar.id);
-                calendar.id
+                *found = Some(calendar.clone());
+                calendar
             };
-            match client.events(id).await {
-                Ok(events) => Ok((timetree::to_ics(&events), TIMETREE_REFRESH)),
+            match client.events(calendar.id).await {
+                Ok(events) => {
+                    // Les étiquettes peuvent changer : relues à chaque fois.
+                    let details = timetree::Details {
+                        labels: client.labels(calendar.id).await,
+                        users: calendar.users.iter().cloned().collect(),
+                    };
+                    Ok((timetree::to_ics(&events, &details), TIMETREE_REFRESH))
+                }
                 Err(error) => {
                     // L'agenda a peut-être été recréé : on le recherchera.
                     *found = None;
@@ -524,7 +550,12 @@ mod tests {
             calendars[1].source,
             Source::Ics(url::Url::parse("https://exemple.fr/zone-b.ics").unwrap())
         );
-        let family = parse_config("- nom: Famille\n  timetree: Agenda de la famille\n").unwrap();
+        let family = parse_config(
+            "- nom: Famille\n  timetree: Agenda de la famille\n  couleur: \"#4CAF50\"\n",
+        )
+        .unwrap();
+        assert_eq!(family[0].color.as_deref(), Some("#4caf50"));
+        assert!(parse_config("- nom: X\n  timetree: X\n  couleur: vert\n").is_err());
         assert_eq!(
             family[0].source,
             Source::TimeTree("Agenda de la famille".into())

@@ -15,6 +15,7 @@
 //! Ce n'est pas une API officielle : si TimeTree la change, l'agenda passe
 //! « indisponible » avec la raison, et le reste de la maison continue.
 
+use std::collections::HashMap;
 use std::fmt::Write as _;
 use std::sync::Mutex;
 
@@ -64,6 +65,23 @@ impl TimeTreeError {
 pub struct CalendarInfo {
     pub id: i64,
     pub name: String,
+    /// Ses membres : identifiant, et nom affiché (pour les participants).
+    pub users: Vec<(i64, String)>,
+}
+
+/// Une étiquette TimeTree (« Médecin »), et sa couleur `#rrggbb`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Label {
+    pub name: String,
+    pub color: String,
+}
+
+/// Ce qu'il faut pour habiller les rendez-vous : les étiquettes de l'agenda
+/// (par numéro) et le nom de ses membres.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Details {
+    pub labels: HashMap<i64, Label>,
+    pub users: HashMap<i64, String>,
 }
 
 /// Le client : le compte, et la session en cours.
@@ -209,6 +227,21 @@ impl Client {
                 Some(CalendarInfo {
                     id: c.get("id")?.as_i64()?,
                     name: clean(c.get("name")?.as_str()?, 100),
+                    users: c
+                        .get("calendar_users")
+                        .and_then(Value::as_array)
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|user| {
+                            let id = user
+                                .get("user_id")
+                                .or_else(|| user.get("id"))
+                                .and_then(Value::as_i64)?;
+                            let name = clean(user.get("name")?.as_str()?, 40);
+                            (!name.is_empty()).then_some((id, name))
+                        })
+                        .take(50)
+                        .collect(),
                 })
             })
             .take(100)
@@ -232,6 +265,36 @@ impl Client {
                         .join(", "),
                 )
             })
+    }
+
+    /// Les étiquettes de l'agenda (« Médecin », rouge). Une erreur ici
+    /// n'empêche pas de lire les rendez-vous : on s'en passe.
+    pub async fn labels(&self, calendar_id: i64) -> HashMap<i64, Label> {
+        let Ok(json) = self.get(&format!("/calendar/{calendar_id}/labels")).await else {
+            return HashMap::new();
+        };
+        json.get("calendar_labels")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|label| {
+                let id = label.get("id").and_then(Value::as_i64)?;
+                Some((
+                    id,
+                    Label {
+                        name: clean(
+                            label
+                                .get("name")
+                                .and_then(Value::as_str)
+                                .unwrap_or_default(),
+                            40,
+                        ),
+                        color: color(label.get("color")?).unwrap_or_default(),
+                    },
+                ))
+            })
+            .take(100)
+            .collect()
     }
 
     /// Tous les événements de l'agenda, morceau par morceau.
@@ -293,6 +356,49 @@ async fn read(mut response: reqwest::Response) -> Result<String, TimeTreeError> 
     Ok(String::from_utf8_lossy(&body).into_owned())
 }
 
+/// Une couleur TimeTree : un nombre (`0xeb6834`) ou un texte `#eb6834`.
+fn color(value: &Value) -> Option<String> {
+    let text = match value {
+        Value::Number(n) => format!("#{:06x}", n.as_u64().filter(|n| *n <= 0xff_ffff)?),
+        Value::String(s) => s.trim().to_ascii_lowercase(),
+        _ => return None,
+    };
+    crate::ics::is_hex_color(&text).then_some(text)
+}
+
+/// Le numéro d'étiquette d'un rendez-vous : `label_id`, ou dans
+/// `relationships.label.data.id` (« 12345,3 » : le numéro est à la fin).
+fn label_id(event: &Value) -> Option<i64> {
+    if let Some(id) = event.get("label_id").and_then(Value::as_i64) {
+        return Some(id);
+    }
+    let id = event.pointer("/relationships/label/data/id")?;
+    match id {
+        Value::Number(n) => n.as_i64(),
+        Value::String(s) => s.rsplit(',').next()?.trim().parse().ok(),
+        _ => None,
+    }
+}
+
+/// Les participants d'un rendez-vous, par leur nom (ceux qu'on connaît).
+fn attendees(event: &Value, users: &HashMap<i64, String>) -> Vec<String> {
+    event
+        .get("attendees")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|a| {
+            let id = a.as_i64().or_else(|| {
+                a.get("user_id")
+                    .or_else(|| a.get("id"))
+                    .and_then(Value::as_i64)
+            })?;
+            users.get(&id).cloned()
+        })
+        .take(20)
+        .collect()
+}
+
 fn clean(text: &str, max: usize) -> String {
     text.chars().filter(|c| !c.is_control()).take(max).collect()
 }
@@ -323,13 +429,14 @@ fn moment(ms: i64, zone: &TimeZone) -> Option<jiff::civil::DateTime> {
     )
 }
 
-/// Les événements TimeTree, en fichier ICS.
+/// Les événements TimeTree, en fichier ICS, habillés de leurs étiquettes et
+/// participants (`details`).
 ///
 /// On saute les anniversaires (générés par TimeTree à partir des
 /// profils), les « mémos » (des notes sans date) et les événements
 /// supprimés.
 #[must_use]
-pub fn to_ics(events: &[Value]) -> String {
+pub fn to_ics(events: &[Value], details: &Details) -> String {
     let mut out =
         String::from("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//ha-maison//TimeTree//FR\r\n");
     for event in events {
@@ -372,6 +479,26 @@ pub fn to_ics(events: &[Value]) -> String {
         let note = text("note");
         if !note.is_empty() {
             let _ = write!(out, "DESCRIPTION:{}\r\n", ics_text(note));
+        }
+        let location = text("location");
+        if !location.is_empty() {
+            let _ = write!(out, "LOCATION:{}\r\n", ics_text(location));
+        }
+        if let Some(label) = label_id(event).and_then(|id| details.labels.get(&id)) {
+            if !label.name.is_empty() {
+                let _ = write!(out, "CATEGORIES:{}\r\n", ics_text(&label.name));
+            }
+            if !label.color.is_empty() {
+                let _ = write!(out, "COLOR:{}\r\n", label.color);
+            }
+        }
+        for name in attendees(event, &details.users) {
+            // Le nom entre guillemets : sans « " », sans retour à la ligne.
+            let name: String = name
+                .chars()
+                .filter(|c| *c != '"' && !c.is_control())
+                .collect();
+            let _ = write!(out, "ATTENDEE;CN=\"{name}\":invalid:nomail\r\n");
         }
         if all_day {
             // La fin d'une journée entière est exclue en ICS : le lendemain.
@@ -461,6 +588,8 @@ mod tests {
     fn events_become_an_ics_file() {
         let events = vec![
             json!({"uuid": "a1", "title": "Dentiste, Léa", "note": "Ligne 1\nLigne 2",
+                   "location": "Cabinet; 1er étage", "attendees": [7, {"user_id": 8}, 99],
+                   "relationships": {"label": {"data": {"id": "123,3"}}},
                    "start_at": oct21(15), "end_at": oct21(16), "all_day": false,
                    "start_timezone": "Europe/Paris", "type": 0, "category": 1,
                    "recurrences": []}),
@@ -477,8 +606,25 @@ mod tests {
                    "all_day": false, "type": 0, "category": 1, "deactivated_at": 1}),
             json!({"title": "Sans identifiant", "start_at": oct21(9), "end_at": oct21(10)}),
         ];
-        let text = to_ics(&events);
+        let details = Details {
+            labels: HashMap::from([(
+                3,
+                Label {
+                    name: "Médecin".into(),
+                    color: "#d6311f".into(),
+                },
+            )]),
+            users: HashMap::from([(7, "Papa".to_owned()), (8, "Léa".to_owned())]),
+        };
+        let text = to_ics(&events, &details);
         assert!(text.contains("SUMMARY:Dentiste\\, Léa\r\n"), "{text}");
+        assert!(
+            text.contains(
+                "LOCATION:Cabinet\\; 1er étage\r\nCATEGORIES:Médecin\r\nCOLOR:#d6311f\r\n"
+            ),
+            "{text}"
+        );
+        assert!(text.contains("ATTENDEE;CN=\"Papa\":invalid:nomail\r\n"));
         assert!(text.contains("DESCRIPTION:Ligne 1\\nLigne 2\r\n"));
         assert!(text.contains("DTSTART;TZID=Europe/Paris:20261021T150000\r\n"));
         assert!(text.contains("RRULE:FREQ=WEEKLY;UNTIL=20261104T235959\r\n"));
@@ -503,6 +649,11 @@ mod tests {
             .collect();
         // Le 21, le 4 novembre (dernier jour inclus) ; pas le 28 (annulé).
         assert_eq!(piscine, ["2026-10-21T18:00:00", "2026-11-04T18:00:00"]);
+        let dentiste = found.iter().find(|o| o.summary == "Dentiste, Léa").unwrap();
+        assert_eq!(dentiste.extra.location, "Cabinet; 1er étage");
+        assert_eq!(dentiste.extra.label, "Médecin");
+        assert_eq!(dentiste.extra.color, "#d6311f");
+        assert_eq!(dentiste.extra.attendees, ["Papa", "Léa"]);
         let vacances = found
             .iter()
             .find(|o| o.summary == "Vacances")
@@ -531,6 +682,10 @@ mod tests {
         assert!(recurrence("X-AUTRE:1", false).is_none());
         assert!(recurrence("RRULE:FREQ=DAILY\r\nBEGIN:VEVENT", false).is_none());
         assert!(TimeTreeError::Credentials.is_lasting());
+        assert_eq!(color(&json!(0xeb_6834)).as_deref(), Some("#eb6834"));
+        assert_eq!(color(&json!("#1BAF7A")).as_deref(), Some("#1baf7a"));
+        assert_eq!(color(&json!("rouge")), None);
+        assert_eq!(label_id(&json!({"label_id": 4})), Some(4));
         assert!(!TimeTreeError::Unreachable.is_lasting());
     }
 }

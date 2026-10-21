@@ -16,3 +16,4 @@
 # l'agenda tel qu'il apparaît dans TimeTree. Voir docs/timetree.md.
 # - nom: Famille
 #   timetree: Famille
+#   couleur: "#4caf50"       # sa couleur dans l'agenda (facultatif)

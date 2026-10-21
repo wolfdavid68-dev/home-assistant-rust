@@ -66,7 +66,7 @@ async fn calendars(State(site): State<Shared>, headers: HeaderMap) -> Response {
     }
     json!({"calendars": [
         {"id": 11, "name": "Travail"},
-        {"id": 22, "name": "Famille Martin"},
+        {"id": 22, "name": "Famille Martin", "calendar_users": [{"user_id": 7, "name": "Papa"}, {"id": 8, "name": "Tom"}]},
         {"id": 33, "name": "Famille Martin", "deactivated_at": 1},
     ]})
     .to_string()
@@ -94,10 +94,21 @@ async fn events(
     } else {
         json!({"chunk": false, "since": 600, "events": [
             {"uuid": "e2", "title": "Dentiste", "start_at": start + 86_400_000, "end_at": start + 86_400_000 + 1_800_000,
-             "all_day": false, "start_timezone": "Europe/Paris", "type": 0, "category": 1}
+             "all_day": false, "start_timezone": "Europe/Paris", "type": 0, "category": 1,
+             "label_id": 3, "location": "Cabinet dentaire", "attendees": [7, 8]}
         ]})
     };
     page.to_string().into_response()
+}
+
+async fn labels(State(site): State<Shared>, headers: HeaderMap, Path(id): Path<i64>) -> Response {
+    if !allowed(&site, &headers) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    assert_eq!(id, 22);
+    json!({"calendar_labels": [{"id": 3, "name": "Médecin", "color": 0xd6_311f}]})
+        .to_string()
+        .into_response()
 }
 
 async fn site() -> (String, Shared) {
@@ -106,6 +117,7 @@ async fn site() -> (String, Shared) {
         .route("/api/v1/auth/email/signin", put(signin))
         .route("/api/v1/calendars", get(calendars))
         .route("/api/v1/calendar/{id}/events/sync", get(events))
+        .route("/api/v1/calendar/{id}/labels", get(labels))
         .with_state(Arc::clone(&shared));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://{}/api/v1", listener.local_addr().unwrap());
@@ -182,6 +194,14 @@ async fn a_timetree_calendar_becomes_a_house_calendar() {
         .filter_map(|e| e["summary"].as_str())
         .collect();
     assert!(titles.contains(&"Dentiste"), "{titles:?}");
+    // Le dentiste, habillé : lieu, étiquette, couleur, participants.
+    let dentist = events.iter().find(|e| e["summary"] == "Dentiste").unwrap();
+    assert_eq!(dentist["location"], "Cabinet dentaire");
+    assert_eq!(dentist["label"], "Médecin");
+    assert_eq!(dentist["color"], "#d6311f");
+    assert_eq!(dentist["attendees"], json!(["Papa", "Tom"]));
+    let pool = events.iter().find(|e| e["summary"] == "Piscine").unwrap();
+    assert!(pool.get("label").is_none(), "pas d'étiquette : rien");
     assert!(
         titles.iter().filter(|t| **t == "Piscine").count() >= 8,
         "une piscine par semaine : {titles:?}"

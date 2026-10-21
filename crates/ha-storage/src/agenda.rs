@@ -41,6 +41,20 @@ pub struct CalendarEvent {
     pub end: String,
     pub all_day: bool,
     pub created_by: Option<String>,
+    /// Ce que donnent certains agendas en plus (TimeTree, étape 75).
+    pub extra: EventExtra,
+}
+
+/// Les détails d'un rendez-vous venus d'un agenda en ligne : le lieu,
+/// l'étiquette (« Médecin ») et sa couleur, les participants. Vides pour
+/// l'agenda de la maison.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct EventExtra {
+    pub location: String,
+    pub label: String,
+    /// `#rrggbb`, ou vide.
+    pub color: String,
+    pub attendees: Vec<String>,
 }
 
 /// Un rendez-vous à ajouter.
@@ -198,6 +212,7 @@ impl Store {
                     end,
                     all_day: all_day != 0,
                     created_by,
+                    extra: EventExtra::default(),
                 },
             )
             .collect())
