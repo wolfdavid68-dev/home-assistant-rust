@@ -13,9 +13,16 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Maison">
   <link rel="stylesheet" href="/style.css">
-  <!-- Tout le code est dans app.js : la politique de sécurité (CSP) interdit
-       le JavaScript écrit directement dans la page. -->
+  <!-- Le code est dans ces fichiers, chargés dans cet ordre (voir l'en-tête
+       de app.js) : la politique de sécurité (CSP) interdit le JavaScript
+       écrit directement dans la page. -->
+  <script src="/utils.js" defer></script>
   <script src="/app.js" defer></script>
+  <script src="/tiles.js" defer></script>
+  <script src="/dialogs.js" defer></script>
+  <script src="/editor.js" defer></script>
+  <script src="/account.js" defer></script>
+  <script src="/start.js" defer></script>
   <script src="/canvas.js" defer></script>
   <script src="/house.js" defer></script>
   <script src="/agenda.js" defer></script>

@@ -601,7 +601,13 @@ async fn dashboard_files_are_served_with_security_headers() {
     let app = TestApp::new().await;
     for (uri, content_type) in [
         ("/", "text/html; charset=utf-8"),
+        ("/utils.js", "text/javascript; charset=utf-8"),
         ("/app.js", "text/javascript; charset=utf-8"),
+        ("/tiles.js", "text/javascript; charset=utf-8"),
+        ("/dialogs.js", "text/javascript; charset=utf-8"),
+        ("/editor.js", "text/javascript; charset=utf-8"),
+        ("/account.js", "text/javascript; charset=utf-8"),
+        ("/start.js", "text/javascript; charset=utf-8"),
         ("/canvas.js", "text/javascript; charset=utf-8"),
         ("/house.js", "text/javascript; charset=utf-8"),
         ("/agenda.js", "text/javascript; charset=utf-8"),
@@ -696,14 +702,158 @@ async fn api_errors_also_carry_security_headers() {
 fn dashboard_never_uses_inner_html() {
     // Règle de sécurité : les noms d'appareils viennent du réseau. La page ne
     // doit jamais les insérer comme du HTML.
-    for (name, script) in [
+    let scripts = [
+        ("utils.js", include_str!("../web/utils.js")),
         ("app.js", include_str!("../web/app.js")),
+        ("tiles.js", include_str!("../web/tiles.js")),
+        ("dialogs.js", include_str!("../web/dialogs.js")),
+        ("editor.js", include_str!("../web/editor.js")),
+        ("account.js", include_str!("../web/account.js")),
+        ("start.js", include_str!("../web/start.js")),
         ("canvas.js", include_str!("../web/canvas.js")),
         ("house.js", include_str!("../web/house.js")),
         ("agenda.js", include_str!("../web/agenda.js")),
-    ] {
+        ("sw.js", include_str!("../web/sw.js")),
+    ];
+    for (name, script) in scripts {
         dashboard_script_is_safe(name, script);
     }
+    // Chaque script chargé par la page est vérifié ci-dessus : un nouveau
+    // fichier ne peut pas être oublié.
+    let index = include_str!("../web/index.html");
+    for src in index.split("<script src=\"/").skip(1) {
+        let name = src.split('"').next().unwrap();
+        assert!(
+            scripts.iter().any(|(checked, _)| *checked == name),
+            "{name} chargé par index.html mais pas vérifié"
+        );
+    }
+}
+
+/// Une demande du tableau de bord, avec des en-têtes choisis.
+async fn get_dashboard_file(
+    app: &TestApp,
+    uri: &str,
+    headers: &[(header::HeaderName, &str)],
+) -> axum::response::Response {
+    let mut request = Request::builder().uri(uri);
+    for (name, value) in headers {
+        request = request.header(name, *value);
+    }
+    app.router()
+        .oneshot(request.body(Body::empty()).unwrap())
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn dashboard_text_files_are_gzipped_for_browsers_that_accept_it() {
+    use std::io::Read as _;
+
+    let app = TestApp::new().await;
+    let gzip = [(header::ACCEPT_ENCODING, "gzip, deflate, br")];
+    let original = include_bytes!("../web/app.js");
+
+    let response = get_dashboard_file(&app, "/app.js", &gzip).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let headers = response.headers().clone();
+    assert_eq!(headers[header::CONTENT_ENCODING], "gzip");
+    assert_eq!(headers[header::VARY], "Accept-Encoding");
+    assert_eq!(headers[header::CACHE_CONTROL], "no-cache");
+    assert_eq!(
+        headers[header::CONTENT_TYPE],
+        "text/javascript; charset=utf-8"
+    );
+    // Les en-têtes de sécurité restent là.
+    assert!(headers.contains_key(header::CONTENT_SECURITY_POLICY));
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert!(body.len() * 2 < original.len(), "{} octets", body.len());
+    let mut unpacked = Vec::new();
+    flate2::read::GzDecoder::new(&body[..])
+        .read_to_end(&mut unpacked)
+        .unwrap();
+    assert_eq!(unpacked, original);
+
+    // Sans gzip annoncé (ou refusé), le fichier part tel quel.
+    for headers in [&[][..], &[(header::ACCEPT_ENCODING, "gzip;q=0")][..]] {
+        let response = get_dashboard_file(&app, "/app.js", headers).await;
+        assert!(!response.headers().contains_key(header::CONTENT_ENCODING));
+        assert_eq!(response.headers()[header::VARY], "Accept-Encoding");
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(&body[..], original);
+    }
+
+    // Les polices et les images sont déjà compressées : jamais deux fois.
+    for uri in ["/fonts/geist.woff2", "/icon-192.png"] {
+        let response = get_dashboard_file(&app, uri, &gzip).await;
+        assert!(
+            !response.headers().contains_key(header::CONTENT_ENCODING),
+            "{uri}"
+        );
+        assert!(!response.headers().contains_key(header::VARY), "{uri}");
+        assert_eq!(
+            response.headers()[header::CACHE_CONTROL],
+            "public, max-age=604800",
+            "{uri}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn dashboard_files_are_not_sent_again_while_unchanged() {
+    let app = TestApp::new().await;
+    for accept in ["gzip", "identity"] {
+        let response =
+            get_dashboard_file(&app, "/style.css", &[(header::ACCEPT_ENCODING, accept)]).await;
+        let etag = response.headers()[header::ETAG]
+            .to_str()
+            .unwrap()
+            .to_owned();
+        assert!(etag.starts_with('"') && etag.ends_with('"'), "{etag}");
+
+        // Le navigateur redemande avec son empreinte : rien à renvoyer.
+        let again = get_dashboard_file(
+            &app,
+            "/style.css",
+            &[
+                (header::ACCEPT_ENCODING, accept),
+                (header::IF_NONE_MATCH, &etag),
+            ],
+        )
+        .await;
+        assert_eq!(again.status(), StatusCode::NOT_MODIFIED, "{accept}");
+        assert_eq!(again.headers()[header::ETAG], etag.as_str());
+        assert!(
+            again
+                .headers()
+                .contains_key(header::CONTENT_SECURITY_POLICY)
+        );
+        let body = axum::body::to_bytes(again.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert!(body.is_empty());
+
+        // Une autre empreinte (ancienne version) : le fichier est renvoyé.
+        let old = get_dashboard_file(
+            &app,
+            "/style.css",
+            &[
+                (header::ACCEPT_ENCODING, accept),
+                (header::IF_NONE_MATCH, "\"ancienne\""),
+            ],
+        )
+        .await;
+        assert_eq!(old.status(), StatusCode::OK, "{accept}");
+    }
+
+    // La version compressée et la version brute n'ont pas la même empreinte.
+    let gz = get_dashboard_file(&app, "/style.css", &[(header::ACCEPT_ENCODING, "gzip")]).await;
+    let raw = get_dashboard_file(&app, "/style.css", &[]).await;
+    assert_ne!(gz.headers()[header::ETAG], raw.headers()[header::ETAG]);
 }
 
 fn dashboard_script_is_safe(name: &str, script: &str) {
