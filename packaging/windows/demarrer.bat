@@ -17,6 +17,11 @@ rem Position de la maison (soleil, meteo, protection solaire) :
 rem set HA_LATITUDE=48.85
 rem set HA_LONGITUDE=2.35
 
+rem Enceintes Sonos et annonces vocales (voir docs/sonos.md) : Piper et sa
+rem voix dans le dossier « piper », a cote de ha-server.exe.
+rem set HA_SONOS=auto
+rem set HA_PIPER=%~dp0piper\piper.exe
+
 rem Fuseau horaire et niveau de detail du journal :
 set TZ=Europe/Paris
 set RUST_LOG=info
