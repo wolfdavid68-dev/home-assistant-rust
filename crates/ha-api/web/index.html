@@ -18,6 +18,7 @@
   <script src="/app.js" defer></script>
   <script src="/canvas.js" defer></script>
   <script src="/house.js" defer></script>
+  <script src="/agenda.js" defer></script>
 </head>
 <body>
   <!-- Écran de connexion -->
@@ -56,6 +57,7 @@
         <span id="connection" class="status" aria-live="polite">Connexion…</span>
         <span id="weather-pill" class="weather-pill" hidden></span>
         <nav class="actions" aria-label="Menu">
+          <button id="open-agenda" class="ghost" type="button" hidden>Agenda</button>
           <button id="open-logbook" class="ghost" type="button">Journal de bord</button>
           <button id="open-automations" class="ghost" type="button">Automatisations</button>
           <button id="open-energy" class="ghost" type="button">Énergie</button>
@@ -78,6 +80,8 @@
         <!-- Mise en page « tableau » : qui est là (house.js) -->
         <div id="board-people" class="board-people" aria-label="Personnes" hidden></div>
         <section id="plan" class="plan-card" aria-label="Plan de la maison" hidden></section>
+        <!-- Mise en page « tableau » : les rendez-vous du jour et de la semaine (agenda.js) -->
+        <section id="board-agenda" class="board-agenda" aria-label="Agenda" hidden></section>
         <!-- Mise en page « tableau » : les courbes de l'onglet (house.js) -->
         <section id="board-charts" class="board-charts" aria-label="Courbes" hidden></section>
         <nav id="scenes" class="scenes" aria-label="Scènes et scripts" hidden></nav>
@@ -95,12 +99,46 @@
       <!-- Le cartouche, comme au bas d'un plan d'architecte -->
       <footer id="title-block" class="title-block" aria-label="Cartouche" hidden></footer>
     </div>
+    <!-- L'agenda, façon Google Agenda : tous les agendas réunis (agenda.js) -->
+    <section id="agenda-view" class="agenda-view" aria-label="Agenda" hidden>
+      <aside class="agenda-side">
+        <div id="agenda-today" class="agenda-card"></div>
+        <div id="agenda-mini" class="agenda-card agenda-mini"></div>
+        <div id="agenda-calendars" class="agenda-card"></div>
+      </aside>
+      <div class="agenda-card agenda-main">
+        <div class="agenda-head">
+          <h2 id="agenda-title"></h2>
+          <button id="agenda-today-button" class="ghost small" type="button">Aujourd'hui</button>
+          <button id="agenda-prev" class="ghost small" type="button" aria-label="Précédent">‹</button>
+          <button id="agenda-next" class="ghost small" type="button" aria-label="Suivant">›</button>
+          <div id="agenda-views" class="agenda-views" role="group" aria-label="Affichage"></div>
+          <button id="agenda-add" class="agenda-add" type="button" hidden>+ Rendez-vous</button>
+        </div>
+        <div id="agenda-body" class="agenda-body"></div>
+      </div>
+    </section>
+    <dialog id="agenda-event" class="history-dialog agenda-event" aria-labelledby="agenda-event-title"></dialog>
+    <dialog id="agenda-new" class="history-dialog agenda-new" aria-labelledby="agenda-new-title">
+      <form id="agenda-new-form" method="dialog">
+        <div class="history-top"><h2 id="agenda-new-title">Nouveau rendez-vous</h2><button id="agenda-new-close" class="ghost" type="button">Fermer</button></div>
+        <label class="field"><span>Titre</span><input id="agenda-new-summary" required maxlength="200" autocomplete="off"></label>
+        <label class="field"><span>Jour</span><input id="agenda-new-day" type="date" required></label>
+        <div class="agenda-new-times">
+          <label class="field"><span>Début</span><input id="agenda-new-start" type="time"></label>
+          <label class="field"><span>Fin</span><input id="agenda-new-end" type="time"></label>
+        </div>
+        <p class="auto-meta">Sans heure : toute la journée. Ajouté dans l'agenda de la maison.</p>
+        <button class="action-button" type="submit">Ajouter</button>
+      </form>
+    </dialog>
     <p id="empty" class="empty" hidden>
       Aucun appareil pour l'instant. Configure MQTT ou associe ton pont Hue
       (<code>ha-server hue pair</code>).
     </p>
     <nav class="dock" aria-label="Navigation">
       <a href="#" id="dock-home" class="active"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg><span>Maison</span></a>
+      <button id="dock-agenda" type="button" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v15H4z"/><path d="M4 10h16"/><path d="M8 3v4"/><path d="M16 3v4"/></svg><span>Agenda</span></button>
       <button id="dock-logbook" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg><span>Journal</span></button>
       <button id="dock-automations" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v3"/><path d="M12 18v3"/><path d="M3 12h3"/><path d="M18 12h3"/><path d="M8 12a4 4 0 1 0 8 0 4 4 0 1 0-8 0"/></svg><span>Automatismes</span></button>
       <button id="dock-energy" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg><span>Énergie</span></button>

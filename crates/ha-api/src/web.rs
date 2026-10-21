@@ -13,6 +13,7 @@ const INDEX_HTML: &str = include_str!("../web/index.html");
 const APP_JS: &str = include_str!("../web/app.js");
 const CANVAS_JS: &str = include_str!("../web/canvas.js");
 const HOUSE_JS: &str = include_str!("../web/house.js");
+const AGENDA_JS: &str = include_str!("../web/agenda.js");
 const STYLE_CSS: &str = include_str!("../web/style.css");
 const ICON_SVG: &str = include_str!("../web/icon.svg");
 const HOUSE_SVG: &str = include_str!("../web/house.svg");
@@ -69,6 +70,10 @@ pub(crate) async fn canvas_js() -> impl IntoResponse {
 
 pub(crate) async fn house_js() -> impl IntoResponse {
     file("text/javascript; charset=utf-8", HOUSE_JS)
+}
+
+pub(crate) async fn agenda_js() -> impl IntoResponse {
+    file("text/javascript; charset=utf-8", AGENDA_JS)
 }
 
 pub(crate) async fn style_css() -> impl IntoResponse {

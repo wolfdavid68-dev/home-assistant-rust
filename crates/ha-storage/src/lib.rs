@@ -22,7 +22,7 @@ mod statistics;
 mod store;
 mod timetree;
 
-pub use agenda::{CalendarEvent, DueChange, NewCalendarEvent, TodoItem};
+pub use agenda::{CalendarEvent, DueChange, EventExtra, NewCalendarEvent, TodoItem};
 pub use audit::{AuditCheck, AuditEntry, AuditRecord, MAX_AUDIT_LIMIT, clean_field};
 pub use automations::{AutomationVersion, MAX_VERSIONS, StoredAutomation};
 pub use drawing::{HomeImage, HomeImageInfo};

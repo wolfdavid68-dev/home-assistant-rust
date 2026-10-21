@@ -86,6 +86,7 @@ Un noyau domotique en Rust, inspiré de Home Assistant.
 - [Étape 72 : la découpe automatique des calques](docs/images-ia.md#étape-72--la-découpe-automatique)
 - [Étape 73 : les enceintes Sonos et les annonces vocales, expliquées](docs/sonos.md)
 - [Étape 74 : l'agenda TimeTree de la famille, expliqué](docs/timetree.md)
+- [Étape 75 : l'agenda façon Google Agenda, expliqué](docs/agenda-semaine.md)
 - [Étape 5 : les automatisations, expliqué](docs/etape-5-automatisations.md)
 - [Modernisation du code, expliquée](docs/modernisation.md)
 - [Étape 6 : l'interface web, expliquée](docs/etape-6-interface-web.md)

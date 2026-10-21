@@ -15,6 +15,8 @@ use jiff::civil::{Date, DateTime, Weekday};
 use jiff::tz::TimeZone;
 use jiff::{Span, Timestamp, ToSpan};
 
+pub use ha_storage::EventExtra;
+
 /// Événements gardés au plus par fichier.
 pub const MAX_EVENTS: usize = 5000;
 /// Périodes calculées au plus par événement répété.
@@ -52,6 +54,8 @@ pub struct Event {
     pub exdates: Vec<DateTime>,
     /// L'occurrence d'un événement répété que celui-ci remplace.
     pub recurrence_id: Option<DateTime>,
+    /// Lieu, étiquette, couleur, participants.
+    pub extra: EventExtra,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -83,6 +87,7 @@ pub struct Occurrence {
     pub start: DateTime,
     pub end: DateTime,
     pub all_day: bool,
+    pub extra: EventExtra,
 }
 
 /// Ce que le fichier contenait d'incompris.
@@ -466,7 +471,45 @@ fn event(properties: &[Property], local: &TimeZone, simplified: &mut usize) -> O
         rule,
         exdates,
         recurrence_id,
+        extra: EventExtra {
+            location: text("LOCATION").chars().take(200).collect(),
+            // La première catégorie : l'étiquette (« Médecin »).
+            label: get("CATEGORIES")
+                .and_then(|(_, _, value)| {
+                    value
+                        .split(',')
+                        .next()
+                        .map(|first| unescape(first).trim().to_owned())
+                })
+                .unwrap_or_default()
+                .chars()
+                .take(60)
+                .collect(),
+            color: get("COLOR")
+                .map(|(_, _, value)| value.trim().to_ascii_lowercase())
+                .filter(|c| is_hex_color(c))
+                .unwrap_or_default(),
+            attendees: properties
+                .iter()
+                .filter(|(name, _, _)| name == "ATTENDEE")
+                .filter_map(|(_, params, value)| {
+                    let name = param(params, "CN").map_or_else(
+                        || value.trim().trim_start_matches("mailto:").to_owned(),
+                        |cn| cn.trim_matches('"').to_owned(),
+                    );
+                    let name: String = name.chars().filter(|c| !c.is_control()).take(60).collect();
+                    (!name.is_empty()).then_some(name)
+                })
+                .take(20)
+                .collect(),
+        },
     })))
+}
+
+/// `#rrggbb`.
+#[must_use]
+pub fn is_hex_color(text: &str) -> bool {
+    text.len() == 7 && text.starts_with('#') && text[1..].bytes().all(|b| b.is_ascii_hexdigit())
 }
 
 /// Le `n`-ième `weekday` du mois (`n` négatif : en partant de la fin).
@@ -613,6 +656,7 @@ pub fn expand(events: &[Event], from: DateTime, to: DateTime, local: &TimeZone) 
                     start,
                     end: end.max(start),
                     all_day: event.all_day,
+                    extra: event.extra.clone(),
                 });
             }
         };

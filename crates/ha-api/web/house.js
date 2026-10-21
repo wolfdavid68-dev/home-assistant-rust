@@ -880,16 +880,27 @@ function selectPage(id, remember = true) {
 
 function renderTabs() {
   const nav = $("#board-tabs");
-  nav.replaceChildren(...house.pages.map((page) => {
-    const current = page.id === house.config?.id;
+  // L'agenda ouvert (agenda.js) : aucun onglet de maison n'est l'onglet actif.
+  const agendaOpen = typeof agenda !== "undefined" && agenda.open;
+  const tabs = house.pages.map((page) => {
+    const current = !agendaOpen && page.id === house.config?.id;
     const tab = el("button", { type: "button", class: current ? "board-tab-item active" : "board-tab-item", "aria-current": current ? "page" : "false", text: page.name });
     tab.addEventListener("click", () => {
+      if (agendaOpen) closeAgenda();
       if (page.id !== house.config?.id) selectPage(page.id);
     });
     return tab;
-  }));
+  });
+  // L'onglet Agenda, s'il y a un agenda (étape 75).
+  const withAgenda = typeof agendaCalendars === "function" && agendaCalendars().length > 0;
+  if (withAgenda) {
+    const tab = el("button", { type: "button", class: agendaOpen ? "board-tab-item active" : "board-tab-item", "aria-current": agendaOpen ? "page" : "false" }, svgIcon(ICONS.calendar), "Agenda");
+    tab.addEventListener("click", () => openAgenda());
+    tabs.push(tab);
+  }
+  nav.replaceChildren(...tabs);
   // Un seul onglet : rien à choisir sur téléphone.
-  nav.classList.toggle("single", house.pages.length === 1);
+  nav.classList.toggle("single", tabs.length === 1);
 }
 
 function buildHouse() {
@@ -939,6 +950,9 @@ function renderGauges() {
   }
   const lights = [...entities.values()].filter((s) => isLight(s) && s.state === "on").length;
   items.push(gauge(ICONS.bulb, "Lumières", lights === 0 ? "éteintes" : `${lights} allumée${lights > 1 ? "s" : ""}`, "lights"));
+  // Le prochain rendez-vous d'aujourd'hui (agenda.js, étape 75).
+  const next = typeof agendaGauge === "function" ? agendaGauge() : null;
+  if (next) items.push(next);
   const zone = entities.get("zone.home");
   if (Array.isArray(zone?.attributes.persons)) {
     const count = zone.attributes.persons.length;
@@ -1187,6 +1201,7 @@ function renderHouse() {
     $("#board-covers").hidden = true;
     $("#board-people").hidden = true;
     $("#board-charts").hidden = true;
+    $("#board-agenda").hidden = true;
     return;
   }
   if (house.loading === null && token.get()) loadHouse();
@@ -1197,6 +1212,7 @@ function renderHouse() {
   renderCovers();
   renderPeople();
   renderCharts();
+  if (typeof renderBoardAgenda === "function") renderBoardAgenda();
   if (isPlan()) renderTitleBlock();
 }
 

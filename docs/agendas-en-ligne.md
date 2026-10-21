@@ -30,6 +30,7 @@ Crée `calendriers.yaml` à côté des autres fichiers (ou indique son chemin av
 - 10 agendas au plus.
 - Un agenda **TimeTree** se met ici aussi, avec `timetree:` au lieu de `url:` : voir
   [l'étape 74](timetree.md).
+- `couleur: "#4caf50"` (facultatif) : sa couleur dans l'onglet Agenda ([étape 75](agenda-semaine.md)).
 
 Vérifie le fichier, puis redémarre le serveur :
 

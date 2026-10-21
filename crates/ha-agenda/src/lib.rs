@@ -388,7 +388,7 @@ pub fn calendar_state(name: &str, window: &[CalendarEvent], now: DateTime) -> (S
     let events: Vec<Value> = window
         .iter()
         .map(|e| {
-            json!({
+            let mut event = json!({
                 "uid": e.id.to_string(),
                 "summary": e.summary,
                 "description": e.description,
@@ -396,7 +396,24 @@ pub fn calendar_state(name: &str, window: &[CalendarEvent], now: DateTime) -> (S
                 "end": e.end,
                 "all_day": e.all_day,
                 "created_by": e.created_by,
-            })
+            });
+            // Les détails d'un agenda en ligne (TimeTree), seulement s'il y en a.
+            if let Value::Object(map) = &mut event {
+                let extra = &e.extra;
+                for (key, value) in [
+                    ("location", &extra.location),
+                    ("label", &extra.label),
+                    ("color", &extra.color),
+                ] {
+                    if !value.is_empty() {
+                        map.insert(key.into(), json!(value));
+                    }
+                }
+                if !extra.attendees.is_empty() {
+                    map.insert("attendees".into(), json!(extra.attendees));
+                }
+            }
+            event
         })
         .collect();
     attributes.insert("events".into(), Value::Array(events));
@@ -417,6 +434,7 @@ mod tests {
             end: end.into(),
             all_day: false,
             created_by: None,
+            extra: ha_storage::EventExtra::default(),
         }
     }
 

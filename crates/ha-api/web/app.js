@@ -427,8 +427,10 @@ function renderHome() {
   const who = account.user ? ` ${account.user.charAt(0).toUpperCase()}${account.user.slice(1)}` : "";
   const found = alerts();
   const greeting = $("#greeting");
+  // Un rendez-vous dans l'heure (agenda.js, étape 75).
+  const soon = typeof agendaSoon === "function" ? agendaSoon() : null;
   if (found.length === 0) {
-    greeting.replaceChildren(`${hello}${who}. Tout est calme.`);
+    greeting.replaceChildren(`${hello}${who}. Tout est calme.`, ...(soon ? [" ", soon, "."] : []));
   } else if (found.length === 1) {
     // Demain est dans la tuile de Tempo aujourd'hui.
     const target = found[0].state.entity_id === TEMPO_TOMORROW ? TEMPO_TODAY : found[0].state.entity_id;
@@ -480,6 +482,8 @@ function renderHome() {
   renderScenes();
   // Le dessin de la maison, les repères et le cartouche (house.js).
   if (typeof renderHouse === "function") renderHouse();
+  // L'agenda, s'il est ouvert (agenda.js).
+  if (typeof renderAgendaView === "function") renderAgendaView();
 }
 
 /** Ce qu'on sait d'une pièce : lumières, température, alertes. */

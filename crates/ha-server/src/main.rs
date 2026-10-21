@@ -532,7 +532,12 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     // Agendas en ligne (étape 57) : collecte des déchets, vacances…
     let calendars = match ha_ics::load(&calendars_path()) {
         Ok(list) if list.is_empty() => None,
-        Ok(list) => match ha_ics::Calendars::start(list, timetree_account, Arc::clone(&core)) {
+        Ok(list) => match ha_ics::Calendars::start_with(
+            list,
+            timetree_account,
+            &timetree_api(),
+            Arc::clone(&core),
+        ) {
             Ok(calendars) => Some(calendars),
             Err(error) => {
                 warn!("agendas en ligne : démarrage impossible ({error})");
@@ -929,6 +934,16 @@ pub(crate) fn energy_path() -> std::path::PathBuf {
 }
 
 /// Le compteur Linky (`HA_TELEINFO`), s'il est branché.
+/// L'adresse de l'API TimeTree. `HA_TIMETREE_API` ne sert qu'aux essais, avec
+/// un faux TimeTree sur ce PC (`http://127.0.0.1:…`) : toute autre adresse
+/// est ignorée.
+pub(crate) fn timetree_api() -> String {
+    std::env::var("HA_TIMETREE_API")
+        .ok()
+        .filter(|url| url.starts_with("http://127.0.0.1:"))
+        .unwrap_or_else(|| ha_ics::timetree::API.to_owned())
+}
+
 /// `HA_SONOS` : les enceintes (vide : les chercher).
 fn sonos_hosts() -> Result<Vec<String>, String> {
     ha_sonos::parse_hosts(&std::env::var("HA_SONOS").unwrap_or_default())

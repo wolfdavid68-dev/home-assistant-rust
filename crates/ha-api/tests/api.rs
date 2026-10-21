@@ -604,6 +604,7 @@ async fn dashboard_files_are_served_with_security_headers() {
         ("/app.js", "text/javascript; charset=utf-8"),
         ("/canvas.js", "text/javascript; charset=utf-8"),
         ("/house.js", "text/javascript; charset=utf-8"),
+        ("/agenda.js", "text/javascript; charset=utf-8"),
         ("/house.svg", "image/svg+xml"),
         ("/style.css", "text/css; charset=utf-8"),
         ("/icon.svg", "image/svg+xml"),
@@ -699,6 +700,7 @@ fn dashboard_never_uses_inner_html() {
         ("app.js", include_str!("../web/app.js")),
         ("canvas.js", include_str!("../web/canvas.js")),
         ("house.js", include_str!("../web/house.js")),
+        ("agenda.js", include_str!("../web/agenda.js")),
     ] {
         dashboard_script_is_safe(name, script);
     }

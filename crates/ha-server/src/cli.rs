@@ -1442,11 +1442,14 @@ pub(crate) async fn timetree_command(args: &[&str]) -> Result<(), Box<dyn Error>
 fn timetree_client(
     account: ha_storage::TimeTreeAccount,
 ) -> Result<ha_ics::timetree::Client, Box<dyn Error>> {
-    Ok(ha_ics::timetree::Client::new(
-        ha_tls::public_client()?,
-        ha_ics::timetree::API,
-        account,
-    ))
+    let api = crate::timetree_api();
+    // Le faux TimeTree des essais est en HTTP, sur ce PC.
+    let http = if api.starts_with("http://127.0.0.1:") {
+        ha_tls::web_client(false)?
+    } else {
+        ha_tls::public_client()?
+    };
+    Ok(ha_ics::timetree::Client::new(http, &api, account))
 }
 
 fn print_timetree_calendars(calendars: &[ha_ics::timetree::CalendarInfo]) {

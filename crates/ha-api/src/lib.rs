@@ -194,6 +194,7 @@ pub fn router(state: Arc<ApiState>) -> Router {
         .route("/app.js", get(web::app_js))
         .route("/canvas.js", get(web::canvas_js))
         .route("/house.js", get(web::house_js))
+        .route("/agenda.js", get(web::agenda_js))
         .route("/style.css", get(web::style_css))
         .route("/icon.svg", get(web::icon_svg))
         .route("/house.svg", get(web::house_svg))
