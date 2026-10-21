@@ -42,6 +42,8 @@ pub enum Permission {
     AllDevices,
     /// Changer l'apparence commune du tableau de bord (le dessin de la maison).
     EditDashboard,
+    /// Voir les tablettes murales connectées, et les déconnecter (étape 78).
+    ManageTablets,
 }
 
 impl Role {

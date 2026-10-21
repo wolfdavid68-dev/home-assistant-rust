@@ -17,7 +17,7 @@ use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use ha_storage::{Store, to_micros};
+use ha_storage::{Store, from_micros, to_micros};
 use sqlx::SqlitePool;
 use tokio::sync::Semaphore;
 use zeroize::Zeroizing;
@@ -37,6 +37,18 @@ type UserRow = (i64, String, Option<String>, Option<i64>);
 
 /// Durée de validité d'un jeton par défaut : 30 jours.
 pub const DEFAULT_TOKEN_LIFETIME: Duration = Duration::from_hours(30 * 24);
+
+/// Une tablette murale (étape 78) reste connectée tant qu'elle sert : sa
+/// session est prolongée à chaque usage. Restée **90 jours** sans servir, elle
+/// expire.
+pub const WALL_TOKEN_LIFETIME: Duration = Duration::from_hours(90 * 24);
+
+/// La prolongation n'est écrite qu'une fois par jour au plus : le tableau de
+/// bord vérifie son jeton chaque minute, inutile d'écrire à chaque fois.
+const WALL_RENEW_EVERY: Duration = Duration::from_hours(24);
+
+/// Longueur maximale du nom d'une tablette murale.
+pub const MAX_WALL_LABEL: usize = 40;
 
 /// Nombre de calculs Argon2 simultanés au maximum. Chacun utilise ~19 Mo de
 /// mémoire : sans limite, une rafale de connexions pourrait saturer la machine.
@@ -62,6 +74,20 @@ impl User {
 /// main) donne le rôle le plus restreint : jamais plus de droits par erreur.
 fn role_from_db(value: &str) -> Role {
     Role::parse(value).unwrap_or(Role::Guest)
+}
+
+/// Une tablette murale associée, pour la liste de Mon compte.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WallTablet {
+    /// Identifiant de sa session (pour la fermer).
+    pub id: i64,
+    /// Le nom donné à la tablette (« Couloir »).
+    pub label: String,
+    /// Le compte connecté dessus.
+    pub username: String,
+    pub created_at: SystemTime,
+    /// Dernier usage connu (à un jour près).
+    pub last_used_at: SystemTime,
 }
 
 /// Jeton remis à l'utilisateur après une connexion réussie.
@@ -249,6 +275,87 @@ impl Auth {
         self.issue_token(user_id, self.token_lifetime).await
     }
 
+    /// Connexion d'une **tablette murale** (étape 78) : comme [`Auth::login`],
+    /// mais la session reste ouverte tant que la tablette sert
+    /// ([`WALL_TOKEN_LIFETIME`] sans servir pour qu'elle expire), et un
+    /// administrateur la voit et peut la fermer ([`Auth::wall_tablets`]).
+    ///
+    /// Refusée à un compte administrateur : une tablette accrochée au mur est
+    /// à portée de main de tous, elle ne doit pas pouvoir tout faire.
+    pub async fn login_wall(
+        &self,
+        username: &str,
+        password: &str,
+        code: Option<&str>,
+        ip: IpAddr,
+        label: &str,
+    ) -> Result<IssuedToken, AuthError> {
+        let label = wall_label(label)?;
+        let user_id = self.check_credentials(username, password, code, ip).await?;
+        // Le rôle n'est regardé qu'après le mot de passe : sans lui, on
+        // n'apprend pas qu'un compte est administrateur.
+        let role: String = sqlx::query_scalar("SELECT role FROM users WHERE id = ?1")
+            .bind(user_id)
+            .fetch_one(&self.pool)
+            .await?;
+        if role_from_db(&role) == Role::Admin {
+            return Err(AuthError::AdminOnWall);
+        }
+        self.insert_token(user_id, WALL_TOKEN_LIFETIME, false, Some(&label))
+            .await
+    }
+
+    /// Les tablettes murales connectées, de la plus ancienne à la plus récente.
+    pub async fn wall_tablets(&self) -> Result<Vec<WallTablet>, AuthError> {
+        let rows: Vec<(i64, String, String, i64, Option<i64>)> = sqlx::query_as(
+            "SELECT access_tokens.id, access_tokens.wall_label, users.username,
+                    access_tokens.created_at, access_tokens.last_used_at
+             FROM access_tokens JOIN users ON users.id = access_tokens.user_id
+             WHERE access_tokens.wall_label IS NOT NULL AND access_tokens.expires_at > ?1
+             ORDER BY access_tokens.created_at, access_tokens.id",
+        )
+        .bind(to_micros(SystemTime::now())?)
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter()
+            .map(|(id, label, username, created_at, last_used_at)| {
+                Ok(WallTablet {
+                    id,
+                    label,
+                    username,
+                    created_at: from_micros(created_at)?,
+                    last_used_at: from_micros(last_used_at.unwrap_or(created_at))?,
+                })
+            })
+            .collect()
+    }
+
+    /// Ferme la session d'une tablette murale. Renvoie son nom, ou `None`
+    /// si elle n'existe pas (ou plus). Une session ordinaire n'est jamais
+    /// fermée par ce chemin.
+    pub async fn forget_wall_tablet(&self, id: i64) -> Result<Option<String>, AuthError> {
+        Ok(sqlx::query_scalar(
+            "DELETE FROM access_tokens WHERE id = ?1 AND wall_label IS NOT NULL
+             RETURNING wall_label",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?)
+    }
+
+    /// Le nom de tablette murale de ce jeton, si c'en est une.
+    pub async fn wall_label_of(&self, token: &str) -> Result<Option<String>, AuthError> {
+        if !looks_like_token(token) {
+            return Ok(None);
+        }
+        Ok(sqlx::query_scalar(
+            "SELECT wall_label FROM access_tokens WHERE token_hash = ?1 AND wall_label IS NOT NULL",
+        )
+        .bind(token::hash_token(token).as_slice())
+        .fetch_optional(&self.pool)
+        .await?)
+    }
+
     /// Un jeton pour un programme (un assistant IA branché par MCP, étape
     /// 55), sans mot de passe : seule la ligne de commande du serveur en
     /// crée. `lifetime` : 1 à 365 jours. `None` si le compte n'existe pas.
@@ -263,7 +370,9 @@ impl Auth {
             .fetch_optional(&self.pool)
             .await?;
         match user_id {
-            Some(user_id) => Ok(Some(self.insert_token(user_id, lifetime, true).await?)),
+            Some(user_id) => Ok(Some(
+                self.insert_token(user_id, lifetime, true, None).await?,
+            )),
             None => Ok(None),
         }
     }
@@ -470,22 +579,52 @@ impl Auth {
         // le stocke pas !). On cherche son empreinte SHA-256 dans la base. Le
         // temps de recherche ne dépend que de l'empreinte, qui ne révèle rien
         // du jeton : pas d'attaque possible par mesure du temps de réponse.
-        let row: Option<(i64, String, String)> = sqlx::query_as(
-            "SELECT users.id, users.username, users.role
+        let now = SystemTime::now();
+        let row: Option<(i64, String, String, i64, bool, i64)> = sqlx::query_as(
+            "SELECT users.id, users.username, users.role, access_tokens.id,
+                    access_tokens.wall_label IS NOT NULL, access_tokens.expires_at
              FROM access_tokens JOIN users ON users.id = access_tokens.user_id
              WHERE access_tokens.token_hash = ?1 AND access_tokens.expires_at > ?2
                AND access_tokens.program = ?3",
         )
         .bind(token::hash_token(token).as_slice())
-        .bind(to_micros(SystemTime::now())?)
+        .bind(to_micros(now)?)
         .bind(i64::from(program))
         .fetch_optional(&self.pool)
         .await?;
-        Ok(row.map(|(id, username, role)| User {
-            id,
-            username,
-            role: role_from_db(&role),
-        }))
+        let Some((id, username, role, token_id, wall, expires_at)) = row else {
+            return Ok(None);
+        };
+        let role = role_from_db(&role);
+        if wall {
+            // Compte passé administrateur depuis : la tablette ne sert plus.
+            if role == Role::Admin {
+                return Ok(None);
+            }
+            self.renew_wall_token(token_id, expires_at, now).await?;
+        }
+        Ok(Some(User { id, username, role }))
+    }
+
+    /// Prolonge la session d'une tablette murale qui sert, une fois par jour
+    /// au plus.
+    async fn renew_wall_token(
+        &self,
+        token_id: i64,
+        expires_at: i64,
+        now: SystemTime,
+    ) -> Result<(), AuthError> {
+        let renewed = now + WALL_TOKEN_LIFETIME;
+        if expires_at >= to_micros(renewed - WALL_RENEW_EVERY)? {
+            return Ok(());
+        }
+        sqlx::query("UPDATE access_tokens SET expires_at = ?1, last_used_at = ?2 WHERE id = ?3")
+            .bind(to_micros(renewed)?)
+            .bind(to_micros(now)?)
+            .bind(token_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
     }
 
     /// Révoque un jeton (déconnexion). Renvoie `false` s'il n'existait pas.
@@ -513,29 +652,33 @@ impl Auth {
         user_id: i64,
         lifetime: Duration,
     ) -> Result<IssuedToken, AuthError> {
-        self.insert_token(user_id, lifetime, false).await
+        self.insert_token(user_id, lifetime, false, None).await
     }
 
     /// `program` : un jeton d'assistant IA, accepté seulement par
-    /// [`Auth::authenticate_program`].
+    /// [`Auth::authenticate_program`]. `wall_label` : le nom d'une tablette
+    /// murale (voir [`Auth::login_wall`]).
     async fn insert_token(
         &self,
         user_id: i64,
         lifetime: Duration,
         program: bool,
+        wall_label: Option<&str>,
     ) -> Result<IssuedToken, AuthError> {
         let token = token::generate_token()?;
         let now = SystemTime::now();
         let expires_at = now + lifetime;
         sqlx::query(
-            "INSERT INTO access_tokens (user_id, token_hash, created_at, expires_at, program)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO access_tokens
+                 (user_id, token_hash, created_at, expires_at, program, wall_label, last_used_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?3)",
         )
         .bind(user_id)
         .bind(token::hash_token(&token).as_slice())
         .bind(to_micros(now)?)
         .bind(to_micros(expires_at)?)
         .bind(i64::from(program))
+        .bind(wall_label)
         .execute(&self.pool)
         .await?;
         Ok(IssuedToken { token, expires_at })
@@ -599,6 +742,20 @@ fn check_username(username: &str) -> Result<(), AuthError> {
     } else {
         Err(AuthError::InvalidUsername)
     }
+}
+
+/// Le nom d'une tablette murale : espaces autour enlevés, 1 à
+/// [`MAX_WALL_LABEL`] caractères, sans caractère de contrôle (il est affiché
+/// dans Mon compte et dans le journal d'audit).
+fn wall_label(label: &str) -> Result<String, AuthError> {
+    let label = label.trim();
+    let length = label.chars().count();
+    if length == 0 || length > MAX_WALL_LABEL || label.chars().any(char::is_control) {
+        return Err(AuthError::InvalidWallLabel {
+            max: MAX_WALL_LABEL,
+        });
+    }
+    Ok(label.to_owned())
 }
 
 fn looks_like_token(token: &str) -> bool {

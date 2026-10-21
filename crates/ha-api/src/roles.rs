@@ -66,6 +66,7 @@ pub(crate) fn require(user: &User, permission: Permission) -> Result<(), ApiErro
             Permission::ReadAudit => "voir le journal d'audit",
             Permission::AllDevices => "voir tous les appareils",
             Permission::EditDashboard => "changer le dessin de la maison",
+            Permission::ManageTablets => "gérer les tablettes murales",
         }
     )))
 }
@@ -177,6 +178,7 @@ pub(crate) fn permissions_json(user: &User) -> Value {
         "audit": user.can(Permission::ReadAudit),
         "all_devices": user.can(Permission::AllDevices),
         "edit_dashboard": user.can(Permission::EditDashboard),
+        "tablets": user.can(Permission::ManageTablets),
         // Ce que le compte peut commander, avec les mêmes règles que
         // `can_control` : `null` veut dire « tout ».
         "controls": if user.can(Permission::AllDevices) {

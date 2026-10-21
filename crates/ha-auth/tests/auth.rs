@@ -445,3 +445,171 @@ async fn a_program_token_works_without_a_password_and_dies_with_it() {
             .is_none()
     );
 }
+
+/// Une base avec un compte administrateur (« david ») et un compte famille
+/// (« tablette ») ; renvoie aussi le `Store`, pour lire les jetons.
+async fn setup_wall() -> (Auth, Store) {
+    let store = Store::open_in_memory().await.unwrap();
+    let auth = Auth::new(&store).await.unwrap();
+    auth.create_user("david", PASSWORD).await.unwrap();
+    auth.create_user_as("tablette", PASSWORD, ha_auth::Role::Family)
+        .await
+        .unwrap();
+    (auth, store)
+}
+
+/// L'expiration (en jours depuis maintenant) de la seule tablette murale.
+async fn wall_days_left(store: &Store) -> i64 {
+    let expires_at: i64 =
+        sqlx::query_scalar("SELECT expires_at FROM access_tokens WHERE wall_label IS NOT NULL")
+            .fetch_one(store.pool())
+            .await
+            .unwrap();
+    let now = ha_storage::to_micros(std::time::SystemTime::now()).unwrap();
+    (expires_at - now) / 86_400_000_000
+}
+
+#[tokio::test]
+async fn a_wall_tablet_stays_connected_while_it_is_used() {
+    let (auth, store) = setup_wall().await;
+    let issued = auth
+        .login_wall("tablette", PASSWORD, None, IP, "  Couloir  ")
+        .await
+        .unwrap();
+    assert_eq!(
+        auth.authenticate(&issued.token)
+            .await
+            .unwrap()
+            .unwrap()
+            .username,
+        "tablette"
+    );
+    assert_eq!(wall_days_left(&store).await, 89);
+    assert_eq!(
+        auth.wall_label_of(&issued.token).await.unwrap().as_deref(),
+        Some("Couloir")
+    );
+
+    // 80 jours plus tard (simulé) : servir la prolonge de nouveau à 90 jours.
+    sqlx::query("UPDATE access_tokens SET expires_at = expires_at - 80 * 86400000000")
+        .execute(store.pool())
+        .await
+        .unwrap();
+    assert_eq!(wall_days_left(&store).await, 9);
+    assert!(auth.authenticate(&issued.token).await.unwrap().is_some());
+    assert_eq!(wall_days_left(&store).await, 89);
+
+    // Une session ordinaire, elle, n'est jamais prolongée.
+    let session = auth.login("tablette", PASSWORD, None, IP).await.unwrap();
+    assert!(auth.wall_label_of(&session.token).await.unwrap().is_none());
+    sqlx::query(
+        "UPDATE access_tokens SET expires_at = expires_at - 20 * 86400000000
+         WHERE wall_label IS NULL",
+    )
+    .execute(store.pool())
+    .await
+    .unwrap();
+    auth.authenticate(&session.token).await.unwrap().unwrap();
+    let left: i64 = sqlx::query_scalar(
+        "SELECT expires_at FROM access_tokens WHERE wall_label IS NULL AND program = 0",
+    )
+    .fetch_one(store.pool())
+    .await
+    .unwrap();
+    let now = ha_storage::to_micros(std::time::SystemTime::now()).unwrap();
+    assert_eq!((left - now) / 86_400_000_000, 9);
+
+    // Restée 90 jours sans servir : expirée.
+    sqlx::query("UPDATE access_tokens SET expires_at = 0 WHERE wall_label IS NOT NULL")
+        .execute(store.pool())
+        .await
+        .unwrap();
+    assert!(auth.authenticate(&issued.token).await.unwrap().is_none());
+    assert_eq!(auth.wall_tablets().await.unwrap(), []);
+}
+
+#[tokio::test]
+async fn an_administrator_never_stays_connected_on_a_wall_tablet() {
+    let (auth, _store) = setup_wall().await;
+    assert!(matches!(
+        auth.login_wall("david", PASSWORD, None, IP, "Couloir")
+            .await,
+        Err(AuthError::AdminOnWall)
+    ));
+    // Un mauvais mot de passe ne révèle pas que le compte est administrateur.
+    assert!(matches!(
+        auth.login_wall("david", "pas le bon mot de passe", None, IP, "Couloir")
+            .await,
+        Err(AuthError::InvalidCredentials)
+    ));
+    // Compte passé administrateur après coup : la tablette ne sert plus.
+    let issued = auth
+        .login_wall("tablette", PASSWORD, None, IP, "Couloir")
+        .await
+        .unwrap();
+    auth.set_role("tablette", ha_auth::Role::Admin)
+        .await
+        .unwrap();
+    assert!(auth.authenticate(&issued.token).await.unwrap().is_none());
+}
+
+#[tokio::test]
+async fn a_wall_tablet_needs_a_short_printable_name() {
+    let (auth, _store) = setup_wall().await;
+    for label in ["", "   ", "Cou\nloir", &"x".repeat(41)] {
+        assert!(
+            matches!(
+                auth.login_wall("tablette", PASSWORD, None, IP, label).await,
+                Err(AuthError::InvalidWallLabel { .. })
+            ),
+            "{label:?}"
+        );
+    }
+    auth.login_wall("tablette", PASSWORD, None, IP, &"é".repeat(40))
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn wall_tablets_are_listed_and_forgotten_one_by_one() {
+    let (auth, store) = setup_wall().await;
+    let couloir = auth
+        .login_wall("tablette", PASSWORD, None, IP, "Couloir")
+        .await
+        .unwrap();
+    let cuisine = auth
+        .login_wall("tablette", PASSWORD, None, IP, "Cuisine")
+        .await
+        .unwrap();
+    let session = auth.login("david", PASSWORD, None, IP).await.unwrap();
+
+    let tablets = auth.wall_tablets().await.unwrap();
+    let labels: Vec<_> = tablets.iter().map(|t| t.label.as_str()).collect();
+    assert_eq!(labels, ["Couloir", "Cuisine"]);
+    assert!(tablets.iter().all(|t| t.username == "tablette"));
+
+    // Une session ordinaire ne se ferme pas par ce chemin.
+    let session_id: i64 =
+        sqlx::query_scalar("SELECT id FROM access_tokens WHERE wall_label IS NULL")
+            .fetch_one(store.pool())
+            .await
+            .unwrap();
+    assert!(auth.forget_wall_tablet(session_id).await.unwrap().is_none());
+    assert!(auth.authenticate(&session.token).await.unwrap().is_some());
+
+    assert_eq!(
+        auth.forget_wall_tablet(tablets[0].id)
+            .await
+            .unwrap()
+            .as_deref(),
+        Some("Couloir")
+    );
+    assert!(auth.authenticate(&couloir.token).await.unwrap().is_none());
+    assert!(auth.authenticate(&cuisine.token).await.unwrap().is_some());
+    assert!(
+        auth.forget_wall_tablet(tablets[0].id)
+            .await
+            .unwrap()
+            .is_none()
+    );
+}

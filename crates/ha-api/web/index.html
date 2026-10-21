@@ -49,6 +49,12 @@
         <input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7"
                pattern="[0-9 ]{6,7}" placeholder="123 456">
       </label>
+      <!-- Étape 78 : la tablette accrochée au mur reste connectée tant qu'elle sert. -->
+      <label class="check"><input name="wall" type="checkbox"> Tablette murale : rester connectée</label>
+      <label id="wall-label-field" hidden>
+        Nom de la tablette
+        <input name="wall_label" maxlength="40" value="Tablette murale" autocomplete="off">
+      </label>
       <p id="login-error" class="error" role="alert" hidden></p>
       <button type="submit" class="primary">Se connecter</button>
     </form>
@@ -209,6 +215,12 @@
       <section id="system" class="integrations" aria-labelledby="system-title" hidden>
         <h3 id="system-title">Système</h3>
         <dl id="system-list" class="system-list"></dl>
+      </section>
+      <!-- Les tablettes murales connectées (étape 78) : réservé à l'administrateur. -->
+      <section id="tablets" class="push-option" aria-labelledby="tablets-title" hidden>
+        <h3 id="tablets-title">Tablettes murales</h3>
+        <p class="account">Elles restent connectées tant qu'elles servent. Pour en ajouter une : sur la tablette, coche « Tablette murale » à la connexion, avec un compte famille ou invité.</p>
+        <ul id="tablet-list" class="push-devices"></ul>
       </section>
       <button id="logout" class="ghost danger" type="button">Se déconnecter</button>
     </dialog>

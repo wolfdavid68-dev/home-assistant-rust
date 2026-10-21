@@ -53,7 +53,7 @@ use std::time::{Duration, Instant};
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use axum::http::{HeaderValue, StatusCode, header};
-use axum::routing::{get, post, put};
+use axum::routing::{delete, get, post, put};
 use ha_auth::Auth;
 use ha_core::CancellationToken;
 use ha_core::Core;
@@ -136,6 +136,8 @@ pub fn router(state: Arc<ApiState>) -> Router {
         .route("/api/", get(rest::root))
         .route("/api/auth/login", post(rest::login))
         .route("/api/auth/logout", post(rest::logout))
+        .route("/api/auth/tablets", get(rest::list_tablets))
+        .route("/api/auth/tablets/{id}", delete(rest::forget_tablet))
         .route("/api/auth/confirm", post(automations::confirm))
         .route("/api/automations", get(automations::list))
         .route("/api/automations/check", post(automations::check))
