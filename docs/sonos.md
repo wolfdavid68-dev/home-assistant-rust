@@ -104,7 +104,8 @@ par enceinte.
 ## Dans les automatisations
 
 ```yaml
-- alias: Le linge est fini
+- id: linge_annonce
+  alias: Le linge est fini
   triggers:
     - trigger: event
       event_type: appareil_termine
