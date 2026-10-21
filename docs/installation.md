@@ -6,7 +6,7 @@ Trois façons, selon la machine :
 | --- | --- | --- |
 | **Windows** | `ha-maison-vX.Y.Z-windows.zip` : le programme et ses fichiers | remplacer `ha-server.exe` |
 | **Linux** (Ubuntu, Debian…) | `compose.yaml` : Docker télécharge l'image tout seul | `docker compose pull && docker compose up -d` |
-| **Mini-PC dédié** sous Debian | `ha-maison-linux-x86_64.tar.gz` : le programme et son installateur | relancer `sudo ./installer.sh` |
+| **Mini-PC dédié** sous Debian | `ha-maison-linux-x86_64.tar.gz` : le programme et son installateur | automatique, chaque nuit |
 
 Tous sont sur la page des versions :
 <https://github.com/wolfdavid68-dev/home-assistant-rust/releases>.

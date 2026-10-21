@@ -103,7 +103,7 @@ sudo ha-maison user add david
 ```
 
 Ouvre <http://192.168.1.20:8123/> sur le téléphone : c'est prêt. Le serveur redémarrera tout seul
-à chaque allumage.
+à chaque allumage, et **se mettra à jour tout seul** chaque nuit (voir plus bas).
 
 ## Au quotidien
 
@@ -156,7 +156,46 @@ sudo journalctl -u ha-maison -n 20
 Par exemple « il faut HA_LATITUDE et HA_LONGITUDE ensemble ». Corrige, puis `restart` : le service
 réessaie de toute façon toutes les 5 secondes.
 
-## Mettre à jour le serveur
+## Les mises à jour du serveur, automatiques
+
+Chaque nuit vers 4 h (après la sauvegarde de 3 h 30), le mini-PC regarde s'il existe une version
+plus récente du serveur, et l'installe tout seul. Si la machine était éteinte à 4 h, il le fait au
+prochain allumage.
+
+**Prudemment :**
+
+1. Il lit d'abord l'**empreinte** (SHA-256) de la dernière archive publiée, un tout petit fichier :
+   si c'est celle déjà vue, rien n'est téléchargé.
+2. Il télécharge l'archive depuis GitHub (HTTPS) et **vérifie son empreinte** : une archive
+   abîmée ou modifiée en route est refusée, rien n'est installé.
+3. Il n'installe qu'une version **plus récente** : jamais de retour en arrière.
+4. Il **sauvegarde la base**, garde l'ancien programme, puis installe (comme `installer.sh`).
+5. Si le nouveau serveur **ne répond pas** dans les 30 secondes, il remet **tout seul** l'ancien
+   programme et la base d'avant la mise à jour, et ne retente plus cette version : il attend la
+   suivante.
+
+Tes réglages, tes comptes, l'historique et les appareils associés restent. La version installée
+s'affiche dans **Mon compte → Système**.
+
+**Ce qu'elle a fait** :
+
+```bash
+sudo journalctl -u ha-maison-maj          # par exemple « mise à jour : 0.1.0 -> 0.1.1 »
+systemctl list-timers ha-maison-maj.timer  # la prochaine fois
+```
+
+**La lancer tout de suite** : `sudo systemctl start ha-maison-maj`.
+
+**L'arrêter** (pour mettre à jour toi-même) :
+
+```bash
+sudo systemctl disable --now ha-maison-maj.timer
+```
+
+Elle reste arrêtée, même après une mise à jour à la main. Pour la remettre :
+`sudo systemctl enable --now ha-maison-maj.timer`.
+
+### À la main
 
 Les mêmes commandes que pour l'installation : la nouvelle archive, puis `sudo ./installer.sh`.
 
@@ -246,8 +285,12 @@ le port 8123 depuis la box. Pour l'accès à distance, un VPN (voir l'[étape 7]
 SSH (port 22) ne sert qu'à l'administration ; pour aller plus loin, une clé SSH à la place du mot de
 passe.
 
-**Les mises à jour** : Debian tout seul pour le système (étape 5), et `installer.sh` pour le
-serveur.
+**Les mises à jour** : Debian tout seul pour le système (étape 5), et la mise à jour de chaque nuit
+pour le serveur. Elle tourne en administrateur, puisqu'elle remplace le programme : elle fait
+donc confiance à GitHub et à ce dépôt. L'empreinte vient du même endroit que l'archive : elle
+protège d'un téléchargement abîmé ou modifié en route, pas d'un compte GitHub piraté. C'est pour
+cela qu'une version n'est publiée qu'avec l'accord de David (voir `CLAUDE.md`). Pour ne rien
+installer sans l'avoir vu, arrête-la (plus haut) et mets à jour à la main.
 
 ## Comment c'est construit
 
@@ -259,15 +302,27 @@ serveur.
 - **`packaging/linux/ha-maison.env`** : les réglages, avec les chemins de Linux.
 - **`packaging/linux/ha-maison`** : la commande d'administration. Elle lance `ha-server` sous le
   compte du service, avec ses réglages.
+- **`packaging/linux/mise-a-jour.sh`**, **`ha-maison-maj.service`** et **`ha-maison-maj.timer`** :
+  la mise à jour de chaque nuit. Ce qu'elle retient (la dernière empreinte vue, une version
+  refusée, l'ancien programme) est dans `/var/lib/ha-maison-maj`, lisible par root seul.
 - **`.github/workflows/release.yml`** : à chaque version, l'archive `ha-maison-linux-x86_64.tar.gz`
-  est compilée dans Debian 12 (le programme tourne sur Debian 12 et 13), puis jointe à la version.
-- **CI** : `shellcheck` relit les deux scripts à chaque PR.
+  est compilée dans Debian 12 (le programme tourne sur Debian 12 et 13), puis jointe à la version
+  avec son empreinte (`.sha256`, envoyée après l'archive).
+- **CI** : `shellcheck` relit les trois scripts à chaque PR.
 
 Essayé dans un Debian 13 avec systemd, depuis l'archive :
 - l'installation, le compte et la connexion ;
 - le mot de passe tapé dans un vrai terminal ;
 - un redémarrage de la machine (le service repart seul) ;
-- une mise à jour (réglages, compte et données gardés) ;
+- une mise à jour à la main (réglages, compte et données gardés) ;
+- la mise à jour automatique, avec une fausse page des versions :
+  - même version publiée : rien à faire, puis plus aucun téléchargement ;
+  - une version 0.1.1 : installée, compte et données gardés ;
+  - une version 0.1.2 qui ne démarre pas : retour tout seul à 0.1.1 avec la base d'avant, et
+    pas de nouvel essai la nuit suivante ;
+  - une archive modifiée : refusée (empreinte fausse) ;
+  - une version plus ancienne : ignorée ;
+  - arrêtée, puis l'installateur relancé : elle reste arrêtée ;
 - une sauvegarde et un fichier de pièces ;
 - la voix Piper et l'écoute sur le port 80, avec toutes les protections du service.
 
@@ -281,6 +336,14 @@ fichier texte (`.service`) ; `systemctl enable` le fait démarrer à chaque allu
 
 **`StateDirectory=`** : systemd crée lui-même les dossiers de données, avec le bon propriétaire et
 les bons droits. Avec `ProtectSystem=strict`, ce sont les seuls endroits où le service peut écrire.
+
+**Un minuteur systemd (`.timer`)** : l'équivalent de « tous les jours à 4 h ». `Persistent=true`
+rattrape une nuit où la machine était éteinte, et `RandomizedDelaySec` étale l'heure, pour que
+tous les mini-PC ne téléchargent pas à la même seconde.
+
+**Un script lu en entier avant de commencer** : `sh` lit un script ligne à ligne pendant qu'il
+tourne. La mise à jour remplace son propre fichier : tout son travail est donc dans une fonction
+`main`, que `sh` lit en entier avant de l'exécuter.
 
 **`runuser`** : lance une commande sous un autre compte, même un compte sans shell ni mot de passe
 comme `ha-maison`. La commande `ha-maison` s'en sert pour que `user add` écrive dans la base avec

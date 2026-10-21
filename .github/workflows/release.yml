@@ -133,19 +133,27 @@ jobs:
           dir="ha-maison-${TAG}-linux-x86_64"
           mkdir "$dir"
           cp target/release/ha-server LICENSE *.example.yaml "$dir"/
-          cp packaging/linux/installer.sh packaging/linux/ha-maison \
-            packaging/linux/ha-maison.service packaging/linux/ha-maison.env "$dir"/
-          chmod 0755 "$dir"/ha-server "$dir"/installer.sh "$dir"/ha-maison
+          cp packaging/linux/installer.sh packaging/linux/mise-a-jour.sh \
+            packaging/linux/ha-maison packaging/linux/ha-maison.env \
+            packaging/linux/ha-maison.service packaging/linux/ha-maison-maj.service \
+            packaging/linux/ha-maison-maj.timer "$dir"/
+          chmod 0755 "$dir"/ha-server "$dir"/installer.sh "$dir"/mise-a-jour.sh "$dir"/ha-maison
           # Un nom fixe : « releases/latest/download/… » mène toujours à la
           # dernière version (le dossier dedans porte le numéro).
           tar -czf ha-maison-linux-x86_64.tar.gz --owner=0 --group=0 "$dir"
-          ls -l ha-maison-linux-x86_64.tar.gz
+          # L'empreinte, que la mise à jour automatique lit et vérifie.
+          sha256sum ha-maison-linux-x86_64.tar.gz > ha-maison-linux-x86_64.tar.gz.sha256
+          ls -l ha-maison-linux-x86_64.tar.gz*
 
       - name: Joindre à la version
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
-        run: gh release upload "$TAG" ha-maison-linux-x86_64.tar.gz --repo "$GITHUB_REPOSITORY"
+        # L'archive d'abord, l'empreinte ensuite : un mini-PC qui voit la
+        # nouvelle empreinte trouve toujours l'archive qui va avec.
+        run: |
+          gh release upload "$TAG" ha-maison-linux-x86_64.tar.gz --repo "$GITHUB_REPOSITORY"
+          gh release upload "$TAG" ha-maison-linux-x86_64.tar.gz.sha256 --repo "$GITHUB_REPOSITORY"
 
   docker:
     name: image Docker

@@ -10,7 +10,8 @@
 #   - un compte système « ha-maison », sans mot de passe ni shell ;
 #   - le programme dans /opt/ha-maison, la commande « ha-maison » ;
 #   - les réglages dans /etc/ha-maison (jamais remplacés ensuite) ;
-#   - le service systemd, démarré tout de suite et à chaque allumage.
+#   - le service systemd, démarré tout de suite et à chaque allumage ;
+#   - la mise à jour automatique, chaque nuit (mise-a-jour.sh).
 # Les données restent dans /var/lib/ha-maison* : une mise à jour n'y touche pas.
 set -eu
 
@@ -43,6 +44,7 @@ fi
 install -d -m 0755 /opt/ha-maison
 install -m 0755 ha-server /opt/ha-maison/ha-server.nouveau
 mv -f /opt/ha-maison/ha-server.nouveau /opt/ha-maison/ha-server
+install -m 0755 mise-a-jour.sh /opt/ha-maison/mise-a-jour.sh
 install -m 0755 ha-maison /usr/local/bin/ha-maison
 
 # 3. Les réglages : lisibles par le service, modifiables seulement avec sudo.
@@ -59,10 +61,16 @@ for exemple in ./*.example.yaml; do
   install -m 0644 "$exemple" /etc/ha-maison/
 done
 
-# 4. Le service.
-install -m 0644 ha-maison.service /etc/systemd/system/ha-maison.service
+# 4. Le service, et sa mise à jour de chaque nuit. Celle-ci n'est activée
+# qu'à la première installation : si tu l'as arrêtée, elle le reste.
+maj_nouvelle=false
+[ -e /etc/systemd/system/ha-maison-maj.timer ] || maj_nouvelle=true
+install -m 0644 ha-maison.service ha-maison-maj.service ha-maison-maj.timer /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable ha-maison.service >/dev/null 2>&1
+if [ "$maj_nouvelle" = true ]; then
+  systemctl enable --now ha-maison-maj.timer >/dev/null 2>&1
+fi
 systemctl restart ha-maison.service
 
 printf "  démarrage"
@@ -84,6 +92,9 @@ fi
 
 adresse=$(hostname -I 2>/dev/null | awk '{ print $1 }')
 echo "Le serveur tourne, et redémarrera tout seul à chaque allumage."
+if systemctl is-enabled --quiet ha-maison-maj.timer; then
+  echo "Il se met à jour tout seul, chaque nuit vers 4 h."
+fi
 echo "Tableau de bord : http://${adresse:-<adresse du mini-PC>}:8123/"
 if [ "$premiere_fois" = true ]; then
   echo
