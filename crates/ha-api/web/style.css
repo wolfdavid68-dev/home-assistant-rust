@@ -532,6 +532,15 @@ input[type="range"]::-moz-range-track { background: transparent; }
 .round:disabled { opacity: 0.4; cursor: default; }
 .tile.cover.on .icon { background: var(--accent-soft); color: var(--accent); }
 
+/* Enceintes et annonces (étape 73). */
+.tile.media.on .icon { background: var(--accent-soft); color: var(--accent); }
+.media-volume { display: flex; align-items: center; gap: 8px; }
+.media-volume .round { flex: none; width: 44px; }
+.media-volume input[type="range"] { flex: 1; min-width: 0; }
+.media-volume-value { flex: none; min-width: 3.2em; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+.announce-options { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.announce-options select { flex: 1 1 9rem; min-width: 0; max-width: 100%; }
+
 /* Thermostat : un cadran, la consigne au centre. */
 .dial { position: relative; width: 132px; height: 116px; flex: none; }
 .dial svg { position: absolute; inset: 0; width: 132px; height: 132px; }

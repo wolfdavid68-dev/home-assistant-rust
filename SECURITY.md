@@ -35,8 +35,8 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
   compris ; tout droit non accordé explicitement est refusé. Un invité ne voit pas la présence de la
   famille ni l'alarme, et ne commande jamais un portail, une porte de garage ou une serrure. Les
   interrupteurs du serveur lui-même (simulation de présence, qui dit quand la maison est vide, et
-  délestage, protection solaire) lui sont cachés, comme les rappels insistants (« Garage ouvert »). Il reste
-  toujours au moins un administrateur ; les rôles ne se changent que sur la machine (`ha-server user role`).
+  délestage, protection solaire) lui sont cachés, comme les rappels insistants (« Garage ouvert ») et les
+  annonces vocales. Il reste toujours au moins un administrateur ; les rôles ne se changent que sur la machine (`ha-server user role`).
 
 ## Réseau
 
@@ -69,6 +69,11 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
   dans `alexa.yaml` sont exposés, jamais serrure, alarme, portail ni porte de garage ; seules les adresses
   autorisées (les Echo, ou à défaut le réseau local) sont servies ; serveur séparé de l'API ; chaque ordre est
   journalisé ; port 80 jamais redirigé depuis la box.
+- Sonos et annonces vocales : API locale des enceintes (UPnP), seulement vers des adresses du réseau local
+  sur le port 1400, réponses limitées à 512 Kio ; la voix (Piper) tourne sur le PC, la phrase ne part
+  jamais sur Internet ; le serveur des annonces (port 8124) est séparé de l'API, ne sert que les annonces
+  en cours (nom aléatoire de 128 bits, 10 minutes au plus) et seulement aux enceintes connues ; annonces
+  cachées aux invités.
 - Thermostat : radiateur coupé immédiatement si la température est inconnue, la fenêtre ouverte ou la
   température maximale atteinte ; consignes bornées (5 à 30 °C) ; arrêté au premier démarrage ; un radiateur
   ne peut être commandé que par un seul thermostat ; pas de rafale d'ordres vers un appareil injoignable.

@@ -2,10 +2,10 @@
 //!
 //! Un **invité** ne voit pas la présence de la famille (personnes,
 //! téléphones, zone Maison), ni l'alarme, ni les serrures et sirènes, ni
-//! l'agenda et les listes, ni les notifications et les rappels. Il ne
-//! commande que des appareils sans risque : lumières, prises, ventilateurs,
-//! scènes, et les volets (jamais un portail, une porte de garage ou une
-//! porte). Les interrupteurs du serveur lui-même (simulation de présence,
+//! l'agenda et les listes, ni les notifications, les rappels et les annonces
+//! vocales. Il ne commande que des appareils sans risque : lumières, prises,
+//! ventilateurs, scènes, la musique des enceintes, et les volets (jamais un
+//! portail, une porte de garage ou une porte). Les interrupteurs du serveur lui-même (simulation de présence,
 //! délestage, protection solaire) lui sont cachés.
 
 use ha_auth::{Permission, User};
@@ -16,11 +16,14 @@ use crate::error::ApiError;
 
 /// Domaines cachés aux invités : la présence de la famille, les messages, et
 /// ce qui dit si la maison est fermée (serrures, sirènes).
-const HIDDEN_FROM_GUESTS: [&str; 11] = [
+const HIDDEN_FROM_GUESTS: [&str; 12] = [
     // Les notifications, alertes et rappels parlent de la maison (porte
     // ouverte…).
     "persistent_notification",
     "alert",
+    // Les annonces vocales (étape 73) : un invité ne fait pas parler toutes
+    // les enceintes de la maison.
+    "tts",
     "person",
     "device_tracker",
     "zone",
@@ -43,7 +46,7 @@ const HIDDEN_SWITCHES: [&str; 3] = [
     "switch.protection_solaire",
 ];
 /// Domaines qu'un invité peut commander.
-const GUEST_CONTROLS: [&str; 5] = ["light", "switch", "fan", "scene", "cover"];
+const GUEST_CONTROLS: [&str; 6] = ["light", "switch", "fan", "scene", "cover", "media_player"];
 /// Volets qu'un invité ne commande jamais (comme Alexa).
 const FORBIDDEN_COVER_CLASSES: [&str; 3] = ["garage", "gate", "door"];
 

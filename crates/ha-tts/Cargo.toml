@@ -1,0 +1,19 @@
+[package]
+name = "ha-tts"
+description = "La voix des annonces : Piper (programme ou service Wyoming), en local, et le carillon"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["io-util", "macros", "net", "process", "rt", "time"] }
+tracing.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["io-util", "macros", "net", "process", "rt", "rt-multi-thread", "time"] }
+
+[lints]
+workspace = true

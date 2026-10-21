@@ -1,0 +1,28 @@
+[package]
+name = "ha-sonos"
+description = "Intégration Sonos (API UPnP locale) et annonces vocales"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+axum.workspace = true
+futures-util.workspace = true
+getrandom.workspace = true
+ha-core = { path = "../ha-core" }
+ha-tls = { path = "../ha-tls" }
+ha-tts = { path = "../ha-tts" }
+jiff.workspace = true
+reqwest.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["sync", "rt", "macros", "time", "net"] }
+tracing.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["sync", "rt", "rt-multi-thread", "macros", "time", "net", "test-util"] }
+
+[lints]
+workspace = true

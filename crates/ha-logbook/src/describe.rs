@@ -90,6 +90,18 @@ fn phrase(old: &State, new: &State) -> Option<String> {
             }
             .into(),
         ),
+        // Une enceinte (étape 73) : « Salon joue », « Chambre s'est arrêtée ».
+        "media_player" => Some(
+            match value {
+                "playing" => "joue",
+                "paused" => "est en pause",
+                "idle" => "s'est arrêté",
+                _ => return Some(format!("passe à « {value} »")),
+            }
+            .into(),
+        ),
+        // Une annonce : son texte.
+        "tts" => text(attributes, "dernier_message").map(|message| format!("« {message} »")),
         "water_heater" => Some(match value {
             "off" => "s'est arrêté".into(),
             mode => format!("passe en mode {}", water_heater_mode(mode)),
@@ -387,6 +399,21 @@ mod tests {
                 "détecte de la fumée !",
             ),
             ("cover.salon", "open", "closing", &none, "se ferme"),
+            ("media_player.salon", "idle", "playing", &none, "joue"),
+            (
+                "media_player.cuisine",
+                "playing",
+                "idle",
+                &json!({"friendly_name": "Cuisine"}),
+                "s'est arrêtée",
+            ),
+            (
+                "tts.annonces",
+                "2026-10-21T10:00:00Z",
+                "2026-10-21T10:05:00Z",
+                &json!({"dernier_message": "Le repas est prêt"}),
+                "« Le repas est prêt »",
+            ),
             ("person.david", "not_home", "home", &none, "est à la maison"),
             ("zone.home", "1", "0", &none, "plus personne à la maison"),
             ("zone.home", "1", "2", &none, "2 personnes à la maison"),

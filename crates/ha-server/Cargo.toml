@@ -34,8 +34,10 @@ ha-logbook = { path = "../ha-logbook" }
 ha-shedding = { path = "../ha-shedding" }
 ha-simulation = { path = "../ha-simulation" }
 ha-somfy = { path = "../ha-somfy" }
+ha-sonos = { path = "../ha-sonos" }
 ha-thermostat = { path = "../ha-thermostat" }
 ha-tls = { path = "../ha-tls" }
+ha-tts = { path = "../ha-tts" }
 ha-weather = { path = "../ha-weather" }
 ha-workday = { path = "../ha-workday" }
 jiff.workspace = true

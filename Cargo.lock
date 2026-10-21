@@ -1154,11 +1154,13 @@ dependencies = [
  "ha-shedding",
  "ha-simulation",
  "ha-somfy",
+ "ha-sonos",
  "ha-storage",
  "ha-sun",
  "ha-teleinfo",
  "ha-thermostat",
  "ha-tls",
+ "ha-tts",
  "ha-weather",
  "ha-workday",
  "jiff",
@@ -1235,6 +1237,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "ha-sonos"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "futures-util",
+ "getrandom 0.4.3",
+ "ha-core",
+ "ha-tls",
+ "ha-tts",
+ "jiff",
+ "reqwest",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "ha-storage"
 version = "0.1.0"
 dependencies = [
@@ -1297,6 +1318,16 @@ dependencies = [
  "rustls-platform-verifier",
  "sha2 0.11.1",
  "thiserror",
+]
+
+[[package]]
+name = "ha-tts"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

@@ -1406,7 +1406,7 @@ async fn a_guest_sees_and_controls_only_safe_devices() {
     assert_eq!(
         body["permissions"]["controls"],
         json!({
-            "domains": ["light", "switch", "fan", "scene", "cover"],
+            "domains": ["light", "switch", "fan", "scene", "cover", "media_player"],
             "forbidden_cover_classes": ["garage", "gate", "door"],
         })
     );

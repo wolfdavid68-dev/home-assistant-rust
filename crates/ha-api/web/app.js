@@ -260,6 +260,7 @@ const SECTIONS = [
   { title: "Lumières", domains: [], extra: (s) => isLight(s) },
   { title: "Volets", domains: ["cover"] },
   { title: "Prises et interrupteurs", domains: ["switch", "fan"], extra: (s) => isOutlet(s) },
+  { title: "Musique et annonces", domains: ["media_player", "tts"] },
   { title: "Alarme, serrures et sirènes", domains: ["alarm_control_panel", "lock", "siren"] },
   { title: "Boutons et réglages", domains: ["button", "number", "select", "text", "event"] },
   { title: "Eau et air", domains: ["valve", "humidifier", "water_heater"] },
@@ -662,6 +663,8 @@ function renderTileContent(state) {
     case "lock": return lockTile(state);
     case "valve": return valveTile(state);
     case "vacuum": return vacuumTile(state);
+    case "media_player": return mediaTile(state);
+    case "tts": return announceTile(state);
     case "water_heater": return waterHeaterTile(state);
     case "todo": return todoTile(state);
     case "fan": return fanTile(state);
@@ -872,6 +875,115 @@ function vacuumTile(state) {
         : commandButton(state, "start", "Lancer le ménage", { icon: ICONS.play }),
       commandButton(state, "stop", "Arrêter", { icon: ICONS.stop }),
       commandButton(state, "return_to_base", "Renvoyer à sa base", { icon: ICONS.home })),
+  );
+}
+
+// ----- Enceintes et annonces (étape 73)
+
+const MEDIA_LABELS = { playing: "Lecture", paused: "En pause", idle: "À l'arrêt" };
+
+function mediaTile(state) {
+  const a = state.attributes;
+  const playing = state.state === "playing";
+  const known = ["playing", "paused", "idle"].includes(state.state);
+  const what = [a.media_title, a.media_artist].filter((t) => typeof t === "string" && t !== "").join(" — ");
+  const channel = typeof a.media_channel === "string" && a.media_channel !== "" ? a.media_channel : "";
+  const group = (Array.isArray(a.group_members) ? a.group_members : [])
+    .map((id) => entities.get(id))
+    .filter(Boolean)
+    .map(nameOf);
+  const text = [
+    known ? MEDIA_LABELS[state.state] : statusText(state),
+    state.state !== "idle" ? [channel, what].filter(Boolean).join(" · ") : "",
+    group.length > 0 ? `avec ${joinNames(group)}` : "",
+  ].filter(Boolean).join(" · ");
+  const volume = finite(a.volume_level) ? Math.round(a.volume_level * 100) : 0;
+  const muted = a.is_volume_muted === true;
+  const slider = el("input", {
+    type: "range", min: "0", max: "100", value: String(volume),
+    "aria-label": `Volume de ${nameOf(state)}`,
+  });
+  fillSlider(slider);
+  slider.addEventListener("change", () => {
+    markPending(state.entity_id);
+    callService("media_player", "volume_set", { entity_id: state.entity_id, volume_level: Number(slider.value) / 100 });
+  });
+  const mute = commandButton(state, "volume_mute", muted ? "Remettre le son" : "Couper le son", {
+    icon: muted ? ICONS.muted : ICONS.speaker, pressed: muted, data: { is_volume_muted: !muted },
+  });
+  const classes = [tileClass(state, "media")];
+  if (playing) classes.push("on");
+  return el(
+    "div",
+    { id: tileId(state.entity_id), class: classes.join(" ") },
+    tileHead(state, ICONS.speaker, text),
+    el("div", { class: "cover-buttons" },
+      commandButton(state, "media_previous_track", "Morceau précédent", { icon: ICONS.previous }),
+      playing
+        ? commandButton(state, "media_pause", "Mettre en pause", { icon: ICONS.pause })
+        : commandButton(state, "media_play", "Lancer la lecture", { icon: ICONS.play }),
+      commandButton(state, "media_next_track", "Morceau suivant", { icon: ICONS.next })),
+    el("div", { class: "media-volume" }, mute, slider, el("span", { class: "media-volume-value", text: `${volume}\u202f%` })),
+  );
+}
+
+// Le texte en cours d'écriture survit au rafraîchissement de la tuile.
+const announceDraft = { message: "", target: "", volume: "" };
+
+function announceTile(state) {
+  const a = state.attributes;
+  const speakers = (Array.isArray(a.enceintes) ? a.enceintes : []).filter((id) => entities.has(id));
+  const voice = typeof a.voix === "string" ? a.voix : "";
+  const hasVoice = voice !== "" && !voice.startsWith("aucune");
+  const last = typeof a.dernier_message === "string" && !Number.isNaN(Date.parse(state.state))
+    ? `Dernière il y a ${ago(state.state)} : « ${a.dernier_message} »`
+    : hasVoice ? `Voix : ${voice}` : "Pas de voix installée : carillon seulement";
+  const input = el("input", {
+    type: "text", maxlength: "500", autocomplete: "off", value: announceDraft.message,
+    placeholder: hasVoice ? "Le repas est prêt" : "Installe Piper pour parler (docs/sonos.md)",
+    "aria-label": "Message à annoncer",
+  });
+  input.disabled = !hasVoice;
+  input.addEventListener("input", () => { announceDraft.message = input.value; });
+  const target = el("select", { "aria-label": "Enceintes" });
+  target.append(el("option", { value: "", text: "Partout" }));
+  for (const id of speakers) target.append(el("option", { value: id, text: nameOf(entities.get(id)) }));
+  target.value = speakers.includes(announceDraft.target) ? announceDraft.target : "";
+  target.addEventListener("change", () => { announceDraft.target = target.value; });
+  const volume = el("select", { "aria-label": "Volume de l'annonce" });
+  for (const [value, text] of [["", "Volume actuel"], ["30", "30\u202f%"], ["50", "50\u202f%"], ["70", "70\u202f%"]]) {
+    volume.append(el("option", { value, text }));
+  }
+  volume.value = announceDraft.volume;
+  volume.addEventListener("change", () => { announceDraft.volume = volume.value; });
+  const send = (withMessage) => {
+    const data = {
+      entity_id: state.entity_id,
+      media_player_entity_id: target.value === "" ? speakers : target.value,
+    };
+    if (withMessage) data.message = input.value;
+    if (volume.value !== "") data.volume = Number(volume.value);
+    markPending(state.entity_id);
+    callService("tts", "speak", data);
+  };
+  const form = el("form", { class: "add-form announce-form" }, input,
+    el("button", { type: "submit", class: "action-button", text: "Annoncer" }));
+  form.querySelector("button").disabled = !hasVoice;
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (input.value.trim() === "" || speakers.length === 0) return;
+    send(true);
+    input.value = "";
+    announceDraft.message = "";
+  });
+  const chime = el("button", { type: "button", class: "ghost small", text: "Carillon seul" });
+  chime.addEventListener("click", () => { if (speakers.length > 0) send(false); });
+  return el(
+    "div",
+    { id: tileId(state.entity_id), class: "tile sensor announce" },
+    tileHead(state, ICONS.megaphone, last),
+    form,
+    el("div", { class: "announce-options" }, target, volume, chime),
   );
 }
 
@@ -2014,6 +2126,11 @@ const ICONS = {
   occupancy: ["M12 4a2 2 0 1 0 0 4 2 2 0 1 0 0-4z", "M8 21v-6l-2-1 2-5h8l2 5-2 1v6"],
   bell: ["M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9", "M10 21a2 2 0 0 0 4 0"],
   play: ["M8 5v14l11-7z"],
+  previous: ["M18 6l-9 6 9 6z", "M6 6v12"],
+  next: ["M6 6l9 6-9 6z", "M18 6v12"],
+  speaker: ["M4 9h4l5-4v14l-5-4H4z", "M16.5 9a4 4 0 0 1 0 6", "M19 6.5a8 8 0 0 1 0 11"],
+  muted: ["M4 9h4l5-4v14l-5-4H4z", "M17 9.5l5 5", "M22 9.5l-5 5"],
+  megaphone: ["M3 10v4h3l10 5V5L6 10z", "M19 9.5a3 3 0 0 1 0 5", "M6 14l1.5 5h3L9 15"],
   sparkle: ["M12 3v4", "M12 17v4", "M3 12h4", "M17 12h4", "M6 6l2.5 2.5", "M15.5 15.5L18 18", "M6 18l2.5-2.5", "M15.5 8.5L18 6"],
   chart: ["M4 19h16", "M4 15l4-5 4 3 6-7"],
   moon: ["M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"],
@@ -2534,6 +2651,8 @@ const SERVICES = {
   text: [["set_value", "Écrire"]],
   alarm_control_panel: [["alarm_arm_away", "Armer (absence)"], ["alarm_arm_home", "Armer (présence)"], ["alarm_arm_night", "Armer (nuit)"], ["alarm_disarm", "Désarmer"]],
   calendar: [["create_event", "Ajouter un rendez-vous"]],
+  media_player: [["media_play", "Lancer la lecture"], ["media_pause", "Mettre en pause"], ["media_stop", "Arrêter"], ["media_next_track", "Morceau suivant"], ["volume_set", "Régler le volume"], ["volume_mute", "Couper ou remettre le son"]],
+  tts: [["speak", "Faire une annonce"]],
 };
 const SUN_EVENTS = [["sunrise", "lever du soleil"], ["sunset", "coucher du soleil"], ["dawn", "aube"], ["dusk", "crépuscule"]];
 const WEEKDAYS = [["mon", "lun"], ["tue", "mar"], ["wed", "mer"], ["thu", "jeu"], ["fri", "ven"], ["sat", "sam"], ["sun", "dim"]];
@@ -3515,6 +3634,32 @@ function actionFields(a, refresh) {
     fields.push(textField("Titre (facultatif)", a.data, "title"), textField("Message", a.data, "message", { placeholder: MESSAGE_EXAMPLE }));
     delete extra.title;
     delete extra.message;
+  } else if (a.action === "media_player.volume_set") {
+    // Volume en % à l'écran, 0 à 1 dans la configuration (comme Home Assistant).
+    const shown = typeof a.data.volume_level === "number" ? Math.round(a.data.volume_level * 100) : "";
+    const input = el("input", { type: "number", min: "0", max: "100", inputmode: "numeric", value: shown });
+    input.addEventListener("input", () => {
+      const percent = Number(input.value);
+      if (input.value === "" || !Number.isFinite(percent)) delete a.data.volume_level;
+      else a.data.volume_level = Math.min(100, Math.max(0, percent)) / 100;
+      changed();
+    });
+    fields.push(field("Volume (%)", input));
+    delete extra.volume_level;
+  } else if (a.action === "media_player.volume_mute") {
+    fields.push(selectField("Son", a.data, "is_volume_muted", [[true, "Couper"], [false, "Remettre"]]));
+    delete extra.is_volume_muted;
+  } else if (a.action === "tts.speak") {
+    fields.push(
+      textField("Enceinte(s)", a.data, "media_player_entity_id", { placeholder: "media_player.salon, media_player.cuisine", list: true }),
+      textField("Message", a.data, "message", { placeholder: "Le linge est fini. {{ states('sensor.lave_linge') }}" }),
+      numberField("Volume % (facultatif)", a.data, "volume"),
+      selectField("Carillon avant", a.data, "carillon", [[true, "Oui"], [false, "Non"]], true),
+    );
+    delete extra.media_player_entity_id;
+    delete extra.message;
+    delete extra.volume;
+    delete extra.carillon;
   } else if (a.action === "notify.send_message") {
     fields.push(textField("Titre (facultatif)", a.data, "title"), textField("Message", a.data, "message", { placeholder: MESSAGE_EXAMPLE }));
     fields.push(selectField("Priorité", a.data, "priority", [[1, "1 (discrète)"], [2, "2"], [3, "3 (normale)"], [4, "4"], [5, "5 (urgente)"]], true));
@@ -4624,9 +4769,9 @@ function showDashboard() {
 }
 
 // Rafraîchit les « il y a … » chaque minute.
-// (Sauf si un curseur de luminosité est en train d'être utilisé.)
+// (Sauf si un curseur ou un champ de texte est en train d'être utilisé.)
 setInterval(() => {
-  if (entities.size && document.activeElement?.type !== "range") renderAll();
+  if (entities.size && !["range", "text"].includes(document.activeElement?.type)) renderAll();
 }, 60_000);
 
 if (token.get()) showDashboard();

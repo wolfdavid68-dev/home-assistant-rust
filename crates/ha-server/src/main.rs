@@ -22,6 +22,8 @@
 //! ha-server freebox pair          associe la Freebox (lecture seule)
 //! ha-server freebox devices       liste les appareils du réseau
 //! ha-server freebox track <MAC> <nom>  suit la présence d'un appareil
+//! ha-server sonos                 liste les enceintes Sonos trouvées
+//! ha-server voix "<phrase>"       essaie la voix des annonces (essai-voix.wav)
 //! ha-server automations check     vérifie automatisations, scripts et scènes
 //! ha-server automations list      liste les automatisations (fichier et éditeur)
 //! ha-server automations delete <id>  supprime une automatisation de l'éditeur
@@ -97,6 +99,10 @@
 //! - `HA_ALEXA_IP` : adresse de cette machine sur le réseau local, pour
 //!   piloter les appareils de `alexa.yaml` à la voix (`HA_ALEXA_PATH`,
 //!   `HA_ALEXA_PORT` (80), `HA_ALEXA_ALLOWED` : adresses des Echo) ;
+//! - `HA_SONOS` : `auto` (les chercher) ou l'adresse d'une enceinte Sonos ;
+//!   `HA_SONOS_AUDIO` : adresse de ce PC vue par les enceintes (devinée par
+//!   défaut, port 8124) ; `HA_PIPER` : la voix des annonces, programme
+//!   `piper` ou service `tcp://hôte:10200` ; `HA_PIPER_VOIX` : la voix ;
 //! - `HA_AUTOMATION_EDITOR` : `on` (par défaut) ou `off` pour un éditeur
 //!   d'automatisations en lecture seule dans le tableau de bord ;
 //! - `RUST_LOG` : niveau de détail des logs (par défaut `info`).
@@ -163,6 +169,15 @@ async fn main() -> ExitCode {
         ["hue", rest @ ..] => cli::hue_command(rest).await,
         ["somfy", rest @ ..] => cli::somfy_command(rest).await,
         ["freebox", rest @ ..] => cli::freebox_command(rest).await,
+        ["sonos"] => match sonos_hosts() {
+            Ok(hosts) => cli::list_sonos(&hosts).await,
+            Err(error) => Err(error.into()),
+        },
+        ["voix", phrase] => match tts_config() {
+            Ok(Some(tts)) => cli::test_voice(&tts, phrase).await,
+            Ok(None) => Err("indique la voix avec HA_PIPER : voir docs/sonos.md".into()),
+            Err(error) => Err(error.into()),
+        },
         ["automations", rest @ ..] => cli::automations_command(rest).await,
         ["areas", "check"] => cli::check_areas(&areas_path()),
         ["calendriers", "check"] => cli::check_calendars(&calendars_path()),
@@ -342,6 +357,7 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     let energy_config = ha_energy::load(&energy_path())
         .map_err(|error| format!("{} : {error}", energy_path().display()))?;
     let teleinfo_config = teleinfo_config()?;
+    let sonos_config = sonos_config()?;
     let thermostat_configs = ha_thermostat::load(&thermostats_path())
         .map_err(|error| format!("{} : {error}", thermostats_path().display()))?;
     if location.is_none() && ha_automation::uses_sun(&automations) {
@@ -656,6 +672,12 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
             None
         }
     };
+    // Sonos (étape 73) : les enceintes et les annonces vocales.
+    let sonos = sonos_config.and_then(|config| {
+        ha_sonos::Sonos::start(config, Arc::clone(&core))
+            .inspect_err(|error| warn!("Sonos désactivé : {error}"))
+            .ok()
+    });
     // Alexa : un souci (port 80 déjà pris, droits insuffisants) ne doit pas
     // empêcher le reste de la maison de fonctionner.
     let alexa = match alexa_settings {
@@ -682,8 +704,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         && somfy.is_none()
         && freebox.is_none()
         && teleinfo.is_none()
+        && sonos.is_none()
     {
-        info!("aucun appareil configuré (MQTT, Hue, Somfy, Freebox) : appareils simulés");
+        info!("aucun appareil configuré (MQTT, Hue, Somfy, Freebox, Sonos) : appareils simulés");
         Some(tokio::spawn(simulate_devices(Arc::clone(&core))))
     } else {
         None
@@ -772,6 +795,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     }
     if let Some(freebox) = freebox {
         freebox.stop().await;
+    }
+    if let Some(sonos) = sonos {
+        sonos.stop().await;
     }
     if let Some(somfy) = somfy {
         somfy.stop().await;
@@ -892,6 +918,45 @@ pub(crate) fn energy_path() -> std::path::PathBuf {
 }
 
 /// Le compteur Linky (`HA_TELEINFO`), s'il est branché.
+/// `HA_SONOS` : les enceintes (vide : les chercher).
+fn sonos_hosts() -> Result<Vec<String>, String> {
+    ha_sonos::parse_hosts(&std::env::var("HA_SONOS").unwrap_or_default())
+}
+
+/// `HA_PIPER` et `HA_PIPER_VOIX` : la voix des annonces.
+fn tts_config() -> Result<Option<ha_tts::Tts>, String> {
+    let Ok(piper) = std::env::var("HA_PIPER") else {
+        return Ok(None);
+    };
+    let voice = std::env::var("HA_PIPER_VOIX").ok();
+    ha_tts::Tts::from_settings(&piper, voice.as_deref())
+        .map(Some)
+        .map_err(|error| error.to_string())
+}
+
+/// Les réglages Sonos, si `HA_SONOS` est là.
+fn sonos_config() -> Result<Option<ha_sonos::Config>, String> {
+    if std::env::var_os("HA_SONOS").is_none() {
+        return Ok(None);
+    }
+    let mut config = ha_sonos::Config::new(sonos_hosts()?);
+    if let Ok(audio) = std::env::var("HA_SONOS_AUDIO") {
+        let (address, port) = ha_sonos::parse_audio(&audio)?;
+        config.audio_address = Some(address.into());
+        config.audio_port = port;
+    }
+    // Une voix mal installée n'empêche pas le reste : les annonces se
+    // limitent alors au carillon, et le journal dit pourquoi.
+    config.tts = match tts_config() {
+        Ok(tts) => tts,
+        Err(error) => {
+            warn!("voix des annonces : {error}");
+            None
+        }
+    };
+    Ok(Some(config))
+}
+
 fn teleinfo_config() -> Result<Option<ha_teleinfo::Config>, String> {
     let Ok(source) = std::env::var("HA_TELEINFO") else {
         return Ok(None);
