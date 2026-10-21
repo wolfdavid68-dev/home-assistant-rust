@@ -2832,6 +2832,10 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .hub-event-text b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hub-event-text small { color: var(--muted); font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hub-event-text small:empty { display: none; }
+/* Le prochain rendez-vous partage sa ligne avec « dans 23 min » : son titre
+   passe sur deux lignes plutôt que d'être coupé. */
+.hub-event.next .hub-event-text { flex: 1; }
+.hub-event.next .hub-event-text b { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
 .hub-event-when { margin-left: auto; color: #03a9f4; font-weight: 600; font-size: 0.82rem; white-space: nowrap; }
 .hub-empty { margin: 4px; color: var(--muted); font-size: 0.9rem; }
 
