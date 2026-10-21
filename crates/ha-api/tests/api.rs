@@ -611,6 +611,7 @@ async fn dashboard_files_are_served_with_security_headers() {
         ("/canvas.js", "text/javascript; charset=utf-8"),
         ("/house.js", "text/javascript; charset=utf-8"),
         ("/agenda.js", "text/javascript; charset=utf-8"),
+        ("/hub.js", "text/javascript; charset=utf-8"),
         ("/house.svg", "image/svg+xml"),
         ("/style.css", "text/css; charset=utf-8"),
         ("/icon.svg", "image/svg+xml"),
@@ -713,6 +714,7 @@ fn dashboard_never_uses_inner_html() {
         ("canvas.js", include_str!("../web/canvas.js")),
         ("house.js", include_str!("../web/house.js")),
         ("agenda.js", include_str!("../web/agenda.js")),
+        ("hub.js", include_str!("../web/hub.js")),
         ("sw.js", include_str!("../web/sw.js")),
     ];
     for (name, script) in scripts {

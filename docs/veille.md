@@ -24,6 +24,9 @@ Après **5 minutes sans contact**, en mode tablette :
 Le contenu est mis à jour toutes les 20 secondes. En portrait, le dessin passe au-dessus de
 l'horloge. Sans dessin (mise en page classique), l'horloge est centrée.
 
+Avec la [vue hub](hub.md) (étape 80), l'écran de veille prend le dessin au centre de la vue hub,
+et le lui rend au réveil.
+
 ## Pensé pour un mur
 
 - **Plus sombre la nuit** : quand le soleil est couché (`sun.sun`, ou de 22 h à 7 h sans lui), tout

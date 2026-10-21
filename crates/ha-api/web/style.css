@@ -25,34 +25,37 @@
 /* Mise en page : une colonne sur téléphone ; à partir de 1000 px, la vue
    d'ensemble (plan, scènes) reste à gauche et les appareils défilent à droite. */
 :root {
-  --bg: #f2f4f7;
-  --sky-1: #d7e0ee;
-  --sky-2: #e9edf4;
-  --card: #ffffff;
-  --card-2: #f2f4f7;
-  --line: #e1e6ed;
-  --text: #141b2b;
-  --text-2: #2b3446;
-  --muted: #4a5568;
-  --accent: #2643c4;
+  /* « Pierre » : pas de blanc pur, un beige chaud et des cartes ivoire, avec
+     un accent indigo. Moins éblouissant, surtout sur une tablette allumée
+     toute la journée, et accordé à la lumière chaude des maquettes 3D. */
+  --bg: #e8e5df;
+  --sky-1: #ddd8cf;
+  --sky-2: #e4e0d9;
+  --card: #f4f2ee;
+  --card-2: #eae6df;
+  --line: #d8d2c8;
+  --text: #1f1b17;
+  --text-2: #3b352f;
+  --muted: #5d564e;
+  --accent: #4b44c8;
   --accent-ink: #ffffff;
-  --accent-soft: #eaeffc;
+  --accent-soft: #e2dff4;
   --glow: #ffd666;
   --glow-ink: #3b2a05;
-  --glow-soft: #fff6dc;
-  --glow-line: #f3dc9a;
+  --glow-soft: #f4e7c6;
+  --glow-line: #ecd598;
   --glow-bar: #d9a00d;
   --heat: #f0703a;
   --heat-ink: #9a3a0e;
-  --heat-soft: #ffe7da;
+  --heat-soft: #f3dccd;
   --ok: #1d7f53;
-  --ok-soft: #ddf3e8;
+  --ok-soft: #d8e7da;
   --alert: #c2361f;
   --alert-ink: #7a1e0e;
-  --alert-soft: #fde7e1;
-  --alert-stripe: #fbd3ca;
-  --shadow: 0 1px 2px rgb(20 27 43 / 0.06), 0 10px 28px rgb(20 27 43 / 0.07);
-  --shadow-float: 0 1px 2px rgb(20 27 43 / 0.08), 0 14px 34px rgb(20 27 43 / 0.16);
+  --alert-soft: #f2dbd2;
+  --alert-stripe: #eac4b9;
+  --shadow: 0 1px 2px rgb(31 27 23 / 0.06), 0 10px 28px rgb(31 27 23 / 0.07);
+  --shadow-float: 0 1px 2px rgb(31 27 23 / 0.08), 0 14px 34px rgb(31 27 23 / 0.16);
   --radius: 22px;
   --font: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-display: "Bricolage Grotesque", "Geist", ui-sans-serif, system-ui, sans-serif;
@@ -80,7 +83,7 @@
   --tempo-blue-ink: #ffffff;
   --tempo-white: #ffffff;
   /* La barre du navigateur, sur téléphone. */
-  --bar: #d7e0ee;
+  --bar: #ddd8cf;
   color-scheme: light;
 }
 
@@ -1626,12 +1629,12 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .house, .gauges, .title-block, .room-hum, .room-line, .board-covers, .house-actions, .board-people, .board-charts { display: none; }
 
 :root[data-theme="plan"] {
-  --bar: #f3f5f9;
-  --bg: #f3f5f9;
-  --sky-1: #f3f5f9;
-  --sky-2: #f3f5f9;
-  --card: #fdfdfe;
-  --card-2: #edf1f8;
+  --bar: #e4e8ef;
+  --bg: #e4e8ef;
+  --sky-1: #e4e8ef;
+  --sky-2: #e4e8ef;
+  --card: #f0f2f6;
+  --card-2: #e1e6ee;
   --line: #c3cde0;
   --ink: #24418f;
   --ink-line: #9fb0d3;
@@ -1642,13 +1645,13 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
   --muted: #54638a;
   --accent: #24418f;
   --accent-ink: #ffffff;
-  --accent-soft: #e3e9f7;
+  --accent-soft: #d9e0f1;
   --glow: #f5d25c;
   --glow-ink: #3f3108;
-  --glow-soft: #fbf3d2;
+  --glow-soft: #f3e8c4;
   --glow-line: #e3c76d;
   --glow-bar: #c99a12;
-  --heat-soft: #fde6da;
+  --heat-soft: #f4dccf;
   --shadow: none;
   --shadow-float: 0 0 0 1.5px var(--ink), 0 22px 48px rgb(36 65 143 / 0.18);
   --radius: 5px;
@@ -2756,3 +2759,186 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 [data-theme="maquette"] .agenda-event { background: #1c1b22; }
 /* Le style « plan » : à l'encre. */
 [data-theme|="plan"] .agenda-card { box-shadow: 0 0 0 1.25px var(--ink); border-radius: 6px; }
+
+/* ---------------------------------------------------------------- La vue hub (étape 80)
+   La tablette murale, à l'horizontale : le dessin de la maison au centre,
+   l'heure, la météo et l'agenda à gauche, les scènes et les pièces à droite.
+   Par-dessus le tableau de bord (les fenêtres s'ouvrent au-dessus). */
+:root[data-hub="on"] body { overflow: hidden; }
+.hub {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  grid-template-columns: minmax(260px, 25%) minmax(0, 1fr) minmax(280px, 27%);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 16px 18px;
+  padding: 18px 22px 20px;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+}
+.hub[hidden] { display: none; }
+[data-theme="maquette"] .hub {
+  background:
+    radial-gradient(1100px 760px at 8% 8%, rgb(10 70 86 / 0.55), transparent 65%),
+    radial-gradient(1100px 760px at 10% 100%, rgb(70 24 110 / 0.6), transparent 65%),
+    radial-gradient(1300px 900px at 100% 45%, rgb(110 14 52 / 0.62), transparent 68%),
+    radial-gradient(900px 700px at 60% 100%, rgb(60 14 80 / 0.5), transparent 70%),
+    #12101c;
+}
+.hub button { font: inherit; color: inherit; }
+.hub-card { background: var(--card); border-radius: 18px; padding: 14px 16px; }
+.hub-card h2 { display: flex; justify-content: space-between; align-items: baseline; margin: 0 4px 8px; font: 600 1rem var(--font); letter-spacing: normal; text-transform: none; color: var(--text); }
+.hub-card h2 small { font-size: 0.8rem; font-weight: 500; color: var(--muted); }
+
+/* En haut : qui est là, l'alerte, la connexion. */
+.hub-top { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; min-width: 0; }
+.hub-top p { margin: 0; }
+.hub-people { display: flex; gap: 6px; }
+.hub-avatar { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 0.9rem; color: #fff; background: var(--person); box-shadow: 0 0 0 2px var(--bg); }
+.hub-avatar.away { opacity: 0.35; }
+.hub-pill { background: var(--card); border-radius: 999px; padding: 7px 14px; font-size: 0.88rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hub-alert { display: flex; align-items: center; gap: 8px; background: rgb(255 152 0 / 0.18); color: #ffd08a; padding-block: 5px; }
+.hub-alert b { color: var(--text); font-weight: 600; }
+.hub-alert svg { width: 20px; height: 20px; flex: none; }
+.hub-alert-action { border: 0; border-radius: 999px; padding: 5px 14px; background: rgb(255 255 255 / 0.16); font-weight: 600; cursor: pointer; }
+:root:not([data-theme="maquette"]):not([data-theme="dark"]):not([data-theme="plan-nuit"]) .hub-alert { color: #8a4b00; }
+.hub-live { margin-left: auto !important; display: flex; align-items: center; gap: 7px; font-size: 0.82rem; color: var(--muted); }
+.hub-live i { width: 8px; height: 8px; border-radius: 50%; background: #9e9e9e; }
+.hub-live i.on { background: #66bb6a; box-shadow: 0 0 8px #66bb6a; }
+
+/* À gauche : l'heure, la météo, l'agenda. */
+.hub-left, .hub-right { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+.hub-time p { margin: 0; }
+.hub-clock { font-family: var(--font-display); font-weight: 300; font-size: clamp(4rem, 7.4vw, 6.6rem); line-height: 0.95; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
+.hub-date { margin-top: 6px !important; font-size: 1.2rem; color: var(--muted); }
+.hub-greeting { margin-top: 10px !important; font-size: 1rem; line-height: 1.45; color: var(--muted); }
+.hub-greeting a { color: var(--text); font-weight: 600; }
+.hub-weather-now { display: flex; align-items: center; gap: 12px; }
+.hub-weather-now svg { width: 42px; height: 42px; color: #ffb74d; stroke-width: 1.5; flex: none; }
+.hub-weather-now strong { font-family: var(--font-display); font-weight: 300; font-size: 2.6rem; }
+.hub-weather-now span { display: grid; font-size: 0.92rem; }
+.hub-weather-now small { color: var(--muted); }
+.hub-forecast { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.hub-forecast:empty { display: none; }
+.hub-forecast li { display: grid; justify-items: center; gap: 3px; padding: 7px 0; border-radius: 12px; background: var(--card-2); font-size: 0.75rem; color: var(--muted); }
+.hub-forecast li::first-letter { text-transform: uppercase; }
+.hub-forecast svg { width: 18px; height: 18px; }
+.hub-forecast b { color: var(--text); font-size: 0.95rem; }
+.hub-agenda { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 2px; }
+.hub-event { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 6px; border: 0; border-radius: 12px; background: none; text-align: left; cursor: pointer; }
+.hub-event.next { background: rgb(3 169 244 / 0.13); }
+.hub-event-bar { width: 4px; align-self: stretch; border-radius: 4px; background: var(--ev); flex: none; }
+.hub-event-time { width: 44px; flex: none; font-family: var(--font-mono, monospace); font-size: 0.85rem; color: var(--muted); }
+.hub-event-text { display: grid; min-width: 0; }
+.hub-event-text b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-event-text small { color: var(--muted); font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-event-text small:empty { display: none; }
+/* Un rendez-vous qui partage sa ligne avec « dans 23 min » ou « en cours » : son titre
+   passe sur deux lignes plutôt que d'être coupé. */
+.hub-event:has(.hub-event-when) .hub-event-text { flex: 1; }
+.hub-event:has(.hub-event-when) .hub-event-text b { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
+.hub-event-when { margin-left: auto; color: #03a9f4; font-weight: 600; font-size: 0.82rem; white-space: nowrap; }
+.hub-event-when.now { color: #66bb6a; }
+:root:is([data-theme="light"], [data-theme="plan"]) .hub-event.next { background: var(--accent-soft); }
+:root:is([data-theme="light"], [data-theme="plan"]) .hub-event-when { color: var(--accent); }
+:root:is([data-theme="light"], [data-theme="plan"]) .hub-event-when.now { color: var(--ok); }
+.hub-empty { margin: 4px; color: var(--muted); font-size: 0.9rem; }
+
+/* Au centre : la maison. */
+.hub-center { position: relative; min-height: 0; border-radius: 22px; overflow: hidden; background: var(--card-2); }
+[data-theme="maquette"] .hub-center, [data-theme="dark"] .hub-center, [data-theme="plan-nuit"] .hub-center { background: radial-gradient(70% 70% at 50% 55%, rgb(255 190 120 / 0.06), transparent 70%), rgb(0 0 0 / 0.18); }
+.hub-house { position: absolute; inset: 0; container-type: size; display: grid; place-items: center; }
+.hub-house #house-stage { width: min(96cqw, calc(96cqh * var(--ratio, 1.35))); }
+/* Sur fond sombre, le fond noir d'une maquette 3D se fond dans le décor : on
+   garde le plus clair des deux, et les bords s'effacent. */
+[data-theme="maquette"] .hub-house #house-stage, [data-theme="dark"] .hub-house #house-stage, [data-theme="plan-nuit"] .hub-house #house-stage {
+  -webkit-mask-image: radial-gradient(closest-side, #000 84%, transparent 100%);
+  mask-image: radial-gradient(closest-side, #000 84%, transparent 100%);
+}
+[data-theme="maquette"] .hub-house .house-stage img, [data-theme="dark"] .hub-house .house-stage img, [data-theme="plan-nuit"] .hub-house .house-stage img { mix-blend-mode: lighten; }
+/* La maquette 3D détourée (house.js, makeCutout) : sur un thème clair, et
+   dans la vue hub quel que soit le thème, la maison flotte sur la page avec
+   une ombre douce, au lieu d'un rectangle de fond noir. */
+:root:is([data-theme="light"], [data-theme="plan"]) .house-stage.cutout,
+.hub-house .house-stage.cutout { isolation: isolate; overflow: visible; }
+:root:is([data-theme="light"], [data-theme="plan"]) .house-stage.cutout img,
+.hub-house .house-stage.cutout img {
+  -webkit-mask-image: var(--house-cut);
+  mask-image: var(--house-cut);
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  mix-blend-mode: normal;
+}
+:root:is([data-theme="light"], [data-theme="plan"]) .house-stage.cutout::before,
+.hub-house .house-stage.cutout::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 -8% 0;
+  z-index: -1;
+  background: var(--house-shadow) center / 100% 100% no-repeat;
+  pointer-events: none;
+}
+/* Plus besoin du fondu en cercle : il rognait les coins du socle. */
+:root .hub-house #house-stage.cutout { -webkit-mask-image: none; mask-image: none; }
+.hub-views { position: absolute; z-index: 2; left: 14px; top: 12px; display: flex; padding: 3px; border-radius: 12px; background: var(--card); border: 1px solid var(--line, transparent); }
+.hub-views button { border: 0; background: none; padding: 6px 14px; border-radius: 9px; font-size: 0.85rem; color: var(--muted); cursor: pointer; }
+.hub-views button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+[data-theme="maquette"] .hub-views { background: rgb(0 0 0 / 0.4); }
+[data-theme="maquette"] .hub-views button.on { background: rgb(255 255 255 / 0.12); color: #fff; }
+.hub-hint { position: absolute; z-index: 2; right: 16px; bottom: 12px; margin: 0; font-size: 0.8rem; color: var(--muted); }
+
+/* À droite : les scènes, les pièces. */
+.hub-scenes { display: grid; grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr)); gap: 10px; }
+.hub-scenes.narrow .hub-scene { min-height: 74px; padding: 11px; }
+.hub-scenes.narrow .hub-scene b { font-size: 0.92rem; line-height: 1.2; }
+.hub-scene { display: grid; gap: 8px; justify-items: start; min-height: 82px; padding: 13px; border: 0; border-radius: 18px; background: var(--card); text-align: left; cursor: pointer; }
+.hub-scene b { font-size: 1rem; font-weight: 600; }
+.hub-scene-icon { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; }
+.hub-scene-icon svg { width: 20px; height: 20px; }
+.hub-scene.t-go .hub-scene-icon { background: rgb(3 169 244 / 0.2); color: #03a9f4; }
+.hub-scene.t-home .hub-scene-icon { background: rgb(102 187 106 / 0.2); color: #66bb6a; }
+.hub-scene.t-night .hub-scene-icon { background: rgb(149 117 205 / 0.25); color: #b39ddb; }
+.hub-scene.t-cine .hub-scene-icon { background: rgb(255 183 77 / 0.2); color: #ffb74d; }
+.hub-scene.t-morning .hub-scene-icon { background: rgb(255 213 79 / 0.2); color: #f9a825; }
+.hub-scene.pending { opacity: 0.6; }
+.hub-scene.on { box-shadow: inset 0 0 0 2px #03a9f4; }
+.hub-rooms { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-auto-rows: min-content; gap: 8px; }
+.hub-room { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 58px; padding: 9px 12px; border: 0; border-radius: 16px; background: var(--card); text-align: left; cursor: pointer; }
+.hub-room-icon { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; flex: none; background: var(--card-2); color: var(--muted); }
+.hub-room-icon svg { width: 20px; height: 20px; }
+.hub-room.lit .hub-room-icon { background: #ffb74d; color: #1a1205; box-shadow: 0 0 18px rgb(255 183 77 / 0.45); }
+.hub-room.alert .hub-room-icon { background: rgb(255 152 0 / 0.25); color: #ffb74d; }
+.hub-room.alert small { color: #ffb74d; }
+.hub-room-text { display: grid; min-width: 0; }
+.hub-room-text b { font-weight: 600; }
+.hub-room-text small { color: var(--muted); font-size: 0.8rem; }
+.hub-room-text small:empty { display: none; }
+.hub-room-temp { margin-left: auto; font-family: var(--font-mono, monospace); font-size: 0.95rem; color: var(--muted); }
+/* Plus de 6 pièces : deux colonnes, pour tout voir sans faire défiler. */
+.hub-rooms.compact { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.hub-rooms.compact .hub-room { gap: 9px; min-height: 52px; padding: 7px 9px; border-radius: 14px; }
+.hub-rooms.compact .hub-room-icon { width: 32px; height: 32px; }
+.hub-rooms.compact .hub-room-icon svg { width: 17px; height: 17px; }
+.hub-rooms.compact .hub-room-text b { font-size: 0.92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-rooms.compact .hub-room-text small { font-size: 0.74rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Le choix des scènes du hub, dans Mon compte. */
+.hub-pick summary { cursor: pointer; color: var(--text); font-size: 0.92rem; }
+.hub-pick-list { display: grid; gap: 0.3rem; padding: 0.3rem 0 0.2rem 0.6rem; max-height: 14rem; overflow-y: auto; }
+.hub-pick-list label:has(input:disabled) { opacity: 0.55; }
+
+/* En bas. */
+.hub-dock { grid-column: 1 / -1; display: flex; gap: 10px; }
+.hub-dock button { flex: 1; display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 52px; border: 0; border-radius: 16px; background: var(--card); font-weight: 600; cursor: pointer; }
+.hub-dock button[hidden] { display: none; }
+.hub-dock svg { width: 22px; height: 22px; }
+.hub-dock .hub-say-button { background: rgb(3 169 244 / 0.18); color: #bfe9ff; }
+:root:not([data-theme="maquette"]):not([data-theme="dark"]):not([data-theme="plan-nuit"]) .hub-dock .hub-say-button { color: var(--accent); background: var(--accent-soft); }
+.hub-say form { display: grid; gap: 14px; min-width: min(480px, 80vw); }
+.hub-say h2 { margin: 0; font-size: 1.1rem; }
+.hub-say input { font-size: 1.1rem; padding: 12px 14px; }
+.hub-say-actions { display: flex; justify-content: flex-end; gap: 10px; }
+:root[data-hub="on"] .flash { z-index: 45; }

@@ -574,5 +574,7 @@ function backHomeLater() {
       renderAll();
     }
     window.scrollTo({ top: 0 });
+    // La vue hub revient (hub.js, étape 80).
+    if (typeof hubBack === "function") hubBack();
   }, IDLE_MS);
 }
