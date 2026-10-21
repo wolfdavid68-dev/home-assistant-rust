@@ -66,6 +66,7 @@ utilisation :
   ha-server backup now            sauvegarde la base (même serveur en marche)
   ha-server backup list           liste les sauvegardes
   ha-server backup restore <fichier> [--force]  restaure une sauvegarde (serveur arrêté)
+  ha-server https                 l'autorité de la maison (HTTPS) : empreinte, noms
   ha-server healthcheck           vérifie qu'un serveur répond (pour Docker)";
 
 fn parse_role(value: &str) -> Result<ha_auth::Role, Box<dyn Error>> {

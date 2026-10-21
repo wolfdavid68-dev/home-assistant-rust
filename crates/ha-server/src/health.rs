@@ -59,8 +59,12 @@ async fn status_line(target: SocketAddr) -> Result<String, Box<dyn Error>> {
     Ok(text.lines().next().unwrap_or_default().to_owned())
 }
 
+/// `200` ; ou `301` : avec `HA_TLS=on`, le serveur renvoie une requête en
+/// clair vers `https://` (étape 79). Il est donc bien là.
 fn is_ok(status: &str) -> bool {
-    status.starts_with("HTTP/1.1 200 ") || status.starts_with("HTTP/1.0 200 ")
+    ["HTTP/1.1 200 ", "HTTP/1.0 200 ", "HTTP/1.1 301 "]
+        .iter()
+        .any(|ok| status.starts_with(ok))
 }
 
 #[cfg(test)]

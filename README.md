@@ -91,6 +91,7 @@ Un noyau domotique en Rust, inspiré de Home Assistant.
 - [Étape 76 : le tableau de bord plus léger, expliqué](docs/tableau-leger.md)
 - [Étape 77 : le mini-PC dédié à la maison, expliqué](docs/mini-pc.md)
 - [Étape 78 : la tablette murale associée, expliquée](docs/tablette-murale.md)
+- [Étape 79 : le HTTPS sur le réseau de la maison, expliqué](docs/https-maison.md)
 - [Étape 5 : les automatisations, expliqué](docs/etape-5-automatisations.md)
 - [Modernisation du code, expliquée](docs/modernisation.md)
 - [Étape 6 : l'interface web, expliquée](docs/etape-6-interface-web.md)

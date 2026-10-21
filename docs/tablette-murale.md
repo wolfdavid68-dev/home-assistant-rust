@@ -64,12 +64,14 @@ d'un coup.
 
 ## 4. Régler la tablette Android
 
-Le tableau de bord ne peut pas, à lui seul, garder l'écran allumé : le navigateur ne le permet
-qu'en HTTPS, et le mini-PC est en simple HTTP sur le réseau de la maison. C'est le travail d'une
-appli « kiosque » : **Fully Kiosk Browser**, sur le Play Store.
+En [HTTPS](https-maison.md) (d'office sur le mini-PC), le tableau de bord garde lui-même l'écran
+allumé. Une appli « kiosque » fait le reste : démarrer avec la tablette, rester en plein écran,
+empêcher d'en sortir. C'est **Fully Kiosk Browser**, sur le Play Store.
 
-1. Installe **Fully Kiosk Browser** et ouvre-la.
-2. **Start URL** (adresse de départ) : `http://192.168.1.20:8123`.
+1. Installe d'abord le **certificat de la maison** sur la tablette
+   ([HTTPS, étape 2](https-maison.md#2-installer-le-certificat-de-la-maison-sur-chaque-appareil)).
+2. Installe **Fully Kiosk Browser** et ouvre-la. **Start URL** (adresse de départ) :
+   `https://192.168.1.20:8123` (`http://` si le serveur n'est pas en HTTPS).
 3. Associe la tablette comme plus haut, dans Fully.
 4. Dans les réglages de Fully (glisser depuis le bord gauche de l'écran, puis *Settings*) :
    - **Keep Screen On** (écran toujours allumé) : oui ;

@@ -3486,3 +3486,112 @@ async fn a_wall_tablet_logs_in_once_and_the_administrator_can_disconnect_it() {
         );
     }
 }
+
+/// Envoie une requête HTTP/1.1 brute et renvoie toute la réponse.
+async fn raw_request<S>(mut stream: S, request: &str) -> Vec<u8>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
+    stream.write_all(request.as_bytes()).await.unwrap();
+    let mut response = Vec::new();
+    let _ = stream.read_to_end(&mut response).await;
+    response
+}
+
+#[tokio::test]
+async fn the_dashboard_is_served_in_https_and_plain_http_is_redirected() {
+    let app = TestApp::new().await;
+    let token = app.login().await;
+    let ca = ha_tls::local_ca::LocalCa::generate().unwrap();
+    let names = [ha_tls::local_ca::LocalName::parse("127.0.0.1").unwrap()];
+    let cert = ha_tls::local_ca::ServerCert::new(ca.issue_server(&names).unwrap());
+    let https = ha_api::Https {
+        config: ha_tls::local_ca::server_config(cert).unwrap(),
+        ca_der: Arc::from(ca.der()),
+    };
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(ha_api::serve_https(listener, Arc::clone(&app.state), https));
+
+    // Un client qui ne fait confiance qu'à l'autorité de la maison.
+    let mut roots = rustls::RootCertStore::empty();
+    roots
+        .add(rustls::pki_types::CertificateDer::from(ca.der().to_vec()))
+        .unwrap();
+    let config = rustls::ClientConfig::builder_with_provider(Arc::new(
+        rustls::crypto::ring::default_provider(),
+    ))
+    .with_safe_default_protocol_versions()
+    .unwrap()
+    .with_root_certificates(roots)
+    .with_no_client_auth();
+    let connector = tokio_rustls::TlsConnector::from(Arc::new(config));
+    let tcp = tokio::net::TcpStream::connect(addr).await.unwrap();
+    let server = rustls::pki_types::ServerName::IpAddress(addr.ip().into());
+    let tls = connector.connect(server, tcp).await.unwrap();
+    let response = raw_request(
+        tls,
+        &format!(
+            "GET /api/ HTTP/1.1\r\nHost: {addr}\r\nAuthorization: Bearer {token}\r\n\
+             Connection: close\r\n\r\n"
+        ),
+    )
+    .await;
+    let text = String::from_utf8_lossy(&response);
+    assert!(text.starts_with("HTTP/1.1 200 "), "{text}");
+    assert!(text.contains("API en marche"), "{text}");
+    // Les en-têtes de sécurité sont là aussi en HTTPS.
+    assert!(
+        text.to_ascii_lowercase()
+            .contains("content-security-policy")
+    );
+
+    // En clair : redirigé vers la même adresse en https://.
+    let tcp = tokio::net::TcpStream::connect(addr).await.unwrap();
+    let response = raw_request(
+        tcp,
+        &format!("GET /api/states HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\n\r\n"),
+    )
+    .await;
+    let text = String::from_utf8_lossy(&response);
+    assert!(text.starts_with("HTTP/1.1 301 "), "{text}");
+    assert!(
+        text.contains(&format!("\r\nLocation: https://{addr}/api/states\r\n")),
+        "{text}"
+    );
+
+    // Sauf le certificat de l'autorité, à installer sur les appareils.
+    let tcp = tokio::net::TcpStream::connect(addr).await.unwrap();
+    let response = raw_request(
+        tcp,
+        &format!("GET /maison-ca.crt HTTP/1.1\r\nHost: {addr}\r\n\r\n"),
+    )
+    .await;
+    assert!(response.starts_with(b"HTTP/1.1 200 OK\r\n"));
+    assert!(response.ends_with(ca.der()));
+
+    // Une autre autorité (un appareil qui ne connaît pas la maison) : refusé.
+    let stranger = ha_tls::local_ca::LocalCa::generate().unwrap();
+    let mut roots = rustls::RootCertStore::empty();
+    roots
+        .add(rustls::pki_types::CertificateDer::from(
+            stranger.der().to_vec(),
+        ))
+        .unwrap();
+    let config = rustls::ClientConfig::builder_with_provider(Arc::new(
+        rustls::crypto::ring::default_provider(),
+    ))
+    .with_safe_default_protocol_versions()
+    .unwrap()
+    .with_root_certificates(roots)
+    .with_no_client_auth();
+    let tcp = tokio::net::TcpStream::connect(addr).await.unwrap();
+    let refused = tokio_rustls::TlsConnector::from(Arc::new(config))
+        .connect(
+            rustls::pki_types::ServerName::IpAddress(addr.ip().into()),
+            tcp,
+        )
+        .await;
+    assert!(refused.is_err());
+}

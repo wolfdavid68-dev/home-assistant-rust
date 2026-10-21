@@ -13,6 +13,9 @@ set HA_BIND=127.0.0.1:8123
 rem Sauvegardes chaque nuit dans le dossier « sauvegardes » (7 gardees).
 set HA_BACKUP_DIR=%~dp0sauvegardes
 
+rem HTTPS sur le reseau de la maison (voir docs/https-maison.md) :
+rem set HA_TLS=on
+
 rem Position de la maison (soleil, meteo, protection solaire) :
 rem set HA_LATITUDE=48.85
 rem set HA_LONGITUDE=2.35

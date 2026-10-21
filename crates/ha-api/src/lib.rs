@@ -42,6 +42,7 @@ mod push;
 mod rest;
 mod roles;
 mod system;
+mod tls;
 mod web;
 mod ws;
 
@@ -224,6 +225,8 @@ pub fn router(state: Arc<ApiState>) -> Router {
 }
 
 /// Sert l'API sur `listener` jusqu'à l'appel de [`ApiState::shutdown`].
+pub use tls::{CA_PATH, Https, serve_https};
+
 pub async fn serve(listener: TcpListener, state: Arc<ApiState>) -> std::io::Result<()> {
     let shutdown = state.shutdown_signal();
     let app = router(state).into_make_service_with_connect_info::<SocketAddr>();

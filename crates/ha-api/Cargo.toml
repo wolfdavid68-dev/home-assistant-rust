@@ -20,16 +20,20 @@ ha-core = { path = "../ha-core" }
 ha-notices = { path = "../ha-notices" }
 ha-push = { path = "../ha-push" }
 jiff.workspace = true
+rustls.workspace = true
 ha-storage = { path = "../ha-storage" }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
-tokio = { workspace = true, features = ["sync", "rt", "macros", "time", "net"] }
+tokio = { workspace = true, features = ["sync", "rt", "macros", "time", "net", "io-util"] }
+# Le HTTPS de la maison (étape 79).
+tokio-rustls.workspace = true
 tower-http.workspace = true
 tracing.workspace = true
 zeroize.workspace = true
 
 [dev-dependencies]
+ha-tls = { path = "../ha-tls" }
 futures-util.workspace = true
 tokio-tungstenite.workspace = true
 tower.workspace = true
