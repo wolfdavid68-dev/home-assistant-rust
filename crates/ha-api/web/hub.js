@@ -415,12 +415,62 @@ function hubAnnouncer() {
 
 function renderHubDock() {
   $("#hub-open-agenda").hidden = $("#hub-agenda").hidden;
+  renderHubCourses();
   const energy = $("#hub-energy");
   energy.hidden = $("#open-energy").hidden;
   const power = hubPower();
   energy.lastChild.textContent = power || "Énergie";
   $("#hub-announce").hidden = hubAnnouncer() === null;
 }
+
+// ---------------------------------------------------------------- Courses
+// La liste de courses (étape 81 : celle de l'appli Iglou quand elle est
+// reliée), en grand : on coche en rangeant les courses, on ajoute en passant.
+
+const HUB_LIST = "todo.courses";
+
+function renderHubCourses() {
+  const state = entities.get(HUB_LIST);
+  const button = $("#hub-courses");
+  button.hidden = !state;
+  if (!state) {
+    if ($("#hub-list").open) $("#hub-list").close();
+    return;
+  }
+  const items = todoItems(state);
+  const left = items.filter((item) => item.status !== "completed").length;
+  button.lastChild.textContent = state.state === "unavailable" ? "Courses" : left === 0 ? "Courses" : `Courses · ${left}`;
+  if ($("#hub-list").open) renderHubList(state);
+}
+
+function renderHubList(state) {
+  const items = todoItems(state);
+  const iglou = state.attributes.source === "iglou";
+  const left = items.filter((item) => item.status !== "completed").length;
+  $("#hub-list-title").textContent = left === 0 ? "Courses" : `Courses · ${left} à acheter`;
+  $("#hub-list-note").textContent = state.state === "unavailable"
+    ? "Iglou ne répond pas : la liste sera relue dans une minute."
+    : iglou ? "La liste de l'appli Iglou. Coche ce qui est dans le panier ; on range dans l'appli." : "";
+  $("#hub-list-items").replaceChildren(...(items.length > 0
+    ? todoRows(state, items)
+    : [el("li", { class: "hub-list-empty", text: "Rien à acheter." })]));
+}
+
+$("#hub-courses").addEventListener("click", () => {
+  const state = entities.get(HUB_LIST);
+  if (!state) return;
+  renderHubList(state);
+  $("#hub-list").showModal();
+});
+$("#hub-list-close").addEventListener("click", () => $("#hub-list").close());
+$("#hub-list-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const input = $("#hub-list-text");
+  const item = input.value.trim();
+  if (item === "") return;
+  callService("todo", "add_item", { entity_id: HUB_LIST, item });
+  input.value = "";
+});
 
 // ---------------------------------------------------------------- Annonce
 // « Annonce à la maison » : une phrase, lue sur toutes les enceintes.
@@ -448,6 +498,7 @@ function hubButton(id, icon, text) {
 }
 hubButton("#hub-all", HUB_ICONS.grid, "Toute la maison");
 hubButton("#hub-open-agenda", ICONS.calendar, "Agenda");
+hubButton("#hub-courses", ICONS.list, "Courses");
 hubButton("#hub-energy", HUB_ICONS.bolt, "Énergie");
 hubButton("#hub-announce", ICONS.megaphone, "Annonce à la maison");
 

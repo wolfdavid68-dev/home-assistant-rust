@@ -513,11 +513,25 @@
       <nav class="hub-dock" aria-label="Plus">
         <button id="hub-all" type="button"></button>
         <button id="hub-open-agenda" type="button" hidden></button>
+        <button id="hub-courses" type="button" hidden></button>
         <button id="hub-energy" type="button" hidden></button>
         <button id="hub-talk" class="hub-talk-button" type="button" aria-pressed="false" hidden></button>
         <button id="hub-announce" class="hub-say-button" type="button" hidden></button>
       </nav>
     </section>
+    <!-- La liste de courses (étape 81), en grand, sur la tablette. -->
+    <dialog id="hub-list" class="hub-list" aria-labelledby="hub-list-title">
+      <div class="hub-list-head">
+        <h2 id="hub-list-title">Courses</h2>
+        <button id="hub-list-close" class="ghost" type="button">Fermer</button>
+      </div>
+      <p id="hub-list-note" class="hub-list-note"></p>
+      <ul id="hub-list-items" class="todo-list hub-list-items"></ul>
+      <form id="hub-list-form" class="add-form">
+        <input id="hub-list-text" maxlength="80" autocomplete="off" placeholder="Ajouter un article" aria-label="Article à ajouter">
+        <button class="action-button" type="submit">Ajouter</button>
+      </form>
+    </dialog>
     <!-- La sonnette (étape 82) : qui est à la porte, en grand, sur la tablette. -->
     <dialog id="doorbell" class="doorbell" aria-labelledby="doorbell-title">
       <div class="doorbell-head">
