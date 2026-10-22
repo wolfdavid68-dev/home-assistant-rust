@@ -2180,10 +2180,10 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
   [data-layout="board"] .layout {
     max-width: 1760px;
     grid-template-columns: minmax(300px, 30%) minmax(0, 1fr);
-    grid-template-areas: "overview house" "covers covers" "sections sections" "title title";
+    grid-template-areas: "overview house" "covers house";
   }
-  /* Les volets sur toute la largeur, trois ou quatre par ligne. */
-  [data-layout="board"] .cover-rows { grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); }
+  /* Les volets sous l'agenda, dans la colonne de gauche, un par ligne. */
+  [data-layout="board"] .cover-rows { grid-template-columns: 1fr; gap: 6px; }
   /* La barre de navigation devient un rail d'icônes à gauche, comme dans
      Home Assistant ; les boutons du haut ne servent plus. */
   [data-layout="board"] .dock {
@@ -2213,10 +2213,20 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
   /* Tout tient sur un écran, comme sur les tableaux de référence : la
      première rangée (pièces | dessin) prend la hauteur que laissent l'en-tête
      et les volets ; le dessin s'y adapte en gardant ses proportions. */
-  [data-layout="board"] .layout { grid-template-rows: max(520px, calc(100dvh - 76px - var(--covers-h, 0px) - 24px)) auto auto auto; margin-top: 0; gap: 10px; }
+  /* Une seule page : l'en-tête, puis la grille à la hauteur de l'écran
+     (l'agenda et les volets à gauche, le dessin à droite), puis la ligne du
+     journal. Rien ne défile. */
+  [data-layout="board"] .layout { grid-template-rows: auto minmax(0, 1fr); height: max(520px, calc(100dvh - var(--hero-h, 76px) - 52px)); margin-top: 0; gap: 10px; }
+  /* Le cartouche et les sections ne servent plus : les pièces ont leurs onglets. */
+  [data-layout="board"] :is(.sections, .title-block, .title-block:not([hidden])) { display: none; }
+  [data-layout="board"] .board-covers { align-self: stretch; min-height: 0; overflow: hidden; align-content: start; }
+  [data-layout="board"] .house:not([hidden]) { grid-row: 1 / 3; }
+  [data-layout="board"] .journal { padding-bottom: 0; padding-left: calc(68px + var(--gutter)); max-width: 1760px; }
+  [data-layout="board"] .journal summary { padding: 0.5rem 0; font-size: 0.85rem; }
   /* La colonne tient dans sa rangée (sinon, plus haute que l'écran, elle
-     passait par-dessus les volets) et défile, avec une barre fine. */
-  [data-layout="board"] .overview { align-self: stretch; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--muted) 45%, transparent) transparent; align-content: start; gap: 10px; }
+     passait par-dessus les volets), sans barre de défilement : les pièces
+     sont dans leurs onglets (étape 90), il ne reste que l'essentiel. */
+  [data-layout="board"] .overview { align-self: stretch; min-height: 0; overflow: hidden; align-content: start; gap: 10px; }
   [data-layout="board"] .house:not([hidden]) { display: flex; flex-direction: column; min-height: 0; gap: 8px; align-self: stretch; }
   [data-layout="board"] .house-frame { flex: 1; min-height: 0; container-type: size; display: grid; place-items: center; }
   [data-layout="board"] #house-stage { width: min(100cqw, calc(100cqh * var(--ratio, 1.35))); }
@@ -2246,8 +2256,6 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
   [data-layout="board"] .scene { min-height: 40px; font-size: 0.82rem; }
   [data-layout="board"] .legend { font-size: 0.72rem; }
   [data-layout="board"] .board-covers { grid-area: covers; }
-  [data-layout="board"] .sections { grid-area: sections; }
-  [data-layout="board"] .title-block { grid-area: title; }
   [data-layout="board"] .grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
 }
 @media (min-width: 1400px) {
@@ -2292,6 +2300,17 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .board-tab-item:hover { color: var(--text); }
 .board-tab-item.active { color: var(--text); font-weight: 600; box-shadow: inset 0 -2px 0 currentColor; }
 .board-tab-item:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+/* Une pièce où des lumières sont allumées : un point jaune (étape 90). */
+.board-tab-item.lit::after { content: ""; width: 6px; height: 6px; margin-left: 0.4rem; border-radius: 50%; background: var(--glow); flex: none; }
+.board-tab-item svg { width: 16px; height: 16px; margin-right: 0.35rem; }
+@media (min-width: 1000px) {
+  /* Beaucoup d'onglets (les pièces) : ils prennent leur propre ligne, en
+     haut, sur toute la largeur. */
+  [data-layout="board"] .hero:has(.board-tabs.many) { flex-wrap: wrap; row-gap: 0; }
+  [data-layout="board"] .board-tab:has(.board-tabs.many) { flex-basis: 100%; }
+  [data-layout="board"] .board-tabs.many { flex-wrap: wrap; }
+  [data-layout="board"] .board-tabs.many .board-tab-item { padding-inline: 0.75rem; }
+}
 @media (max-width: 999px) {
   [data-layout="board"] .board-tab { flex-basis: 100%; order: 10; }
   [data-layout="board"] .board-tab:has(.single) { display: none; }
@@ -2571,7 +2590,7 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 @media (max-width: 640px) {
   .room-dialog { width: 100vw; max-width: 100vw; max-height: 90dvh; margin: auto 0 0; border-radius: 22px 22px 0 0; }
   .room-sheet { max-height: 90dvh; padding: 0.6rem 1rem calc(1.2rem + env(safe-area-inset-bottom)); }
-  .room-top { padding-top: 0.9rem; touch-action: none; }
+  .room-dialog .room-top { padding-top: 0.9rem; touch-action: none; }
   .room-grab { display: block; position: absolute; top: 0; left: 50%; width: 42px; height: 5px; margin-left: -21px; border-radius: 3px; background: var(--line); }
   .room-dialog[open] { animation: room-up 0.22s ease-out; }
   @keyframes room-up { from { transform: translateY(40%); opacity: 0.6; } }
@@ -2579,6 +2598,25 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 [data-theme|="plan"] .room-chart-card { background: var(--card); border: 1px solid var(--ink-line); border-radius: 4px; }
 [data-theme|="plan"] .room-top .room-icon { border-radius: 4px; border: 1px solid var(--ink-line); }
 [data-theme|="plan"] .room-group h3 { font-family: var(--font-mono); color: var(--ink); }
+/* Une pièce dans son onglet (étape 90) : toute la page, sans fenêtre ni
+   défilement ; ses appareils en quatre colonnes sur un grand écran. */
+.room-view { max-width: 1760px; margin: 0.6rem auto 0; padding: 0 var(--gutter-r) 7rem var(--gutter); }
+.room-view[hidden] { display: none; }
+.room-view .room-sheet { max-height: none; overflow: visible; padding: 0.4rem 0 0; }
+.room-view #room-close, .room-view .room-grab { display: none; }
+.room-view .room-chart-card .chart-line { height: 44px; }
+@media (min-width: 1000px) {
+  [data-layout="board"] .room-view { padding-left: calc(68px + var(--gutter)); padding-bottom: 16px; }
+  /* Une pièce à 19 appareils tient sur un écran 1920 × 1080 : jusqu'à cinq
+     colonnes équilibrées ; un groupe peut passer d'une colonne à l'autre,
+     jamais une tuile. */
+  .room-view .room-body { columns: 290px 5; }
+  .room-view .room-group { break-inside: auto; }
+  .room-view .room-group h3 { break-after: avoid; }
+  .room-view .room-body .grid > * { break-inside: avoid; }
+  .room-view .room-sheet { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; }
+  .room-view :is(.room-body, .room-actions) { grid-column: 1 / -1; }
+}
 [data-theme="maquette"] .room-dialog { background: #1c1b22; }
 [data-theme="maquette"] .room-chart-card { --chart: var(--m-orange); background: rgb(0 0 0 / 0.3); }
 [data-theme="maquette"] .room-icon.lit { background: rgb(255 193 7 / 0.2); color: var(--m-amber); }
@@ -2756,8 +2794,8 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .agenda-bands-label { grid-column: 1; grid-row: 1; font-size: 0.65rem; color: var(--muted); text-align: right; padding: 4px 6px 0 0; }
 .agenda-band { all: unset; cursor: pointer; grid-column: var(--col) / span var(--span); grid-row: var(--lane); margin: 0 3px; border-radius: 6px; padding: 0 8px; font-size: 0.75rem; line-height: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: color-mix(in srgb, var(--ev) 38%, transparent); color: color-mix(in srgb, var(--ev) 45%, var(--text)); }
 .agenda-band b { font-weight: 600; }
-.agenda-scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; }
-.agenda-columns { position: relative; height: var(--height); }
+/* Toutes les heures, 30 pixels chacune, sans défiler (étape 90). */
+.agenda-columns { position: relative; flex: none; height: calc(var(--hours, 14) * 30px); overflow: hidden; }
 .agenda-hours { position: relative; }
 .agenda-hours span { position: absolute; right: 6px; transform: translateY(-50%); font: 0.66rem var(--font-mono); color: var(--muted); }
 .agenda-column { position: relative; border-left: 1px solid var(--line); }
@@ -2846,11 +2884,12 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 
 @media (min-width: 900px) {
   .agenda-view { grid-template-columns: minmax(280px, 30%) minmax(0, 1fr); }
-  .agenda-main { height: calc(100dvh - 120px); min-height: 560px; }
+  .agenda-main { max-height: calc(100dvh - 120px); }
 }
 @media (min-width: 1000px) {
   [data-layout="board"] .agenda-view { padding-left: calc(68px + var(--gutter)); padding-bottom: 16px; }
-  [data-layout="board"] .agenda-main { height: calc(100dvh - 88px); }
+  [data-layout="board"] .agenda-main { max-height: calc(100dvh - var(--hero-h, 76px) - 28px); }
+  [data-layout="board"] .agenda-view { align-items: start; }
   [data-theme="maquette"][data-layout="board"] .agenda-view { margin-top: 12px; grid-template-columns: minmax(340px, 34%) minmax(0, 1fr); }
 }
 @media (max-width: 899px) {
@@ -2878,7 +2917,7 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 :root[data-hub="on"] body { overflow: hidden; }
 /* Sous la vue hub, le tableau de bord ne se voit pas : le navigateur ne le
    calcule plus (étape 88). Il garde sa mise en page pour le retour. */
-:root[data-hub="on"] #dashboard-view > :is(.hero, .layout, .agenda-view) { content-visibility: hidden; }
+:root[data-hub="on"] #dashboard-view > :is(.hero, .layout, .agenda-view, .room-view) { content-visibility: hidden; }
 .hub {
   position: fixed;
   inset: 0;

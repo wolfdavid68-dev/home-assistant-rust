@@ -965,6 +965,11 @@ async function copyText(area) {
 // qu'il montre. L'onglet ouvert est retenu sur cet appareil (localStorage) :
 // la tablette du garage reste sur « Garage ».
 const PAGE_KEY = "ha-page";
+// La pièce ouverte dans son onglet (étape 90, plus bas), et l'onglet des
+// appareils rangés dans aucune pièce.
+const roomTab = { open: false };
+const OTHERS = "";
+const OTHERS_NAME = "Autres";
 
 function pageWanted() {
   try {
@@ -993,27 +998,55 @@ function selectPage(id, remember = true) {
 
 function renderTabs() {
   const nav = $("#board-tabs");
-  // L'agenda ouvert (agenda.js) : aucun onglet de maison n'est l'onglet actif.
+  // L'agenda ou une pièce ouverts : aucun onglet de maison n'est l'onglet actif.
   const agendaOpen = typeof agenda !== "undefined" && agenda.open;
-  const tabs = house.pages.map((page) => {
-    const current = !agendaOpen && page.id === house.config?.id;
-    const tab = el("button", { type: "button", class: current ? "board-tab-item active" : "board-tab-item", "aria-current": current ? "page" : "false", text: page.name });
-    tab.addEventListener("click", () => {
+  const roomOpen = roomTab.open ? roomView.name : null;
+  const specs = house.pages.map((page) => ({
+    key: `page:${page.id}`,
+    label: page.name,
+    current: !agendaOpen && roomOpen === null && page.id === house.config?.id,
+    open: () => {
+      const wasRoom = roomTab.open;
+      closeRoomTab(false);
       if (agendaOpen) closeAgenda();
+      else if (wasRoom) renderAll();
       if (page.id !== house.config?.id) selectPage(page.id);
-    });
-    return tab;
-  });
+    },
+  }));
+  // Mise en page « tableau » (étape 90) : un onglet par pièce, pour que
+  // l'onglet de la maison ne garde que l'essentiel. Un point jaune : des
+  // lumières y sont allumées.
+  if (isBoard()) {
+    for (const area of shownAreas()) {
+      specs.push({ key: `room:${area.name}`, label: area.name, lit: roomInfo(area).lights > 0, current: roomOpen === area.name, open: () => openRoomTab(area.name) });
+    }
+    if (pageAreas === null && looseStates().length > 0) {
+      specs.push({ key: "room:", label: OTHERS_NAME, current: roomOpen === OTHERS, open: () => openRoomTab(OTHERS) });
+    }
+  }
   // L'onglet Agenda, s'il y a un agenda (étape 75).
   const withAgenda = typeof agendaCalendars === "function" && agendaCalendars().length > 0;
-  if (withAgenda) {
-    const tab = el("button", { type: "button", class: agendaOpen ? "board-tab-item active" : "board-tab-item", "aria-current": agendaOpen ? "page" : "false" }, svgIcon(ICONS.calendar), "Agenda");
-    tab.addEventListener("click", () => openAgenda());
-    tabs.push(tab);
-  }
+  if (withAgenda) specs.push({ key: "agenda", label: "Agenda", icon: ICONS.calendar, current: agendaOpen, open: () => openAgenda() });
+
+  // Rien n'a changé : on garde les boutons (et le focus du clavier).
+  const signature = specs.map((s) => `${s.key}|${s.label}|${s.current ? 1 : 0}|${s.lit ? 1 : 0}`).join("\n");
+  if (nav.dataset.signature === signature) return;
+  nav.dataset.signature = signature;
+  const tabs = specs.map((spec) => {
+    const classes = ["board-tab-item"];
+    if (spec.current) classes.push("active");
+    if (spec.lit) classes.push("lit");
+    const tab = el("button", { type: "button", class: classes.join(" "), "aria-current": spec.current ? "page" : "false" },
+      ...(spec.icon ? [svgIcon(spec.icon)] : []), spec.label);
+    if (spec.lit) tab.setAttribute("aria-label", `${spec.label}, lumières allumées`);
+    tab.addEventListener("click", spec.open);
+    return tab;
+  });
   nav.replaceChildren(...tabs);
-  // Un seul onglet : rien à choisir sur téléphone.
+  // Un seul onglet : rien à choisir sur téléphone. Beaucoup d'onglets : ils
+  // prennent leur propre ligne en haut de l'écran.
   nav.classList.toggle("single", tabs.length === 1);
+  nav.classList.toggle("many", tabs.length > 4);
 }
 
 function buildHouse() {
@@ -1217,7 +1250,7 @@ function seriesFor(chart) {
           .map((p) => [Date.parse(p.at), Number(p.mean)])
           .filter(([t, v]) => Number.isFinite(t) && Number.isFinite(v));
         if (isBoard()) renderCharts();
-        if ($("#room").open) renderRoomHead();
+        if (roomShown()) renderRoomHead();
       })
       .catch(() => { entry.loading = false; });
   }
@@ -1306,7 +1339,7 @@ function renderPeople() {
 
 /** Appelé par app.js à chaque changement (au plus une fois par image). */
 function renderHouse() {
-  if ($("#room").open) renderRoomHead();
+  if (roomShown()) renderRoomHead();
   const board = isBoard();
   $("#house").hidden = !board;
   $("#title-block").hidden = !isPlan();
@@ -1339,8 +1372,59 @@ const roomView = { name: null };
 const ROOM_GROUPS = [...SECTIONS, { title: "Scènes", domains: ["scene", "script"] }];
 
 function roomArea() {
+  if (roomView.name === OTHERS) {
+    const states = looseStates().sort((a, b) => nameOf(a).localeCompare(nameOf(b), "fr"));
+    return { name: OTHERS_NAME, entities: states.map((state) => ({ entity_id: state.entity_id })) };
+  }
   return areas.find((area) => area.name === roomView.name) ?? null;
 }
+
+// ---------------------------------------------------------------- Une pièce, en onglet (étape 90)
+// Mise en page « tableau » : chaque pièce a son onglet en haut de l'écran. La
+// pièce prend alors toute la page, à la place de la maison : on y déplace le
+// contenu de la fenêtre (mêmes éléments, mêmes mises à jour).
+/** La pièce se voit : en fenêtre ou en onglet. */
+function roomShown() {
+  return $("#room").open || roomTab.open;
+}
+
+function openRoomTab(name) {
+  if (typeof agenda !== "undefined" && agenda.open) closeAgenda(false);
+  if ($("#room").open) $("#room").close();
+  roomView.name = name;
+  if (!roomArea()) {
+    roomView.name = null;
+    return;
+  }
+  roomTab.open = true;
+  $(".layout").hidden = true;
+  $("#empty").hidden = true;
+  $("#room-view").append($(".room-sheet"));
+  $("#room-view").hidden = false;
+  document.documentElement.dataset.roomTab = "open";
+  renderRoom();
+  renderTabs();
+  $("#dock-home").classList.remove("active");
+  window.scrollTo({ top: 0 });
+}
+
+/** Retour à la maison. `render` : redessiner le tableau (sauf si l'appelant
+ *  s'en charge). */
+function closeRoomTab(render = true) {
+  if (!roomTab.open) return;
+  roomTab.open = false;
+  roomView.name = null;
+  $("#room").append($(".room-sheet"));
+  $("#room-body").replaceChildren();
+  $("#room-view").hidden = true;
+  $(".layout").hidden = false;
+  delete document.documentElement.dataset.roomTab;
+  $("#dock-home").classList.add("active");
+  if (render) renderAll();
+  renderTabs();
+}
+
+$("#dock-home").addEventListener("click", () => closeRoomTab());
 
 function roomStates(area) {
   return area.entities.map((entity) => entities.get(entity.entity_id)).filter((state) => state !== undefined);
@@ -1352,6 +1436,9 @@ function roomThermometer(states) {
 }
 
 function openRoom(name) {
+  // Le tableau : la pièce s'ouvre dans son onglet. La vue hub garde la fenêtre.
+  if (isBoard() && document.documentElement.dataset.hub !== "on") return openRoomTab(name);
+  closeRoomTab();
   roomView.name = name;
   if (!roomArea()) return;
   renderRoom();
@@ -1439,7 +1526,7 @@ $("#room").addEventListener("close", () => { roomView.name = null; $("#room-body
   const sheet = $(".room-sheet");
   let start = null;
   $(".room-top").addEventListener("pointerdown", (event) => {
-    if (event.pointerType === "mouse" || event.target.closest("button")) return;
+    if (event.pointerType === "mouse" || event.target.closest("button") || roomTab.open) return;
     start = event.clientY;
     $(".room-top").setPointerCapture(event.pointerId);
   });
@@ -2373,9 +2460,8 @@ addEventListener("resize", () => { if (house.view) fitLabels(house.view); }, { p
 // Le dessin change de taille (déplacé dans la vue hub ou l'écran de veille,
 // image chargée) : les étiquettes sont replacées, une fois la page calculée.
 new ResizeObserver(() => { if (house.view) fitLabels(house.view); }).observe($("#house-stage"));
-// La hauteur des volets, pour que le dessin et les pièces prennent juste le
-// reste de l'écran (mise en page « tableau » : tout tient sur un écran).
+// La hauteur de l'en-tête (une ou deux lignes, selon le nombre d'onglets) :
+// le reste de l'écran est pour la maison, l'agenda ou la pièce (étape 90).
 new ResizeObserver(([entry]) => {
-  document.documentElement.style.setProperty("--covers-h", `${Math.ceil(entry.target.offsetHeight)}px`);
-  if (house.view) fitLabels(house.view);
-}).observe($("#board-covers"));
+  document.documentElement.style.setProperty("--hero-h", `${Math.ceil(entry.target.offsetHeight)}px`);
+}).observe($(".hero"));

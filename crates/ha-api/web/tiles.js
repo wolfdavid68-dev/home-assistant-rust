@@ -68,7 +68,7 @@ function renderHome() {
   // ce qui peut se voir (une pièce ouverte, le dessin de la maison), puis la
   // vue hub. Le tableau est redessiné en quittant la vue hub (étape 88).
   if (typeof hubShouldShow === "function" && hubShouldShow()) {
-    if ($("#room").open && typeof renderRoomHead === "function") renderRoomHead();
+    if (typeof roomShown === "function" && roomShown()) renderRoomHead();
     if (typeof house !== "undefined" && house.loading === null && token.get()) loadHouse();
     updateHub();
     return;
@@ -162,8 +162,10 @@ function roomInfo(area) {
 function renderPlan() {
   const card = $("#plan");
   const listed = shownAreas();
-  card.hidden = listed.length === 0;
-  if (listed.length === 0) return;
+  // Mise en page « tableau » : les pièces sont dans leurs onglets, en haut
+  // (étape 90) ; la colonne de gauche ne garde que l'essentiel.
+  card.hidden = listed.length === 0 || isBoard();
+  if (card.hidden) return;
   let lit = 0;
   let warnings = 0;
   const temps = [];

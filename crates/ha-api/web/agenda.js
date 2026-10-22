@@ -14,7 +14,6 @@ const AGENDA_HIDDEN_KEY = "ha-agenda-caches";
 const AGENDA_VIEW_KEY = "ha-agenda-vue";
 const AGENDA_PALETTE = ["#4caf50", "#b05dd6", "#ff9800", "#e91e63", "#00bcd4", "#9e9e9e", "#ffc107", "#795548"];
 const AGENDA_HOME_COLOR = "#03a9f4";
-const AGENDA_HOUR = 44; // hauteur d'une heure, en pixels (vue semaine)
 const DAY_MS = 86_400_000;
 const agendaMonthTitle = new Intl.DateTimeFormat("fr", { month: "long", year: "numeric" });
 const agendaDayTitle = new Intl.DateTimeFormat("fr", { weekday: "long", day: "numeric", month: "long" });
@@ -28,7 +27,6 @@ const agenda = {
   anchor: dayStart(new Date()),
   hidden: new Set(readHidden()),
   // Remettre la vue semaine à l'heure du moment (sinon : garder le défilement).
-  resetScroll: true,
 };
 if (!AGENDA_VIEWS.some(([id]) => id === agenda.view)) agenda.view = "week";
 
@@ -147,8 +145,9 @@ const eventSpan = (e) => (e.allDay ? "Toute la journée" : `${hourMinute.format(
 function openAgenda(date, view) {
   if (date) agenda.anchor = dayStart(date);
   if (view) setAgendaView(view, false);
+  // Une pièce ouverte dans son onglet (house.js) : on la referme.
+  if (typeof closeRoomTab === "function") closeRoomTab(false);
   agenda.open = true;
-  agenda.resetScroll = true;
   $(".layout").hidden = true;
   $("#empty").hidden = true;
   $("#agenda-view").hidden = false;
@@ -158,14 +157,14 @@ function openAgenda(date, view) {
   window.scrollTo({ top: 0 });
 }
 
-function closeAgenda() {
+function closeAgenda(render = true) {
   if (!agenda.open) return;
   agenda.open = false;
   $("#agenda-view").hidden = true;
   $(".layout").hidden = false;
   delete document.documentElement.dataset.agenda;
   agendaNav();
-  renderAll();
+  if (render) renderAll();
 }
 
 /** Le bouton du rail (ou de la barre du bas) et l'onglet du tableau. */
@@ -179,13 +178,12 @@ function agendaNav() {
   }
   $("#open-agenda").hidden = !any;
   dock.classList.toggle("active", agenda.open);
-  $("#dock-home").classList.toggle("active", !agenda.open);
+  $("#dock-home").classList.toggle("active", !agenda.open && !(typeof roomTab !== "undefined" && roomTab.open));
   if (typeof renderTabs === "function" && typeof house !== "undefined" && house.pages?.length) renderTabs();
 }
 
 function setAgendaView(view, render = true) {
   agenda.view = view;
-  agenda.resetScroll = true;
   store(AGENDA_VIEW_KEY, view);
   if (render) renderAgendaView();
 }
@@ -195,7 +193,6 @@ $("#open-agenda").addEventListener("click", () => openAgenda());
 $("#dock-home").addEventListener("click", () => closeAgenda());
 $("#agenda-today-button").addEventListener("click", () => {
   agenda.anchor = dayStart(new Date());
-  agenda.resetScroll = true;
   renderAgendaView();
 });
 for (const [id, step] of [["#agenda-prev", -1], ["#agenda-next", 1]]) {
@@ -214,8 +211,6 @@ function renderAgendaView() {
   agendaNav();
   if (!agenda.open) return;
   const calendars = agendaCalendars();
-  const scroller = $("#agenda-body .agenda-scroll");
-  const keep = !agenda.resetScroll && scroller ? scroller.scrollTop : null;
 
   $("#agenda-views").replaceChildren(...AGENDA_VIEWS.map(([id, label]) => {
     const button = el("button", { type: "button", "aria-pressed": String(agenda.view === id), text: label });
@@ -239,9 +234,6 @@ function renderAgendaView() {
     : agenda.view === "list" ? listView(calendars)
       : weekView(calendars, agenda.view === "day" ? [dayStart(a)] : [...Array(7)].map((_, i) => addDays(weekStart(a), i)));
   $("#agenda-body").replaceChildren(body);
-  const scroll = $("#agenda-body .agenda-scroll");
-  if (scroll) scroll.scrollTop = keep ?? Number(body.dataset.first ?? 0);
-  agenda.resetScroll = false;
 }
 
 function weekTitle(monday) {
@@ -304,30 +296,36 @@ function weekView(calendars, days) {
   bandBox.style.setProperty("--lanes", String(Math.max(1, lanes.length)));
 
   // Les heures, et les rendez-vous de chaque jour, côte à côte s'ils se
-  // chevauchent.
+  // chevauchent. Toutes les heures tiennent dans la hauteur de l'écran, sans
+  // défiler (étape 90) : les positions sont en pourcentage de la grille.
+  const span = last - first;
+  const at = (h) => `${(100 * (h - first)) / span}%`;
+  // Une heure, 30 pixels : la semaine tient sans défiler, sans prendre
+  // tout l'écran.
+  const hourPx = 30;
   const hours = el("div", { class: "agenda-hours" });
   for (let h = first + 1; h < last; h++) {
     const mark = el("span", { text: `${String(h).padStart(2, "0")}:00` });
-    mark.style.setProperty("top", `${(h - first) * AGENDA_HOUR}px`);
+    mark.style.setProperty("top", at(h));
     hours.append(mark);
   }
   const columns = el("div", { class: "agenda-columns" }, hours);
-  columns.style.setProperty("--height", `${(last - first) * AGENDA_HOUR}px`);
+  columns.style.setProperty("--hours", String(span));
   for (const day of days) {
     const column = el("div", { class: sameDay(day, now) ? "agenda-column is-today" : "agenda-column" });
     for (let h = first + 1; h < last; h++) {
       const line = el("span", { class: "agenda-hour-line" });
-      line.style.setProperty("top", `${(h - first) * AGENDA_HOUR}px`);
+      line.style.setProperty("top", at(h));
       column.append(line);
     }
     const mine = timed.filter((e) => e.startDate < addDays(day, 1) && e.endDate > day);
     for (const { event, col, cols } of packColumns(mine, day)) {
       const startH = Math.max(first, sameDay(event.startDate, day) ? hoursOf(event.startDate) : first);
       const endH = Math.min(last, sameDay(event.endDate, day) ? hoursOf(event.endDate) : last);
-      const height = Math.max((endH - startH) * AGENDA_HOUR - 2, 20);
+      const height = (endH - startH) * hourPx;
       const block = eventButton(event, "agenda-block", event.summary);
-      block.style.setProperty("top", `${(startH - first) * AGENDA_HOUR}px`);
-      block.style.setProperty("height", `${height}px`);
+      block.style.setProperty("top", at(startH));
+      block.style.setProperty("height", `max(calc(${(100 * (endH - startH)) / span}% - 2px), 18px)`);
       block.style.setProperty("left", `calc(${(100 * col) / cols}% + 2px)`);
       block.style.setProperty("width", `calc(${100 / cols}% - 4px)`);
       if (height > 34) block.append(el("small", { text: `${hourMinute.format(event.startDate)} – ${hourMinute.format(event.endDate)}` }));
@@ -336,16 +334,12 @@ function weekView(calendars, days) {
     }
     if (sameDay(day, now) && hoursOf(now) >= first && hoursOf(now) <= last) {
       const line = el("span", { class: "agenda-now" });
-      line.style.setProperty("top", `${(hoursOf(now) - first) * AGENDA_HOUR}px`);
+      line.style.setProperty("top", at(hoursOf(now)));
       column.append(line);
     }
     columns.append(column);
   }
-  const scroll = el("div", { class: "agenda-scroll" }, columns);
-  grid.append(head, bandBox, scroll);
-  // Au premier affichage : une heure avant maintenant (ou 8 h).
-  const target = days.some((d) => sameDay(d, now)) ? hoursOf(now) - 1 : 8;
-  grid.dataset.first = String(Math.max(0, (target - first) * AGENDA_HOUR));
+  grid.append(head, bandBox, columns);
   return grid;
 }
 

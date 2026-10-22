@@ -102,6 +102,7 @@ Un noyau domotique en Rust, inspiré de Home Assistant.
 - [Étape 87 : les colis Amazon sur la tablette, expliqués](docs/colis.md)
 - [Étape 88 : la réponse vocale et la tablette plus rapides, expliquées](docs/plus-rapide.md)
 - [Étape 89 : un tableau sans doublons et un écran de veille sans cadre, expliqués](docs/interface-allegee.md)
+- [Étape 90 : un onglet par pièce, et tout sur un écran, expliqués](docs/onglets-pieces.md)
 - [Étape 5 : les automatisations, expliqué](docs/etape-5-automatisations.md)
 - [Modernisation du code, expliquée](docs/modernisation.md)
 - [Étape 6 : l'interface web, expliquée](docs/etape-6-interface-web.md)
