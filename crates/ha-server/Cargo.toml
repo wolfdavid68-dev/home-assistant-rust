@@ -37,6 +37,7 @@ ha-somfy = { path = "../ha-somfy" }
 ha-sonos = { path = "../ha-sonos" }
 ha-thermostat = { path = "../ha-thermostat" }
 ha-tls = { path = "../ha-tls" }
+ha-stt = { path = "../ha-stt" }
 ha-tts = { path = "../ha-tts" }
 ha-weather = { path = "../ha-weather" }
 ha-workday = { path = "../ha-workday" }

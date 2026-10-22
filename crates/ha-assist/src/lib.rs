@@ -94,6 +94,8 @@ pub enum NotUnderstood {
     Ambiguous(Vec<String>),
     /// L'action ne s'applique pas à cet appareil.
     Unsupported(String),
+    /// « Ajoute » sans rien à ajouter.
+    NothingToAdd,
 }
 
 impl NotUnderstood {
@@ -113,6 +115,9 @@ impl NotUnderstood {
             }
             Self::Ambiguous(names) => format!("Lequel ? {}.", names.join(", ")),
             Self::Unsupported(name) => format!("Je ne sais pas faire ça avec {name}."),
+            Self::NothingToAdd => {
+                "Que faut-il ajouter ? « Ajoute du pain à la liste de courses ».".into()
+            }
         }
     }
 }
@@ -151,7 +156,158 @@ pub fn normalize(text: &str) -> String {
         };
         out.push_str(folded);
     }
-    out.split_whitespace().collect::<Vec<_>>().join(" ")
+    let words: Vec<&str> = out.split_whitespace().collect();
+    spoken_numbers(&words).join(" ")
+}
+
+/// La valeur d'un nombre dit en un mot (« vingt » → 20).
+fn number_word(word: &str) -> Option<u32> {
+    Some(match word {
+        "zero" => 0,
+        "un" | "une" => 1,
+        "deux" => 2,
+        "trois" => 3,
+        "quatre" => 4,
+        "cinq" => 5,
+        "six" => 6,
+        "sept" => 7,
+        "huit" => 8,
+        "neuf" => 9,
+        "dix" => 10,
+        "onze" => 11,
+        "douze" => 12,
+        "treize" => 13,
+        "quatorze" => 14,
+        "quinze" => 15,
+        "seize" => 16,
+        "vingt" | "vingts" => 20,
+        "trente" => 30,
+        "quarante" => 40,
+        "cinquante" => 50,
+        "soixante" => 60,
+        "cent" | "cents" => 100,
+        _ => return None,
+    })
+}
+
+/// Un nombre entier écrit en chiffres ou en lettres.
+fn whole(word: &str) -> Option<u32> {
+    number_word(word).or_else(|| {
+        word.parse::<u32>()
+            .ok()
+            .filter(|_| word.bytes().all(|b| b.is_ascii_digit()))
+    })
+}
+
+/// Lit un nombre dit en mots à partir de `words[start]` : sa valeur et le
+/// nombre de mots lus. « vingt et un », « quatre vingt dix », « cent
+/// vingt », « dix neuf », et « 20 et 1 » (ce que la reconnaissance vocale
+/// écrit parfois pour « vingt et un »).
+fn read_number(words: &[&str], start: usize) -> Option<(u32, usize)> {
+    let word = |i: usize| words.get(start + i).copied();
+    let mut total = whole(word(0)?)?;
+    let mut used = 1;
+    // « quatre vingt » : 80.
+    if total == 4 && matches!(word(1), Some("vingt" | "vingts")) {
+        total = 80;
+        used = 2;
+    }
+    // « deux cents », « cent ».
+    if total < 10 && matches!(word(used), Some("cent" | "cents")) {
+        total = total.max(1) * 100;
+        used += 1;
+    }
+    // Après les centaines : la suite (« cent vingt et un »).
+    if total >= 100 && total % 100 == 0 {
+        if let Some((rest, n)) = read_number(words, start + used).filter(|(rest, _)| *rest < 100) {
+            total += rest;
+            used += n;
+        }
+        return Some((total, used));
+    }
+    // Les dizaines, puis les unités : « vingt deux », « vingt et un »,
+    // « soixante et onze », « quatre vingt dix neuf ».
+    let tens = total % 100;
+    let teens_allowed = tens == 60 || tens == 80;
+    if (20..=90).contains(&tens) && tens % 10 == 0 {
+        let (and, next) = match word(used) {
+            Some("et") => (1, word(used + 1)),
+            other => (0, other),
+        };
+        // Écrit en chiffres (« 20 et 1 ») : seulement avec « et ».
+        let digits = number_word(words[start]).is_none();
+        if let Some(unit) = next.and_then(whole).filter(|_| !digits || and == 1) {
+            let ok = if and == 1 {
+                unit == 1 || (teens_allowed && unit == 11)
+            } else {
+                (1..=9).contains(&unit) || (teens_allowed && (10..=19).contains(&unit))
+            };
+            if ok {
+                total += unit;
+                used += and + 1;
+                // « soixante dix sept » : 77.
+                if teens_allowed
+                    && unit == 10
+                    && let Some(more) = word(used).and_then(number_word)
+                    && (1..=9).contains(&more)
+                {
+                    total += more;
+                    used += 1;
+                }
+            }
+        }
+    } else if total == 10
+        && let Some(unit) = word(used).and_then(number_word)
+        && (7..=9).contains(&unit)
+    {
+        // « dix sept ».
+        total += unit;
+        used += 1;
+    }
+    Some((total, used))
+}
+
+/// Remplace les nombres dits en lettres par des chiffres : « à vingt et un
+/// degres » → « a 21 degres », « vingt et un et demi » → « 21.5 ». « un »
+/// et « une » seuls restent des mots (« allume une lampe »).
+fn spoken_numbers(words: &[&str]) -> Vec<String> {
+    let mut out = Vec::with_capacity(words.len());
+    let mut i = 0;
+    while i < words.len() {
+        // « pour cent » n'est pas un nombre.
+        if words[i] == "pour" && words.get(i + 1) == Some(&"cent") {
+            out.push("pourcent".to_owned());
+            i += 2;
+            continue;
+        }
+        let spelled = number_word(words[i]).is_some();
+        let half_after = |next: usize| {
+            matches!(
+                (words.get(next), words.get(next + 1)),
+                (Some(&"et"), Some(&("demi" | "demie")))
+            )
+        };
+        match read_number(words, i) {
+            Some((n, used))
+                if (spelled || used > 1 || half_after(i + used))
+                    && !(used == 1 && matches!(words[i], "un" | "une")) =>
+            {
+                i += used;
+                let half = half_after(i);
+                if half {
+                    i += 2;
+                    out.push(format!("{n}.5"));
+                } else {
+                    out.push(n.to_string());
+                }
+            }
+            _ => {
+                out.push(words[i].to_owned());
+                i += 1;
+            }
+        }
+    }
+    out
 }
 
 /// Les petits mots qui ne servent pas à trouver un appareil.
@@ -247,6 +403,11 @@ fn value(words: &[&str]) -> Option<(f64, Unit)> {
             Some("degre" | "degres") => Unit::Degrees,
             _ => Unit::None,
         };
+        // « 21 degres et demi ».
+        let half = unit == Unit::Degrees
+            && words.get(index + 2) == Some(&"et")
+            && matches!(words.get(index + 3).copied(), Some("demi" | "demie"));
+        let number = if half { number + 0.5 } else { number };
         let after_a = index > 0 && words[index - 1] == "a";
         (after_a || unit != Unit::None).then_some((number, unit))
     })
@@ -461,6 +622,9 @@ pub fn understand(text: &str, devices: &[Device]) -> Result<Understood, NotUnder
         .any(|word| matches!(*word, "les" | "tous" | "toutes" | "tout"));
     let hint = words.iter().find_map(|word| domain_hint(word));
 
+    if let Some(added) = add_to_list(text, devices) {
+        return added.map(|order| Understood::Orders(vec![order]));
+    }
     if is_question(text, &raw) {
         return Ok(Understood::Answer(answer(
             devices, &raw, &words, plural, hint,
@@ -488,6 +652,214 @@ pub fn understand(text: &str, devices: &[Device]) -> Result<Understood, NotUnder
         });
     }
     Ok(Understood::Orders(orders))
+}
+
+/// Une chose à ajouter fait au plus ces caractères.
+pub const MAX_ITEM_CHARS: usize = 100;
+
+/// Les verbes qui ajoutent à une liste, même sans la nommer.
+const ADD_VERBS: &[&str] = &[
+    "ajoute",
+    "ajouter",
+    "ajoutez",
+    "rajoute",
+    "rajouter",
+    "rajoutez",
+    "note",
+    "noter",
+    "notez",
+    "inscris",
+    "inscrire",
+    "inscrivez",
+];
+/// Les verbes qui n'ajoutent que si la liste est nommée (« mets du pain sur
+/// la liste de courses »).
+const PUT_VERBS: &[&str] = &["mets", "met", "mettre", "mettez"];
+/// Les mots qui annoncent la liste : « à la liste », « aux courses ».
+const LIST_MARKERS: &[&str] = &["a", "au", "aux", "sur", "dans", "en"];
+/// Les mots qu'on peut dire autour du nom de la liste.
+const LIST_EXTRA: &[&str] = &["liste", "merci", "vous"];
+/// Les petits mots retirés devant la chose (« du pain » → « pain »).
+const ITEM_ARTICLES: &[&str] = &[
+    "du", "de", "la", "le", "les", "l", "des", "un", "une", "d", "quelques", "encore",
+];
+/// Les mots de politesse retirés à la fin de la chose.
+const ITEM_POLITE: &[&str] = &["stp", "svp", "merci", "plait", "te", "vous", "il", "s"];
+
+/// Les mots de la phrase d'origine, accents et majuscules gardés, coupés
+/// après l'apostrophe (« l'huile » → « l' », « huile »).
+fn tokens(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for word in text.split_whitespace() {
+        let mut rest = word;
+        while let Some(cut) = rest.find(['\'', '’']) {
+            let (head, tail) = rest.split_at(cut);
+            let apostrophe = tail.chars().next().map_or(1, char::len_utf8);
+            out.push(format!("{head}'"));
+            rest = &tail[apostrophe..];
+        }
+        out.push(rest.to_owned());
+    }
+    out.into_iter()
+        .map(|token| {
+            token
+                .trim_matches(|c: char| ",.;:!?«»\"()[]".contains(c) || c.is_whitespace())
+                .to_owned()
+        })
+        .filter(|token| !token.is_empty())
+        .collect()
+}
+
+/// Les mots qui comptent dans le nom d'une liste (« Liste de courses » →
+/// « course »).
+fn list_words(device: &Device) -> Vec<String> {
+    let object = device.state.entity_id().object_id().replace('_', " ");
+    let mut words = keywords(&normalize(&device.name));
+    words.extend(keywords(&normalize(&object)));
+    words.retain(|word| word != "liste");
+    words
+}
+
+/// La liste dite dans la phrase.
+#[derive(Clone, Copy)]
+enum ListSaid<'a> {
+    /// « la liste », sans dire laquelle.
+    Unnamed,
+    Named(&'a Device),
+}
+
+impl<'a> ListSaid<'a> {
+    fn device(self) -> Option<&'a Device> {
+        match self {
+            Self::Unnamed => None,
+            Self::Named(device) => Some(device),
+        }
+    }
+}
+
+/// Les mots `said` désignent-ils une liste ?
+fn which_list<'a>(lists: &[&'a Device], said: &[String]) -> Option<ListSaid<'a>> {
+    let said: Vec<&String> = said
+        .iter()
+        .filter(|word| !LIST_EXTRA.contains(&word.as_str()))
+        .collect();
+    if said.is_empty() {
+        return Some(ListSaid::Unnamed);
+    }
+    lists
+        .iter()
+        .filter(|list| {
+            let words = list_words(list);
+            said.iter().all(|word| words.contains(word))
+        })
+        .max_by_key(|list| list_words(list).len())
+        .map(|list| ListSaid::Named(list))
+}
+
+/// La chose à ajouter, propre : sans article devant, sans politesse
+/// derrière, avec une majuscule (« du pain de mie » → « Pain de mie »).
+fn item_text(tokens: &[String]) -> Option<String> {
+    let norm = |token: &String| normalize(token);
+    let mut start = 0;
+    let mut end = tokens.len();
+    while end > start && ITEM_POLITE.contains(&norm(&tokens[end - 1]).as_str()) {
+        end -= 1;
+    }
+    while start + 1 < end && ITEM_ARTICLES.contains(&norm(&tokens[start]).as_str()) {
+        start += 1;
+    }
+    let mut item = String::new();
+    for token in &tokens[start..end] {
+        if !item.is_empty() && !item.ends_with('\'') {
+            item.push(' ');
+        }
+        item.push_str(token);
+    }
+    let mut chars = item.chars();
+    let first = chars.next()?;
+    Some(first.to_uppercase().chain(chars).collect())
+}
+
+/// « Ajoute du pain à la liste de courses », « note appeler le plombier
+/// dans les tâches », « mets du lait sur la liste ». `None` : la phrase ne
+/// parle pas d'ajouter à une liste.
+fn add_to_list(text: &str, devices: &[Device]) -> Option<Result<Order, NotUnderstood>> {
+    let tokens = tokens(text);
+    let norms: Vec<String> = tokens.iter().map(|token| normalize(token)).collect();
+    // Le verbe, au début de la phrase (« tu peux ajouter… »).
+    let (verb_at, strong) = norms.iter().take(4).enumerate().find_map(|(i, word)| {
+        if ADD_VERBS.contains(&word.as_str()) {
+            Some((i, true))
+        } else if PUT_VERBS.contains(&word.as_str()) {
+            Some((i, false))
+        } else {
+            None
+        }
+    })?;
+    let lists: Vec<&Device> = devices.iter().filter(|d| d.domain() == "todo").collect();
+    if lists.is_empty() {
+        return strong.then_some(Err(NotUnderstood::NoDevice));
+    }
+    let said = |range: &[String]| keywords(&normalize(&range.join(" ")));
+    let after = verb_at + 1;
+    let marker = |i: usize| LIST_MARKERS.contains(&norms[i].as_str());
+    // 1. « ajoute <chose> à <liste> » : le premier « à » qui n'est suivi
+    //    que du nom d'une liste.
+    let mut found = (after + 1..tokens.len())
+        .filter(|&i| marker(i))
+        .find_map(|i| {
+            let named = said(&tokens[i + 1..]);
+            // Sans « ajoute », la liste doit être dite (« mets … à » ne suffit pas).
+            if !strong && named.is_empty() {
+                return None;
+            }
+            which_list(&lists, &named).map(|list| (list, &tokens[after..i]))
+        });
+    // 2. « ajoute à <liste> <chose> ».
+    if found.is_none() && after < tokens.len() && marker(after) {
+        found = (after + 2..tokens.len()).rev().find_map(|end| {
+            let named = said(&tokens[after + 1..end]);
+            if named.is_empty() {
+                return None;
+            }
+            which_list(&lists, &named)
+                .filter(|list| list.device().is_some())
+                .map(|list| (list, &tokens[end..]))
+        });
+    }
+    let (list, item) = match found {
+        Some(found) => found,
+        None if strong => (ListSaid::Unnamed, &tokens[after..]),
+        None => return None,
+    };
+    // Sans liste nommée : celle des courses, ou la seule.
+    let list = list
+        .device()
+        .or_else(|| {
+            lists
+                .iter()
+                .find(|list| list_words(list).iter().any(|word| word == "course"))
+                .copied()
+        })
+        .or_else(|| (lists.len() == 1).then(|| lists[0]));
+    let Some(list) = list else {
+        return Some(Err(NotUnderstood::Ambiguous(
+            lists.iter().take(6).map(|list| list.name.clone()).collect(),
+        )));
+    };
+    let Some(item) = item_text(item) else {
+        return Some(Err(NotUnderstood::NothingToAdd));
+    };
+    if item.chars().count() > MAX_ITEM_CHARS {
+        return Some(Err(NotUnderstood::TooLong));
+    }
+    Some(Ok(Order {
+        domain: "todo".into(),
+        service: "add_item".into(),
+        entity_id: list.state.entity_id().clone(),
+        data: data(&[("item", Value::from(item))]),
+        name: list.name.clone(),
+    }))
 }
 
 fn is_question(text: &str, raw: &[&str]) -> bool {
@@ -1150,5 +1522,137 @@ mod tests {
             understand("qui est à la maison ?", &devices),
             Ok(Understood::Answer("Je ne peux pas te le dire.".into()))
         );
+    }
+
+    #[test]
+    fn spoken_numbers_become_digits() {
+        let cases = [
+            (
+                "mets le chauffage à vingt et un degrés",
+                "mets le chauffage a 21 degres",
+            ),
+            ("à 20 et 1°", "a 21 degres"),
+            ("à dix-neuf degrés et demi", "a 19 degres et demi"),
+            ("à vingt et un et demi", "a 21.5"),
+            ("à 21 et demi", "a 21.5"),
+            ("soixante-dix-sept", "77"),
+            ("soixante et onze", "71"),
+            ("quatre-vingt-dix pour cent", "90 pourcent"),
+            ("quatre vingts", "80"),
+            ("cent", "100"),
+            ("deux cent vingt-deux", "222"),
+            ("dix sept", "17"),
+            ("allume une lampe et un spot", "allume une lampe et un spot"),
+            ("les deux volets", "les 2 volets"),
+            ("la chambre 2", "la chambre 2"),
+            ("à 20 1", "a 20 1"),
+        ];
+        for (said, expected) in cases {
+            assert_eq!(normalize(said), expected, "{said}");
+        }
+        assert_eq!(
+            one("mets le chauffage du salon à vingt et un degrés et demi"),
+            (
+                "climate.set_temperature".into(),
+                "climate.salon".into(),
+                json!({"temperature": 21.5})
+            )
+        );
+        assert_eq!(
+            one("Met le chauffage du salon à 20 et 1°."),
+            (
+                "climate.set_temperature".into(),
+                "climate.salon".into(),
+                json!({"temperature": 21})
+            )
+        );
+        assert_eq!(
+            one("ouvre le volet du salon à cinquante pour cent"),
+            (
+                "cover.set_cover_position".into(),
+                "cover.salon".into(),
+                json!({"position": 50})
+            )
+        );
+    }
+
+    fn with_lists() -> Vec<Device> {
+        let core = Core::new();
+        let mut devices = home();
+        devices.push(device(
+            &core,
+            "todo.courses",
+            "3",
+            "Liste de courses",
+            None,
+            json!({}),
+        ));
+        devices.push(device(&core, "todo.taches", "0", "Tâches", None, json!({})));
+        devices
+    }
+
+    fn added(text: &str) -> (String, String) {
+        match understand(text, &with_lists()) {
+            Ok(Understood::Orders(orders)) => {
+                assert_eq!(orders.len(), 1, "{text}");
+                assert_eq!(orders[0].service, "add_item");
+                (
+                    orders[0].entity_id.to_string(),
+                    orders[0].data["item"].as_str().unwrap().to_owned(),
+                )
+            }
+            other => panic!("{text} : {other:?}"),
+        }
+    }
+
+    #[test]
+    fn things_are_added_to_a_list() {
+        let courses = |item: &str| ("todo.courses".to_owned(), item.to_owned());
+        assert_eq!(
+            added("Ajoute du pain à la liste de courses."),
+            courses("Pain")
+        );
+        assert_eq!(added("ajoute du lait aux courses"), courses("Lait"));
+        assert_eq!(added("Ajoute de l'huile d'olive"), courses("Huile d'olive"));
+        assert_eq!(
+            added("ajoute de la sauce à la tomate à la liste de courses s'il te plaît"),
+            courses("Sauce à la tomate")
+        );
+        assert_eq!(added("mets des œufs sur la liste"), courses("Œufs"));
+        assert_eq!(
+            added("Tu peux rajouter 6 yaourts sur ma liste de courses ?"),
+            courses("6 yaourts")
+        );
+        assert_eq!(
+            added("ajoute à la liste de courses du beurre"),
+            courses("Beurre")
+        );
+        assert_eq!(
+            added("note appeler le plombier dans les tâches"),
+            ("todo.taches".into(), "Appeler le plombier".into())
+        );
+        // « mets … à » reste un ordre à un appareil.
+        assert_eq!(
+            understand("mets le chauffage du salon à 21", &with_lists()).unwrap(),
+            understand("mets le chauffage du salon à 21", &home()).unwrap()
+        );
+        assert_eq!(
+            understand("ajoute", &with_lists()),
+            Err(NotUnderstood::NothingToAdd)
+        );
+        assert_eq!(
+            understand("ajoute du pain", &home()),
+            Err(NotUnderstood::NoDevice)
+        );
+        // Sans liste de courses, plusieurs listes : laquelle ?
+        let core = Core::new();
+        let others = vec![
+            device(&core, "todo.maison", "0", "Maison", None, json!({})),
+            device(&core, "todo.jardin", "0", "Jardin", None, json!({})),
+        ];
+        assert!(matches!(
+            understand("ajoute du pain", &others),
+            Err(NotUnderstood::Ambiguous(_))
+        ));
     }
 }

@@ -19,6 +19,9 @@ ha-energy = { path = "../ha-energy" }
 ha-core = { path = "../ha-core" }
 ha-notices = { path = "../ha-notices" }
 ha-push = { path = "../ha-push" }
+# Parler à la maison depuis la tablette (étape 84).
+ha-stt = { path = "../ha-stt" }
+ha-tts = { path = "../ha-tts" }
 jiff.workspace = true
 rustls.workspace = true
 ha-storage = { path = "../ha-storage" }

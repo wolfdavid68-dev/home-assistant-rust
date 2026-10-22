@@ -128,6 +128,8 @@ function showDashboard() {
   live.open();
   loadAccount().catch(() => {});
   loadAreas().catch(() => {});
+  // Le micro (étape 84) : voix.js est chargé après ce fichier.
+  if (typeof loadVoice === "function") loadVoice().catch(() => {});
   // Ouvert depuis une notification : la cloche directement.
   if (location.hash === "#notifications") {
     history.replaceState(null, "", "/");

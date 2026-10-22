@@ -28,6 +28,7 @@
   <script src="/agenda.js" defer></script>
   <script src="/hub.js" defer></script>
   <script src="/sonnette.js" defer></script>
+  <script src="/voix.js" defer></script>
 </head>
 <body>
   <!-- Écran de connexion -->
@@ -315,13 +316,17 @@
         <button type="button" class="ghost small">Allume la lumière de la chambre</button>
         <button type="button" class="ghost small">Quelle est la température du salon ?</button>
         <button type="button" class="ghost small">Qui est à la maison ?</button>
+        <button type="button" class="ghost small">Ajoute du pain à la liste de courses</button>
       </div>
+      <p id="assist-voice" class="assist-voice" role="status" hidden></p>
       <form id="assist-form" class="assist-form">
         <input id="assist-text" type="text" maxlength="300" autocomplete="off" enterkeyhint="send"
                placeholder="Ferme le volet de la chambre" aria-label="Ta demande" required>
+        <!-- Parler (étape 84) : seulement si l'écoute est installée sur le serveur. -->
+        <button id="assist-mic" class="mic-button" type="button" aria-label="Parler" aria-pressed="false" hidden></button>
         <button class="primary" type="submit">Envoyer</button>
       </form>
-      <p class="account">Compris sur le serveur, sans cloud. Sur téléphone, le micro du clavier permet de dicter.</p>
+      <p class="account">Compris sur le serveur, sans cloud. Le micro aussi : la phrase est écoutée sur le serveur de la maison.</p>
     </dialog>
     <dialog id="notices" class="history-dialog notices-dialog" aria-labelledby="notices-title">
       <div class="history-top">
@@ -501,6 +506,7 @@
         <button id="hub-all" type="button"></button>
         <button id="hub-open-agenda" type="button" hidden></button>
         <button id="hub-energy" type="button" hidden></button>
+        <button id="hub-talk" class="hub-talk-button" type="button" aria-pressed="false" hidden></button>
         <button id="hub-announce" class="hub-say-button" type="button" hidden></button>
       </nav>
     </section>

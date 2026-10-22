@@ -26,6 +26,9 @@
 //! | PATCH / DELETE | `/api/push/subscriptions/{id}` | Change ce qu'il reçoit / le retire |
 //! | POST | `/api/push/test` | Envoie un essai à ses appareils |
 //! | POST | `/api/conversation/process` | Assist : une phrase en français (« ferme le volet de la chambre ») |
+//! | GET | `/api/conversation/voice` | L'écoute et la voix de la tablette sont-elles installées ? |
+//! | POST | `/api/conversation/audio` | Une phrase dite à la tablette (WAV), écoutée puis comprise (étape 84) |
+//! | POST | `/api/conversation/speech` | La réponse lue par la voix de la maison (WAV) |
 //! | POST | `/api/mcp` | Un assistant IA branché par MCP (étape 55) |
 //! | POST | `/api/push/action` | Un bouton touché sur une notification (sans connexion : le ticket en tient lieu) |
 //! | GET | `/api/websocket` | API WebSocket (authentification dans le 1er message) |
@@ -43,12 +46,13 @@ mod rest;
 mod roles;
 mod system;
 mod tls;
+mod voice;
 mod web;
 mod ws;
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use axum::Router;
@@ -70,6 +74,8 @@ pub use json::{format_timestamp, state_to_json};
 const MAX_BODY_SIZE: usize = 64 * 1024;
 /// Une requête HTTP qui dure plus longtemps est interrompue.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+/// L'écoute d'une phrase : son tour, puis Whisper.
+const VOICE_TIMEOUT: Duration = Duration::from_secs(90);
 
 /// Ce que les routes de l'API partagent.
 #[derive(Debug)]
@@ -92,6 +98,12 @@ pub struct ApiState {
     pub push_tickets: ha_push::Tickets,
     /// Les appels des assistants IA (MCP, étape 55), pour les limiter.
     mcp_limiter: mcp::Limiter,
+    /// L'écoute des phrases dites à la tablette (étape 84), si installée.
+    listening: OnceLock<ha_stt::Stt>,
+    /// La voix qui lit les réponses à la tablette, si installée.
+    speaking: OnceLock<ha_tts::Tts>,
+    /// Deux réponses lues à la fois au plus.
+    speech_turn: tokio::sync::Semaphore,
     shutdown: CancellationToken,
 }
 
@@ -116,8 +128,22 @@ impl ApiState {
             metrics: system::Metrics::default(),
             push_tickets: ha_push::Tickets::default(),
             mcp_limiter: mcp::Limiter::default(),
+            listening: OnceLock::new(),
+            speaking: OnceLock::new(),
+            speech_turn: tokio::sync::Semaphore::new(2),
             shutdown,
         })
+    }
+
+    /// Branche l'écoute et la voix de la tablette (étape 84). Sans elles,
+    /// leurs routes répondent 503 et le bouton micro n'apparaît pas.
+    pub fn set_voice(&self, listening: Option<ha_stt::Stt>, speaking: Option<ha_tts::Tts>) {
+        if let Some(stt) = listening {
+            let _ = self.listening.set(stt);
+        }
+        if let Some(tts) = speaking {
+            let _ = self.speaking.set(tts);
+        }
     }
 
     /// Demande l'arrêt du serveur : plus de nouvelles connexions, et les
@@ -180,6 +206,7 @@ pub fn router(state: Arc<ApiState>) -> Router {
         .route("/api/push/test", post(push::test))
         .route("/api/push/action", post(push::action))
         .route("/api/conversation/process", post(assist::process))
+        .route("/api/conversation/voice", get(voice::overview))
         .route("/api/mcp", post(mcp::handle).get(mcp::no_stream))
         .route("/api/home/drawing", get(drawing::get).put(drawing::put))
         .route(
@@ -195,6 +222,29 @@ pub fn router(state: Arc<ApiState>) -> Router {
         .route("/api/websocket", get(ws::handler))
         // Tableau de bord web (compressé, avec empreinte).
         .merge(web::router())
+        .layer(TimeoutLayer::with_status_code(
+            StatusCode::REQUEST_TIMEOUT,
+            REQUEST_TIMEOUT,
+        ))
+        // L'écoute et la voix prennent plus de temps (une autre phrase peut
+        // passer avant) : leur propre délai, et une limite de taille pour le
+        // son de 15 s.
+        .route(
+            "/api/conversation/audio",
+            post(voice::listen)
+                .layer::<_, std::convert::Infallible>(DefaultBodyLimit::max(ha_stt::MAX_WAV_BYTES))
+                .layer(TimeoutLayer::with_status_code(
+                    StatusCode::REQUEST_TIMEOUT,
+                    VOICE_TIMEOUT,
+                )),
+        )
+        .route(
+            "/api/conversation/speech",
+            post(voice::speak).layer(TimeoutLayer::with_status_code(
+                StatusCode::REQUEST_TIMEOUT,
+                VOICE_TIMEOUT,
+            )),
+        )
         .layer(DefaultBodyLimit::max(MAX_BODY_SIZE))
         // En-têtes de sécurité sur toutes les réponses.
         .layer(SetResponseHeaderLayer::overriding(
@@ -212,10 +262,6 @@ pub fn router(state: Arc<ApiState>) -> Router {
         .layer(SetResponseHeaderLayer::overriding(
             header::REFERRER_POLICY,
             HeaderValue::from_static("no-referrer"),
-        ))
-        .layer(TimeoutLayer::with_status_code(
-            StatusCode::REQUEST_TIMEOUT,
-            REQUEST_TIMEOUT,
         ))
         // La durée de chaque requête, pour la page « Système ».
         .layer(axum::middleware::from_fn_with_state(

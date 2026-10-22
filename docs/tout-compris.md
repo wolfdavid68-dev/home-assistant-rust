@@ -11,13 +11,15 @@ sudo ./installer.sh --sonos --ring
 
 installe et règle **toute la maison**, sans rien à copier à la main :
 
-| | Toujours | Avec `--sonos` | Avec `--ring` |
-| --- | :---: | :---: | :---: |
-| Le serveur, son service, sa mise à jour de chaque nuit | ✓ | | |
-| Les mises à jour de sécurité de Debian, automatiques | ✓ | | |
-| Mosquitto (le facteur MQTT), réglé, avec ses comptes | ✓ | | |
-| Les enceintes Sonos, Piper et la voix française | | ✓ | |
-| ring-mqtt, pour la [sonnette Ring](sonnette.md) | | | ✓ |
+| | Toujours | Avec `--sonos` | Avec `--ring` | Avec `--voix` |
+| --- | :---: | :---: | :---: | :---: |
+| Le serveur, son service, sa mise à jour de chaque nuit | ✓ | | | |
+| Les mises à jour de sécurité de Debian, automatiques | ✓ | | | |
+| Mosquitto (le facteur MQTT), réglé, avec ses comptes | ✓ | | | |
+| Les enceintes Sonos | | ✓ | | |
+| Piper et la voix française | | ✓ | | ✓ |
+| ring-mqtt, pour la [sonnette Ring](sonnette.md) | | | ✓ | |
+| Whisper, pour [parler à la maison](voix.md) depuis la tablette | | | | ✓ |
 
 Il ne reste à faire que ce qui demande **toi** : créer ton compte (`sudo ha-maison user add david`),
 connecter le compte Ring (le code arrive par SMS), relier les appareils qui ont un bouton à presser
@@ -77,7 +79,8 @@ de passe et ne redémarre que ce qui a changé.
 | Fichier | Rôle |
 | ------- | ---- |
 | [packaging/linux/tout-compris.sh](../packaging/linux/tout-compris.sh) | Tout ce qu'il faut autour du serveur, étape par étape, chacune sautée si elle est déjà faite |
-| [packaging/linux/installer.sh](../packaging/linux/installer.sh) | Les options (`--sonos`, `--ring`, retenues), puis appelle `tout-compris.sh` |
+| [packaging/linux/installer.sh](../packaging/linux/installer.sh) | Les options (`--sonos`, `--ring`, `--voix`, retenues), puis appelle `tout-compris.sh` |
+| [packaging/linux/ha-maison-ecoute.service](../packaging/linux/ha-maison-ecoute.service) | Le service d'écoute (Whisper), avec `--voix` ([étape 84](voix.md)) |
 | [packaging/linux/ha-maison-ring.service](../packaging/linux/ha-maison-ring.service) | Le service de ring-mqtt, avec l'image épinglée |
 | [packaging/linux/ha-maison.service](../packaging/linux/ha-maison.service) | Lit `ha-maison.auto.env`, puis `ha-maison.env` (qui passe devant) |
 | [packaging/linux/ha-maison](../packaging/linux/ha-maison) | La commande d'administration lit les deux aussi |

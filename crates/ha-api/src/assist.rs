@@ -27,7 +27,7 @@ use crate::rest::{Outcome, execute, parse_json};
 use crate::roles;
 
 /// Les appareils qu'Assist connaît.
-const DOMAINS: [&str; 18] = [
+const DOMAINS: [&str; 19] = [
     "light",
     "switch",
     "cover",
@@ -46,6 +46,8 @@ const DOMAINS: [&str; 18] = [
     "binary_sensor",
     "person",
     "alarm_control_panel",
+    // Les listes (courses, tâches) : « ajoute du pain à la liste de courses ».
+    "todo",
 ];
 
 #[derive(Deserialize)]
@@ -90,13 +92,16 @@ pub(crate) fn devices(state: &ApiState, auth: &Authenticated) -> Vec<Device> {
 }
 
 fn reply(kind: &str, speech: &str) -> Json<Value> {
-    Json(json!({
-        "response": {
-            "response_type": kind,
-            "language": "fr",
-            "speech": { "plain": { "speech": speech } },
-        }
-    }))
+    Json(json!({ "response": response(kind, speech) }))
+}
+
+/// La réponse d'Assist, comme celle de Home Assistant.
+pub(crate) fn response(kind: &str, speech: &str) -> Value {
+    json!({
+        "response_type": kind,
+        "language": "fr",
+        "speech": { "plain": { "speech": speech } },
+    })
 }
 
 /// `POST /api/conversation/process`
@@ -148,6 +153,11 @@ pub(crate) async fn converse(
         );
         if let Some(amount) = ha_assist::amount(&order) {
             summary = format!("{summary} {amount}");
+        }
+        if order.service == "add_item"
+            && let Some(item) = order.data.get("item").and_then(Value::as_str)
+        {
+            summary = format!("{item} ajouté à « {} »", order.name);
         }
         match execute(
             state,

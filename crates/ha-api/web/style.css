@@ -2518,7 +2518,22 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .assist-line.from-home p { background: var(--card-2); color: var(--text); border-bottom-left-radius: 4px; }
 .assist-line.is-error p { box-shadow: inset 3px 0 0 var(--alert); }
 .assist-examples { display: flex; flex-wrap: wrap; gap: 0.4rem; }
-.assist-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; }
+.assist-form { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 0.5rem; }
+.assist-form:has(.mic-button[hidden]) { grid-template-columns: minmax(0, 1fr) auto; }
+
+/* Parler à la maison (étape 84) : le bouton micro, qui bat au rythme de la voix. */
+.mic-button { --voice-level: 0; display: grid; place-items: center; width: 44px; min-height: 44px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: var(--card-2); color: var(--text); cursor: pointer; transition: box-shadow 0.12s ease-out, background 0.2s; }
+.mic-button[hidden] { display: none; }
+.mic-button svg { width: 22px; height: 22px; }
+.mic-button[data-state="listening"] { background: var(--alert); border-color: transparent; color: #fff; box-shadow: 0 0 0 calc(4px + var(--voice-level) * 12px) rgb(229 57 53 / 0.25); }
+.mic-button[data-state="starting"], .mic-button[data-state="thinking"], .mic-button[data-state="speaking"] { opacity: 0.7; cursor: progress; }
+.assist-voice { margin: 0; font-size: 0.9rem; color: var(--muted); }
+.assist-voice[hidden] { display: none; }
+.hub-dock .hub-talk-button { background: var(--accent); color: var(--accent-ink, #fff); }
+.hub-dock .hub-talk-button[data-state="listening"] { background: var(--alert); }
+@media (prefers-reduced-motion: reduce) {
+  .mic-button { transition: none; }
+}
 .assist-form input { min-width: 0; }
 .assist-dialog .account { margin: 0; font-size: 0.82rem; }
 

@@ -5,6 +5,8 @@
 #   sudo ./installer.sh                   le serveur, et tout ce qu'il lui faut
 #   sudo ./installer.sh --sonos --ring    en plus : la voix des annonces sur les
 #                                         enceintes Sonos, et la sonnette Ring
+#   sudo ./installer.sh --voix            en plus : parler à la maison depuis
+#                                         la tablette (Whisper, 400 Mo)
 #
 # Les options sont retenues (/etc/ha-maison/options) : la mise à jour de
 # chaque nuit les garde. Guide : docs/mini-pc.md
@@ -18,6 +20,8 @@
 #     avec des mots de passe tirés au hasard (étape 83) ;
 #   - avec --sonos : la voix (Piper), téléchargée et vérifiée ;
 #   - avec --ring : ring-mqtt, dans un conteneur à la version épinglée ;
+#   - avec --voix : l'écoute (Whisper) et la voix (Piper), téléchargées et
+#     vérifiées, l'écoute dans son propre service (ha-maison-ecoute) ;
 #   - le service systemd, démarré tout de suite et à chaque allumage ;
 #   - la mise à jour automatique, chaque nuit (mise-a-jour.sh).
 # Les données restent dans /var/lib/ha-maison* : une mise à jour n'y touche pas.
@@ -44,13 +48,16 @@ version=$(./ha-server --version) || die "ha-server ne démarre pas sur cette mac
 OPTIONS=/etc/ha-maison/options
 avec_sonos=false
 avec_ring=false
+avec_voix=false
 if grep -qx sonos "$OPTIONS" 2>/dev/null; then avec_sonos=true; fi
 if grep -qx ring "$OPTIONS" 2>/dev/null; then avec_ring=true; fi
+if grep -qx voix "$OPTIONS" 2>/dev/null; then avec_voix=true; fi
 for option in "$@"; do
   case "$option" in
     --sonos) avec_sonos=true ;;
     --ring) avec_ring=true ;;
-    *) die "option inconnue : $option (possibles : --sonos, --ring)" ;;
+    --voix) avec_voix=true ;;
+    *) die "option inconnue : $option (possibles : --sonos, --ring, --voix)" ;;
   esac
 done
 echo "Installation de $version"
@@ -88,6 +95,7 @@ done
   echo "# Les options de l'installation (installer.sh), gardées par les mises à jour."
   if [ "$avec_sonos" = true ]; then echo sonos; fi
   if [ "$avec_ring" = true ]; then echo ring; fi
+  if [ "$avec_voix" = true ]; then echo voix; fi
 } >"$OPTIONS"
 chmod 0644 "$OPTIONS"
 
@@ -142,6 +150,11 @@ if [ "$avec_ring" = true ] && [ ! -s /var/lib/ring-mqtt/ring-state.json ]; then
   echo
   echo "Sonnette Ring : sur ton téléphone, ouvre http://${adresse}:55123/"
   echo "et connecte le compte Ring (le code arrive par SMS). Une seule fois."
+fi
+if [ "$avec_voix" = true ] && ! grep -q '^HA_TLS=on' /etc/ha-maison/ha-maison.env; then
+  echo
+  echo "Parler à la maison : le micro de la tablette ne marche qu'en HTTPS."
+  echo "Mets HA_TLS=on dans /etc/ha-maison/ha-maison.env (voir docs/https-maison.md)."
 fi
 if [ "$premiere_fois" = true ]; then
   echo

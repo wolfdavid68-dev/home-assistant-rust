@@ -614,6 +614,8 @@ async fn dashboard_files_are_served_with_security_headers() {
         ("/agenda.js", "text/javascript; charset=utf-8"),
         ("/hub.js", "text/javascript; charset=utf-8"),
         ("/sonnette.js", "text/javascript; charset=utf-8"),
+        ("/voix.js", "text/javascript; charset=utf-8"),
+        ("/ecoute.js", "text/javascript; charset=utf-8"),
         ("/house.svg", "image/svg+xml"),
         ("/style.css", "text/css; charset=utf-8"),
         ("/icon.svg", "image/svg+xml"),
@@ -718,6 +720,8 @@ fn dashboard_never_uses_inner_html() {
         ("agenda.js", include_str!("../web/agenda.js")),
         ("hub.js", include_str!("../web/hub.js")),
         ("sonnette.js", include_str!("../web/sonnette.js")),
+        ("voix.js", include_str!("../web/voix.js")),
+        ("ecoute.js", include_str!("../web/ecoute.js")),
         ("sw.js", include_str!("../web/sw.js")),
     ];
     for (name, script) in scripts {
@@ -2221,6 +2225,195 @@ async fn assist_understands_french_and_obeys_the_same_rules() {
         )
         .await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+/// « Ajoute du pain à la liste de courses » (étape 84) : un ordre à la liste.
+#[tokio::test]
+async fn assist_adds_to_the_shopping_list() {
+    let app = TestApp::new().await;
+    let mut attributes = Attributes::new();
+    attributes.insert("friendly_name".into(), "Liste de courses".into());
+    app.state
+        .core
+        .states
+        .set("todo.courses".parse().unwrap(), "0", attributes)
+        .unwrap();
+    let david = app.login().await;
+    let mut events = app.state.core.bus.subscribe();
+    let (status, body) = app
+        .request(
+            "POST",
+            "/api/conversation/process",
+            Some(&david),
+            Some(json!({"text": "Ajoute du pain de mie à la liste de courses"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(
+        body["response"]["speech"]["plain"]["speech"],
+        "C'est fait : Pain de mie ajouté à « Liste de courses »."
+    );
+    let event = events.recv().await.unwrap();
+    let ha_core::Event::CallService {
+        domain,
+        service,
+        data,
+        ..
+    } = event.as_ref()
+    else {
+        panic!("un ordre est attendu");
+    };
+    assert_eq!((domain.as_str(), service.as_str()), ("todo", "add_item"));
+    assert_eq!(data["item"], "Pain de mie");
+}
+
+/// Un WAV d'une seconde (16 bits, mono, 16 000 Hz) : une note.
+#[cfg(unix)]
+fn spoken_wav() -> Vec<u8> {
+    let samples: Vec<i16> = (0..16_000u32)
+        .map(|i| if i % 40 < 20 { 6000 } else { -6000 })
+        .collect();
+    let data = u32::try_from(samples.len() * 2).unwrap();
+    let mut out = Vec::new();
+    out.extend_from_slice(b"RIFF");
+    out.extend_from_slice(&(36 + data).to_le_bytes());
+    out.extend_from_slice(b"WAVEfmt ");
+    for (value, size) in [
+        (16u32, 4),
+        (1, 2),
+        (1, 2),
+        (16_000, 4),
+        (32_000, 4),
+        (2, 2),
+        (16, 2),
+    ] {
+        out.extend_from_slice(&value.to_le_bytes()[..size]);
+    }
+    out.extend_from_slice(b"data");
+    out.extend_from_slice(&data.to_le_bytes());
+    for sample in samples {
+        out.extend_from_slice(&sample.to_le_bytes());
+    }
+    out
+}
+
+/// Parler à la maison (étape 84) : la tablette envoie le son, le serveur
+/// l'écoute (ici un faux Whisper), le comprend et obéit ; la réponse est dite
+/// par la voix (un faux Piper).
+#[cfg(unix)]
+#[tokio::test]
+async fn the_tablet_can_talk_to_the_house() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let app = TestApp::new().await;
+    furnish(&app);
+    let david = app.login().await;
+
+    // Rien d'installé : pas de micro.
+    let (_, body) = app
+        .request("GET", "/api/conversation/voice", Some(&david), None)
+        .await;
+    assert_eq!(body, json!({"listen": false, "speak": false}));
+    let (status, _, _) = app
+        .send_bytes("POST", "/api/conversation/audio", &david, spoken_wav())
+        .await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+
+    let dir = std::env::temp_dir().join(format!("ha-api-voix-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    for name in [
+        ha_stt::ENCODER,
+        ha_stt::DECODER,
+        ha_stt::TOKENS,
+        "voix.onnx",
+    ] {
+        std::fs::write(dir.join(name), b"").unwrap();
+    }
+    let scripts = [
+        (
+            ha_stt::PROGRAM,
+            "#!/bin/sh\necho '{\"lang\": \"fr\", \"text\": \" Ferme le volet du salon.\"}'\n",
+        ),
+        (
+            "piper",
+            "#!/bin/sh\ncat > /dev/null\nprintf '\\001\\000\\002\\000'\n",
+        ),
+    ];
+    for (name, script) in scripts {
+        std::fs::write(dir.join(name), script).unwrap();
+        std::fs::set_permissions(dir.join(name), std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    app.state.set_voice(
+        Some(ha_stt::Stt::from_dir(&dir).unwrap()),
+        Some(ha_tts::Tts::new(ha_tts::Engine::Program {
+            program: dir.join("piper"),
+            model: dir.join("voix.onnx"),
+        })),
+    );
+    let (_, body) = app
+        .request("GET", "/api/conversation/voice", Some(&david), None)
+        .await;
+    assert_eq!(body, json!({"listen": true, "speak": true}));
+
+    let mut events = app.state.core.bus.subscribe();
+    let (status, bytes, _) = app
+        .send_bytes("POST", "/api/conversation/audio", &david, spoken_wav())
+        .await;
+    let body: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["text"], "Ferme le volet du salon.");
+    assert_eq!(body["response"]["response_type"], "action_done");
+    let event = events.recv().await.unwrap();
+    let ha_core::Event::CallService { service, .. } = event.as_ref() else {
+        panic!("un ordre est attendu");
+    };
+    assert_eq!(service, "close_cover");
+
+    // Un son qui n'est pas un WAV : refusé avant d'être écouté.
+    let (status, _, _) = app
+        .send_bytes(
+            "POST",
+            "/api/conversation/audio",
+            &david,
+            b"bonjour".to_vec(),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    // Trop gros : refusé dès la lecture.
+    let (status, _, _) = app
+        .send_bytes(
+            "POST",
+            "/api/conversation/audio",
+            &david,
+            vec![0; ha_stt::MAX_WAV_BYTES + 1],
+        )
+        .await;
+    assert_eq!(status, StatusCode::PAYLOAD_TOO_LARGE);
+
+    // La réponse, dite par la voix.
+    let (status, bytes, content_type) = app
+        .send_bytes(
+            "POST",
+            "/api/conversation/speech",
+            &david,
+            json!({"text": "C'est fait."}).to_string().into_bytes(),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(content_type.as_deref(), Some("audio/wav"));
+    assert_eq!(&bytes[..4], b"RIFF");
+
+    // Sans connexion : refusé.
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/conversation/speech",
+            None,
+            Some(json!({"text": "a"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    std::fs::remove_dir_all(&dir).unwrap();
 }
 
 /// Une requête MCP (JSON-RPC), avec des en-têtes en plus.

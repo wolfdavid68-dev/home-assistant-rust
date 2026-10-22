@@ -32,8 +32,9 @@ La tablette **à l'horizontale** :
   température et ce qui y est allumé ou ouvert. Au-delà de 6 pièces, elles passent sur deux
   colonnes : toutes visibles, sans faire défiler. Un contact ouvre la pièce par-dessus la vue hub ;
 - **en bas** : **Toute la maison** (le tableau de bord complet), **Agenda** (l'agenda en grand),
-  **Énergie** (avec la puissance du moment, « 1,2 kW ») et **Annonce à la maison** : une phrase
-  tapée sur la tablette, lue sur les enceintes ([étape 73](sonos.md)).
+  **Énergie** (avec la puissance du moment, « 1,2 kW »), **Parler à la maison** : une phrase dite
+  au micro de la tablette ([étape 84](voix.md)), et **Annonce à la maison** : une phrase tapée sur
+  la tablette, lue sur les enceintes ([étape 73](sonos.md)).
 
 Chaque bouton n'apparaît que si la maison a ce qu'il faut : pas de carte météo sans météo, pas
 d'annonce sans enceinte ni voix.

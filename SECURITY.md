@@ -75,6 +75,12 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
   programme, mots de passe de 32 caractères tirés au hasard rangés dans `/etc/ha-maison/secrets` ; la voix (Piper)
   vérifiée par son empreinte SHA-256 ; ring-mqtt dans un conteneur dont l'image est épinglée par son empreinte ;
   Docker installé seulement avec `--ring`, le serveur jamais dans Docker.
+- Parler à la maison (étape 84) : la voix est écoutée sur le mini-PC (Whisper) et la réponse dite par Piper, rien ne
+  part sur Internet ; ni le son ni la phrase ne sont gardés ni journalisés ; le son est vérifié avant d'être écouté
+  (WAV 16 bits mono 16 000 Hz, 15 s au plus), une phrase à la fois ; le service d'écoute, sans mot de passe, n'est
+  joignable que depuis le mini-PC (`IPAddressAllow=localhost`, et le serveur refuse une autre adresse que la boucle
+  locale), sous un compte jetable sans droit d'écriture ; ses fichiers sont vérifiés par leur empreinte SHA-256 ; chaque
+  ordre suit le chemin d'un toucher (Assist).
 - Agendas en ligne (ICS) : HTTPS seulement, sans redirection, 2 Mio au plus ; l'adresse (qui peut contenir une
   clé secrète) n'est jamais journalisée ni publiée, seulement le nom du site ; lecture seule.
 - Alexa (faux pont Hue, sans authentification possible) : désactivée par défaut ; seuls les appareils listés

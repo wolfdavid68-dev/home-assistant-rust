@@ -15,7 +15,9 @@ Commander la maison **avec une phrase**, comme l'Assist de Home Assistant :
 
 Le bouton en forme de bulle, en haut de l'écran, ouvre Assist. La phrase est **comprise sur ton
 serveur**, sans cloud ni intelligence artificielle : rien ne sort de la maison. Sur téléphone, le
-micro du clavier permet de la dicter.
+micro du clavier permet de la dicter. Avec l'écoute installée, un bouton **micro** permet de la
+dire, écoutée sur le serveur lui aussi ([étape 84](voix.md)), qui comprend aussi les nombres en
+lettres et « ajoute du pain à la liste de courses ».
 
 ## Ce qu'Assist comprend
 
