@@ -41,6 +41,9 @@ utilisation :
   ha-server timetree pair         associe le compte TimeTree de la maison (lecture seule)
   ha-server timetree status       affiche le compte et ses agendas
   ha-server timetree forget       oublie le compte
+  ha-server iglou pair            relie la liste de courses de l'appli Iglou
+  ha-server iglou status          affiche le compte, sa maison et la liste
+  ha-server iglou forget          oublie le compte (la liste locale reprend)
   ha-server smartthings pair      associe la maison SmartThings de Samsung (docs/smartthings.md)
   ha-server smartthings status    affiche l'association et ses jetons
   ha-server smartthings devices   liste les appareils SmartThings et leurs entités
@@ -549,10 +552,11 @@ async fn audit_cli(store: &Store, domain: &str, args: &[&str]) {
         ),
         ("freebox", ["track", mac, _]) => ("freebox_track".to_owned(), Some(*mac)),
         ("freebox", ["untrack", name]) => ("freebox_untrack".to_owned(), Some(*name)),
-        ("hue" | "somfy" | "freebox" | "timetree" | "smartthings", ["forget"]) => {
+        ("hue" | "somfy" | "freebox" | "timetree" | "iglou" | "smartthings", ["forget"]) => {
             (format!("{domain}_forget"), None)
         }
         ("timetree", ["pair"]) => ("timetree_pair".to_owned(), None),
+        ("iglou", ["pair"]) => ("iglou_pair".to_owned(), None),
         ("smartthings", ["pair"]) => ("smartthings_pair".to_owned(), None),
         ("automations", ["delete", id]) => ("automation_delete".to_owned(), Some(*id)),
         _ => return,
@@ -1675,6 +1679,142 @@ async fn timetree_inner(args: &[&str], store: &Store) -> Result<(), Box<dyn Erro
                 println!("compte TimeTree oublié (pense à changer son mot de passe s'il a fuité)");
             } else {
                 println!("aucun compte TimeTree associé");
+            }
+            Ok(())
+        }
+        _ => Err(USAGE.into()),
+    }
+}
+
+/// `iglou pair|status|forget` : la liste de courses de l'appli Iglou
+/// (étape 81).
+pub(crate) async fn iglou_command(args: &[&str]) -> Result<(), Box<dyn Error>> {
+    let store = crate::open_store().await?;
+    let result = iglou_inner(args, &store).await;
+    if result.is_ok() {
+        audit_cli(&store, "iglou", args).await;
+    }
+    store.close().await;
+    result
+}
+
+fn print_iglou_list(items: &[ha_iglou::list::Item]) {
+    let left = items.iter().filter(|i| !i.done).count();
+    println!("liste de courses : {left} article(s) à acheter");
+    for item in items.iter().take(30) {
+        println!(
+            "  {} {} ({}, {})",
+            if item.done { "[x]" } else { "[ ]" },
+            item.summary,
+            item.quantity,
+            item.group
+        );
+    }
+    if items.len() > 30 {
+        println!("  … et {} de plus", items.len() - 30);
+    }
+}
+
+async fn iglou_inner(args: &[&str], store: &Store) -> Result<(), Box<dyn Error>> {
+    match args {
+        ["pair"] => {
+            println!("Iglou : la maison lit et complète la liste de courses de l'appli.");
+            println!("Utilise un compte DÉDIÉ à la maison (créé dans l'appli), jamais ton compte");
+            println!("personnel. Le mot de passe est gardé chiffré.");
+            println!();
+            println!("Le projet et la clé web sont dans la configuration Firebase de l'appli");
+            println!("(google-services.json : « project_id » et « current_key »).");
+            let project_id = ask_line("projet Firebase : ")?;
+            if !ha_iglou::client::is_project_id(&project_id) {
+                return Err("projet invalide (minuscules, chiffres et tirets)".into());
+            }
+            let api_key = ask_line("clé web Firebase : ")?;
+            if !ha_iglou::client::is_api_key(&api_key) {
+                return Err("clé web invalide".into());
+            }
+            let email = ask_line("e-mail du compte Iglou de la maison : ")?;
+            if !(3..=254).contains(&email.len())
+                || !email.contains('@')
+                || email.chars().any(char::is_control)
+            {
+                return Err("adresse e-mail invalide".into());
+            }
+            let password = ask_secret("mot de passe : ")?;
+            let mut account = ha_storage::IglouAccount {
+                project_id,
+                api_key,
+                email,
+                password,
+                maison_id: String::new(),
+            };
+            let client = crate::iglou_client(&account)?;
+            let maisons = client.maisons().await?;
+            let maison = match maisons.as_slice() {
+                [] => {
+                    println!("Ce compte n'est membre d'aucune maison Iglou.");
+                    println!(
+                        "Dans l'appli, sur ton téléphone : Réglages → Code d'invitation, puis recopie-le."
+                    );
+                    let code = ask_line("code d'invitation : ")?;
+                    client.join(&code, "Maison").await?
+                }
+                [one] => one.clone(),
+                many => {
+                    for (index, maison) in many.iter().enumerate() {
+                        println!("  {}. {}", index + 1, maison.nom);
+                    }
+                    let choice = ask_line("laquelle (numéro) : ")?;
+                    choice
+                        .trim()
+                        .parse::<usize>()
+                        .ok()
+                        .and_then(|n| many.get(n.checked_sub(1)?))
+                        .cloned()
+                        .ok_or("choix invalide")?
+                }
+            };
+            account.maison_id = maison.id.clone();
+            let items = client.shopping_list(&maison.id).await?;
+            store.save_iglou_account(&account).await?;
+            println!("associé à la maison « {} » !", maison.nom);
+            // Ce qui restait sur la liste locale passe dans Iglou.
+            let local = store.todo_items(ha_iglou::ENTITY).await?;
+            let mut copied = 0;
+            for item in local.iter().filter(|i| !i.done) {
+                client.add(&maison.id, &item.summary).await?;
+                store.remove_todo_item(ha_iglou::ENTITY, item.id).await?;
+                copied += 1;
+            }
+            if copied > 0 {
+                println!("{copied} article(s) de l'ancienne liste locale ajouté(s) dans Iglou");
+            }
+            print_iglou_list(&items);
+            println!("puis relance « ha-server » : todo.courses devient la liste d'Iglou.");
+            Ok(())
+        }
+        ["status"] => {
+            let Some(account) = store.iglou_account().await? else {
+                println!("aucun compte Iglou associé (ha-server iglou pair)");
+                return Ok(());
+            };
+            println!("compte : {} (projet {})", account.email, account.project_id);
+            let client = crate::iglou_client(&account)?;
+            let maisons = client.maisons().await?;
+            match maisons.iter().find(|m| m.id == account.maison_id) {
+                Some(maison) => println!("maison : {}", maison.nom),
+                None => return Err("le compte n'est plus membre de sa maison Iglou : refais « ha-server iglou pair »".into()),
+            }
+            print_iglou_list(&client.shopping_list(&account.maison_id).await?);
+            Ok(())
+        }
+        ["forget"] => {
+            if store.forget_iglou_account().await? {
+                println!(
+                    "compte Iglou oublié : la liste de courses locale reprend au prochain démarrage."
+                );
+                println!("Pour couper l'accès, retire aussi le membre « Maison » dans l'appli.");
+            } else {
+                println!("aucun compte Iglou associé");
             }
             Ok(())
         }

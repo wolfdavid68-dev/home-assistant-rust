@@ -1059,6 +1059,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "ha-iglou"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "getrandom 0.4.3",
+ "ha-core",
+ "ha-storage",
+ "ha-tls",
+ "reqwest",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "url",
+ "zeroize",
+]
+
+[[package]]
 name = "ha-input"
 version = "0.1.0"
 dependencies = [
@@ -1180,6 +1198,7 @@ dependencies = [
  "ha-freebox",
  "ha-hue",
  "ha-ics",
+ "ha-iglou",
  "ha-input",
  "ha-logbook",
  "ha-mqtt",
