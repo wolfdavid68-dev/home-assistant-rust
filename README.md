@@ -95,6 +95,7 @@ Un noyau domotique en Rust, inspiré de Home Assistant.
 - [Étape 80 : la vue hub de la tablette murale, expliquée](docs/hub.md)
 - [Étape 81 : la liste de courses d'Iglou, expliquée](docs/iglou.md)
 - [Étape 82 : la sonnette Ring, expliquée](docs/sonnette.md)
+- [Étape 83 : toute la maison en une commande, expliquée](docs/tout-compris.md)
 - [Étape 5 : les automatisations, expliqué](docs/etape-5-automatisations.md)
 - [Modernisation du code, expliquée](docs/modernisation.md)
 - [Étape 6 : l'interface web, expliquée](docs/etape-6-interface-web.md)

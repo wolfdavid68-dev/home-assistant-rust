@@ -35,87 +35,27 @@ photo précédente avec « La nouvelle photo arrive… », puis la remplace.
 
 ## Mettre en place, sur le mini-PC
 
-### 1. Le facteur MQTT (Mosquitto)
+### 1. Mosquitto et ring-mqtt : une commande
 
-ring-mqtt et le serveur se parlent par [MQTT](etape-4-mqtt.md). Si Mosquitto n'est pas encore
-installé :
-
-```bash
-sudo apt install mosquitto
-sudo nano /etc/mosquitto/conf.d/maison.conf
-```
-
-```text
-listener 1883 127.0.0.1
-allow_anonymous false
-password_file /etc/mosquitto/passwd
-```
-
-`127.0.0.1` : seul le mini-PC lui-même peut s'y connecter (ring-mqtt et le serveur y tournent tous
-les deux). Deux comptes, un pour chacun, avec chacun son mot de passe :
+Dans le dossier de l'archive du serveur (voir [le mini-PC](mini-pc.md)) :
 
 ```bash
-sudo mosquitto_passwd -c /etc/mosquitto/passwd ha-server
-sudo mosquitto_passwd /etc/mosquitto/passwd ring
-sudo chown root:mosquitto /etc/mosquitto/passwd && sudo chmod 640 /etc/mosquitto/passwd
-sudo systemctl restart mosquitto
+sudo ./installer.sh --ring
 ```
 
-Puis le serveur : le mot de passe de `ha-server` dans un fichier secret, et trois lignes dans
-`/etc/ha-maison/ha-maison.env` :
+Elle installe et règle tout ([étape 83](tout-compris.md)) :
 
-```bash
-sudo nano /etc/ha-maison/secrets/mqtt_password    # le mot de passe, sur une ligne
-sudo chgrp ha-maison /etc/ha-maison/secrets/mqtt_password
-sudo chmod 640 /etc/ha-maison/secrets/mqtt_password
-sudo nano /etc/ha-maison/ha-maison.env
-```
+- **Mosquitto**, le facteur MQTT, qui n'écoute que sur le mini-PC lui-même (`127.0.0.1`), avec un
+  compte pour le serveur et un pour ring-mqtt, chacun avec un mot de passe tiré au hasard ;
+- **ring-mqtt**, dans un conteneur Docker (le service `ha-maison-ring`), à une version **épinglée par
+  son empreinte** : seule cette version exacte peut tourner. Elle change avec les mises à jour du
+  serveur, chaque nuit, jamais en cachette ;
+- ses réglages (`/var/lib/ring-mqtt/config.json`, lisible par l'administrateur seul).
 
-```text
-HA_MQTT_HOST=127.0.0.1
-HA_MQTT_USER=ha-server
-HA_MQTT_PASSWORD_FILE=/etc/ha-maison/secrets/mqtt_password
-```
+Si tu préfères tout faire à la main (un autre broker, ring-mqtt ailleurs), voir
+[plus bas](#à-la-main).
 
-```bash
-sudo systemctl restart ha-maison
-```
-
-### 2. ring-mqtt
-
-Le plus simple est de le faire tourner dans un conteneur Docker, mis à part du reste :
-
-```bash
-sudo apt install docker.io
-sudo mkdir -p /var/lib/ring-mqtt
-sudo nano /var/lib/ring-mqtt/config.json
-```
-
-```json
-{
-  "mqtt_url": "mqtt://ring:LE-MOT-DE-PASSE-DE-ring@127.0.0.1:1883",
-  "enable_cameras": true,
-  "enable_modes": false,
-  "enable_panic": false,
-  "livestream_user": "",
-  "livestream_pass": "",
-  "disarm_code": "",
-  "hass_topic": "homeassistant/status",
-  "ring_topic": "ring",
-  "location_ids": []
-}
-```
-
-```bash
-sudo chmod 600 /var/lib/ring-mqtt/config.json
-sudo docker run -d --name ring-mqtt --restart unless-stopped --network host \
-  -v /var/lib/ring-mqtt:/data tsightler/ring-mqtt:5.9.3
-```
-
-`--restart unless-stopped` : il redémarre tout seul avec le mini-PC. Le numéro de version est
-fixé : une mise à jour se fait à la main (voir plus bas), pas en cachette.
-
-### 3. Le relier à ton compte Ring
+### 2. Le relier à ton compte Ring
 
 Sur ton téléphone, ouvre **`http://192.168.1.20:55123`** (l'adresse du mini-PC) : connecte-toi avec
 le compte Ring, puis tape le **code reçu par SMS**. C'est fait une seule fois : ring-mqtt garde
@@ -129,13 +69,13 @@ Quelques secondes plus tard, le journal du serveur dit
 `entité MQTT découverte : binary_sensor.porte_d_entree_sonnette`, et la tuile de la photo apparaît
 sur le tableau de bord.
 
-### 4. Quand prendre une photo
+### 3. Quand prendre une photo
 
 Sur le tableau de bord, la liste **Porte d'entrée Mode photo** : choisis **Ding** (une photo à chaque
 coup de sonnette), ou **Motion + Ding** (aussi quand quelqu'un passe devant la porte, mais la batterie
 de la sonnette s'use plus vite).
 
-### 5. L'annonce et la notification
+### 4. L'annonce et la notification
 
 Dans `/etc/ha-maison/automations.yaml` (ou avec l'[éditeur](editeur-automatisations.md)) :
 
@@ -187,15 +127,16 @@ sonnette la rouvre.
   seul. Il ne parle qu'aux serveurs de Ring (en HTTPS) et au Mosquitto du mini-PC.
 - **Alexa** n'est pas touchée : rien ne change pour elle.
 
-**Mettre à jour ring-mqtt** (quand Ring change quelque chose, ring-mqtt sort une nouvelle version) :
-regarde le numéro sur [la page du projet](https://github.com/tsightler/ring-mqtt/releases), puis :
+**Mettre à jour ring-mqtt** : rien à faire. Quand Ring change quelque chose, ring-mqtt sort une
+nouvelle version ; elle arrive avec une mise à jour du serveur (épinglée, vérifiée), la nuit.
 
-```bash
-sudo docker pull tsightler/ring-mqtt:<nouveau numéro>
-sudo docker rm -f ring-mqtt
-sudo docker run -d --name ring-mqtt --restart unless-stopped --network host \
-  -v /var/lib/ring-mqtt:/data tsightler/ring-mqtt:<nouveau numéro>
-```
+## À la main
+
+Sans l'installeur (un autre Linux, un broker à toi) : Mosquitto avec un compte pour le serveur
+(`HA_MQTT_HOST`, `HA_MQTT_USER`, `HA_MQTT_PASSWORD_FILE` dans `ha-maison.env`) et un pour ring-mqtt,
+puis ring-mqtt [comme son auteur l'explique](https://github.com/tsightler/ring-mqtt/wiki), avec
+`"enable_cameras": true` et l'adresse de ton broker dans son `config.json`. Le serveur reconnaît la
+sonnette toute seule dès que ring-mqtt publie.
 
 ## Comment c'est construit
 

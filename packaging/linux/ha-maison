@@ -19,6 +19,9 @@ fi
 # son nom, avec les réglages du service, dans son dossier.
 exec runuser -u ha-maison -- /bin/sh -c '
   set -a
+  if [ -r /etc/ha-maison/ha-maison.auto.env ]; then
+    . /etc/ha-maison/ha-maison.auto.env
+  fi
   . /etc/ha-maison/ha-maison.env
   set +a
   cd /var/lib/ha-maison

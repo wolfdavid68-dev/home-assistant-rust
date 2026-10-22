@@ -80,7 +80,7 @@ jobs:
       # Les scripts du mini-PC (packaging/linux) : shellcheck est déjà sur
       # les machines de GitHub.
       - name: Scripts shell
-        run: shellcheck packaging/linux/installer.sh packaging/linux/mise-a-jour.sh packaging/linux/ha-maison
+        run: shellcheck packaging/linux/installer.sh packaging/linux/tout-compris.sh packaging/linux/mise-a-jour.sh packaging/linux/ha-maison
 
       - name: Dépendances (failles, licences, sources)
         uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1

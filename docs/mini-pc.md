@@ -77,23 +77,29 @@ ssh david@192.168.1.20
 
 La première fois, réponds `yes`, puis ton mot de passe Debian.
 
-## 5. Les mises à jour de sécurité de Debian, automatiques
+## 5. Les mises à jour de sécurité de Debian
 
-```bash
-sudo apt install unattended-upgrades
-sudo dpkg-reconfigure -plow unattended-upgrades
-```
+Rien à faire : l'installation du serveur (étape suivante) les rend automatiques. Debian installe
+alors chaque jour, tout seul, les correctifs de sécurité.
 
-Réponds **Oui**. Debian installe alors chaque jour, tout seul, les correctifs de sécurité.
-
-## 6. Installer le serveur
+## 6. Installer le serveur, et tout ce qu'il lui faut
 
 ```bash
 wget https://github.com/wolfdavid68-dev/home-assistant-rust/releases/latest/download/ha-maison-linux-x86_64.tar.gz
 tar -xzf ha-maison-linux-x86_64.tar.gz
 cd ha-maison-v*-linux-x86_64
-sudo ./installer.sh
+sudo ./installer.sh --sonos --ring
 ```
+
+Comme Home Assistant OS, une seule commande installe **toute la maison** ([étape 83](tout-compris.md)) :
+le serveur, les mises à jour de Debian, le facteur MQTT (Mosquitto, réglé avec des mots de passe
+tirés au hasard), et avec les options :
+
+- **`--sonos`** : les enceintes Sonos et la voix des annonces (Piper, en français) ;
+- **`--ring`** : la sonnette Ring (ring-mqtt, voir [la sonnette](sonnette.md)).
+
+Sans enceintes ni sonnette, `sudo ./installer.sh` tout court. Les options sont retenues : la mise à
+jour de chaque nuit les garde.
 
 Le script dit ce qu'il fait, démarre le serveur et donne l'adresse du tableau de bord. Puis crée
 ton compte (le mot de passe est demandé deux fois, 12 caractères au moins) :
@@ -248,22 +254,13 @@ sudo systemctl start ha-maison
 
 ## La voix des annonces (Sonos)
 
-Piper tourne sur le mini-PC, comme sous Windows. Installe-le dans `/opt/ha-maison/piper` :
+Avec `sudo ./installer.sh --sonos`, Piper et la voix française (`fr_FR-siwis-medium`) sont
+téléchargés dans `/opt/ha-maison/piper` et **vérifiés par leur empreinte** (une version modifiée en
+route est refusée), et les enceintes sont cherchées sur le réseau (`HA_SONOS=auto`). Pour essayer la
+voix : `sudo ha-maison voix "Bonjour"` (écrit `/var/lib/ha-maison/essai-voix.wav`).
 
-```bash
-cd /tmp
-wget https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz
-sudo tar -xzf piper_linux_x86_64.tar.gz -C /opt/ha-maison
-voix=https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/fr/fr_FR/siwis/medium
-sudo wget -P /opt/ha-maison/piper "$voix/fr_FR-siwis-medium.onnx" "$voix/fr_FR-siwis-medium.onnx.json"
-```
-
-Puis, dans `/etc/ha-maison/ha-maison.env`, enlève le `#` devant `HA_SONOS=auto` et
-`HA_PIPER=/opt/ha-maison/piper/piper`, et `sudo systemctl restart ha-maison`. Pour l'essayer :
-`sudo ha-maison voix "Bonjour"` (écrit `/var/lib/ha-maison/essai-voix.wav`).
-
-Sur un mini-PC, pas de Docker : la recherche des enceintes (`HA_SONOS=auto`) et Alexa en local
-marchent directement.
+Le serveur lui-même ne tourne pas dans Docker : la recherche des enceintes (`HA_SONOS=auto`) et Alexa
+en local marchent directement. (Seul ring-mqtt, avec `--ring`, a son conteneur.)
 
 ## Sécurité
 
@@ -291,6 +288,11 @@ le port 8123 depuis la box. Pour l'accès à distance, un VPN (voir l'[étape 7]
 SSH (port 22) ne sert qu'à l'administration ; pour aller plus loin, une clé SSH à la place du mot de
 passe.
 
+**Ce que l'installation ajoute** ([étape 83](tout-compris.md)) : Mosquitto n'écoute que sur
+`127.0.0.1` (le mini-PC lui-même), sans compte anonyme, un compte par programme avec un mot de passe
+de 32 caractères tirés au hasard, rangé dans `/etc/ha-maison/secrets` ; la voix est vérifiée par son
+empreinte ; ring-mqtt tourne dans un conteneur à la version épinglée par son empreinte.
+
 **Les mises à jour** : Debian tout seul pour le système (étape 5), et la mise à jour de chaque nuit
 pour le serveur. Elle tourne en administrateur, puisqu'elle remplace le programme : elle fait
 donc confiance à GitHub et à ce dépôt. L'empreinte vient du même endroit que l'archive : elle
@@ -304,6 +306,8 @@ installer sans l'avoir vu, arrête-la (plus haut) et mets à jour à la main.
   démarre), crée le compte, copie le programme, les réglages (seulement s'ils n'existent pas) et le
   service, démarre, puis attend que le serveur réponde (`ha-server healthcheck`). Relancé, il met à
   jour sans rien perdre.
+- **`packaging/linux/tout-compris.sh`** : tout ce qu'il faut autour du serveur (mises à jour de
+  Debian, Mosquitto, la voix, ring-mqtt), lu par `installer.sh` ([étape 83](tout-compris.md)).
 - **`packaging/linux/ha-maison.service`** : le service systemd et ses protections.
 - **`packaging/linux/ha-maison.env`** : les réglages, avec les chemins de Linux.
 - **`packaging/linux/ha-maison`** : la commande d'administration. Elle lance `ha-server` sous le
@@ -314,7 +318,7 @@ installer sans l'avoir vu, arrête-la (plus haut) et mets à jour à la main.
 - **`.github/workflows/release.yml`** : à chaque version, l'archive `ha-maison-linux-x86_64.tar.gz`
   est compilée dans Debian 12 (le programme tourne sur Debian 12 et 13), puis jointe à la version
   avec son empreinte (`.sha256`, envoyée après l'archive).
-- **CI** : `shellcheck` relit les trois scripts à chaque PR.
+- **CI** : `shellcheck` relit les quatre scripts à chaque PR.
 
 Essayé dans un Debian 13 avec systemd, depuis l'archive :
 - l'installation, le compte et la connexion ;
