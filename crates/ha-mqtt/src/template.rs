@@ -8,7 +8,10 @@
 //! - `{{ value }}` : le message tel quel ;
 //! - `{{ value_json.temperature }}` : un champ d'un message JSON ;
 //! - `{{ value_json['DS18B20'].Temperature }}`, `{{ value_json.sensors[0] }}` :
-//!   des champs imbriqués.
+//!   des champs imbriqués ;
+//! - `{{ value_json["batteryLevel"] | default("") }}` (ring-mqtt) : la valeur
+//!   à prendre si le champ manque, un texte entre guillemets ou un nombre.
+//!   `default("")` veut dire « pas de valeur », comme un champ absent.
 //!
 //! Sécurité : un message venu du réseau ne peut ainsi jamais faire exécuter
 //! de code, seulement lire un champ.
@@ -22,6 +25,9 @@ pub enum Template {
     Raw,
     /// `{{ value_json…}}` suivi d'un chemin.
     Json(Vec<Segment>),
+    /// `{{ value_json… | default(…) }}` : le chemin, et la valeur à prendre
+    /// si le champ manque (ou si le message n'est pas du JSON).
+    JsonOr(Vec<Segment>, String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -39,8 +45,10 @@ impl Template {
             .strip_prefix("{{")?
             .strip_suffix("}}")?
             .trim();
+        let (inner, default) = split_default(inner)?;
         if inner == "value" {
-            return Some(Self::Raw);
+            // `{{ value | default(…) }}` n'a pas de sens : le message est là.
+            return default.is_none().then_some(Self::Raw);
         }
         let mut rest = inner.strip_prefix("value_json")?;
         let mut path = Vec::new();
@@ -71,7 +79,10 @@ impl Template {
                 rest = &after_bracket[end + 1..];
             }
         }
-        Some(Self::Json(path))
+        Some(match default {
+            None => Self::Json(path),
+            Some(default) => Self::JsonOr(path, default),
+        })
     }
 
     /// Applique le modèle à un message. `None` si la valeur est absente
@@ -80,22 +91,67 @@ impl Template {
     pub fn render(&self, payload: &str) -> Option<String> {
         match self {
             Self::Raw => Some(payload.trim().to_owned()),
-            Self::Json(path) => {
-                let root: Value = serde_json::from_str(payload).ok()?;
-                let mut current = &root;
-                for segment in path {
-                    current = match segment {
-                        Segment::Key(key) => current.get(key)?,
-                        Segment::Index(index) => current.get(index)?,
-                    };
-                }
-                match current {
-                    Value::Null => None,
-                    Value::String(text) => Some(text.clone()),
-                    other => Some(other.to_string()),
-                }
-            }
+            Self::Json(path) => as_text(lookup(path, payload)?),
+            Self::JsonOr(path, default) => match lookup(path, payload) {
+                Some(value) => as_text(value),
+                None => (!default.is_empty()).then(|| default.clone()),
+            },
         }
+    }
+}
+
+/// Sépare un filtre final `| default(…)` du reste du modèle. `None` pour tout
+/// autre filtre (`| float`…), refusé comme avant. L'argument est un texte
+/// entre guillemets (sans guillemet ni `\` dedans) ou un nombre.
+fn split_default(inner: &str) -> Option<(&str, Option<String>)> {
+    let Some((expression, filter)) = inner.rsplit_once('|') else {
+        return Some((inner, None));
+    };
+    let argument = filter
+        .trim()
+        .strip_prefix("default")?
+        .trim_start()
+        .strip_prefix('(')?
+        .strip_suffix(')')?
+        .trim();
+    let default = match argument.as_bytes() {
+        [b'\'', .., b'\''] | [b'"', .., b'"'] if argument.len() >= 2 => {
+            let text = &argument[1..argument.len() - 1];
+            if text.contains(['\'', '"', '\\']) {
+                return None;
+            }
+            text.to_owned()
+        }
+        _ => {
+            argument
+                .parse::<f64>()
+                .ok()
+                .filter(|number| number.is_finite())?;
+            argument.to_owned()
+        }
+    };
+    Some((expression.trim_end(), Some(default)))
+}
+
+/// Suit le chemin dans le message JSON. `None` si le message n'est pas du
+/// JSON ou si un champ du chemin manque.
+fn lookup(path: &[Segment], payload: &str) -> Option<Value> {
+    let mut current: Value = serde_json::from_str(payload).ok()?;
+    for segment in path {
+        current = match segment {
+            Segment::Key(key) => current.get_mut(key)?.take(),
+            Segment::Index(index) => current.get_mut(*index)?.take(),
+        };
+    }
+    Some(current)
+}
+
+/// La valeur en texte ; `null` n'en est pas une.
+fn as_text(value: Value) -> Option<String> {
+    match value {
+        Value::Null => None,
+        Value::String(text) => Some(text),
+        other => Some(other.to_string()),
     }
 }
 
@@ -151,9 +207,56 @@ mod tests {
             "{{ value_json. }}",
             "{{ value_json[abc] }}",
             "{{ states('sensor.x') }}",
+            "{{ value | default('x') }}",
+            "{{ value_json.a | default }}",
+            "{{ value_json.a | default(x) }}",
+            "{{ value_json.a | default('a', true) }}",
+            "{{ value_json.a | default('a\'b') }}",
+            "{{ value_json.a | default(\"a\" ~ \"b\") }}",
+            "{{ value_json.a | default('') | float }}",
+            "{{ value_json.a | float | default(0) }}",
+            "{{ value_json.a | default(nan) }}",
         ] {
             assert_eq!(Template::parse(template), None, "{template:?}");
         }
+    }
+
+    #[test]
+    fn default_filter_like_ring_mqtt() {
+        let battery = r#"{{ value_json["batteryLevel"] | default("") }}"#;
+        assert_eq!(
+            render(
+                battery,
+                r#"{"batteryLevel": 28, "firmwareStatus": "Up to Date"}"#
+            )
+            .as_deref(),
+            Some("28")
+        );
+        // Champ absent ou message illisible : « "" », c'est-à-dire rien.
+        assert_eq!(render(battery, r#"{"firmwareStatus": "Up to Date"}"#), None);
+        assert_eq!(render(battery, "pas du json"), None);
+        assert_eq!(render(battery, r#"{"batteryLevel": null}"#), None);
+    }
+
+    #[test]
+    fn default_filter_values() {
+        let payload = r#"{"a": {"b": "ok"}}"#;
+        assert_eq!(
+            render("{{value_json.a.b|default('x')}}", payload).as_deref(),
+            Some("ok")
+        );
+        assert_eq!(
+            render("{{ value_json.a.c | default('inconnu') }}", payload).as_deref(),
+            Some("inconnu")
+        );
+        assert_eq!(
+            render("{{ value_json.z.c | default(0) }}", payload).as_deref(),
+            Some("0")
+        );
+        assert_eq!(
+            render("{{ value_json.z | default( -1.5 ) }}", payload).as_deref(),
+            Some("-1.5")
+        );
     }
 
     #[test]
