@@ -81,7 +81,7 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
   programme, mots de passe de 32 caractères tirés au hasard rangés dans `/etc/ha-maison/secrets` ; la voix (Piper)
   vérifiée par son empreinte SHA-256 ; ring-mqtt dans un conteneur dont l'image est épinglée par son empreinte ;
   Docker installé seulement avec `--ring`, le serveur jamais dans Docker.
-- Parler à la maison (étape 84) : la voix est écoutée sur le mini-PC (Whisper) et la réponse dite par Piper, rien ne
+- Parler à la maison (étapes 84 et 88) : la voix est écoutée sur le mini-PC (Parakeet, version figée, vérifiée par son empreinte) et la réponse dite par Piper, rien ne
   part sur Internet ; ni le son ni la phrase ne sont gardés ni journalisés ; le son est vérifié avant d'être écouté
   (WAV 16 bits mono 16 000 Hz, 15 s au plus), une phrase à la fois ; le service d'écoute, sans mot de passe, n'est
   joignable que depuis le mini-PC (`IPAddressAllow=localhost`, et le serveur refuse une autre adresse que la boucle
@@ -97,6 +97,10 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
   serveur renouvelle ; retour d'autorisation vérifié par un état aléatoire ; HTTPS vers `api.smartthings.com`
   seulement, sans redirection, réponses limitées à 4 Mio ; identifiants d'appareils vérifiés ; chaque ordre suit le
   chemin d'un toucher.
+- Voix gardée en marche (étape 88) : Piper écrit ses fichiers dans un dossier à lui (droits `0700`, créé neuf à chaque
+  démarrage, jamais réutilisé, vidé après chaque phrase) ; le serveur n'y lit que des noms de fichier, jamais un
+  chemin donné par Piper. Fichiers du tableau de bord gardés par le navigateur à une adresse avec leur empreinte
+  (`immutable`), sans rien changer à la CSP ; aucun `innerHTML`, même pour comparer.
 - Colis Amazon (étape 87) : la boîte Gmail est lue en **lecture seule** (IMAP `EXAMINE` et `BODY.PEEK`, aucune
   commande qui modifie, déplace ou supprime un e-mail, jamais d'envoi), par TLS avec certificat vérifié ; mot de passe
   d'application chiffré dans la base, jamais affiché ni journalisé ; seuls les e-mails d'Amazon des 14 derniers jours

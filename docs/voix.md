@@ -13,22 +13,23 @@ Alexa** : sans Amazon, sans Google, sans compte, et sans que la voix sorte de la
 > Quelle est la température de la chambre ?
 
 On touche **Parler à la maison** (en bas de la [vue hub](hub.md)) ou le **micro** d'Assist, on dit
-sa phrase, on se tait : la tablette s'arrête toute seule d'écouter. Quelques secondes plus tard,
+sa phrase, on se tait : la tablette s'arrête toute seule d'écouter. Deux secondes plus tard,
 la phrase entendue s'affiche, la maison obéit, et **répond à voix haute** sur la tablette
 (« C'est fait : allumer Lampe salon »).
 
 ## Comment ça marche
 
 1. **La tablette enregistre** la phrase, en 16 000 Hz (la qualité du téléphone, ce qu'il faut pour
-   la parole). Elle s'arrête après **1,2 s de silence**, ou au bout de 12 s, ou si on retouche le
+   la parole). Elle s'arrête après **0,9 s de silence** ([étape 88](plus-rapide.md)), ou au bout de 12 s, ou si on retouche le
    bouton. Si personne ne parle pendant 6 s, elle abandonne.
-2. **Le mini-PC l'écoute** avec **Whisper** (le modèle « small » d'OpenAI, gratuit, qui tourne sans
-   Internet), par le programme **sherpa-onnx**. Whisper reste chargé en mémoire, dans son propre
-   service : une phrase est écrite en 3 à 5 s.
+2. **Le mini-PC l'écoute** avec **Parakeet** (le modèle de NVIDIA, gratuit, qui tourne sans
+   Internet), par le programme **sherpa-onnx**. Il reste chargé en mémoire, dans son propre
+   service : une phrase est écrite en moins d'une seconde. (Jusqu'à l'[étape 88](plus-rapide.md),
+   c'était Whisper « small » d'OpenAI, 3 à 5 s.)
 3. **[Assist](assist.md) la comprend** et donne les ordres, exactement comme une phrase tapée :
    mêmes droits, même [garde](garde.md), mot de passe redemandé pour une serrure.
-4. **La voix de la maison répond** ([Piper](sonos.md), déjà là pour les annonces) : la réponse est
-   lue sur la tablette.
+4. **La voix de la maison répond** ([Piper](sonos.md), déjà là pour les annonces, gardé en marche :
+   0,1 à 0,3 s) : la réponse est lue sur la tablette.
 
 **Rien ne sort de la maison** : ni le son, ni le texte. Ni le son ni la phrase ne sont gardés ou
 écrits dans les journaux.
@@ -36,7 +37,7 @@ la phrase entendue s'affiche, la maison obéit, et **répond à voix haute** sur
 ## Ce qu'Assist comprend de plus
 
 **Les nombres dits en lettres** : « vingt et un degrés », « dix-neuf et demi », « cinquante pour
-cent », « soixante-dix », « quatre-vingt-dix ». Ce que Whisper écrit parfois (« 20 et 1° ») aussi.
+cent », « soixante-dix », « quatre-vingt-dix ». Ce que l'écoute écrit parfois (« 20 et 1° ») aussi.
 « Un » et « une » seuls restent des mots : « allume une lampe » n'est pas « allume 1 lampe ».
 
 **La liste de courses** (celle de la maison, ou celle d'Iglou si elle est reliée) et les tâches :
@@ -60,7 +61,7 @@ Sur le [mini-PC](mini-pc.md), une option de plus à l'[installation](tout-compri
 sudo ./installer.sh --voix
 ```
 
-Elle télécharge **400 Mo** (sherpa-onnx, Whisper « small » et la voix Piper), chaque fichier
+Elle télécharge **670 Mo** (sherpa-onnx, Parakeet et la voix Piper), chaque fichier
 **vérifié par son empreinte**, et démarre le service **`ha-maison-ecoute`**. Le bouton micro
 apparaît alors tout seul sur les tablettes.
 
@@ -72,8 +73,9 @@ de la maison installé. En `http://`, Assist l'explique au lieu d'ouvrir le micr
 **Autoriser**. Avec Fully Kiosk Browser ([tablette murale](tablette-murale.md)), active aussi
 **Web Content Settings → Enable Microphone Access**.
 
-**Ce qu'il faut au mini-PC** : 800 Mo de mémoire en plus, tout le temps (Whisper chargé). Une
-phrase occupe les processeurs quelques secondes ; le serveur de la maison passe avant.
+**Ce qu'il faut au mini-PC** : 900 Mo de mémoire en plus, tout le temps (Parakeet chargé), et
+100 Mo pour Piper. Une phrase occupe les processeurs moins d'une seconde ; le serveur de la maison
+passe avant.
 
 ### Essayer, et vérifier
 
@@ -84,14 +86,15 @@ sudo ha-maison ecoute /tmp/phrase.wav        # fait écouter un enregistrement
 
 `phrase.wav` : 16 bits, mono, 16 000 Hz (par exemple
 `ffmpeg -i enregistrement.m4a -ac 1 -ar 16000 /tmp/phrase.wav`). La réponse :
-« entendu en 3,8 s : « Ajoute du pain à la liste de courses. » ».
+« entendu en 0,6 s : « Ajoute du pain à la liste de courses. » ».
 
 ### Sans le mini-PC
 
 Sur un PC, sans service : télécharge `sherpa-onnx-offline` (paquet Python `sherpa-onnx-bin`, et
-`libonnxruntime` du paquet `sherpa-onnx-core`) et les trois fichiers de Whisper dans un dossier,
-renommés `encoder.onnx`, `decoder.onnx` et `tokens.txt`, puis `HA_ECOUTE=<ce dossier>`. Le programme
-est alors lancé pour chaque phrase : 4 à 5 s de plus, le temps de relire le modèle.
+`libonnxruntime` du paquet `sherpa-onnx-core`) et les quatre fichiers de Parakeet dans un dossier,
+renommés `encoder.onnx`, `decoder.onnx`, `joiner.onnx` et `tokens.txt`, puis `HA_ECOUTE=<ce
+dossier>` (sans `joiner.onnx`, ce sont les trois fichiers de Whisper). Le programme est alors lancé
+pour chaque phrase : quelques secondes de plus, le temps de relire le modèle.
 
 | Réglage | Rôle |
 |---------|------|
@@ -101,15 +104,16 @@ est alors lancé pour chaque phrase : 4 à 5 s de plus, le temps de relire le mo
 
 ## Sécurité
 
-- **La voix ne quitte pas la maison** : Whisper et Piper tournent sur le mini-PC.
+- **La voix ne quitte pas la maison** : Parakeet et Piper tournent sur le mini-PC.
 - **Le service d'écoute n'a pas de mot de passe**, alors il est **fermé au réseau** : systemd ne
   laisse passer que le mini-PC lui-même (`IPAddressAllow=localhost`), et le serveur refuse une
   autre adresse que `127.0.0.1`. Il tourne sous un compte jetable, sans droit d'écrire nulle part
   (note 1,1 de `systemd-analyze security`), avec 1,5 Go de mémoire au plus.
 - **Le son est vérifié avant d'être écouté** : un vrai WAV, 16 bits, mono, 16 000 Hz, 15 s au plus
-  (refusé au-delà de 473 Kio). Un silence n'est même pas envoyé à Whisper.
+  (refusé au-delà de 473 Kio). Un silence n'est même pas envoyé à l'écoute.
 - **Les phrases inventées par Whisper** dans un bruit de fond (« Sous-titres réalisés par la
-  communauté d'Amara.org », appris dans des vidéos) sont reconnues et ignorées.
+  communauté d'Amara.org », appris dans des vidéos) sont reconnues et ignorées (Parakeet n'a pas ce
+  défaut, le filtre reste).
 - **Il faut être connecté** : le compte de la tablette, avec ses droits. Un invité ne commande que
   ce qu'il peut toucher ; une pièce protégée attend une validation, comme toujours.
 - **Une phrase à la fois** : les suivantes attendent leur tour (20 s au plus), pour que l'écoute ne
@@ -136,14 +140,16 @@ Essayé :
   réseau bloquée ; relancé sans option, rien retéléchargé ni redémarré.
 
 La voix de synthèse (Piper) qui a servi à ces essais avale parfois la première syllabe d'une phrase
-(« lume la lumière »), Whisper aussi alors ; une vraie voix n'a pas ce défaut. Les essais ont donc
+(« lume la lumière »), l'écoute aussi alors ; une vraie voix n'a pas ce défaut. Les essais ont donc
 commencé par « Bonjour, … ».
 
 ### Concepts utilisés
 
-**La reconnaissance de la parole** (en anglais *speech-to-text*) : Whisper est un réseau de
-neurones entraîné sur 680 000 heures de paroles, dans 99 langues. Le modèle « small » (244 millions
-de paramètres) est réduit en entiers de 8 bits : quatre fois plus petit, presque aussi juste.
+**La reconnaissance de la parole** (en anglais *speech-to-text*) : un réseau de neurones entraîné
+sur des centaines de milliers d'heures de paroles. Parakeet (600 millions de paramètres, 25 langues
+d'Europe) est réduit en entiers de 8 bits : quatre fois plus petit, presque aussi juste. Whisper, le
+premier choix, traitait toujours 30 secondes de son, même pour une phrase de deux secondes ;
+Parakeet ne traite que ce qui a été dit.
 
 **Un AudioWorklet** : un petit programme que le navigateur fait tourner dans son fil audio, à part
 de la page, pour recevoir le son du micro sans à-coups. Le navigateur le charge comme un script du
@@ -151,4 +157,4 @@ site : la [CSP](etape-6-interface-web.md) n'a pas besoin d'être assouplie.
 
 **La fin de phrase au silence** : la tablette mesure le niveau du son environ toutes les 40 millisecondes.
 Le plus bas entendu est le bruit de la pièce ; nettement au-dessus, c'est la voix. Quand la voix
-s'est tue depuis 1,2 s, la phrase est finie.
+s'est tue depuis 0,9 s, la phrase est finie.

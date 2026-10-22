@@ -311,3 +311,39 @@ async fn a_parcel_on_its_way_then_delivered() {
     assert_eq!(fetched(11), 2);
     assert_eq!(fetched(14), 1);
 }
+
+/// Une boîte qui accepte la connexion mais ne répond jamais : l'arrêt du
+/// serveur n'attend pas la fin du relevé (90 s).
+#[tokio::test(flavor = "multi_thread")]
+async fn stopping_does_not_wait_for_a_silent_mailbox() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let silent = tokio::spawn(async move {
+        let mut kept = Vec::new();
+        loop {
+            let (stream, _) = listener.accept().await.unwrap();
+            kept.push(stream);
+        }
+    });
+    let store = Store::open_in_memory().await.unwrap();
+    store
+        .save_mail_account(&MailAccount {
+            host: "imap.gmail.com".into(),
+            port: 993,
+            username: "maison@gmail.com".into(),
+            password: Zeroizing::new(PASSWORD.into()),
+        })
+        .await
+        .unwrap();
+    let mailbox = Mailbox::local(&format!("127.0.0.1:{port}"), None).unwrap();
+    let colis = Colis::start(store, mailbox, Arc::new(Core::new()));
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let started = std::time::Instant::now();
+    colis.stop().await;
+    assert!(
+        started.elapsed() < Duration::from_secs(2),
+        "{:?}",
+        started.elapsed()
+    );
+    silent.abort();
+}

@@ -1,5 +1,6 @@
-# L'écoute de la maison (étape 84) : Whisper, gardé en mémoire, qui écrit
-# ce qu'on dit au micro de la tablette. Installé par « installer.sh --voix ».
+# L'écoute de la maison (étapes 84 et 88) : Parakeet, gardé en mémoire, qui
+# écrit ce qu'on dit au micro de la tablette (en moins d'une seconde).
+# Installé par « installer.sh --voix ».
 # Guide : docs/voix.md
 #
 #   sudo systemctl status ha-maison-ecoute     est-il en marche ?
@@ -10,22 +11,22 @@
 # sort jamais sur le réseau.
 
 [Unit]
-Description=L'écoute de la maison (Whisper, sherpa-onnx)
+Description=L'écoute de la maison (Parakeet, sherpa-onnx)
 Documentation=https://github.com/wolfdavid68-dev/home-assistant-rust/blob/main/docs/voix.md
 After=network.target
 
 [Service]
 Type=simple
-# Le nombre de processeurs pour Whisper (4 au plus), écrit par installer.sh.
+# Le nombre de processeurs pour l'écoute (4 au plus), écrit par installer.sh.
 Environment=ECOUTE_FILS=2
 EnvironmentFile=-/etc/ha-maison/ecoute.env
 ExecStart=/opt/ha-maison/ecoute/sherpa-onnx-offline-websocket-server \
   --port=10350 \
-  --whisper-encoder=/opt/ha-maison/ecoute/encoder.onnx \
-  --whisper-decoder=/opt/ha-maison/ecoute/decoder.onnx \
+  --encoder=/opt/ha-maison/ecoute/encoder.onnx \
+  --decoder=/opt/ha-maison/ecoute/decoder.onnx \
+  --joiner=/opt/ha-maison/ecoute/joiner.onnx \
   --tokens=/opt/ha-maison/ecoute/tokens.txt \
-  --whisper-language=fr \
-  --whisper-task=transcribe \
+  --model-type=nemo_transducer \
   --num-threads=${ECOUTE_FILS} \
   --num-work-threads=1 \
   --max-batch-size=1 \
@@ -37,7 +38,7 @@ RestartSec=5
 # Un compte jetable, créé par systemd au démarrage : le service ne peut rien
 # écrire, rien lire d'autre que ses fichiers.
 DynamicUser=yes
-# Whisper « small » prend ≈ 800 Mo ; le serveur de la maison passe avant lui.
+# Parakeet prend ≈ 900 Mo ; le serveur de la maison passe avant lui.
 MemoryMax=1500M
 CPUWeight=50
 TasksMax=64

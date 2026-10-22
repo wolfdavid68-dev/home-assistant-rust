@@ -288,7 +288,7 @@ async fn run(store: Store, mailbox: Mailbox, core: Arc<Core>, token: Cancellatio
     let mut published = Published::default();
     let mut backoff = Duration::from_mins(1);
     loop {
-        let result = async {
+        let reading = async {
             let account = store
                 .mail_account()
                 .await?
@@ -296,12 +296,20 @@ async fn run(store: Store, mailbox: Mailbox, core: Arc<Core>, token: Cancellatio
             tokio::time::timeout(TIMEOUT, read_mail(&mailbox, &account, &mut cache))
                 .await
                 .map_err(|_| ColisError::Timeout)?
-        }
-        .await;
+        };
+        // L'arrêt du serveur n'attend pas la fin d'un relevé (une boîte
+        // injoignable peut le faire durer 90 s).
+        let result = tokio::select! {
+            result = reading => result,
+            () = token.cancelled() => break,
+        };
         let wait = match result {
             Ok(notices) => {
                 let parcels = amazon::parcels(&notices);
-                published.publish(&core, &parcels, &mailbox, &http).await;
+                tokio::select! {
+                    () = published.publish(&core, &parcels, &mailbox, &http) => {}
+                    () = token.cancelled() => break,
+                }
                 core.report(crate::ID, crate::NAME, Health::Connected);
                 backoff = Duration::from_mins(1);
                 mailbox.poll

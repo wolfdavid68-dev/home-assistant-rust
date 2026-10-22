@@ -40,6 +40,31 @@ function el(tag, attributes = {}, ...children) {
   return node;
 }
 
+/** Remplace les enfants de `node`, seulement si ce qu'on verrait change.
+ *  Refaire un bloc à l'identique coûte au navigateur un nouveau calcul de
+ *  la page, à chaque mesure d'un capteur (étape 88). Si rien ne change, les
+ *  anciens éléments restent, avec leurs gestes : un geste ne doit dépendre
+ *  que de ce qui se voit (ou relire l'état au moment du toucher). */
+function swap(node, ...children) {
+  const next = document.createDocumentFragment();
+  next.append(...children);
+  const old = node.childNodes;
+  const fresh = next.childNodes;
+  if (old.length === fresh.length && [...fresh].every((child, i) => child.isEqualNode(old[i]))) return false;
+  node.replaceChildren(next);
+  return true;
+}
+
+/** Le texte d'un élément, seulement s'il change (même raison que `swap`). */
+function setText(node, text) {
+  if (node.textContent !== text) node.textContent = text;
+}
+
+/** Un attribut, seulement s'il change. */
+function setAttr(node, name, value) {
+  if (node.getAttribute(name) !== value) node.setAttribute(name, value);
+}
+
 /** Icône SVG, construite élément par élément (pas de HTML non plus). */
 function svgIcon(paths) {
   const NS = "http://www.w3.org/2000/svg";

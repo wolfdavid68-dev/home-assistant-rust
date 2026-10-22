@@ -508,8 +508,8 @@ function updateHouse(view) {
       const area = areas.find((a) => a.name === zone.area);
       const info = area ? roomInfo(area) : null;
       const temp = info && Number.isFinite(info.temperature) ? ` : ${number.format(info.temperature)} °C` : "";
-      node.setAttribute("aria-label", `${zone.name ?? zone.area}${temp}. Toucher pour ouvrir la pièce.`);
-      node.title = zone.name ?? zone.area;
+      setAttr(node, "aria-label", `${zone.name ?? zone.area}${temp}. Toucher pour ouvrir la pièce.`);
+      setAttr(node, "title", zone.name ?? zone.area);
       node.classList.toggle("on", (info?.lights ?? 0) > 0);
       continue;
     }
@@ -521,18 +521,24 @@ function updateHouse(view) {
     node.classList.toggle("on", Boolean(state) && ["on", "open", "opening", "unlocked"].includes(state.state));
     const what = readonly ? "" : command[1] === "turn_off" ? " Toucher pour éteindre." : command[1] === "turn_on" ? (["scene", "script"].includes(command[0]) ? " Toucher pour lancer." : " Toucher pour allumer.")
       : command[1] === "close_cover" ? " Toucher pour fermer." : command[1] === "open_cover" ? " Toucher pour ouvrir." : " Toucher pour appuyer.";
-    node.setAttribute("aria-label", `${name} : ${labelValue(state)}.${what}`);
-    node.title = name;
+    setAttr(node, "aria-label", `${name} : ${labelValue(state)}.${what}`);
+    setAttr(node, "title", name);
     if (node.dataset.state !== state?.state) node.classList.remove("pending");
     node.dataset.state = state?.state ?? "";
   }
+  let moved = false;
   for (const { label, name, value, node } of view.labels) {
     const state = entities.get(label.entity_id);
-    name.textContent = label.name ?? (state ? nameOf(state) : label.entity_id);
-    value.textContent = labelValue(state);
-    node.setAttribute("aria-label", `${name.textContent} : ${value.textContent}`);
+    const before = node.textContent;
+    setText(name, label.name ?? (state ? nameOf(state) : label.entity_id));
+    setText(value, labelValue(state));
+    setAttr(node, "aria-label", `${name.textContent} : ${value.textContent}`);
+    if (node.textContent !== before) moved = true;
   }
-  fitLabels(view);
+  // Replacer les étiquettes oblige le navigateur à recalculer la page : seulement
+  // si un texte a changé (sa largeur aussi). Un changement de taille du dessin
+  // passe par l'observateur plus bas.
+  if (moved) fitLabels(view);
 }
 
 function placeZone(node, zone) {
@@ -2364,6 +2370,9 @@ $("#drawing-save").addEventListener("click", async () => {
 for (const id of ["#drawing-close", "#drawing-cancel"]) $(id).addEventListener("click", () => $("#drawing").close());
 $("#open-drawing").addEventListener("click", openDrawingEditor);
 addEventListener("resize", () => { if (house.view) fitLabels(house.view); }, { passive: true });
+// Le dessin change de taille (déplacé dans la vue hub ou l'écran de veille,
+// image chargée) : les étiquettes sont replacées, une fois la page calculée.
+new ResizeObserver(() => { if (house.view) fitLabels(house.view); }).observe($("#house-stage"));
 // La hauteur des volets, pour que le dessin et les pièces prennent juste le
 // reste de l'écran (mise en page « tableau » : tout tient sur un écran).
 new ResizeObserver(([entry]) => {

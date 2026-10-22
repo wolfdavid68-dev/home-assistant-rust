@@ -504,6 +504,10 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         warn!("voix de la tablette : {error}");
         None
     });
+    // Piper charge sa voix maintenant : la première réponse n'attend pas.
+    if let Some(tts) = speaking.clone() {
+        tokio::spawn(async move { tts.warm_up().await });
+    }
     api_state.set_voice(listening, speaking);
     let api = tokio::spawn({
         let state = Arc::clone(&api_state);
@@ -1126,15 +1130,22 @@ fn sonos_hosts() -> Result<Vec<String>, String> {
     ha_sonos::parse_hosts(&std::env::var("HA_SONOS").unwrap_or_default())
 }
 
-/// `HA_PIPER` et `HA_PIPER_VOIX` : la voix des annonces.
+/// `HA_PIPER` et `HA_PIPER_VOIX` : la voix des annonces. Une seule voix
+/// pour tout le serveur (enceintes et tablette) : un seul Piper gardé en
+/// marche.
 fn tts_config() -> Result<Option<ha_tts::Tts>, String> {
-    let Ok(piper) = std::env::var("HA_PIPER") else {
-        return Ok(None);
-    };
-    let voice = std::env::var("HA_PIPER_VOIX").ok();
-    ha_tts::Tts::from_settings(&piper, voice.as_deref())
-        .map(Some)
-        .map_err(|error| error.to_string())
+    static TTS: std::sync::OnceLock<Result<Option<ha_tts::Tts>, String>> =
+        std::sync::OnceLock::new();
+    TTS.get_or_init(|| {
+        let Ok(piper) = std::env::var("HA_PIPER") else {
+            return Ok(None);
+        };
+        let voice = std::env::var("HA_PIPER_VOIX").ok();
+        ha_tts::Tts::from_settings(&piper, voice.as_deref())
+            .map(Some)
+            .map_err(|error| error.to_string())
+    })
+    .clone()
 }
 
 /// L'écoute de la tablette, si `HA_ECOUTE` est là : l'adresse du service

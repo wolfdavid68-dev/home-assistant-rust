@@ -77,6 +77,8 @@ function hideHub() {
     $("#house .house-frame").append(stage);
     if (house.view) fitLabels(house.view);
   }
+  // Le tableau de bord n'était plus redessiné sous la vue hub : il se remet à jour.
+  scheduleHome();
 }
 
 /** Retour à l'accueil (account.js, 2 minutes sans contact) : la vue hub
@@ -95,10 +97,10 @@ function leaveHub() {
 
 function renderHub() {
   const now = new Date();
-  $("#hub-clock").textContent = hourMinute.format(now);
-  $("#hub-date").textContent = fullDate.format(now);
+  setText($("#hub-clock"), hourMinute.format(now));
+  setText($("#hub-date"), fullDate.format(now));
   const connection = $("#connection");
-  $("#hub-live").replaceChildren(el("i", { class: connection.classList.contains("live") ? "on" : "" }), connection.textContent);
+  swap($("#hub-live"), el("i", { class: connection.classList.contains("live") ? "on" : "" }), connection.textContent);
   renderHubPeople();
   renderHubAlert();
   renderHubGreeting(now);
@@ -108,10 +110,7 @@ function renderHub() {
   renderHubScenes();
   renderHubRooms();
   renderHubDock();
-  if (house.view) {
-    updateHouse(house.view);
-    fitLabels(house.view);
-  }
+  if (house.view) updateHouse(house.view);
 }
 
 function personColor(name) {
@@ -126,7 +125,7 @@ function renderHubPeople() {
     .sort((a, b) => nameOf(a).localeCompare(nameOf(b), "fr"));
   const box = $("#hub-people");
   box.hidden = people.length === 0;
-  box.replaceChildren(...people.map((state) => {
+  swap(box, ...people.map((state) => {
     const name = nameOf(state);
     const home = state.state === "home";
     const avatar = el("span", {
@@ -141,10 +140,10 @@ function renderHubPeople() {
   pill.hidden = people.length === 0;
   const here = people.filter((s) => s.state === "home");
   const away = people.filter((s) => s.state !== "home").map(nameOf);
-  pill.textContent = [
+  setText(pill, [
     here.length === 0 ? "Personne à la maison" : `${here.length} à la maison`,
     away.length > 0 && here.length > 0 ? `${joinNames(away)} ${away.length > 1 ? "ne sont pas là" : "n'est pas là"}` : "",
-  ].filter(Boolean).join(" · ");
+  ].filter(Boolean).join(" · "));
 }
 
 /** L'alerte du moment, et de quoi y répondre (fermer le garage). Les ordres
@@ -157,7 +156,7 @@ function renderHubAlert() {
   if (waiting > 0) {
     const open = el("button", { type: "button", class: "hub-alert-action", text: "Voir" });
     open.addEventListener("click", () => $("#open-notices").click());
-    pill.replaceChildren(svgIcon(HUB_ICONS.warn),
+    swap(pill, svgIcon(HUB_ICONS.warn),
       el("b", { text: waiting === 1 ? "1 ordre attend ta validation" : `${waiting} ordres attendent ta validation` }), open);
     return;
   }
@@ -170,7 +169,7 @@ function renderHubAlert() {
     close.addEventListener("click", () => callService("cover", "close_cover", { entity_id: state.entity_id }));
     parts.push(close);
   }
-  pill.replaceChildren(...parts);
+  swap(pill, ...parts);
 }
 
 function renderHubGreeting(now) {
@@ -178,10 +177,9 @@ function renderHubGreeting(now) {
   const hello = hour >= 5 && hour < 18 ? "Bonjour." : "Bonsoir.";
   const found = alerts();
   const soon = typeof agendaSoon === "function" ? agendaSoon() : null;
-  const line = $("#hub-greeting");
-  if (found.length > 1) line.replaceChildren(`${hello} ${found.length} choses demandent ton attention.`);
-  else if (soon) line.replaceChildren(`${hello} `, soon, ".");
-  else line.replaceChildren(`${hello} ${found.length === 0 ? "Tout est calme." : ""}`.trim());
+  const parts = found.length > 1 ? [`${hello} ${found.length} choses demandent ton attention.`]
+    : soon ? [`${hello} `, soon, "."]
+    : [`${hello} ${found.length === 0 ? "Tout est calme." : ""}`.trim()];
   // Une machine en marche (lave-linge SmartThings, étape 86) : quand elle finit.
   const machines = [...entities.values()]
     .filter((s) => typeof s.attributes.appareil === "string")
@@ -191,7 +189,8 @@ function renderHubGreeting(now) {
   // Les colis Amazon (colis.js, étape 87).
   const parcels = typeof parcelGreeting === "function" ? parcelGreeting() : null;
   if (parcels) machines.push(parcels);
-  if (machines.length) line.append(` ${machines.join(" · ")}.`);
+  if (machines.length) parts.push(` ${machines.join(" · ")}.`);
+  swap($("#hub-greeting"), ...parts);
 }
 
 function renderHubWeather() {
@@ -206,7 +205,7 @@ function renderHubWeather() {
   const today = days[0];
   const range = today && finite(today.templow) && finite(today.temperature)
     ? `min ${Math.round(today.templow)}° · max ${Math.round(today.temperature)}°` : "";
-  card.replaceChildren(
+  swap(card,
     el("div", { class: "hub-weather-now" },
       svgIcon(weatherIcon(weather.state)),
       el("strong", { text: finite(a.temperature) ? `${number.format(a.temperature)}°` : "—" }),
@@ -245,7 +244,7 @@ function renderHubAgenda(now) {
     row.addEventListener("click", () => openEventDetails(e));
     return row;
   });
-  card.replaceChildren(
+  swap(card,
     el("h2", {}, "Agenda", el("small", { text: "aujourd'hui et demain" })),
     ...(rows.length > 0 ? rows : [el("p", { class: "hub-empty", text: "Rien de prévu d'ici demain soir." })]),
   );
@@ -284,7 +283,7 @@ function hubMergeSame(events) {
 function renderHubViews() {
   const box = $("#hub-views");
   box.hidden = house.pages.length < 2;
-  box.replaceChildren(...house.pages.map((page) => {
+  swap(box, ...house.pages.map((page) => {
     const current = page.id === house.config?.id;
     const button = el("button", { type: "button", class: current ? "on" : "", "aria-pressed": String(current), text: page.name });
     button.addEventListener("click", () => {
@@ -350,7 +349,7 @@ function renderHubScenes() {
   const columns = list.length === 1 ? 1 : list.length % 3 === 0 || list.length === 5 ? 3 : 2;
   box.style.setProperty("--cols", String(columns));
   box.classList.toggle("narrow", columns === 3);
-  box.replaceChildren(...list.map((state, index) => {
+  swap(box, ...list.map((state, index) => {
     const isScript = domainOf(state) === "script";
     const running = isScript && state.state === "on";
     const look = hubSceneLook(state, index);
@@ -374,7 +373,7 @@ function renderHubRooms() {
   // défiler. La température passe alors sous le nom.
   const compact = areas.length > 6;
   box.classList.toggle("compact", compact);
-  box.replaceChildren(...areas.map((area) => {
+  swap(box, ...areas.map((area) => {
     const info = roomInfo(area);
     const detail = info.alert ? info.alert
       : info.lights > 0 ? `${info.lights} lumière${info.lights > 1 ? "s" : ""}`
@@ -419,7 +418,7 @@ function renderHubDock() {
   const energy = $("#hub-energy");
   energy.hidden = $("#open-energy").hidden;
   const power = hubPower();
-  energy.lastChild.textContent = power || "Énergie";
+  setText(energy.lastChild, power || "Énergie");
   $("#hub-announce").hidden = hubAnnouncer() === null;
 }
 
@@ -439,7 +438,7 @@ function renderHubCourses() {
   }
   const items = todoItems(state);
   const left = items.filter((item) => item.status !== "completed").length;
-  button.lastChild.textContent = state.state === "unavailable" ? "Courses" : left === 0 ? "Courses" : `Courses · ${left}`;
+  setText(button.lastChild, state.state === "unavailable" ? "Courses" : left === 0 ? "Courses" : `Courses · ${left}`);
   if ($("#hub-list").open) renderHubList(state);
 }
 

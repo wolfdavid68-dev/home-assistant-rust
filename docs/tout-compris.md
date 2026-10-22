@@ -19,7 +19,7 @@ installe et règle **toute la maison**, sans rien à copier à la main :
 | Les enceintes Sonos | | ✓ | | |
 | Piper et la voix française | | ✓ | | ✓ |
 | ring-mqtt, pour la [sonnette Ring](sonnette.md) | | | ✓ | |
-| Whisper, pour [parler à la maison](voix.md) depuis la tablette | | | | ✓ |
+| Parakeet, pour [parler à la maison](voix.md) depuis la tablette | | | | ✓ |
 
 Il ne reste à faire que ce qui demande **toi** : créer ton compte (`sudo ha-maison user add david`),
 connecter le compte Ring (le code arrive par SMS), relier les appareils qui ont un bouton à presser
@@ -80,7 +80,7 @@ de passe et ne redémarre que ce qui a changé.
 | ------- | ---- |
 | [packaging/linux/tout-compris.sh](../packaging/linux/tout-compris.sh) | Tout ce qu'il faut autour du serveur, étape par étape, chacune sautée si elle est déjà faite |
 | [packaging/linux/installer.sh](../packaging/linux/installer.sh) | Les options (`--sonos`, `--ring`, `--voix`, retenues), puis appelle `tout-compris.sh` |
-| [packaging/linux/ha-maison-ecoute.service](../packaging/linux/ha-maison-ecoute.service) | Le service d'écoute (Whisper), avec `--voix` ([étape 84](voix.md)) |
+| [packaging/linux/ha-maison-ecoute.service](../packaging/linux/ha-maison-ecoute.service) | Le service d'écoute (Parakeet), avec `--voix` ([étape 84](voix.md)) |
 | [packaging/linux/ha-maison-ring.service](../packaging/linux/ha-maison-ring.service) | Le service de ring-mqtt, avec l'image épinglée |
 | [packaging/linux/ha-maison.service](../packaging/linux/ha-maison.service) | Lit `ha-maison.auto.env`, puis `ha-maison.env` (qui passe devant) |
 | [packaging/linux/ha-maison](../packaging/linux/ha-maison) | La commande d'administration lit les deux aussi |

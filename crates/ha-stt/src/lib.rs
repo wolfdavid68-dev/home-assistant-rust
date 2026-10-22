@@ -1,14 +1,16 @@
 //! **L'écoute** (étape 84) : une phrase dite à la tablette devient du
 //! texte, **sur le mini-PC**, sans envoyer la voix à Google ni à Amazon.
 //!
-//! La reconnaissance est faite par [Whisper](https://github.com/openai/whisper)
-//! (le modèle « small », réduit en entiers 8 bits), avec les programmes du
-//! projet [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx), de deux
-//! façons (réglage `HA_ECOUTE`) :
+//! La reconnaissance est faite par **Parakeet** de NVIDIA (étape 88 :
+//! 4 fois plus rapide que Whisper « small » de l'étape 84, et plus juste en
+//! français), ou par [Whisper](https://github.com/openai/whisper), tous deux
+//! réduits en entiers 8 bits, avec les programmes du projet
+//! [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx), de deux façons
+//! (réglage `HA_ECOUTE`) :
 //!
 //! - **le service** `sherpa-onnx-offline-websocket-server`, installé par
-//!   `installer.sh --voix` : il garde le modèle en mémoire (≈ 800 Mo) et
-//!   répond en 3 à 4 s ;
+//!   `installer.sh --voix` : il garde le modèle en mémoire (≈ 900 Mo) et
+//!   répond en moins d'une seconde avec Parakeet (3 à 4 s avec Whisper) ;
 //! - **le programme** `sherpa-onnx-offline`, lancé pour chaque phrase :
 //!   rien qui tourne en permanence, mais 4 à 5 s de plus pour relire le
 //!   modèle (pour essayer sur un PC).
@@ -55,6 +57,8 @@ pub const PROGRAM: &str = "sherpa-onnx-offline";
 pub const ENCODER: &str = "encoder.onnx";
 pub const DECODER: &str = "decoder.onnx";
 pub const TOKENS: &str = "tokens.txt";
+/// Présent pour Parakeet (un « transducteur ») ; absent pour Whisper.
+pub const JOINER: &str = "joiner.onnx";
 
 /// Ce qui peut empêcher d'écouter.
 #[derive(Debug, thiserror::Error)]
@@ -92,6 +96,8 @@ struct Program {
     encoder: PathBuf,
     decoder: PathBuf,
     tokens: PathBuf,
+    /// Parakeet : son troisième fichier. `None` : Whisper.
+    joiner: Option<PathBuf>,
     threads: usize,
 }
 
@@ -133,8 +139,9 @@ impl Stt {
         })
     }
 
-    /// D'après un dossier qui contient le programme et les trois fichiers du
-    /// modèle ([`PROGRAM`], [`ENCODER`], [`DECODER`], [`TOKENS`]).
+    /// D'après un dossier qui contient le programme et les fichiers du
+    /// modèle ([`PROGRAM`], [`ENCODER`], [`DECODER`], [`TOKENS`], et
+    /// [`JOINER`] pour Parakeet).
     pub fn from_dir(dir: &Path) -> Result<Self, SttError> {
         let file = |name: &str| {
             let path = dir.join(name);
@@ -157,6 +164,7 @@ impl Stt {
                 encoder: file(ENCODER)?,
                 decoder: file(DECODER)?,
                 tokens: file(TOKENS)?,
+                joiner: Some(dir.join(JOINER)).filter(|path| path.is_file()),
                 threads,
             }),
             turn: Semaphore::new(1),
@@ -168,10 +176,15 @@ impl Stt {
     pub fn describe(&self) -> String {
         match &self.engine {
             Engine::Program(program) => format!(
-                "Whisper, programme sherpa-onnx ({} processeurs)",
+                "{}, programme sherpa-onnx ({} processeurs)",
+                if program.joiner.is_some() {
+                    "Parakeet"
+                } else {
+                    "Whisper"
+                },
                 program.threads
             ),
-            Engine::Server(address) => format!("Whisper, service sherpa-onnx (ws://{address})"),
+            Engine::Server(address) => format!("service d'écoute sherpa-onnx (ws://{address})"),
         }
     }
 
@@ -208,12 +221,21 @@ impl Stt {
 impl Program {
     async fn run(&self, wav: &Path) -> Result<String, SttError> {
         let mut command = Command::new(&self.path);
+        if let Some(joiner) = &self.joiner {
+            command
+                .arg(arg("--encoder=", &self.encoder))
+                .arg(arg("--decoder=", &self.decoder))
+                .arg(arg("--joiner=", joiner))
+                .arg("--model-type=nemo_transducer");
+        } else {
+            command
+                .arg(arg("--whisper-encoder=", &self.encoder))
+                .arg(arg("--whisper-decoder=", &self.decoder))
+                .arg("--whisper-language=fr")
+                .arg("--whisper-task=transcribe");
+        }
         command
-            .arg(arg("--whisper-encoder=", &self.encoder))
-            .arg(arg("--whisper-decoder=", &self.decoder))
             .arg(arg("--tokens=", &self.tokens))
-            .arg("--whisper-language=fr")
-            .arg("--whisper-task=transcribe")
             .arg(format!("--num-threads={}", self.threads))
             .arg(wav)
             .stdin(Stdio::null())
@@ -401,6 +423,18 @@ mod tests {
             stt.transcribe(&quiet).await,
             Err(SttError::Silence)
         ));
+        // Avec le fichier de Parakeet : les réglages de Parakeet.
+        std::fs::write(dir.join(JOINER), b"").unwrap();
+        let parakeet = Stt::from_dir(&dir).unwrap();
+        assert!(parakeet.describe().starts_with("Parakeet"));
+        assert_eq!(parakeet.transcribe(&wav).await.unwrap(), "Allume la lampe.");
+        let seen = std::fs::read_to_string(dir.join("vu.txt")).unwrap();
+        assert!(seen.contains("--model-type=nemo_transducer"), "{seen}");
+        assert!(
+            seen.contains(&format!("--joiner={}", dir.join(JOINER).display())),
+            "{seen}"
+        );
+        assert!(!seen.contains("--whisper"), "{seen}");
         // Un programme en erreur : une erreur claire.
         std::fs::write(dir.join(PROGRAM), "#!/bin/sh\nexit 3\n").unwrap();
         let error = stt.transcribe(&wav).await.unwrap_err().to_string();
