@@ -27,12 +27,26 @@ struct Site {
 
 type Shared = Arc<Mutex<Site>>;
 
-async fn signin(State(site): State<Shared>, body: String) -> Response {
+/// Comme le vrai site : sans `User-Agent`, tout est refusé (400, code -401).
+fn has_user_agent(headers: &HeaderMap) -> bool {
+    headers
+        .get(header::USER_AGENT)
+        .is_some_and(|agent| !agent.is_empty())
+}
+
+async fn signin(State(site): State<Shared>, headers: HeaderMap, body: String) -> Response {
+    if !has_user_agent(&headers) {
+        return (
+            StatusCode::BAD_REQUEST,
+            json!({"error": {"code": -401}}).to_string(),
+        )
+            .into_response();
+    }
     let body: Value = serde_json::from_str(&body).unwrap();
     assert_eq!(body["uuid"].as_str().unwrap().len(), 32);
     if body["uid"] != "maison@exemple.fr" || body["password"] != "bon mot de passe" {
         return (
-            StatusCode::UNAUTHORIZED,
+            StatusCode::BAD_REQUEST,
             json!({"error": {"code": -702}}).to_string(),
         )
             .into_response();
@@ -56,6 +70,7 @@ fn allowed(site: &Shared, headers: &HeaderMap) -> bool {
         return false;
     }
     headers.get("x-timetreea").is_some()
+        && has_user_agent(headers)
         && headers.get(header::COOKIE).and_then(|c| c.to_str().ok())
             == Some(&format!("_session_id={}", site.session))
 }
