@@ -89,7 +89,7 @@ const SERVICES = {
   text: [["set_value", "Écrire"]],
   alarm_control_panel: [["alarm_arm_away", "Armer (absence)"], ["alarm_arm_home", "Armer (présence)"], ["alarm_arm_night", "Armer (nuit)"], ["alarm_disarm", "Désarmer"]],
   calendar: [["create_event", "Ajouter un rendez-vous"]],
-  media_player: [["media_play", "Lancer la lecture"], ["media_pause", "Mettre en pause"], ["media_stop", "Arrêter"], ["media_next_track", "Morceau suivant"], ["volume_set", "Régler le volume"], ["volume_mute", "Couper ou remettre le son"]],
+  media_player: [["media_play", "Lancer la lecture"], ["media_pause", "Mettre en pause"], ["media_stop", "Arrêter"], ["media_next_track", "Morceau suivant"], ["volume_set", "Régler le volume"], ["volume_mute", "Couper ou remettre le son"], ["select_source", "Lancer un favori"]],
   tts: [["speak", "Faire une annonce"]],
 };
 const SUN_EVENTS = [["sunrise", "lever du soleil"], ["sunset", "coucher du soleil"], ["dawn", "aube"], ["dusk", "crépuscule"]];
@@ -780,6 +780,10 @@ function actionFields(a, refresh) {
   } else if (a.action === "media_player.volume_mute") {
     fields.push(selectField("Son", a.data, "is_volume_muted", [[true, "Couper"], [false, "Remettre"]]));
     delete extra.is_volume_muted;
+  } else if (a.action === "media_player.select_source") {
+    // Un favori Sonos, par son nom (étape 91).
+    fields.push(textField("Favori", a.data, "source", { placeholder: "Ma playlist" }));
+    delete extra.source;
   } else if (a.action === "tts.speak") {
     fields.push(
       textField("Enceinte(s)", a.data, "media_player_entity_id", { placeholder: "media_player.salon, media_player.cuisine", list: true }),

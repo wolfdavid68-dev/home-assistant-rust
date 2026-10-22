@@ -585,7 +585,41 @@ function mediaTile(state) {
         : commandButton(state, "media_play", "Lancer la lecture", { icon: ICONS.play }),
       commandButton(state, "media_next_track", "Morceau suivant", { icon: ICONS.next })),
     el("div", { class: "media-volume" }, mute, slider, el("span", { class: "media-volume-value", text: `${volume}\u202f%` })),
+    ...mediaFavorites(state),
   );
+}
+
+// Au-del\u00e0, les favoris passent dans une liste d\u00e9roulante.
+const MAX_FAVORITE_BUTTONS = 8;
+
+/** Les favoris Sonos (\u00e9tape 91) : un toucher les lance sur l'enceinte. */
+function mediaFavorites(state) {
+  const a = state.attributes;
+  const names = (Array.isArray(a.source_list) ? a.source_list : []).filter((n) => typeof n === "string" && n !== "");
+  if (names.length === 0 || state.state === "unavailable") return [];
+  const launch = (source) => {
+    markPending(state.entity_id);
+    callService("media_player", "select_source", { entity_id: state.entity_id, source });
+  };
+  if (names.length > MAX_FAVORITE_BUTTONS) {
+    const list = el("select", { class: "tile-select", "aria-label": `Lancer un favori sur ${nameOf(state)}` });
+    list.append(el("option", { value: "", text: "Lancer un favori\u2026" }));
+    for (const name of names) list.append(el("option", { value: name, text: name }));
+    list.addEventListener("change", () => {
+      if (list.value !== "") launch(list.value);
+    });
+    return [list];
+  }
+  const buttons = names.map((name) => {
+    const button = el("button", {
+      type: "button", class: "action-button media-favorite", title: name,
+      "aria-label": `Lancer ${name} sur ${nameOf(state)}`,
+    }, name);
+    button.setAttribute("aria-pressed", String(a.source === name));
+    button.addEventListener("click", () => launch(name));
+    return button;
+  });
+  return [el("div", { class: "media-favorites", role: "group", "aria-label": "Favoris" }, ...buttons)];
 }
 
 // Le texte en cours d'écriture survit au rafraîchissement de la tuile.
