@@ -212,8 +212,10 @@ function onStateChanged({ entity_id, old_state, new_state }) {
   // pièce (house.js) : on remplace chacune.
   const existing = document.querySelectorAll(`:is(.sections, .room-body) #${CSS.escape(tileId(entity_id))}`);
   if (existing.length > 0 && new_state) for (const tile of existing) tile.replaceWith(renderTile(new_state));
-  else {
-    // Entité ajoutée ou supprimée : on redessine tout.
+  else if (!old_state || !new_state) {
+    // Entité ajoutée ou supprimée : on redessine tout. Une entité sans tuile
+    // (rangée dans une pièce du tableau, une scène…) n'a rien à remplacer :
+    // ses cartes (pièces, volets) suivent avec scheduleHome().
     renderAll();
     refreshEntityList();
   }
@@ -322,6 +324,16 @@ async function loadAreas() {
   renderAll();
 }
 
+/** Les appareils rangés dans aucune pièce : par type sur « Toute la maison »,
+ *  ou dans l'onglet « Autres » du tableau (house.js). Les scènes et les
+ *  scripts sont déjà en boutons, les notifications ont leur cloche, et demain
+ *  est dans la tuile de la vigilance (ou de Tempo) du jour. */
+function looseStates(states = [...entities.values()]) {
+  const inArea = new Set(areas.flatMap((area) => area.entities.map((entity) => entity.entity_id)));
+  return states.filter((s) => !inArea.has(s.entity_id) && s.entity_id !== VIGILANCE_TOMORROW && s.entity_id !== TEMPO_TOMORROW
+    && !["scene", "script", "persistent_notification"].includes(domainOf(s)));
+}
+
 // La pièce affichée seule (après un toucher sur le plan), ou `null`.
 const view = { room: null };
 
@@ -361,12 +373,8 @@ function renderAll() {
     items.forEach((s) => used.add(s.entity_id));
     return { title: area.name, items };
   });
-  // … puis, par type, les appareils qui ne sont dans aucune pièce. Les scènes
-  // et les scripts sont déjà en haut, en boutons.
-  // Les notifications ont leur cloche, en haut.
-  // Demain est dans la tuile de la vigilance (ou de Tempo) du jour.
-  const loose = sorted.filter((s) => !used.has(s.entity_id) && s.entity_id !== VIGILANCE_TOMORROW && s.entity_id !== TEMPO_TOMORROW
-    && !["scene", "script", "persistent_notification"].includes(domainOf(s)));
+  // … puis, par type, les appareils qui ne sont dans aucune pièce.
+  const loose = looseStates(sorted).filter((s) => !used.has(s.entity_id));
   const groups = SECTIONS.map(({ title, domains, extra }) => {
     const items = loose.filter((s) => !used.has(s.entity_id) && (domains.includes(domainOf(s)) || extra?.(s)));
     items.forEach((s) => used.add(s.entity_id));
@@ -375,6 +383,14 @@ function renderAll() {
   groups.push({ title: "Autres", items: loose.filter((s) => !used.has(s.entity_id)) });
   // Un onglet limité à quelques pièces (Garage…) ne montre que leurs appareils.
   if (pageAreas !== null && isBoard()) groups.length = 0;
+
+  // Mise en page « tableau » : chaque pièce a son onglet, et les appareils
+  // sans pièce sont dans l'onglet « Autres » (étape 90). L'onglet de la
+  // maison ne garde que l'essentiel, sur un seul écran.
+  if (isBoard()) {
+    areaGroups.length = 0;
+    groups.length = 0;
+  }
 
   container.replaceChildren(
     ...[...areaGroups, ...groups]
