@@ -1432,6 +1432,20 @@ pub(crate) async fn test_voice(tts: &ha_tts::Tts, phrase: &str) -> Result<(), Bo
     Ok(())
 }
 
+/// `ecoute <fichier.wav>` : fait écouter un enregistrement (16 bits, mono,
+/// 16 000 Hz) à Whisper, comme une phrase dite à la tablette.
+pub(crate) async fn test_listening(stt: &ha_stt::Stt, file: &str) -> Result<(), Box<dyn Error>> {
+    println!("écoute : {}", stt.describe());
+    let wav = std::fs::read(file)?;
+    let started = std::time::Instant::now();
+    let text = stt.transcribe(&wav).await?;
+    println!(
+        "entendu en {:.1} s : « {text} »",
+        started.elapsed().as_secs_f64()
+    );
+    Ok(())
+}
+
 /// `timetree pair|status|forget` : le compte TimeTree de la maison
 /// (étape 74).
 pub(crate) async fn timetree_command(args: &[&str]) -> Result<(), Box<dyn Error>> {

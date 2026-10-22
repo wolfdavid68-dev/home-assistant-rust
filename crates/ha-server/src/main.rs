@@ -26,6 +26,7 @@
 //! ha-server iglou pair            relie la liste de courses de l'appli Iglou
 //! ha-server sonos                 liste les enceintes Sonos trouvées
 //! ha-server voix "<phrase>"       essaie la voix des annonces (essai-voix.wav)
+//! ha-server ecoute <fichier.wav>  essaie l'écoute de la tablette (Whisper, étape 84)
 //! ha-server automations check     vérifie automatisations, scripts et scènes
 //! ha-server automations list      liste les automatisations (fichier et éditeur)
 //! ha-server automations delete <id>  supprime une automatisation de l'éditeur
@@ -185,6 +186,13 @@ async fn main() -> ExitCode {
         ["voix", phrase] => match tts_config() {
             Ok(Some(tts)) => cli::test_voice(&tts, phrase).await,
             Ok(None) => Err("indique la voix avec HA_PIPER : voir docs/sonos.md".into()),
+            Err(error) => Err(error.into()),
+        },
+        ["ecoute", file] => match stt_config() {
+            Ok(Some(stt)) => cli::test_listening(&stt, file).await,
+            Ok(None) => {
+                Err("indique le dossier de l'écoute avec HA_ECOUTE : voir docs/voix.md".into())
+            }
             Err(error) => Err(error.into()),
         },
         ["automations", rest @ ..] => cli::automations_command(rest).await,
@@ -479,6 +487,20 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         }),
         energy_config,
     );
+    // Parler à la maison depuis la tablette (étape 84) : une écoute ou une
+    // voix mal installée n'empêche pas le reste, le journal dit pourquoi.
+    let listening = stt_config().unwrap_or_else(|error| {
+        warn!("écoute de la tablette : {error}");
+        None
+    });
+    if let Some(stt) = &listening {
+        info!("écoute de la tablette : {}", stt.describe());
+    }
+    let speaking = tts_config().unwrap_or_else(|error| {
+        warn!("voix de la tablette : {error}");
+        None
+    });
+    api_state.set_voice(listening, speaking);
     let api = tokio::spawn({
         let state = Arc::clone(&api_state);
         async move {
@@ -1047,6 +1069,20 @@ fn tts_config() -> Result<Option<ha_tts::Tts>, String> {
     };
     let voice = std::env::var("HA_PIPER_VOIX").ok();
     ha_tts::Tts::from_settings(&piper, voice.as_deref())
+        .map(Some)
+        .map_err(|error| error.to_string())
+}
+
+/// L'écoute de la tablette, si `HA_ECOUTE` est là : l'adresse du service
+/// d'écoute (`ws://127.0.0.1:10350`) ou le dossier du programme.
+fn stt_config() -> Result<Option<ha_stt::Stt>, String> {
+    let Some(setting) = std::env::var("HA_ECOUTE")
+        .ok()
+        .filter(|setting| !setting.trim().is_empty())
+    else {
+        return Ok(None);
+    };
+    ha_stt::Stt::from_settings(&setting)
         .map(Some)
         .map_err(|error| error.to_string())
 }

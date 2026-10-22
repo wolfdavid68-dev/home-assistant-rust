@@ -134,7 +134,7 @@ jobs:
           mkdir "$dir"
           cp target/release/ha-server LICENSE *.example.yaml "$dir"/
           cp packaging/linux/installer.sh packaging/linux/tout-compris.sh packaging/linux/mise-a-jour.sh \
-            packaging/linux/ha-maison-ring.service \
+            packaging/linux/ha-maison-ring.service packaging/linux/ha-maison-ecoute.service \
             packaging/linux/ha-maison packaging/linux/ha-maison.env \
             packaging/linux/ha-maison.service packaging/linux/ha-maison-maj.service \
             packaging/linux/ha-maison-maj.timer "$dir"/

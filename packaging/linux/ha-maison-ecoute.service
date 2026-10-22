@@ -1,0 +1,78 @@
+# L'écoute de la maison (étape 84) : Whisper, gardé en mémoire, qui écrit
+# ce qu'on dit au micro de la tablette. Installé par « installer.sh --voix ».
+# Guide : docs/voix.md
+#
+#   sudo systemctl status ha-maison-ecoute     est-il en marche ?
+#   sudo journalctl -u ha-maison-ecoute -f     voir le journal
+#
+# Le service n'a pas de mot de passe : il ne répond qu'au mini-PC lui-même
+# (IPAddressAllow=localhost), c'est-à-dire au serveur de la maison. Il ne
+# sort jamais sur le réseau.
+
+[Unit]
+Description=L'écoute de la maison (Whisper, sherpa-onnx)
+Documentation=https://github.com/wolfdavid68-dev/home-assistant-rust/blob/main/docs/voix.md
+After=network.target
+
+[Service]
+Type=simple
+# Le nombre de processeurs pour Whisper (4 au plus), écrit par installer.sh.
+Environment=ECOUTE_FILS=2
+EnvironmentFile=-/etc/ha-maison/ecoute.env
+ExecStart=/opt/ha-maison/ecoute/sherpa-onnx-offline-websocket-server \
+  --port=10350 \
+  --whisper-encoder=/opt/ha-maison/ecoute/encoder.onnx \
+  --whisper-decoder=/opt/ha-maison/ecoute/decoder.onnx \
+  --tokens=/opt/ha-maison/ecoute/tokens.txt \
+  --whisper-language=fr \
+  --whisper-task=transcribe \
+  --num-threads=${ECOUTE_FILS} \
+  --num-work-threads=1 \
+  --max-batch-size=1 \
+  --max-utterance-length=20 \
+  --log-file=/dev/null
+Restart=on-failure
+RestartSec=5
+
+# Un compte jetable, créé par systemd au démarrage : le service ne peut rien
+# écrire, rien lire d'autre que ses fichiers.
+DynamicUser=yes
+# Whisper « small » prend ≈ 800 Mo ; le serveur de la maison passe avant lui.
+MemoryMax=1500M
+CPUWeight=50
+TasksMax=64
+
+# Réseau : seulement le mini-PC lui-même.
+IPAddressDeny=any
+IPAddressAllow=localhost
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+# Durcissement.
+CapabilityBoundingSet=
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectProc=invisible
+ProcSubset=pid
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RemoveIPC=yes
+UMask=0077
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+SystemCallErrorNumber=EPERM
+
+[Install]
+WantedBy=multi-user.target

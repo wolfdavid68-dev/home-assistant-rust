@@ -882,7 +882,9 @@ dependencies = [
  "ha-notices",
  "ha-push",
  "ha-storage",
+ "ha-stt",
  "ha-tls",
+ "ha-tts",
  "jiff",
  "rustls",
  "serde",
@@ -1209,6 +1211,7 @@ dependencies = [
  "ha-somfy",
  "ha-sonos",
  "ha-storage",
+ "ha-stt",
  "ha-sun",
  "ha-teleinfo",
  "ha-thermostat",
@@ -1324,6 +1327,19 @@ dependencies = [
  "tokio",
  "tracing",
  "zeroize",
+]
+
+[[package]]
+name = "ha-stt"
+version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "getrandom 0.4.3",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tokio-tungstenite 0.30.0",
+ "tracing",
 ]
 
 [[package]]
