@@ -167,6 +167,10 @@ une sauvegarde ne rend pas les jetons Hue et Somfy, et il faudrait réassocier l
    ```bash
    git tag v0.1.0 && git push origin v0.1.0
    ```
+   Ou, sans ligne de commande, depuis la page des versions de GitHub : **Draft a new release** →
+   **Choose a tag** : taper `v0.1.0`, puis **Create new tag: v0.1.0 on publish** → **Target** :
+   `main` → **Publish release**. Le workflow complète alors cette version (les fichiers arrivent
+   en une dizaine de minutes).
 3. Le workflow `release.yml` fait le reste :
    - la version GitHub, avec ses notes ;
    - le zip Windows, compilé et vérifié (`ha-server.exe --version`) ;

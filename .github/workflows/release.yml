@@ -59,9 +59,17 @@ jobs:
           - **Mini-PC sous Debian** : télécharge \`ha-maison-linux-x86_64.tar.gz\` ci-dessous, puis \`sudo ./installer.sh\` ([guide](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/docs/mini-pc.md)).
           - **Linux (Docker)** : télécharge \`compose.yaml\` ci-dessous, puis \`docker compose up -d\` (image \`ghcr.io/${GITHUB_REPOSITORY}:${TAG#v}\`).
           NOTES
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Version ${TAG#v}" \
-            --notes-file notes.md --generate-notes --verify-tag \
-            packaging/linux/compose.yaml
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            # Créée depuis la page de GitHub (« Draft a new release ») : on la
+            # complète au lieu d'échouer.
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --title "Version ${TAG#v}" \
+              --notes-file notes.md
+            gh release upload "$TAG" packaging/linux/compose.yaml --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Version ${TAG#v}" \
+              --notes-file notes.md --generate-notes --verify-tag \
+              packaging/linux/compose.yaml
+          fi
 
   windows:
     name: Windows (zip)
@@ -101,7 +109,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
-        run: gh release upload "$env:TAG" "ha-maison-$env:TAG-windows.zip" --repo "$env:GITHUB_REPOSITORY"
+        run: gh release upload "$env:TAG" "ha-maison-$env:TAG-windows.zip" --clobber --repo "$env:GITHUB_REPOSITORY"
 
   linux:
     name: Linux (mini-PC)
@@ -153,8 +161,8 @@ jobs:
         # L'archive d'abord, l'empreinte ensuite : un mini-PC qui voit la
         # nouvelle empreinte trouve toujours l'archive qui va avec.
         run: |
-          gh release upload "$TAG" ha-maison-linux-x86_64.tar.gz --repo "$GITHUB_REPOSITORY"
-          gh release upload "$TAG" ha-maison-linux-x86_64.tar.gz.sha256 --repo "$GITHUB_REPOSITORY"
+          gh release upload "$TAG" ha-maison-linux-x86_64.tar.gz --clobber --repo "$GITHUB_REPOSITORY"
+          gh release upload "$TAG" ha-maison-linux-x86_64.tar.gz.sha256 --clobber --repo "$GITHUB_REPOSITORY"
 
   docker:
     name: image Docker
