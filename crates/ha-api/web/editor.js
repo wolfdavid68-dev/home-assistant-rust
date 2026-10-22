@@ -110,7 +110,10 @@ async function showAutoList(notice = "") {
   $("#auto-list-view").hidden = false;
   const message = $("#auto-notice");
   message.textContent = notice;
+  message.classList.remove("error");
   message.hidden = !notice;
+  // Les automatisations toutes prêtes (pretes.js, étape 85).
+  if (typeof renderPresets === "function") renderPresets().catch(() => {});
   const list = $("#auto-list");
   list.replaceChildren(el("li", { class: "auto-empty", text: "Chargement…" }));
   const { status, data } = await api("GET", "/api/automations");
@@ -127,6 +130,7 @@ async function showAutoList(notice = "") {
 
 function autoCard(entry) {
   const badges = el("div", { class: "badges" }, el("span", { class: "badge", text: entry.source === "file" ? "fichier" : "éditeur" }));
+  if (entry.source === "editor" && entry.id.startsWith("pret_")) badges.append(el("span", { class: "badge", text: "toute prête" }));
   if (entry.error) badges.append(el("span", { class: "badge bad", text: "invalide" }));
   else if (!entry.enabled) badges.append(el("span", { class: "badge off", text: "désactivée" }));
   const card = el(

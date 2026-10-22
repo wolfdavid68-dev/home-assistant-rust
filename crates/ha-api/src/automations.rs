@@ -82,7 +82,7 @@ impl AutomationRequest {
     }
 }
 
-fn automation_error(error: AutomationError) -> ApiError {
+pub(crate) fn automation_error(error: AutomationError) -> ApiError {
     match error {
         AutomationError::Storage(error) => ApiError::Internal(error.to_string()),
         AutomationError::Io(error) => ApiError::Internal(error.to_string()),
@@ -90,7 +90,7 @@ fn automation_error(error: AutomationError) -> ApiError {
     }
 }
 
-fn editor(state: &ApiState) -> Result<&AutomationEditor, ApiError> {
+pub(crate) fn editor(state: &ApiState) -> Result<&AutomationEditor, ApiError> {
     state.automations.as_ref().ok_or(ApiError::NotFound)
 }
 
@@ -104,7 +104,10 @@ pub(crate) fn confirmation_left(state: &ApiState, token: &str) -> Option<Duratio
 
 /// Refuse la requête si l'éditeur est en lecture seule, ou si l'identité n'a
 /// pas été confirmée récemment.
-fn require_confirmation(state: &ApiState, auth: &Authenticated) -> Result<Arc<Editor>, ApiError> {
+pub(crate) fn require_confirmation(
+    state: &ApiState,
+    auth: &Authenticated,
+) -> Result<Arc<Editor>, ApiError> {
     let automations = editor(state)?;
     if !automations.editable {
         return Err(ApiError::Forbidden(
@@ -434,7 +437,7 @@ pub(crate) async fn traces(
 
 /// Prévient le téléphone d'une modification : si quelqu'un d'autre a pris la
 /// main sur un compte, on le sait tout de suite.
-fn notify(state: &ApiState, message: &str) {
+pub(crate) fn notify(state: &ApiState, message: &str) {
     let Ok(entity_id) = NOTIFY_ENTITY.parse::<EntityId>() else {
         return;
     };

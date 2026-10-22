@@ -130,6 +130,40 @@ impl Store {
         Ok(())
     }
 
+    /// Les réglages des automatisations toutes prêtes (étape 85) :
+    /// (nom, JSON).
+    pub async fn automation_presets(&self) -> Result<Vec<(String, String)>, StorageError> {
+        Ok(
+            sqlx::query_as("SELECT name, options FROM automation_presets ORDER BY name")
+                .fetch_all(self.pool())
+                .await?,
+        )
+    }
+
+    /// Enregistre les réglages d'une automatisation toute prête.
+    pub async fn save_automation_preset(
+        &self,
+        name: &str,
+        options: &str,
+        actor: &str,
+    ) -> Result<(), StorageError> {
+        let now = to_micros(SystemTime::now())?;
+        sqlx::query(
+            "INSERT INTO automation_presets (name, options, updated_at, updated_by)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT (name) DO UPDATE SET
+                 options = excluded.options, updated_at = excluded.updated_at,
+                 updated_by = excluded.updated_by",
+        )
+        .bind(name)
+        .bind(options)
+        .bind(now)
+        .bind(actor)
+        .execute(self.pool())
+        .await?;
+        Ok(())
+    }
+
     /// Les versions d'une automatisation, de la plus récente à la plus ancienne.
     pub async fn automation_versions(
         &self,
@@ -196,6 +230,34 @@ async fn add_version(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn preset_options_are_kept() {
+        let store = Store::open_in_memory().await.unwrap();
+        assert_eq!(
+            store.automation_presets().await.unwrap(),
+            Vec::<(String, String)>::new()
+        );
+        store
+            .save_automation_preset("nuit", r#"{"heure":"23:00"}"#, "david")
+            .await
+            .unwrap();
+        store
+            .save_automation_preset("depart", "{}", "david")
+            .await
+            .unwrap();
+        store
+            .save_automation_preset("nuit", r#"{"heure":"22:30"}"#, "alice")
+            .await
+            .unwrap();
+        assert_eq!(
+            store.automation_presets().await.unwrap(),
+            [
+                ("depart".to_owned(), "{}".to_owned()),
+                ("nuit".to_owned(), r#"{"heure":"22:30"}"#.to_owned())
+            ]
+        );
+    }
 
     #[tokio::test]
     async fn save_update_delete_and_versions() {
