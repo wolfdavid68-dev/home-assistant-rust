@@ -44,6 +44,10 @@ utilisation :
   ha-server iglou pair            relie la liste de courses de l'appli Iglou
   ha-server iglou status          affiche le compte, sa maison et la liste
   ha-server iglou forget          oublie le compte (la liste locale reprend)
+  ha-server smartthings pair      associe la maison SmartThings de Samsung (docs/smartthings.md)
+  ha-server smartthings status    affiche l'association et ses jetons
+  ha-server smartthings devices   liste les appareils SmartThings et leurs entités
+  ha-server smartthings forget    oublie l'association
   ha-server sonos                 liste les enceintes Sonos trouvées
   ha-server voix \"<phrase>\"       essaie la voix des annonces (écrit essai-voix.wav)
   ha-server automations check     vérifie automatisations, scripts et scènes
@@ -548,11 +552,12 @@ async fn audit_cli(store: &Store, domain: &str, args: &[&str]) {
         ),
         ("freebox", ["track", mac, _]) => ("freebox_track".to_owned(), Some(*mac)),
         ("freebox", ["untrack", name]) => ("freebox_untrack".to_owned(), Some(*name)),
-        ("hue" | "somfy" | "freebox" | "timetree" | "iglou", ["forget"]) => {
+        ("hue" | "somfy" | "freebox" | "timetree" | "iglou" | "smartthings", ["forget"]) => {
             (format!("{domain}_forget"), None)
         }
         ("timetree", ["pair"]) => ("timetree_pair".to_owned(), None),
         ("iglou", ["pair"]) => ("iglou_pair".to_owned(), None),
+        ("smartthings", ["pair"]) => ("smartthings_pair".to_owned(), None),
         ("automations", ["delete", id]) => ("automation_delete".to_owned(), Some(*id)),
         _ => return,
     };
@@ -1444,6 +1449,152 @@ pub(crate) async fn test_listening(stt: &ha_stt::Stt, file: &str) -> Result<(), 
         started.elapsed().as_secs_f64()
     );
     Ok(())
+}
+
+/// `smartthings pair|status|devices|forget` : la maison SmartThings de
+/// Samsung (étape 86).
+pub(crate) async fn smartthings_command(args: &[&str]) -> Result<(), Box<dyn Error>> {
+    let store = crate::open_store().await?;
+    let result = smartthings_inner(args, &store).await;
+    if result.is_ok() {
+        audit_cli(&store, "smartthings", args).await;
+    }
+    store.close().await;
+    result
+}
+
+async fn smartthings_inner(args: &[&str], store: &Store) -> Result<(), Box<dyn Error>> {
+    use ha_smartthings::api::{self, Api, App};
+
+    let endpoint = crate::smartthings_endpoint();
+    let http = endpoint.http()?;
+    match args {
+        ["pair"] => {
+            println!("Il faut l'application SmartThings créée pour la maison (une seule fois,");
+            println!(
+                "avec « smartthings apps:create », voir docs/smartthings.md) : son Client ID,"
+            );
+            println!("son Client Secret et l'adresse de retour (redirect URI) qu'elle connaît.");
+            println!();
+            let client_id = ask_line("Client ID : ")?;
+            if client_id.is_empty()
+                || client_id.len() > 128
+                || !client_id.chars().all(|c| c.is_ascii_graphic())
+            {
+                return Err("Client ID invalide".into());
+            }
+            let client_secret = ask_secret("Client Secret : ")?;
+            if client_secret.is_empty() || client_secret.len() > 256 {
+                return Err("Client Secret invalide".into());
+            }
+            let redirect_uri = ask_line("Adresse de retour (redirect URI) : ")?;
+            if !redirect_uri.starts_with("https://")
+                || redirect_uri.len() > 512
+                || !redirect_uri.chars().all(|c| c.is_ascii_graphic())
+            {
+                return Err("l'adresse de retour doit commencer par https://".into());
+            }
+            let mut random = [0u8; 16];
+            getrandom::fill(&mut random)
+                .map_err(|error| format!("aléatoire indisponible : {error}"))?;
+            let state: String = random
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect::<Vec<_>>()
+                .concat();
+            println!();
+            println!("1. Ouvre cette adresse, connecte-toi à ton compte Samsung, choisis le lieu");
+            println!("   et autorise « la maison » :");
+            println!();
+            println!(
+                "{}",
+                api::authorize_url(&endpoint, &client_id, &redirect_uri, &state)
+            );
+            println!();
+            println!("2. Tu arrives sur l'adresse de retour (la page peut afficher une erreur :");
+            println!("   ce n'est pas grave). Copie l'adresse complète de cette page.");
+            let pasted = ask_line("Colle-la ici : ")?;
+            let code = api::read_callback(&pasted, &state)?;
+            let app = App {
+                client_id,
+                client_secret,
+                redirect_uri,
+            };
+            let tokens = app.exchange(&http, &endpoint, &code).await?;
+            let devices = Api::new(http.clone(), endpoint.clone(), tokens.access_token.clone())
+                .devices()
+                .await?;
+            store
+                .save_smartthings_account(&ha_storage::SmartThingsAccount {
+                    client_id: app.client_id,
+                    client_secret: app.client_secret,
+                    redirect_uri: app.redirect_uri,
+                    tokens,
+                })
+                .await?;
+            println!("associé !");
+            print_smartthings_devices(devices);
+            println!("Relance le serveur (sudo systemctl restart ha-maison) pour les voir.");
+            Ok(())
+        }
+        ["status" | "devices"] => {
+            let Some(account) = store.smartthings_account().await? else {
+                println!("aucune maison SmartThings associée (ha-server smartthings pair)");
+                return Ok(());
+            };
+            println!("application : {}", account.client_id);
+            println!("adresse de retour : {}", account.redirect_uri);
+            if let Some((refreshed, paired)) = store.smartthings_dates().await? {
+                println!("associée le {}", local_time(paired));
+                println!("jetons renouvelés le {}", local_time(refreshed));
+            }
+            let left = account
+                .tokens
+                .expires_at
+                .duration_since(std::time::SystemTime::now())
+                .unwrap_or_default();
+            // On ne renouvelle pas les jetons ici : c'est le serveur qui
+            // s'en charge (un jeton de renouvellement ne sert qu'une fois).
+            if left.is_zero() {
+                println!(
+                    "jeton d'accès expiré : le serveur le renouvellera à son prochain passage"
+                );
+                return Ok(());
+            }
+            println!("jeton d'accès valable encore {} h", left.as_secs() / 3600);
+            if args == ["devices"] {
+                let devices = Api::new(http, endpoint, account.tokens.access_token)
+                    .devices()
+                    .await?;
+                print_smartthings_devices(devices);
+            }
+            Ok(())
+        }
+        ["forget"] => {
+            if store.forget_smartthings_account().await? {
+                println!(
+                    "association SmartThings oubliée. Pour couper aussi l'accès côté Samsung :"
+                );
+                println!("« smartthings apps:delete » sur l'application de la maison.");
+            } else {
+                println!("aucune maison SmartThings associée");
+            }
+            Ok(())
+        }
+        _ => Err(USAGE.into()),
+    }
+}
+
+/// Les appareils et les entités qu'ils donneront.
+fn print_smartthings_devices(devices: Vec<ha_smartthings::api::Device>) {
+    let core = ha_core::Core::new();
+    let mut mapped = ha_smartthings::devices::Devices::default();
+    let total = devices.len();
+    mapped.sync(devices, &std::collections::HashMap::new(), &core.states);
+    println!("{total} appareils, dont {} utilisables :", mapped.len());
+    for (label, entities) in mapped.summary() {
+        println!("  {label} : {}", entities.join(", "));
+    }
 }
 
 /// `timetree pair|status|forget` : le compte TimeTree de la maison

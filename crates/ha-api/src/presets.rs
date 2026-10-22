@@ -64,7 +64,11 @@ pub(crate) fn house(state: &ApiState) -> House {
             .or_else(|| placed.and_then(|(_, name)| *name))
             .unwrap_or(entity.entity_id().object_id())
             .to_owned();
-        let room = placed.map_or("", |(area, _)| area);
+        // La pièce d'areas.yaml, sinon celle de l'intégration (SmartThings).
+        let room = placed
+            .map(|(area, _)| *area)
+            .or_else(|| attributes.get("piece").and_then(Value::as_str))
+            .unwrap_or("");
         let device = || Device {
             entity_id: id.clone(),
             name: name.clone(),
@@ -91,6 +95,33 @@ pub(crate) fn house(state: &ApiState) -> House {
                 house.openings.push(opening("on"));
             }
             "notify" => notify.push(id.clone()),
+            // Une machine à cycle : SmartThings (attribut `appareil`) ou une
+            // prise qui mesure sa puissance (étape 67, « Terminé »).
+            "sensor"
+                if attributes.get("appareil").is_some()
+                    || attributes
+                        .get("options")
+                        .and_then(Value::as_array)
+                        .is_some_and(|options| options.iter().any(|o| o == "Terminé")) =>
+            {
+                house.appliances.push(device());
+            }
+            "tts" => {
+                let speakers: Vec<String> = attributes
+                    .get("enceintes")
+                    .and_then(Value::as_array)
+                    .map(|list| {
+                        list.iter()
+                            .filter_map(Value::as_str)
+                            .take(20)
+                            .map(str::to_owned)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                if !speakers.is_empty() {
+                    house.announce = Some((id.clone(), speakers));
+                }
+            }
             "switch" if id == "switch.simulation_presence" => house.simulation = Some(id.clone()),
             "zone" if id == "zone.home" => house.people = true,
             "sun" if id == "sun.sun" => house.sun = true,
@@ -178,6 +209,8 @@ pub(crate) async fn list(
             "openings": house.openings.len(),
             "notify": house.notify.is_some(),
             "simulation": house.simulation.is_some(),
+            "appliances": named(&house.appliances),
+            "announce": house.announce.is_some(),
             "people": house.people,
             "sun": house.sun,
         },

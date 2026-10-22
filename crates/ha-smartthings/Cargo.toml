@@ -1,0 +1,32 @@
+[package]
+name = "ha-smartthings"
+description = "La maison SmartThings de Samsung : ses appareils, par l'API officielle (OAuth)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+base64.workspace = true
+getrandom.workspace = true
+ha-core = { path = "../ha-core" }
+ha-storage = { path = "../ha-storage" }
+ha-tls = { path = "../ha-tls" }
+# L'heure de fin des machines, à l'heure de la maison.
+jiff.workspace = true
+reqwest.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["sync", "rt", "macros", "time"] }
+tracing.workspace = true
+url.workspace = true
+zeroize.workspace = true
+
+[dev-dependencies]
+axum.workspace = true
+tokio = { workspace = true, features = ["sync", "rt", "macros", "time", "net", "rt-multi-thread"] }
+
+[lints]
+workspace = true

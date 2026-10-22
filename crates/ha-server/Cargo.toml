@@ -34,6 +34,7 @@ ha-input = { path = "../ha-input" }
 ha-logbook = { path = "../ha-logbook" }
 ha-shedding = { path = "../ha-shedding" }
 ha-simulation = { path = "../ha-simulation" }
+ha-smartthings = { path = "../ha-smartthings" }
 ha-somfy = { path = "../ha-somfy" }
 ha-sonos = { path = "../ha-sonos" }
 ha-thermostat = { path = "../ha-thermostat" }
@@ -43,6 +44,8 @@ ha-tts = { path = "../ha-tts" }
 ha-weather = { path = "../ha-weather" }
 ha-workday = { path = "../ha-workday" }
 jiff.workspace = true
+# L'état tiré au hasard de l'association SmartThings (étape 86).
+getrandom.workspace = true
 ha-storage = { path = "../ha-storage" }
 ha-sun = { path = "../ha-sun" }
 qrcode.workspace = true

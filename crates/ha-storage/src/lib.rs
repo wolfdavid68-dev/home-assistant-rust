@@ -19,6 +19,7 @@ mod logbook;
 mod push;
 mod recorder;
 mod secrets;
+mod smartthings;
 mod statistics;
 mod store;
 mod timetree;
@@ -33,6 +34,7 @@ pub use logbook::{LogbookEntry, MAX_LOGBOOK_LIMIT, NewLogbookEntry};
 pub use push::{NewPushSubscription, PushSubscriptionInfo, PushTarget, VapidKeys};
 pub use recorder::Recorder;
 pub use secrets::{SecretKey, is_sealed};
+pub use smartthings::{SmartThingsAccount, SmartThingsTokens};
 pub use statistics::{
     HourSummary, MAX_STATISTICS_POINTS, Period, StatisticPoint, Statistics, summarize,
 };

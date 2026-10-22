@@ -98,6 +98,7 @@ Un noyau domotique en Rust, inspiré de Home Assistant.
 - [Étape 83 : toute la maison en une commande, expliquée](docs/tout-compris.md)
 - [Étape 84 : parler à la maison depuis la tablette, expliqué](docs/voix.md)
 - [Étape 85 : les automatisations toutes prêtes, expliquées](docs/pretes.md)
+- [Étape 86 : la maison SmartThings de Samsung, expliquée](docs/smartthings.md)
 - [Étape 5 : les automatisations, expliqué](docs/etape-5-automatisations.md)
 - [Modernisation du code, expliquée](docs/modernisation.md)
 - [Étape 6 : l'interface web, expliquée](docs/etape-6-interface-web.md)

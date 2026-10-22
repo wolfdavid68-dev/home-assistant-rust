@@ -29,15 +29,18 @@ pub enum Preset {
     Nuit,
     Matin,
     Vacances,
+    /// Une machine a fini (étape 86) : lave-linge, sèche-linge, lave-vaisselle.
+    Lessive,
 }
 
 impl Preset {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Depart,
         Self::Retour,
         Self::Nuit,
         Self::Matin,
         Self::Vacances,
+        Self::Lessive,
     ];
 
     #[must_use]
@@ -48,6 +51,7 @@ impl Preset {
             Self::Nuit => "nuit",
             Self::Matin => "matin",
             Self::Vacances => "vacances",
+            Self::Lessive => "lessive",
         }
     }
 
@@ -71,6 +75,7 @@ impl Preset {
             Self::Nuit => "Nuit",
             Self::Matin => "Matin",
             Self::Vacances => "Vacances",
+            Self::Lessive => "Lessive",
         }
     }
 
@@ -83,6 +88,7 @@ impl Preset {
             Self::Nuit => "Chaque soir, si quelqu'un est là",
             Self::Matin => "Chaque matin, si quelqu'un est là",
             Self::Vacances => "Quand la maison est vide depuis longtemps",
+            Self::Lessive => "Quand le lave-linge (ou une autre machine) a fini",
         }
     }
 
@@ -101,6 +107,14 @@ impl Preset {
             Self::Nuit => house.lights.is_empty() && house.covers.is_empty(),
             Self::Matin => house.covers.is_empty() && house.climates.is_empty(),
             Self::Vacances => house.climates.is_empty() && house.simulation.is_none(),
+            Self::Lessive => {
+                if house.appliances.is_empty() {
+                    return Some(
+                        "aucune machine suivie (SmartThings, ou une prise qui mesure la puissance)",
+                    );
+                }
+                false
+            }
         };
         nothing.then_some("aucun appareil de la maison ne s'y prête")
     }
@@ -156,6 +170,11 @@ impl Preset {
                 chauffage: Some(12.0),
                 ..Options::default()
             },
+            Self::Lessive => Options {
+                notifier: Some(true),
+                annonce: Some(house.announce.is_some()),
+                ..Options::default()
+            },
         }
     }
 }
@@ -196,6 +215,12 @@ pub struct House {
     pub people: bool,
     /// `sun.sun` existe : on sait s'il fait nuit.
     pub sun: bool,
+    /// Les machines à cycle (lave-linge…) : leur fin donne l'évènement
+    /// `appareil_termine`.
+    pub appliances: Vec<Device>,
+    /// Les annonces sur les enceintes : l'entité (`tts.annonces`) et les
+    /// enceintes.
+    pub announce: Option<(String, Vec<String>)>,
 }
 
 /// Ce qu'on a coché. Chaque automatisation n'en lit qu'une partie.
@@ -238,6 +263,12 @@ pub struct Options {
     /// Vacances : armer la simulation de présence.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub simulation: Option<bool>,
+    /// Lessive : un message sur le téléphone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notifier: Option<bool>,
+    /// Lessive : l'annoncer sur les enceintes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub annonce: Option<bool>,
 }
 
 impl Options {
@@ -257,6 +288,8 @@ impl Options {
             chauffage: self.chauffage.or(defaults.chauffage),
             lumiere_entree: self.lumiere_entree.or(defaults.lumiere_entree),
             simulation: self.simulation.or(defaults.simulation),
+            notifier: self.notifier.or(defaults.notifier),
+            annonce: self.annonce.or(defaults.annonce),
         }
     }
 }
@@ -568,6 +601,33 @@ pub fn build(
                     "Vacances : la maison se garde seule",
                 )
             }
+            Preset::Lessive => {
+                let mut actions = Vec::new();
+                if o.notifier == Some(true) {
+                    actions.push(message(
+                        house,
+                        preset,
+                        "{{ trigger.event.data.name }} a fini",
+                        "{{ trigger.event.data.name }} a fini, en {{ trigger.event.data.duree_minutes }} minutes.",
+                    ));
+                }
+                if let (Some(true), Some((tts, speakers))) = (o.annonce, &house.announce) {
+                    actions.push(json!({
+                        "action": "tts.speak",
+                        "target": { "entity_id": tts },
+                        "data": {
+                            "media_player_entity_id": speakers,
+                            "message": "{{ trigger.event.data.name }} a fini.",
+                        },
+                    }));
+                }
+                (
+                    vec![json!({ "trigger": "event", "event_type": "appareil_termine" })],
+                    Vec::new(),
+                    actions,
+                    "Lessive : la machine a fini",
+                )
+            }
         };
     if actions.is_empty() {
         return Err(format!(
@@ -645,6 +705,8 @@ mod tests {
             simulation: Some("switch.simulation_presence".into()),
             people: true,
             sun: true,
+            appliances: vec![device("sensor.lave_linge", "Lave-linge")],
+            announce: Some(("tts.annonces".into(), vec!["media_player.salon".into()])),
         }
     }
 
@@ -802,6 +864,32 @@ mod tests {
         );
         let back = &config["actions"][0]["choose"][1]["sequence"];
         assert_eq!(back[0]["action"], "switch.turn_off");
+    }
+
+    #[test]
+    fn the_laundry_is_announced() {
+        let config = built(Preset::Lessive, Options::default());
+        assert_eq!(config["triggers"][0]["event_type"], "appareil_termine");
+        assert_eq!(config["actions"][0]["action"], "notify.send_message");
+        assert_eq!(
+            config["actions"][0]["data"]["message"],
+            "{{ trigger.event.data.name }} a fini, en {{ trigger.event.data.duree_minutes }} minutes."
+        );
+        assert_eq!(config["actions"][1]["action"], "tts.speak");
+        assert_eq!(
+            config["actions"][1]["data"]["media_player_entity_id"],
+            json!(["media_player.salon"])
+        );
+        // Sans enceintes : le message seulement.
+        let mut quiet = house();
+        quiet.announce = None;
+        let config = build(Preset::Lessive, &Options::default(), &quiet, true)
+            .unwrap()
+            .to_json();
+        assert_eq!(config["actions"].as_array().unwrap().len(), 1);
+        // Sans machine : pas proposée.
+        quiet.appliances.clear();
+        assert!(Preset::Lessive.unavailable(&quiet).is_some());
     }
 
     #[test]

@@ -10,6 +10,7 @@ const PRESET_ICONS = {
   nuit: ICONS.moon,
   matin: ICONS.illuminance,
   vacances: ["M4 8h16v12H4z", "M9 8V5h6v3", "M4 13h16"],
+  lessive: ["M5 3h14v18H5z", "M5 7h14", "M12 10a4 4 0 1 0 0 8 4 4 0 1 0 0-8z", "M8 5h.01"],
 };
 
 const presets = { list: [], house: null, editable: false, open: new Set() };
@@ -49,6 +50,12 @@ function presetSummary(preset) {
   }
   if (o.ouvertures && h.openings) parts.push("prévenir si une porte ou une fenêtre est ouverte");
   if (preset.name === "vacances" && o.simulation && h.simulation) parts.push("simulation de présence");
+  if (preset.name === "lessive") {
+    const machines = (h.appliances ?? []).map((a) => a.name).join(", ");
+    if (machines) parts.push(machines);
+    if (o.notifier) parts.push("message sur le téléphone");
+    if (o.annonce && h.announce) parts.push("annonce sur les enceintes");
+  }
   return parts.join(" · ");
 }
 
@@ -148,6 +155,9 @@ function presetFields(name, draft) {
     if (h.covers) fields.push(presetCheck(draft, "volets", "Ouvrir les volets"));
     if (h.covers && h.bedroom_covers) fields.push(presetCheck(draft, "chambres", `Aussi ceux des chambres (${count(h.bedroom_covers, "volet", "volets")})`));
     fields.push(...presetHeating(draft, "Remettre le chauffage"));
+  } else if (name === "lessive") {
+    fields.push(presetCheck(draft, "notifier", "Un message sur le téléphone (« Lave-linge a fini, en 92 minutes »)"));
+    if (h.announce) fields.push(presetCheck(draft, "annonce", "L'annoncer sur les enceintes"));
   } else if (name === "vacances") {
     fields.push(presetNumber(draft, "apres_heures", "Quand la maison est vide depuis", { min: 1, max: 24, unit: "h" }));
     fields.push(...presetHeating(draft, "Mettre le chauffage en hors-gel"));

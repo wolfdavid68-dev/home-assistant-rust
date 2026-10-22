@@ -24,6 +24,7 @@
 //! ha-server freebox track <MAC> <nom>  suit la présence d'un appareil
 //! ha-server timetree pair         associe le compte TimeTree de la maison
 //! ha-server iglou pair            relie la liste de courses de l'appli Iglou
+//! ha-server smartthings pair      associe la maison SmartThings de Samsung
 //! ha-server sonos                 liste les enceintes Sonos trouvées
 //! ha-server voix "<phrase>"       essaie la voix des annonces (essai-voix.wav)
 //! ha-server ecoute <fichier.wav>  essaie l'écoute de la tablette (Whisper, étape 84)
@@ -179,6 +180,7 @@ async fn main() -> ExitCode {
         ["freebox", rest @ ..] => cli::freebox_command(rest).await,
         ["timetree", rest @ ..] => cli::timetree_command(rest).await,
         ["iglou", rest @ ..] => cli::iglou_command(rest).await,
+        ["smartthings", rest @ ..] => cli::smartthings_command(rest).await,
         ["sonos"] => match sonos_hosts() {
             Ok(hosts) => cli::list_sonos(&hosts).await,
             Err(error) => Err(error.into()),
@@ -734,6 +736,21 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
             None
         }
     };
+    // SmartThings de Samsung (étape 86).
+    let smartthings = match store.smartthings_account().await {
+        Ok(Some(_)) => Some(ha_smartthings::SmartThings::start(
+            store.clone(),
+            smartthings_endpoint(),
+            Arc::clone(&core),
+        )),
+        Ok(None) => None,
+        Err(error) => {
+            warn!(
+                "SmartThings : association illisible ({error}). Refais « ha-server smartthings pair »."
+            );
+            None
+        }
+    };
     let freebox = match ha_freebox::pairing::load(&store).await {
         Ok(pairing) => {
             pairing.map(|pairing| Freebox::start(pairing, store.clone(), Arc::clone(&core)))
@@ -773,11 +790,14 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     let mut simulation = if mqtt.is_none()
         && hue.is_none()
         && somfy.is_none()
+        && smartthings.is_none()
         && freebox.is_none()
         && teleinfo.is_none()
         && sonos.is_none()
     {
-        info!("aucun appareil configuré (MQTT, Hue, Somfy, Freebox, Sonos) : appareils simulés");
+        info!(
+            "aucun appareil configuré (MQTT, Hue, Somfy, SmartThings, Freebox, Sonos) : appareils simulés"
+        );
         Some(tokio::spawn(simulate_devices(Arc::clone(&core))))
     } else {
         None
@@ -875,6 +895,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     }
     if let Some(somfy) = somfy {
         somfy.stop().await;
+    }
+    if let Some(smartthings) = smartthings {
+        smartthings.stop().await;
     }
     if let Some(hue) = hue {
         hue.stop().await;
@@ -1055,6 +1078,16 @@ pub(crate) fn timetree_api() -> String {
         .ok()
         .filter(|url| url.starts_with("http://127.0.0.1:"))
         .unwrap_or_else(|| ha_ics::timetree::API.to_owned())
+}
+
+/// Où joindre SmartThings. `HA_SMARTTHINGS_API` ne sert qu'aux essais, avec
+/// un faux SmartThings sur ce PC (`http://127.0.0.1:…`) : toute autre
+/// adresse est ignorée.
+pub(crate) fn smartthings_endpoint() -> ha_smartthings::api::Endpoint {
+    std::env::var("HA_SMARTTHINGS_API")
+        .ok()
+        .and_then(|url| ha_smartthings::api::Endpoint::local(&url))
+        .unwrap_or_else(ha_smartthings::api::Endpoint::smartthings)
 }
 
 /// `HA_SONOS` : les enceintes (vide : les chercher).
