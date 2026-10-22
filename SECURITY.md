@@ -71,6 +71,10 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
   les sauvegardes), servie avec `Cache-Control: no-store` à un compte connecté ; cachée aux invités ; seuls le JPEG et le
   PNG sont acceptés (reconnus à leur signature), 2 Mio au plus, 32 caméras au plus. ring-mqtt : compte Ring partagé
   (retirable depuis l'appli Ring), Mosquitto écoute sur `127.0.0.1` avec un compte par programme.
+- Installation du mini-PC (étape 83) : Mosquitto sur `127.0.0.1` seulement, sans anonyme, un compte par
+  programme, mots de passe de 32 caractères tirés au hasard rangés dans `/etc/ha-maison/secrets` ; la voix (Piper)
+  vérifiée par son empreinte SHA-256 ; ring-mqtt dans un conteneur dont l'image est épinglée par son empreinte ;
+  Docker installé seulement avec `--ring`, le serveur jamais dans Docker.
 - Agendas en ligne (ICS) : HTTPS seulement, sans redirection, 2 Mio au plus ; l'adresse (qui peut contenir une
   clé secrète) n'est jamais journalisée ni publiée, seulement le nom du site ; lecture seule.
 - Alexa (faux pont Hue, sans authentification possible) : désactivée par défaut ; seuls les appareils listés

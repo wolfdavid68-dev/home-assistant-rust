@@ -21,6 +21,9 @@ User=ha-maison
 Group=ha-maison
 # Le compteur Linky sur un module USB (/dev/ttyUSB0).
 SupplementaryGroups=dialout
+# Les réglages faits par l'installation (MQTT, voix), puis les tiens, qui
+# passent devant (étape 83).
+EnvironmentFile=-/etc/ha-maison/ha-maison.auto.env
 EnvironmentFile=/etc/ha-maison/ha-maison.env
 ExecStart=/opt/ha-maison/ha-server
 WorkingDirectory=/var/lib/ha-maison

@@ -2,14 +2,22 @@
 # Installe, ou met à jour, le serveur de la maison sur un mini-PC sous
 # Debian. À lancer depuis le dossier décompressé :
 #
-#   sudo ./installer.sh
+#   sudo ./installer.sh                   le serveur, et tout ce qu'il lui faut
+#   sudo ./installer.sh --sonos --ring    en plus : la voix des annonces sur les
+#                                         enceintes Sonos, et la sonnette Ring
 #
-# Guide : docs/mini-pc.md
+# Les options sont retenues (/etc/ha-maison/options) : la mise à jour de
+# chaque nuit les garde. Guide : docs/mini-pc.md
 #
 # Ce que fait le script (et rien d'autre) :
 #   - un compte système « ha-maison », sans mot de passe ni shell ;
 #   - le programme dans /opt/ha-maison, la commande « ha-maison » ;
 #   - les réglages dans /etc/ha-maison (jamais remplacés ensuite) ;
+#   - les mises à jour de sécurité de Debian, automatiques ;
+#   - le facteur MQTT (Mosquitto), pour les programmes du mini-PC seulement,
+#     avec des mots de passe tirés au hasard (étape 83) ;
+#   - avec --sonos : la voix (Piper), téléchargée et vérifiée ;
+#   - avec --ring : ring-mqtt, dans un conteneur à la version épinglée ;
 #   - le service systemd, démarré tout de suite et à chaque allumage ;
 #   - la mise à jour automatique, chaque nuit (mise-a-jour.sh).
 # Les données restent dans /var/lib/ha-maison* : une mise à jour n'y touche pas.
@@ -30,6 +38,21 @@ case "$(uname -m)" in
   *) die "ce programme est fait pour un PC 64 bits (x86_64), pas pour $(uname -m)" ;;
 esac
 version=$(./ha-server --version) || die "ha-server ne démarre pas sur cette machine"
+
+# Les options : celles d'avant (la mise à jour de chaque nuit n'en donne
+# aucune), plus celles données maintenant.
+OPTIONS=/etc/ha-maison/options
+avec_sonos=false
+avec_ring=false
+if grep -qx sonos "$OPTIONS" 2>/dev/null; then avec_sonos=true; fi
+if grep -qx ring "$OPTIONS" 2>/dev/null; then avec_ring=true; fi
+for option in "$@"; do
+  case "$option" in
+    --sonos) avec_sonos=true ;;
+    --ring) avec_ring=true ;;
+    *) die "option inconnue : $option (possibles : --sonos, --ring)" ;;
+  esac
+done
 echo "Installation de $version"
 
 # 1. Le compte du service.
@@ -60,6 +83,18 @@ for exemple in ./*.example.yaml; do
   [ -e "$exemple" ] || continue
   install -m 0644 "$exemple" /etc/ha-maison/
 done
+
+{
+  echo "# Les options de l'installation (installer.sh), gardées par les mises à jour."
+  if [ "$avec_sonos" = true ]; then echo sonos; fi
+  if [ "$avec_ring" = true ]; then echo ring; fi
+} >"$OPTIONS"
+chmod 0644 "$OPTIONS"
+
+# 3 bis. Tout ce qu'il faut autour du serveur (étape 83).
+# shellcheck disable=SC1091 # à côté de ce script, dans l'archive
+. ./tout-compris.sh
+tout_compris
 
 # 4. Le service, et sa mise à jour de chaque nuit. Celle-ci n'est activée
 # qu'à la première installation : si tu l'as arrêtée, elle le reste.
@@ -102,6 +137,11 @@ if grep -q '^HA_TLS=on' /etc/ha-maison/ha-maison.env; then
   echo "  http://${adresse}:8123/maison-ca.crt   (voir docs/https-maison.md)"
 else
   echo "Tableau de bord : http://${adresse}:8123/"
+fi
+if [ "$avec_ring" = true ] && [ ! -s /var/lib/ring-mqtt/ring-state.json ]; then
+  echo
+  echo "Sonnette Ring : sur ton téléphone, ouvre http://${adresse}:55123/"
+  echo "et connecte le compte Ring (le code arrive par SMS). Une seule fois."
 fi
 if [ "$premiere_fois" = true ]; then
   echo

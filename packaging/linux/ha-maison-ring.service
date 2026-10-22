@@ -1,0 +1,27 @@
+# La sonnette Ring pour le serveur de la maison (étape 83) : ring-mqtt, dans
+# un conteneur. Installé et démarré par « sudo ./installer.sh --ring ».
+#
+# L'image est épinglée par son empreinte : seule cette version exacte peut
+# tourner. Elle change avec les mises à jour du serveur (chaque nuit), jamais
+# en cachette. Guide : docs/sonnette.md
+[Unit]
+Description=Sonnette Ring (ring-mqtt) pour le serveur de la maison
+Documentation=https://github.com/wolfdavid68-dev/home-assistant-rust/blob/main/docs/sonnette.md
+Wants=network-online.target
+After=network-online.target docker.service mosquitto.service
+Requires=docker.service
+
+[Service]
+Environment=IMAGE=docker.io/tsightler/ring-mqtt:5.9.3@sha256:4a4e0db460d7023aa5851ff25491401fd23b2fd153b7269af481f0953cd6f00a
+# Sans réseau au démarrage, l'image déjà là suffit.
+ExecStartPre=-/usr/bin/docker pull ${IMAGE}
+ExecStartPre=-/usr/bin/docker rm -f ha-maison-ring
+# --network host : il parle au Mosquitto du mini-PC (127.0.0.1) ; la page de
+# connexion à Ring (port 55123) ne s'ouvre que tant qu'il n'a pas de jeton.
+ExecStart=/usr/bin/docker run --rm --name ha-maison-ring --network host --pull never -v /var/lib/ring-mqtt:/data ${IMAGE}
+ExecStop=/usr/bin/docker stop ha-maison-ring
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
