@@ -56,15 +56,25 @@ pub struct Agenda(Background);
 impl Agenda {
     /// Publie les listes et l'agenda, puis répond aux appels de service.
     pub async fn start(store: Store, core: Arc<Core>) -> Self {
+        Self::start_without(store, core, &[]).await
+    }
+
+    /// Comme [`Agenda::start`], sans les listes `without` : une autre
+    /// intégration les tient (la liste de courses d'Iglou, étape 81).
+    pub async fn start_without(store: Store, core: Arc<Core>, without: &[&str]) -> Self {
         let events = core.bus.subscribe();
         let mut live = Live {
             store,
             core,
+            lists: LISTS
+                .into_iter()
+                .filter(|(list, _)| !without.contains(list))
+                .collect(),
             window: Vec::new(),
             loaded_at: None,
             published: None,
         };
-        for (list, _) in LISTS {
+        for (list, _) in live.lists.clone() {
             live.publish_list(list).await;
         }
         live.refresh_calendar(true).await;
@@ -85,6 +95,8 @@ pub const DOMAINS: [&str; 2] = ["todo", "calendar"];
 struct Live {
     store: Store,
     core: Arc<Core>,
+    /// Les listes tenues ici.
+    lists: Vec<(&'static str, &'static str)>,
     /// Les rendez-vous de la fenêtre publiée, relus de temps en temps.
     window: Vec<CalendarEvent>,
     loaded_at: Option<Instant>,
@@ -129,7 +141,7 @@ impl Live {
         origin: &Origin,
     ) {
         let id = entity_id.as_str();
-        let result = if LISTS.iter().any(|(list, _)| *list == id) {
+        let result = if self.lists.iter().any(|(list, _)| *list == id) {
             self.call_list(id, service, data).await
         } else if id == CALENDAR.0 {
             self.call_calendar(service, data, origin).await

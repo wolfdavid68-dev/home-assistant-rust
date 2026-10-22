@@ -16,6 +16,9 @@ Comme dans Home Assistant, ce sont des entités :
 | `todo.taches`     | Tâches               | idem                                               |
 | `calendar.maison` | Agenda de la maison  | `on` pendant un rendez-vous, `off` sinon           |
 
+Avec l'appli **Iglou** reliée ([étape 81](iglou.md)), `todo.courses` devient la liste de courses
+d'Iglou : mêmes services, mais elle vit dans l'appli de la famille.
+
 ## L'utiliser
 
 Sur le tableau de bord, section **Agenda et listes** :
