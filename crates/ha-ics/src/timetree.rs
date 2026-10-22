@@ -29,6 +29,9 @@ use zeroize::Zeroizing;
 pub const API: &str = "https://timetreeapp.com/api/v1";
 /// L'en-tête que le site TimeTree envoie avec chaque requête.
 const AGENT: &str = "web/2.1.0/fr";
+/// Le nom du programme. Sans `User-Agent`, TimeTree refuse toute requête
+/// (400, code -401), même avec le bon mot de passe.
+const USER_AGENT: &str = concat!("ha-server/", env!("CARGO_PKG_VERSION"));
 /// Taille d'une réponse au plus.
 const MAX_BYTES: usize = 2 << 20;
 /// Morceaux d'événements lus au plus (chacun en compte des centaines).
@@ -148,6 +151,7 @@ impl Client {
             .put(format!("{}/auth/email/signin", self.base))
             .header("Content-Type", "application/json")
             .header("X-Timetreea", AGENT)
+            .header(reqwest::header::USER_AGENT, USER_AGENT)
             .body(body.as_bytes().to_vec())
             .send()
             .await
@@ -169,7 +173,12 @@ impl Client {
                 Some(-495) => TimeTreeError::RateLimited,
                 _ if status.as_u16() == 401 => TimeTreeError::Credentials,
                 _ if status.as_u16() == 429 => TimeTreeError::RateLimited,
-                _ => TimeTreeError::Unexpected(format!("connexion : {}", status.as_u16())),
+                // Le code de TimeTree aide à comprendre un refus nouveau.
+                Some(code) => TimeTreeError::Unexpected(format!(
+                    "connexion : {}, code {code}",
+                    status.as_u16()
+                )),
+                None => TimeTreeError::Unexpected(format!("connexion : {}", status.as_u16())),
             });
         }
         let session =
@@ -194,6 +203,7 @@ impl Client {
                 .get(format!("{}{path}", self.base))
                 .header("Content-Type", "application/json")
                 .header("X-Timetreea", AGENT)
+                .header(reqwest::header::USER_AGENT, USER_AGENT)
                 .header("Cookie", format!("_session_id={}", session.as_str()))
                 .send()
                 .await
