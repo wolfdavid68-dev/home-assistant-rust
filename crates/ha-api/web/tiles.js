@@ -804,27 +804,60 @@ function addForm(placeholder, label, onSubmit, extra = []) {
   return form;
 }
 
-function todoTile(state) {
-  const items = (Array.isArray(state.attributes.items) ? state.attributes.items : [])
-    .filter((item) => item && typeof item.summary === "string");
-  const left = items.filter((item) => item.status !== "completed").length;
+/** Les lignes d'une liste : la case, le texte, la date ou (Iglou, étape 81)
+ *  la quantité, et « × » quand l'élément peut être retiré. Pour Iglou, un
+ *  titre par frigo ou congélateur. */
+function todoRows(state, items) {
+  const iglou = state.attributes.source === "iglou";
   const command = (service, data = {}) => callService("todo", service, { entity_id: state.entity_id, ...data });
-  const rows = items.map((item) => {
+  const rows = [];
+  let group = null;
+  for (const item of items) {
+    if (iglou && typeof item.group === "string" && item.group !== group) {
+      group = item.group;
+      rows.push(el("li", { class: "todo-group", text: group }));
+    }
     const done = item.status === "completed";
-    const box = el("input", { type: "checkbox", "aria-label": `${item.summary} : fait` });
+    const box = el("input", { type: "checkbox", "aria-label": `${item.summary} : ${iglou ? "dans le panier" : "fait"}` });
     box.checked = done;
     box.addEventListener("change", () => command("update_item", { item: item.uid, status: box.checked ? "completed" : "needs_action" }));
-    const remove = el("button", { type: "button", class: "item-remove", "aria-label": `Retirer ${item.summary}`, text: "×" });
-    remove.addEventListener("click", () => command("remove_item", { item: item.uid }));
-    const due = typeof item.due === "string" ? el("span", { class: "item-due", text: shortDate.format(new Date(`${item.due}T12:00:00`)) }) : "";
-    return el("li", { class: done ? "done" : "" }, el("label", {}, box, el("span", { text: item.summary }), due), remove);
-  });
+    let extra = "";
+    if (iglou) {
+      const text = [item.out === true ? "épuisé" : "", typeof item.quantity === "string" ? item.quantity : ""].filter(Boolean).join(" · ");
+      extra = el("span", { class: item.out === true ? "item-due out" : "item-due", text });
+    } else if (typeof item.due === "string") {
+      extra = el("span", { class: "item-due", text: shortDate.format(new Date(`${item.due}T12:00:00`)) });
+    }
+    let remove = "";
+    if (!iglou || item.removable === true) {
+      remove = el("button", { type: "button", class: "item-remove", "aria-label": `Retirer ${item.summary}`, text: "×" });
+      remove.addEventListener("click", () => command("remove_item", { item: item.uid }));
+    }
+    rows.push(el("li", { class: done ? "done" : "" }, el("label", {}, box, el("span", { text: item.summary }), extra), remove));
+  }
+  return rows;
+}
+
+function todoItems(state) {
+  return (Array.isArray(state.attributes.items) ? state.attributes.items : [])
+    .filter((item) => item && typeof item.summary === "string" && typeof item.uid === "string");
+}
+
+function todoTile(state) {
+  const items = todoItems(state);
+  const iglou = state.attributes.source === "iglou";
+  const left = items.filter((item) => item.status !== "completed").length;
+  const command = (service, data = {}) => callService("todo", service, { entity_id: state.entity_id, ...data });
+  const status = iglou
+    ? (left === 0 ? "Rien à acheter · Iglou" : `${left} à acheter · Iglou`)
+    : (left === 0 ? "Rien à faire" : `${left} à faire`);
   const children = [
-    tileHead(state, ICONS.list, left === 0 ? "Rien à faire" : `${left} à faire`),
-    rows.length > 0 ? el("ul", { class: "todo-list" }, ...rows) : el("p", { class: "muted", text: "La liste est vide." }),
+    tileHead(state, ICONS.list, status),
+    items.length > 0 ? el("ul", { class: "todo-list" }, ...todoRows(state, items)) : el("p", { class: "muted", text: "La liste est vide." }),
     addForm("Ajouter…", "Ajouter", (text) => command("add_item", { item: text })),
   ];
-  if (items.length > left) {
+  // Avec Iglou, les courses se rangent dans l'appli (elle remet le frigo à plein).
+  if (items.length > left && !iglou) {
     const clear = el("button", { type: "button", class: "ghost small", text: "Retirer ce qui est fait" });
     clear.addEventListener("click", () => command("remove_completed_items"));
     children.push(clear);
