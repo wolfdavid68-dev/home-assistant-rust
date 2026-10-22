@@ -955,6 +955,28 @@ fn answer(
         }
         return list(&found);
     }
+    // « Le linge est fini ? », « où en est la machine ? » : les machines
+    // suivies (lave-linge SmartThings, étape 86).
+    let wanted = |machine: &str| -> bool {
+        words.iter().any(|w| match w.as_str() {
+            "vaisselle" => machine == "lave-vaisselle",
+            "seche" | "sechage" | "sechoir" => machine == "sèche-linge",
+            "linge" | "lessive" => machine != "lave-vaisselle",
+            "machine" => true,
+            _ => false,
+        })
+    };
+    let machines: Vec<&Device> = devices
+        .iter()
+        .filter(|d| {
+            d.attr("appareil")
+                .and_then(Value::as_str)
+                .is_some_and(wanted)
+        })
+        .collect();
+    if !machines.is_empty() {
+        return list(&machines);
+    }
     match find(devices, words, plural, hint, &["light", "cover", "switch"]) {
         Ok(target) if !target.devices.is_empty() => list(&target.devices),
         Ok(_) | Err(NotUnderstood::NoDevice) => NotUnderstood::NoDevice.message(),
@@ -1006,6 +1028,16 @@ pub fn amount(order: &Order) -> Option<String> {
 #[must_use]
 pub fn describe(device: &Device) -> String {
     let state = device.state.state();
+    // Une machine (lave-linge SmartThings, étape 86) : « en marche, fini vers 11:20 ».
+    if device.attr("appareil").is_some() {
+        let lower = state.to_lowercase();
+        return match device.attr("fin_heure").and_then(Value::as_str) {
+            Some(end) if matches!(state, "En marche" | "En pause") => {
+                format!("{lower}, fini vers {end}")
+            }
+            _ => lower,
+        };
+    }
     let unit = device
         .attr("unit_of_measurement")
         .and_then(Value::as_str)
@@ -1521,6 +1553,37 @@ mod tests {
         assert_eq!(
             understand("qui est à la maison ?", &devices),
             Ok(Understood::Answer("Je ne peux pas te le dire.".into()))
+        );
+    }
+
+    #[test]
+    fn a_machine_says_when_it_ends() {
+        let core = Core::new();
+        let washer = device(
+            &core,
+            "sensor.lave_linge",
+            "En marche",
+            "Lave-linge",
+            Some("Buanderie"),
+            json!({"appareil": "lave-linge", "fin_heure": "11:20"}),
+        );
+        let expected = Ok(Understood::Answer(
+            "Lave-linge (Buanderie) : en marche, fini vers 11:20.".into(),
+        ));
+        assert_eq!(
+            understand(
+                "Est-ce que le lave-linge a fini ?",
+                std::slice::from_ref(&washer)
+            ),
+            expected
+        );
+        assert_eq!(
+            understand("Le linge est fini ?", std::slice::from_ref(&washer)),
+            expected
+        );
+        assert_eq!(
+            understand("Où en est la machine ?", std::slice::from_ref(&washer)),
+            expected
         );
     }
 

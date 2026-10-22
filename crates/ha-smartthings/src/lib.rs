@@ -25,3 +25,6 @@ pub use error::SmartThingsError;
 pub const ID: &str = "smartthings";
 /// Son nom affiché.
 pub const NAME: &str = "SmartThings";
+/// L'évènement d'une machine qui a fini son cycle : le même que celui des
+/// appareils suivis par leur prise (`ha_derived::APPLIANCE_FINISHED`).
+pub const APPLIANCE_FINISHED: &str = "appareil_termine";

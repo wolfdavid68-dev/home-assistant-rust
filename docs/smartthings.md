@@ -18,9 +18,33 @@ les [automatisations](pretes.md) (« Départ » éteint aussi les lampes SmartTh
 | Thermostat | `climate.*` | consigne, mode |
 | Climatiseur Samsung | `climate.*` | marche, arrêt, consigne, froid/chaud/déshumidification/ventilation |
 | Serrure | `lock.*` | verrouiller, déverrouiller (mot de passe redemandé) |
-| Lave-linge, sèche-linge, lave-vaisselle | `sensor.*` : « en marche », « en pause », « arrêté », le cycle, l'heure de fin | lire |
+| Lave-linge, sèche-linge, lave-vaisselle | `sensor.*` : « En marche », « Terminé », le programme, l'heure de fin ; son énergie | lire, et être prévenu à la fin |
 | Capteur de porte, de mouvement, de fuite, de fumée, de présence | `binary_sensor.*` | lire |
 | Température, humidité, luminosité, pile, puissance, énergie | `sensor.*` | lire |
+
+### Le lave-linge (et le sèche-linge, le lave-vaisselle)
+
+C'est souvent la raison d'avoir SmartThings. La maison suit chaque cycle :
+
+| | Où | Exemple |
+|---|---|---|
+| L'état | `sensor.lave_linge` | « Arrêt », « En marche », « En pause », « Terminé » |
+| Le programme, la fin prévue | ses attributs `cycle`, `reste_minutes`, `fin_heure`, `progression` | « rinçage », 47 min, fin vers 10:30, 62 % |
+| Le dernier cycle | `dernier_cycle_minutes`, `dernier_cycle_kwh` | 92 min, 0,85 kWh |
+| L'énergie consommée | `sensor.lave_linge_energie` (kWh, pour le [bilan](energie.md)) | 153,15 kWh |
+
+- **La tuile** dit « En marche · 47 min », le programme, l'heure de fin et une barre de progression.
+- **La vue hub** de la tablette l'ajoute à sa phrase : « Lave-linge : fin vers 10:30 », puis
+  « Lave-linge a fini » pendant 2 heures.
+- **À la voix** : « Le linge est fini ? », « Où en est la machine ? » → « Lave-linge : en marche,
+  fini vers 10:30 ».
+- **À la fin du cycle**, l'évènement `appareil_termine` part, avec la durée et l'énergie : le même
+  que pour une machine suivie par sa prise ([étape 67](assistants.md)). L'automatisation toute
+  prête **Lessive** ([étape 85](pretes.md)) envoie alors « Lave-linge a fini, en 92 minutes » sur
+  le téléphone, et l'annonce sur les enceintes Sonos s'il y en a.
+
+La machine ne se commande pas depuis la maison (ni marche ni arrêt) : on ne lance pas une lessive
+à distance sans y avoir réfléchi.
 
 Chaque appareil garde **sa pièce SmartThings** : le tableau de bord le range dans la pièce du même
 nom (ou en crée une), Assist comprend « les lumières du salon », et les automatisations toutes
@@ -150,7 +174,9 @@ Pour couper aussi l'accès côté Samsung : `smartthings apps:delete` sur l'appl
 Essayé contre un faux SmartThings (sur le PC) : l'association avec la vraie commande, les jetons
 renouvelés et l'ancien refusé, six appareils lus avec leurs pièces, et depuis Assist « allume la
 lampe du salon à 40 % », « ferme le volet de la chambre », « mets la clim du salon à vingt-deux
-degrés » envoyés à SmartThings et relus. Pas encore essayé avec un vrai compte Samsung.
+degrés » envoyés à SmartThings et relus. Un lave-linge Samsung (capacités `washerOperatingState` et
+`samsungce.washerOperatingState`) : « En marche · 47 min » sur sa tuile et dans la phrase du hub,
+puis sa fin, l'évènement `appareil_termine` (0,85 kWh) et le message de l'automatisation Lessive. Pas encore essayé avec un vrai compte Samsung.
 
 ### Concepts utilisés
 

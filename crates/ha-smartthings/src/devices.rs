@@ -32,21 +32,109 @@ pub enum Kind {
     Thermostat,
     AirConditioner,
     Lock,
-    /// Un lave-linge, sèche-linge ou lave-vaisselle : la capacité de son état.
-    Appliance(&'static str),
+    /// Un lave-linge, sèche-linge ou lave-vaisselle.
+    Appliance(Machine),
+}
+
+/// Les machines à cycle de Samsung (et des autres marques SmartThings).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Machine {
+    Washer,
+    Dryer,
+    Dishwasher,
+}
+
+impl Machine {
+    const ALL: [Self; 3] = [Self::Washer, Self::Dryer, Self::Dishwasher];
+
+    /// La capacité standard : `machineState` (`run`, `pause`, `stop`),
+    /// `…JobState`, `completionTime`.
+    fn capability(self) -> &'static str {
+        match self {
+            Self::Washer => "washerOperatingState",
+            Self::Dryer => "dryerOperatingState",
+            Self::Dishwasher => "dishwasherOperatingState",
+        }
+    }
+
+    /// La capacité propre à Samsung : `operatingState` (`running`, `paused`,
+    /// `ready`), `jobState`, `remainingTime` (minutes), `progress` (%).
+    fn samsung_capability(self) -> &'static str {
+        match self {
+            Self::Washer => "samsungce.washerOperatingState",
+            Self::Dryer => "samsungce.dryerOperatingState",
+            Self::Dishwasher => "samsungce.dishwasherOperatingState",
+        }
+    }
+
+    fn job_attribute(self) -> &'static str {
+        match self {
+            Self::Washer => "washerJobState",
+            Self::Dryer => "dryerJobState",
+            Self::Dishwasher => "dishwasherJobState",
+        }
+    }
+
+    /// « lave-linge », pour l'attribut `appareil`.
+    fn name(self) -> &'static str {
+        match self {
+            Self::Washer => "lave-linge",
+            Self::Dryer => "sèche-linge",
+            Self::Dishwasher => "lave-vaisselle",
+        }
+    }
+}
+
+/// Où en est une machine : les mêmes états que les appareils à cycle
+/// suivis par leur prise (étape 67), plus la pause.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Phase {
+    #[default]
+    Off,
+    Running,
+    Paused,
+    Finished,
+}
+
+impl Phase {
+    /// L'état publié.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Off => "Arrêt",
+            Self::Running => "En marche",
+            Self::Paused => "En pause",
+            Self::Finished => "Terminé",
+        }
+    }
+}
+
+/// Le cycle en cours d'une machine, et le dernier terminé.
+#[derive(Debug, Clone, Default)]
+struct Cycle {
+    phase: Phase,
+    started: Option<std::time::SystemTime>,
+    energy_at_start: Option<f64>,
+    /// Le dernier cycle : (minutes, kWh si connus).
+    last: Option<(u64, Option<f64>)>,
+}
+
+/// Un cycle qui vient de se terminer : l'évènement `appareil_termine`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Finished {
+    pub entity_id: EntityId,
+    pub name: String,
+    pub minutes: u64,
+    pub energy_kwh: Option<f64>,
 }
 
 impl Kind {
     fn of(device: &Device) -> Option<Self> {
         let has = |name: &str| device.capabilities.iter().any(|c| c == name);
         let category = |name: &str| device.categories.iter().any(|c| c == name);
-        for appliance in [
-            "washerOperatingState",
-            "dryerOperatingState",
-            "dishwasherOperatingState",
-        ] {
-            if has(appliance) {
-                return Some(Self::Appliance(appliance));
+        for machine in Machine::ALL {
+            if has(machine.capability()) || has(machine.samsung_capability()) {
+                return Some(Self::Appliance(machine));
             }
         }
         Some(if has("airConditionerMode") {
@@ -170,6 +258,7 @@ struct Tracked {
     sensors: Vec<(Sensor, EntityId)>,
     status: Value,
     available: bool,
+    cycle: Cycle,
 }
 
 impl Tracked {
@@ -192,6 +281,47 @@ impl Tracked {
 
     fn number(&self, capability: &str, attribute: &str) -> Option<f64> {
         self.value(capability, attribute).and_then(as_f64)
+    }
+
+    /// L'énergie totale consommée, en kWh : `energyMeter`, sinon le relevé
+    /// des appareils Samsung (`powerConsumptionReport`, en Wh).
+    fn energy_kwh(&self) -> Option<f64> {
+        if let Some(value) = self.number("energyMeter", "energy") {
+            return Some(if self.unit("energyMeter", "energy") == Some("Wh") {
+                value / 1000.0
+            } else {
+                value
+            });
+        }
+        self.value("powerConsumptionReport", "powerConsumption")?
+            .get("energy")
+            .and_then(as_f64)
+            .map(|wh| wh / 1000.0)
+    }
+
+    /// Ce que dit la machine : en marche, en pause, à l'arrêt (`None` :
+    /// inconnu), et si son programme est fini.
+    fn machine(&self, machine: Machine) -> (Option<Phase>, bool) {
+        let samsung = machine.samsung_capability();
+        let phase = match self.text(machine.capability(), "machineState") {
+            Some("run") => Some(Phase::Running),
+            Some("pause") => Some(Phase::Paused),
+            Some("stop") => Some(Phase::Off),
+            _ => match self.text(samsung, "operatingState") {
+                Some("running") => Some(Phase::Running),
+                Some("paused") => Some(Phase::Paused),
+                Some("ready") => Some(Phase::Off),
+                _ => None,
+            },
+        };
+        let finished = matches!(self.job(machine), Some("finish" | "finished"));
+        (phase, finished)
+    }
+
+    fn job(&self, machine: Machine) -> Option<&str> {
+        self.text(machine.capability(), machine.job_attribute())
+            .or_else(|| self.text(machine.samsung_capability(), "jobState"))
+            .filter(|job| *job != "none")
     }
 
     fn unit(&self, capability: &str, attribute: &str) -> Option<&str> {
@@ -273,7 +403,12 @@ impl Devices {
             let kind = Kind::of(&device);
             let sensors: Vec<Sensor> = Sensor::ALL
                 .into_iter()
-                .filter(|s| device.capabilities.iter().any(|c| c == s.capability().0))
+                .filter(|s| {
+                    device.capabilities.iter().any(|c| {
+                        c == s.capability().0
+                            || (*s == Sensor::Energy && c == "powerConsumptionReport")
+                    })
+                })
                 // La température d'un thermostat est dans le thermostat.
                 .filter(|s| {
                     !(*s == Sensor::Temperature
@@ -320,6 +455,10 @@ impl Devices {
                 categories: device.categories,
                 primary,
                 sensors: sensor_ids,
+                cycle: previous
+                    .as_ref()
+                    .map(|p| p.cycle.clone())
+                    .unwrap_or_default(),
                 status: previous.map_or(Value::Null, |p| p.status),
                 available: true,
             };
@@ -404,13 +543,25 @@ impl Devices {
         (primary, ids)
     }
 
-    /// Le nouvel état d'un appareil (`components/main/status`).
-    pub fn apply_status(&mut self, device_id: &str, reading: Value, states: &StateMachine) {
-        if let Some(tracked) = self.by_device.get_mut(device_id) {
-            tracked.status = reading;
-            tracked.available = true;
-            publish(tracked, states);
-        }
+    /// Le nouvel état d'un appareil (`components/main/status`). Rend le
+    /// cycle d'une machine qui vient de se terminer.
+    pub fn apply_status(
+        &mut self,
+        device_id: &str,
+        reading: Value,
+        states: &StateMachine,
+    ) -> Option<Finished> {
+        let tracked = self.by_device.get_mut(device_id)?;
+        tracked.status = reading;
+        tracked.available = true;
+        let finished = match tracked.kind {
+            Some(Kind::Appliance(machine)) => {
+                follow_cycle(tracked, machine, std::time::SystemTime::now())
+            }
+            _ => None,
+        };
+        publish(tracked, states);
+        finished
     }
 
     /// L'appareil ne répond plus (retiré du compte, hors ligne).
@@ -464,6 +615,62 @@ impl Devices {
             device_id: device_id.clone(),
             commands,
         })
+    }
+}
+
+/// Suit le cycle d'une machine : son début, sa fin (avec sa durée et son
+/// énergie). Un état inconnu ne change rien.
+fn follow_cycle(
+    tracked: &mut Tracked,
+    machine: Machine,
+    now: std::time::SystemTime,
+) -> Option<Finished> {
+    let (said, job_finished) = tracked.machine(machine);
+    let said = said?;
+    let energy = tracked.energy_kwh();
+    let cycle = &mut tracked.cycle;
+    let before = cycle.phase;
+    let running = |phase: Phase| matches!(phase, Phase::Running | Phase::Paused);
+    match said {
+        Phase::Running | Phase::Paused => {
+            if !running(before) {
+                cycle.started = Some(now);
+                cycle.energy_at_start = energy;
+            }
+            cycle.phase = said;
+            None
+        }
+        _ if running(before) => {
+            cycle.phase = Phase::Finished;
+            let minutes = cycle
+                .started
+                .and_then(|start| now.duration_since(start).ok())
+                .map_or(0, |d| d.as_secs().div_ceil(60));
+            let used = match (energy, cycle.energy_at_start) {
+                (Some(end), Some(start)) if end >= start => {
+                    Some(((end - start) * 1000.0).round() / 1000.0)
+                }
+                _ => None,
+            };
+            cycle.last = Some((minutes, used));
+            cycle.started = None;
+            Some(Finished {
+                entity_id: tracked.primary.clone()?,
+                name: tracked.label.clone(),
+                minutes,
+                energy_kwh: used,
+            })
+        }
+        // Déjà fini : on le reste jusqu'au prochain cycle.
+        _ if before == Phase::Finished => None,
+        _ => {
+            cycle.phase = if job_finished {
+                Phase::Finished
+            } else {
+                Phase::Off
+            };
+            None
+        }
     }
 }
 
@@ -839,28 +1046,103 @@ fn primary_state(tracked: &Tracked, kind: Kind, attributes: &mut Attributes) -> 
                 None => unknown(),
             }
         }
-        Kind::Appliance(capability) => {
-            let job = capability.replace("OperatingState", "JobState");
-            if let Some(job) = tracked.text(capability, &job) {
-                attributes.insert(
-                    "cycle".into(),
-                    json!(job.chars().take(64).collect::<String>()),
-                );
-            }
-            if let Some(end) = tracked.text(capability, "completionTime") {
-                attributes.insert(
-                    "fin".into(),
-                    json!(end.chars().take(64).collect::<String>()),
-                );
-            }
-            match tracked.text(capability, "machineState") {
-                Some("run") => "en marche".into(),
-                Some("pause") => "en pause".into(),
-                Some("stop") => "arrêté".into(),
-                _ => unknown(),
-            }
+        Kind::Appliance(machine) => {
+            appliance_attributes(tracked, machine, attributes, std::time::SystemTime::now());
+            tracked.cycle.phase.name().into()
         }
     }
+}
+
+/// Ce qu'on montre d'une machine : son programme, la fin prévue, le
+/// dernier cycle.
+fn appliance_attributes(
+    tracked: &Tracked,
+    machine: Machine,
+    attributes: &mut Attributes,
+    now: std::time::SystemTime,
+) {
+    attributes.insert("appareil".into(), json!(machine.name()));
+    attributes.insert("device_class".into(), json!("enum"));
+    attributes.insert(
+        "options".into(),
+        json!([
+            Phase::Off.name(),
+            Phase::Running.name(),
+            Phase::Paused.name(),
+            Phase::Finished.name()
+        ]),
+    );
+    if let Some(job) = tracked.job(machine) {
+        attributes.insert("cycle".into(), json!(job_name(job)));
+    }
+    if let Some((minutes, kwh)) = tracked.cycle.last {
+        attributes.insert("dernier_cycle_minutes".into(), json!(minutes));
+        if let Some(kwh) = kwh {
+            attributes.insert("dernier_cycle_kwh".into(), json!(kwh));
+        }
+    }
+    if !matches!(tracked.cycle.phase, Phase::Running | Phase::Paused) {
+        return;
+    }
+    let samsung = machine.samsung_capability();
+    if let Some(progress) = tracked
+        .number(samsung, "progress")
+        .filter(|p| (0.0..=100.0).contains(p))
+    {
+        attributes.insert("progression".into(), json!(progress.round()));
+    }
+    // La fin : l'heure annoncée, sinon le temps restant.
+    let end = tracked
+        .text(machine.capability(), "completionTime")
+        .and_then(|text| text.parse::<jiff::Timestamp>().ok())
+        .or_else(|| {
+            let left = tracked.number(samsung, "remainingTime")?;
+            let now = jiff::Timestamp::try_from(now).ok()?;
+            #[allow(
+                clippy::cast_possible_truncation,
+                reason = "minutes bornées juste avant"
+            )]
+            let left = left.clamp(0.0, 24.0 * 60.0) as i64;
+            now.checked_add(jiff::SignedDuration::from_mins(left)).ok()
+        });
+    let Some(end) = end else { return };
+    let Ok(now) = jiff::Timestamp::try_from(now) else {
+        return;
+    };
+    let left = end.duration_since(now).as_secs().max(0);
+    #[allow(clippy::cast_sign_loss, reason = "positif juste avant")]
+    let left_minutes = (left as u64).div_ceil(60);
+    attributes.insert("reste_minutes".into(), json!(left_minutes));
+    attributes.insert("fin".into(), json!(end.to_string()));
+    attributes.insert(
+        "fin_heure".into(),
+        json!(
+            end.to_zoned(jiff::tz::TimeZone::system())
+                .strftime("%H:%M")
+                .to_string()
+        ),
+    );
+}
+
+/// Le programme en cours, en français.
+fn job_name(job: &str) -> String {
+    match job {
+        "wash" | "ai_wash" | "air_wash" | "airwash" => "lavage",
+        "pre_wash" => "prélavage",
+        "rinse" | "ai_rinse" => "rinçage",
+        "spin" | "ai_spin" => "essorage",
+        "drying" | "ai_drying" => "séchage",
+        "cooling" => "refroidissement",
+        "weight_sensing" => "pesée",
+        "delay_wash" => "départ différé",
+        "wrinkle_prevent" => "anti-froissage",
+        "refreshing" => "rafraîchissement",
+        "sanitizing" => "désinfection",
+        "pre_drain" => "vidange",
+        "finish" | "finished" => "fini",
+        other => return other.chars().take(32).collect(),
+    }
+    .to_owned()
 }
 
 fn climate_attributes(
@@ -918,6 +1200,14 @@ fn sensor_state(tracked: &Tracked, sensor: Sensor, attributes: &mut Attributes) 
             None => "unknown".into(),
         };
     }
+    if sensor == Sensor::Energy {
+        attributes.insert("state_class".into(), json!("total_increasing"));
+        attributes.insert("unit_of_measurement".into(), json!("kWh"));
+        return tracked.energy_kwh().map_or_else(
+            || "unknown".into(),
+            |kwh| format!("{}", (kwh * 1000.0).round() / 1000.0),
+        );
+    }
     let Some(mut value) = tracked.number(capability, attribute) else {
         return "unknown".into();
     };
@@ -931,13 +1221,6 @@ fn sensor_state(tracked: &Tracked, sensor: Sensor, attributes: &mut Attributes) 
         Sensor::Humidity | Sensor::Battery => "%",
         Sensor::Illuminance => "lx",
         Sensor::Power => "W",
-        Sensor::Energy => {
-            if tracked.unit(capability, attribute) == Some("Wh") {
-                value /= 1000.0;
-            }
-            attributes.insert("state_class".into(), json!("total_increasing"));
-            "kWh"
-        }
         _ => "",
     };
     attributes.insert("unit_of_measurement".into(), json!(unit));
@@ -1136,8 +1419,12 @@ mod tests {
                    "completionTime": {"value": "2026-10-22T10:30:00Z"}}}),
             &core.states,
         );
-        assert_eq!(state("sensor.lave_linge").state(), "en marche");
-        assert_eq!(state("sensor.lave_linge").attributes()["cycle"], "rinse");
+        assert_eq!(state("sensor.lave_linge").state(), "En marche");
+        assert_eq!(state("sensor.lave_linge").attributes()["cycle"], "rinçage");
+        assert_eq!(
+            state("sensor.lave_linge").attributes()["appareil"],
+            "lave-linge"
+        );
 
         devices.apply_status(
             "02",
@@ -1152,6 +1439,100 @@ mod tests {
 
         devices.set_unavailable("01", &core.states);
         assert_eq!(state("light.lampe_salon").state(), "unavailable");
+    }
+
+    /// Un lave-linge Samsung : le cycle suivi, puis l'évènement de fin avec
+    /// sa durée et son énergie.
+    #[test]
+    fn a_samsung_washer_cycle() {
+        use std::time::{Duration, SystemTime};
+
+        let core = Core::new();
+        let mut devices = Devices::default();
+        let washer = device(
+            "w1",
+            "Lave-linge",
+            &[
+                "switch",
+                "samsungce.washerOperatingState",
+                "powerConsumptionReport",
+                "remoteControlStatus",
+            ],
+            &["Washer"],
+        );
+        devices.sync(vec![washer], &rooms(), &core.states);
+        assert_eq!(
+            devices.summary()[0].1,
+            ["sensor.lave_linge", "sensor.lave_linge_energie"]
+        );
+        let state = |entity: &str| core.states.get(&id(entity)).unwrap();
+        let reading = |operating: &str, job: &str, remaining: u32, wh: u32| {
+            json!({
+                "samsungce.washerOperatingState": {
+                    "operatingState": {"value": operating}, "jobState": {"value": job},
+                    "remainingTime": {"value": remaining, "unit": "min"}, "progress": {"value": 40}},
+                "powerConsumptionReport": {"powerConsumption": {"value": {"energy": wh, "deltaEnergy": 0}}},
+            })
+        };
+        assert!(
+            devices
+                .apply_status("w1", reading("ready", "none", 0, 100_000), &core.states)
+                .is_none()
+        );
+        assert_eq!(state("sensor.lave_linge").state(), "Arrêt");
+        assert!(
+            devices
+                .apply_status("w1", reading("running", "wash", 95, 100_000), &core.states)
+                .is_none()
+        );
+        let running = state("sensor.lave_linge");
+        assert_eq!(running.state(), "En marche");
+        assert_eq!(running.attributes()["cycle"], "lavage");
+        assert_eq!(running.attributes()["reste_minutes"], 95);
+        assert_eq!(running.attributes()["progression"], 40.0);
+        assert!(
+            running.attributes()["fin_heure"]
+                .as_str()
+                .unwrap()
+                .contains(':')
+        );
+        assert_eq!(state("sensor.lave_linge_energie").state(), "100");
+        // Une pause ne termine pas le cycle.
+        assert!(
+            devices
+                .apply_status("w1", reading("paused", "rinse", 30, 100_400), &core.states)
+                .is_none()
+        );
+        assert_eq!(state("sensor.lave_linge").state(), "En pause");
+        // Le cycle commencé il y a 90 minutes se termine.
+        devices.by_device.get_mut("w1").unwrap().cycle.started =
+            Some(SystemTime::now() - Duration::from_mins(90));
+        let done = devices
+            .apply_status("w1", reading("ready", "finish", 0, 100_850), &core.states)
+            .unwrap();
+        assert_eq!(done.entity_id.as_str(), "sensor.lave_linge");
+        assert_eq!(done.name, "Lave-linge");
+        assert_eq!(done.minutes, 90);
+        assert_eq!(done.energy_kwh, Some(0.85));
+        let finished = state("sensor.lave_linge");
+        assert_eq!(finished.state(), "Terminé");
+        assert_eq!(finished.attributes()["dernier_cycle_minutes"], 90);
+        assert_eq!(finished.attributes()["dernier_cycle_kwh"], 0.85);
+        assert!(finished.attributes().get("reste_minutes").is_none());
+        // Relu à l'arrêt : toujours « Terminé », pas de deuxième évènement.
+        assert!(
+            devices
+                .apply_status("w1", reading("ready", "none", 0, 100_850), &core.states)
+                .is_none()
+        );
+        assert_eq!(state("sensor.lave_linge").state(), "Terminé");
+        // Le cycle suivant repart.
+        assert!(
+            devices
+                .apply_status("w1", reading("running", "wash", 60, 100_850), &core.states)
+                .is_none()
+        );
+        assert_eq!(state("sensor.lave_linge").state(), "En marche");
     }
 
     #[test]

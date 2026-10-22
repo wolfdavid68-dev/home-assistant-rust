@@ -95,6 +95,33 @@ pub(crate) fn house(state: &ApiState) -> House {
                 house.openings.push(opening("on"));
             }
             "notify" => notify.push(id.clone()),
+            // Une machine à cycle : SmartThings (attribut `appareil`) ou une
+            // prise qui mesure sa puissance (étape 67, « Terminé »).
+            "sensor"
+                if attributes.get("appareil").is_some()
+                    || attributes
+                        .get("options")
+                        .and_then(Value::as_array)
+                        .is_some_and(|options| options.iter().any(|o| o == "Terminé")) =>
+            {
+                house.appliances.push(device());
+            }
+            "tts" => {
+                let speakers: Vec<String> = attributes
+                    .get("enceintes")
+                    .and_then(Value::as_array)
+                    .map(|list| {
+                        list.iter()
+                            .filter_map(Value::as_str)
+                            .take(20)
+                            .map(str::to_owned)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                if !speakers.is_empty() {
+                    house.announce = Some((id.clone(), speakers));
+                }
+            }
             "switch" if id == "switch.simulation_presence" => house.simulation = Some(id.clone()),
             "zone" if id == "zone.home" => house.people = true,
             "sun" if id == "sun.sun" => house.sun = true,
@@ -182,6 +209,8 @@ pub(crate) async fn list(
             "openings": house.openings.len(),
             "notify": house.notify.is_some(),
             "simulation": house.simulation.is_some(),
+            "appliances": named(&house.appliances),
+            "announce": house.announce.is_some(),
             "people": house.people,
             "sun": house.sun,
         },

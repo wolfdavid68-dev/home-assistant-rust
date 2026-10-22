@@ -1344,7 +1344,10 @@ async fn ready_made_automations_are_ticked() {
         .iter()
         .map(|p| p["name"].as_str().unwrap())
         .collect();
-    assert_eq!(names, ["depart", "retour", "nuit", "matin", "vacances"]);
+    assert_eq!(
+        names,
+        ["depart", "retour", "nuit", "matin", "vacances", "lessive"]
+    );
     let depart = &body["presets"][0];
     assert_eq!(depart["enabled"], false);
     assert_eq!(depart["options"]["chauffage"], 17.0);

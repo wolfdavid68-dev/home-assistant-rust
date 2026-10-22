@@ -1264,6 +1264,7 @@ dependencies = [
  "ha-core",
  "ha-storage",
  "ha-tls",
+ "jiff",
  "reqwest",
  "serde_json",
  "thiserror",

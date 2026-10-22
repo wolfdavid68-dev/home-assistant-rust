@@ -17,6 +17,7 @@ En haut de **Automatisations**, la section **Toutes prêtes** :
 | **Nuit** | chaque soir à 23 h, si quelqu'un est là | éteindre les lumières oubliées (sauf dans les chambres, au choix), fermer les volets, changer le chauffage, prévenir si une porte ou une fenêtre est ouverte |
 | **Matin** | à 7 h en semaine, 9 h le week-end, si quelqu'un est là | ouvrir les volets (sauf ceux des chambres, au choix), remettre le chauffage |
 | **Vacances** | la maison est vide depuis 24 h | chauffage hors-gel (12 °C), [simulation de présence](simulation.md) armée, puis désarmée au retour ; un message pour le dire |
+| **Lessive** | le lave-linge (ou une autre machine) a fini | « Lave-linge a fini, en 92 minutes » sur le téléphone, et annoncé sur les enceintes ([SmartThings](smartthings.md), ou une prise qui mesure la puissance) |
 
 Chaque carte dit en une ligne ce qu'elle fera (« après 10 min · éteindre les lumières · chauffage
 à 17 °C »). **Régler** ouvre ses cases et ses valeurs ; l'interrupteur l'active ou la désactive.

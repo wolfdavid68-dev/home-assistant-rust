@@ -3018,3 +3018,7 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .st-card { max-width: 34rem; background: var(--card); border-radius: 20px; padding: 1.5rem; display: grid; gap: 0.8rem; }
 .st-card h1 { margin: 0; font-size: 1.3rem; }
 .st-card p { margin: 0; line-height: 1.5; }
+
+/* Une machine (lave-linge SmartThings, étape 86) : la progression du cycle. */
+.machine-progress { --progress: 0%; height: 6px; border-radius: 999px; background: var(--card-2); overflow: hidden; }
+.machine-progress span { display: block; height: 100%; width: var(--progress); background: var(--accent); border-radius: inherit; }

@@ -1560,6 +1560,7 @@ function alarmTile(state) {
 }
 
 function sensorTile(state) {
+  if (typeof state.attributes.appareil === "string") return machineTile(state);
   if (state.attributes.device_class === "timestamp") return timestampTile(state);
   if (state.attributes.device_class === "date") return dateTile(state);
   const unit = state.attributes.unit_of_measurement;
@@ -1573,6 +1574,30 @@ function sensorTile(state) {
     tileHead(state, lookup(ICONS, state.attributes.device_class) ?? ICONS.gauge, `il y a ${ago(state.last_changed)}`),
     value,
   );
+}
+
+// Une machine suivie par SmartThings (étape 86) : « En marche », le programme,
+// l'heure de fin, la progression ; à la fin, la durée du dernier cycle.
+function machineTile(state) {
+  const a = state.attributes;
+  const running = state.state === "En marche" || state.state === "En pause";
+  const parts = [];
+  if (running && typeof a.cycle === "string") parts.push(a.cycle);
+  if (running && typeof a.fin_heure === "string") parts.push(`fin vers ${a.fin_heure}`);
+  if (!running && Number.isFinite(a.dernier_cycle_minutes)) parts.push(`dernier cycle : ${a.dernier_cycle_minutes} min`);
+  if (!running && parts.length === 0) parts.push(`il y a ${ago(state.last_changed)}`);
+  const tile = el(
+    "div",
+    { id: tileId(state.entity_id), class: `${tileClass(state, "sensor")}${running ? " on" : ""}` },
+    tileHead(state, ICONS.machine, parts.join(" · ")),
+    el("div", { class: "value small-value", text: running && Number.isFinite(a.reste_minutes) ? `${state.state} · ${a.reste_minutes} min` : state.state }),
+  );
+  if (running && Number.isFinite(a.progression)) {
+    const bar = el("div", { class: "machine-progress", role: "progressbar", "aria-valuenow": String(a.progression), "aria-valuemin": "0", "aria-valuemax": "100" }, el("span"));
+    bar.style.setProperty("--progress", `${Math.min(100, Math.max(0, a.progression))}%`);
+    tile.append(bar);
+  }
+  return tile;
 }
 
 // Un jour (prochain jour férié, étape 56) : « Toussaint », « dim. 1 nov., dans 16 jours ».

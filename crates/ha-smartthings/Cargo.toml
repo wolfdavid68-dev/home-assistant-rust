@@ -14,6 +14,8 @@ getrandom.workspace = true
 ha-core = { path = "../ha-core" }
 ha-storage = { path = "../ha-storage" }
 ha-tls = { path = "../ha-tls" }
+# L'heure de fin des machines, à l'heure de la maison.
+jiff.workspace = true
 reqwest.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

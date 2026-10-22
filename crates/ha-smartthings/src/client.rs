@@ -248,7 +248,24 @@ async fn read_status(
 ) -> Result<(), SmartThingsError> {
     match api.status(device_id).await {
         Ok(status) => {
-            devices.apply_status(device_id, status, &core.states);
+            if let Some(done) = devices.apply_status(device_id, status, &core.states) {
+                info!("SmartThings : {} a fini ({} min)", done.name, done.minutes);
+                // Le même évènement que les appareils suivis par leur prise
+                // (étape 67) : les mêmes automatisations servent.
+                let mut data = ha_core::Attributes::new();
+                data.insert(
+                    "entity_id".into(),
+                    serde_json::json!(done.entity_id.as_str()),
+                );
+                data.insert("name".into(), serde_json::json!(done.name));
+                data.insert("duree_minutes".into(), serde_json::json!(done.minutes));
+                if let Some(kwh) = done.energy_kwh {
+                    data.insert("energie_kwh".into(), serde_json::json!(kwh));
+                }
+                if let Err(error) = core.fire(crate::APPLIANCE_FINISHED, data) {
+                    warn!("SmartThings : évènement refusé ({error})");
+                }
+            }
             Ok(())
         }
         Err(SmartThingsError::Status(403 | 404 | 409 | 422)) => {
