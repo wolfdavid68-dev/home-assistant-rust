@@ -317,6 +317,7 @@ function renderTileContent(state) {
     case "tts": return announceTile(state);
     case "water_heater": return waterHeaterTile(state);
     case "todo": return todoTile(state);
+    case "camera": return cameraTile(state);
     case "fan": return fanTile(state);
     case "counter": return counterTile(state);
     case "input_text": return textTile(state);
@@ -802,6 +803,16 @@ function addForm(placeholder, label, onSubmit, extra = []) {
     input.value = "";
   });
   return form;
+}
+
+/** Une caméra (la sonnette, étape 82) : sa dernière photo. */
+function cameraTile(state) {
+  const img = el("img", { class: "camera-image", alt: `Photo : ${nameOf(state)}`, hidden: "" });
+  const caption = el("span", { text: "" });
+  const tile = el("div", { id: tileId(state.entity_id), class: "tile wide-tile camera-tile" },
+    tileHead(state, ICONS.camera, ""), el("div", { class: "camera-frame" }, img), el("p", { class: "muted camera-caption" }, caption));
+  if (typeof showCameraImage === "function") showCameraImage(state, img, caption);
+  return tile;
 }
 
 function todoTile(state) {

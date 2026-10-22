@@ -50,6 +50,9 @@ pub enum Component {
     Text,
     Event,
     AlarmControlPanel,
+    /// Une caméra (étape 82) : la photo d'une sonnette, reçue telle quelle
+    /// (JPEG ou PNG, ou en base64) sur son sujet.
+    Camera,
 }
 
 impl Component {
@@ -74,6 +77,7 @@ impl Component {
             "text" => Some(Self::Text),
             "event" => Some(Self::Event),
             "alarm_control_panel" => Some(Self::AlarmControlPanel),
+            "camera" => Some(Self::Camera),
             _ => None,
         }
     }
@@ -101,6 +105,7 @@ impl Component {
             Self::Text => "text",
             Self::Event => "event",
             Self::AlarmControlPanel => "alarm_control_panel",
+            Self::Camera => "camera",
         }
     }
 
@@ -358,8 +363,10 @@ pub fn parse(
     };
     // Un chauffe-eau n'a pas de sujet d'état : son état, c'est son mode.
     // Un thermostat non plus : son état est son mode (`heat`, `off`…).
+    // Une caméra n'a qu'un sujet, celui de l'image (`topic`).
     let (state_key, command_key) = match component {
         Component::WaterHeater | Component::Climate => ("mode_state_topic", "mode_command_topic"),
+        Component::Camera => ("topic", "command_topic"),
         _ => ("state_topic", "command_topic"),
     };
     let state_topic = topic(state_key)?;
@@ -411,7 +418,21 @@ pub fn parse(
         .and_then(|device| device.get("name"))
         .and_then(Value::as_str)
         .map(|name| name.chars().take(MAX_TEXT_LEN).collect::<String>());
-    let friendly_name = match (device_name, text(&config, "name")?) {
+    // ring-mqtt (sonnette Ring, étape 82) nomme ses entités en anglais : on
+    // les traduit (« Ding » → « Sonnette »), seulement pour ses appareils.
+    let ring = config
+        .get("device")
+        .and_then(|device| device.get("mf").or_else(|| device.get("manufacturer")))
+        .and_then(Value::as_str)
+        == Some("Ring");
+    let entity_name = text(&config, "name")?.map(|name| {
+        if ring {
+            ring_name(&name).map_or(name, str::to_owned)
+        } else {
+            name
+        }
+    });
+    let friendly_name = match (device_name, entity_name) {
         (Some(device), Some(name)) if !name.starts_with(&device) => {
             Some(format!("{device} {name}"))
         }
@@ -441,6 +462,32 @@ pub fn parse(
         brightness_scale,
         profile,
     })))
+}
+
+/// Le nom français d'une entité de ring-mqtt.
+fn ring_name(name: &str) -> Option<&'static str> {
+    Some(match name {
+        "Ding" => "Sonnette",
+        "Motion" => "Mouvement",
+        "Snapshot" => "Photo",
+        "Snapshot Mode" => "Mode photo",
+        "Snapshot Interval" => "Intervalle des photos",
+        "Take Snapshot" => "Prendre une photo",
+        "Motion Detection" => "Détection de mouvement",
+        "Motion Duration" => "Durée du mouvement",
+        "Motion Warning" => "Alerte mouvement",
+        "Ding Duration" => "Durée de la sonnerie",
+        "Battery" => "Batterie",
+        "Wireless" => "Wi-Fi",
+        "Info" => "Infos",
+        "Light" => "Lumière",
+        "Siren" => "Sirène",
+        "Live Stream" => "Vidéo en direct",
+        "Event Stream" => "Vidéo d'un événement",
+        "Event Select" => "Choix de l'événement",
+        "Volume" => "Volume",
+        _ => return None,
+    })
 }
 
 /// Ce que sait faire chaque type d'appareil, avec les valeurs par défaut de
@@ -912,6 +959,13 @@ fn profile(
             profile.fixed.push(("min", json!(min)));
             profile.fixed.push(("max", json!(max)));
             profile.fixed.push(("mode", json!(mode)));
+        }
+        Component::Camera => {
+            profile.image_base64 = match text(config, "image_encoding")?.as_deref() {
+                None => false,
+                Some("b64") => true,
+                Some(_) => return Err(DiscoveryError::InvalidField("image_encoding")),
+            };
         }
         Component::Event => {
             profile.event_types = options(config, "event_types", &[])?;

@@ -67,6 +67,10 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
   jamais le compte personnel ; mot de passe chiffré dans la base, absent des logs, des erreurs et de `Debug` ;
   HTTPS vers `timetreeapp.com` seulement, sans redirection, réponses limitées à 2 Mio ; lecture seule ; une heure
   d'attente après un refus, pour ne pas faire bloquer le compte.
+- Sonnette et caméras MQTT (étape 82) : la photo est gardée en mémoire seulement (jamais dans la base, l'historique ni
+  les sauvegardes), servie avec `Cache-Control: no-store` à un compte connecté ; cachée aux invités ; seuls le JPEG et le
+  PNG sont acceptés (reconnus à leur signature), 2 Mio au plus, 32 caméras au plus. ring-mqtt : compte Ring partagé
+  (retirable depuis l'appli Ring), Mosquitto écoute sur `127.0.0.1` avec un compte par programme.
 - Agendas en ligne (ICS) : HTTPS seulement, sans redirection, 2 Mio au plus ; l'adresse (qui peut contenir une
   clé secrète) n'est jamais journalisée ni publiée, seulement le nom du site ; lecture seule.
 - Alexa (faux pont Hue, sans authentification possible) : désactivée par défaut ; seuls les appareils listés

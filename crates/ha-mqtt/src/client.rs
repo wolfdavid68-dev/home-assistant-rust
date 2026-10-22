@@ -15,7 +15,8 @@ use crate::MqttConfig;
 use crate::bridge::{Action, Bridge};
 
 /// Taille maximale d'un paquet reçu : au-delà, le broker est déconnecté.
-const MAX_INCOMING_PACKET: usize = 256 * 1024;
+/// Assez pour la photo d'une sonnette (2 Mio, 2,7 en base64), étape 82.
+const MAX_INCOMING_PACKET: usize = 3 * 1024 * 1024;
 const MAX_OUTGOING_PACKET: usize = 64 * 1024;
 /// Délai maximal entre deux tentatives de reconnexion.
 const MAX_BACKOFF: Duration = Duration::from_mins(1);
@@ -56,7 +57,7 @@ async fn run(config: MqttConfig, core: Arc<Core>, token: CancellationToken) {
     }
 
     let (client, mut eventloop) = AsyncClient::new(options, 100);
-    let mut bridge = Bridge::new(&config.discovery_prefix);
+    let mut bridge = Bridge::new(&config.discovery_prefix).with_images(Arc::clone(&core.images));
     // Les Shelly récents, sans découverte (étape 66).
     let mut shellies = crate::shelly::Shellies::default();
     let mut events = core.bus.subscribe();

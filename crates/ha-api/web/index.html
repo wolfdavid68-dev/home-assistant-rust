@@ -27,6 +27,7 @@
   <script src="/house.js" defer></script>
   <script src="/agenda.js" defer></script>
   <script src="/hub.js" defer></script>
+  <script src="/sonnette.js" defer></script>
 </head>
 <body>
   <!-- Écran de connexion -->
@@ -503,6 +504,21 @@
         <button id="hub-announce" class="hub-say-button" type="button" hidden></button>
       </nav>
     </section>
+    <!-- La sonnette (étape 82) : qui est à la porte, en grand, sur la tablette. -->
+    <dialog id="doorbell" class="doorbell" aria-labelledby="doorbell-title">
+      <div class="doorbell-head">
+        <div>
+          <h2 id="doorbell-title">On sonne à la porte</h2>
+          <p id="doorbell-when" class="doorbell-when"></p>
+        </div>
+        <button id="doorbell-close" class="ghost" type="button">Fermer</button>
+      </div>
+      <div class="doorbell-photo">
+        <img id="doorbell-img" alt="La photo de la porte" hidden>
+        <p id="doorbell-wait" class="doorbell-wait">La nouvelle photo arrive…</p>
+      </div>
+      <p id="doorbell-shot" class="doorbell-shot"></p>
+    </dialog>
     <dialog id="hub-say" class="hub-say" aria-labelledby="hub-say-title">
       <form id="hub-say-form">
         <h2 id="hub-say-title">Annonce à la maison</h2>

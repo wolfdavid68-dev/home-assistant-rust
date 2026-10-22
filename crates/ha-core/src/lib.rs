@@ -10,6 +10,7 @@ mod entity_id;
 mod error;
 mod event;
 pub mod guard;
+pub mod images;
 pub mod integrations;
 pub mod latency;
 mod origin;
@@ -72,6 +73,8 @@ pub struct Core {
     pub guard: Guard,
     /// La rapidité des appareils (voir [`latency`]).
     pub latencies: latency::Latencies,
+    /// La dernière image de chaque caméra (voir [`images`]).
+    pub images: std::sync::Arc<images::Images>,
 }
 
 impl Core {
@@ -86,6 +89,7 @@ impl Core {
             commands: Commands::default(),
             guard: Guard::default(),
             latencies: latency::Latencies::default(),
+            images: std::sync::Arc::default(),
         }
     }
 }

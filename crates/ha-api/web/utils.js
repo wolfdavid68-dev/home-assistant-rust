@@ -128,5 +128,6 @@ Object.assign(ICONS, {
   arrowDown: ["M12 5v14", "M18 13l-6 6-6-6"],
   square: ["M8 8h8v8H8z"],
   bolt: ["M13 2L4 14h7l-1 8 9-12h-7z"],
+  camera: ["M3 8h4l2-3h6l2 3h4v12H3z", "M12 10.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 1 0 0-7z"],
 });
 const BINARY_ICONS = { motion: ICONS.motion, connectivity: ICONS.globe };

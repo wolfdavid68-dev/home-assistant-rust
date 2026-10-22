@@ -324,6 +324,42 @@ pub(crate) async fn get_state(
     Ok(Json(state_to_json(&current)))
 }
 
+/// `GET /api/camera_proxy/{entity_id}` : la dernière image d'une caméra
+/// (étape 82), comme dans Home Assistant. Une caméra cachée à ce compte (un
+/// invité) est introuvable.
+pub(crate) async fn camera_image(
+    State(state): State<Arc<ApiState>>,
+    auth: Authenticated,
+    Path(entity_id): Path<String>,
+) -> Result<Response, ApiError> {
+    use axum::http::{HeaderValue, header};
+    let entity_id = parse_entity_id(&entity_id)?;
+    if entity_id.domain() != "camera" {
+        return Err(ApiError::NotFound);
+    }
+    let current = state.core.states.get(&entity_id);
+    if !roles::can_see(&auth.user, &entity_id, current.as_ref()) || current.is_none() {
+        return Err(ApiError::NotFound);
+    }
+    let image = state
+        .core
+        .images
+        .get(&entity_id)
+        .ok_or(ApiError::NotFound)?;
+    Ok((
+        [
+            (
+                header::CONTENT_TYPE,
+                HeaderValue::from_static(image.content_type),
+            ),
+            // Une photo de la porte : jamais gardée par le navigateur.
+            (header::CACHE_CONTROL, HeaderValue::from_static("no-store")),
+        ],
+        Bytes::from_owner(image.bytes),
+    )
+        .into_response())
+}
+
 /// `POST /api/states/{entity_id}` : `{"state": "on", "attributes": {…}}`.
 /// Répond 201 si l'entité vient d'être créée, 200 sinon.
 pub(crate) async fn set_state(
