@@ -23,6 +23,7 @@
 //! ha-server freebox devices       liste les appareils du réseau
 //! ha-server freebox track <MAC> <nom>  suit la présence d'un appareil
 //! ha-server timetree pair         associe le compte TimeTree de la maison
+//! ha-server iglou pair            relie la liste de courses de l'appli Iglou
 //! ha-server sonos                 liste les enceintes Sonos trouvées
 //! ha-server voix "<phrase>"       essaie la voix des annonces (essai-voix.wav)
 //! ha-server ecoute <fichier.wav>  essaie l'écoute de la tablette (Whisper, étape 84)
@@ -177,6 +178,7 @@ async fn main() -> ExitCode {
         ["somfy", rest @ ..] => cli::somfy_command(rest).await,
         ["freebox", rest @ ..] => cli::freebox_command(rest).await,
         ["timetree", rest @ ..] => cli::timetree_command(rest).await,
+        ["iglou", rest @ ..] => cli::iglou_command(rest).await,
         ["sonos"] => match sonos_hosts() {
             Ok(hosts) => cli::list_sonos(&hosts).await,
             Err(error) => Err(error.into()),
@@ -537,9 +539,17 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     // pas un changement qui déclenche), et démarrées APRÈS (un minuteur qui a
     // sonné pendant l'arrêt doit atteindre les automatisations).
     let inputs = (!input_config.is_empty()).then(|| ha_input::Inputs::prepare(input_config, &core));
+    // La liste de courses d'Iglou (étape 81), si un compte est associé : elle
+    // remplace alors la liste de courses locale.
+    let iglou = start_iglou(&store, &core).await;
     // Les listes (courses, tâches) et l'agenda : publiés avant les
     // automatisations, pour que leur création ne déclenche rien.
-    let agenda = ha_agenda::Agenda::start(store.clone(), Arc::clone(&core)).await;
+    let without: &[&str] = if iglou.is_some() {
+        &[ha_iglou::ENTITY]
+    } else {
+        &[]
+    };
+    let agenda = ha_agenda::Agenda::start_without(store.clone(), Arc::clone(&core), without).await;
     // Les assistants calculés (groupes, moyennes…), avant les automatisations
     // aussi : leur création ne déclenche rien.
     // Les statistiques d'historique (étape 59) lisent la base : leur tâche.
@@ -805,6 +815,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         inputs.stop().await;
     }
     agenda.stop().await;
+    if let Some(iglou) = iglou {
+        iglou.stop().await;
+    }
     if let Some(assistants) = assistants {
         assistants.stop().await;
     }
@@ -979,6 +992,61 @@ pub(crate) fn energy_path() -> std::path::PathBuf {
 }
 
 /// Le compteur Linky (`HA_TELEINFO`), s'il est branché.
+/// Les adresses de Firebase pour Iglou. `HA_IGLOU_API` ne sert qu'aux essais,
+/// avec un faux Firebase sur ce PC (`http://127.0.0.1:…`) : toute autre
+/// adresse est ignorée.
+pub(crate) fn iglou_endpoints() -> ha_iglou::Endpoints {
+    std::env::var("HA_IGLOU_API")
+        .ok()
+        .filter(|url| url.starts_with("http://127.0.0.1:"))
+        .map_or_else(ha_iglou::Endpoints::google, |url| {
+            ha_iglou::Endpoints::local(&url)
+        })
+}
+
+/// Le client Iglou du compte : en HTTPS, sauf le faux Firebase des essais.
+pub(crate) fn iglou_client(
+    account: &ha_storage::IglouAccount,
+) -> Result<ha_iglou::Client, Box<dyn std::error::Error>> {
+    let endpoints = iglou_endpoints();
+    let http = if endpoints.auth.starts_with("http://127.0.0.1:") {
+        ha_tls::web_client(false)?
+    } else {
+        ha_tls::public_client()?
+    };
+    Ok(ha_iglou::Client::from_account(http, endpoints, account)?)
+}
+
+/// Démarre Iglou si un compte est associé. Un compte illisible n'empêche
+/// pas le reste (la liste de courses locale reprend).
+async fn start_iglou(store: &Store, core: &Arc<Core>) -> Option<ha_iglou::Iglou> {
+    let account = match store.iglou_account().await {
+        Ok(Some(account)) => account,
+        Ok(None) => return None,
+        Err(error) => {
+            warn!("Iglou : compte illisible ({error}). Refais « ha-server iglou pair ».");
+            return None;
+        }
+    };
+    match iglou_client(&account) {
+        Ok(client) => {
+            info!(
+                "Iglou : la liste de courses est celle de l'appli ({})",
+                account.email
+            );
+            Some(ha_iglou::Iglou::start(
+                client,
+                account.maison_id,
+                Arc::clone(core),
+            ))
+        }
+        Err(error) => {
+            warn!("Iglou : démarrage impossible ({error})");
+            None
+        }
+    }
+}
+
 /// L'adresse de l'API TimeTree. `HA_TIMETREE_API` ne sert qu'aux essais, avec
 /// un faux TimeTree sur ce PC (`http://127.0.0.1:…`) : toute autre adresse
 /// est ignorée.
