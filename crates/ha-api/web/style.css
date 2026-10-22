@@ -3013,6 +3013,33 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .camera-image { display: block; width: 100%; height: auto; }
 .camera-caption { margin: 6px 0 0; font-size: 0.85rem; }
 
+/* ---------------------------------------------------------------- Les colis Amazon (étape 87) */
+/* Comme l'Echo : la photo de l'article à gauche, la phrase en grand à droite. */
+.parcel { width: min(900px, 94vw); max-height: 92vh; padding: 0; border: 0; border-radius: 28px; background: var(--card); color: var(--text); box-shadow: var(--shadow-float); overflow: hidden; }
+.parcel[open] { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); }
+.parcel::backdrop { background: rgb(0 0 0 / 0.6); }
+.parcel-photo { display: grid; place-items: center; padding: 24px; background: #fff; min-height: 260px; }
+.parcel-photo img { display: block; max-width: 100%; max-height: 52vh; object-fit: contain; }
+.parcel-icon { display: grid; place-items: center; width: 132px; height: 132px; border-radius: 50%; background: #f2e8da; color: #b26b00; }
+.parcel-icon[hidden] { display: none; }
+.parcel-icon svg { width: 64px; height: 64px; }
+.parcel-text { display: flex; flex-direction: column; gap: 10px; padding: 28px 30px 24px; }
+.parcel-from { margin: 0; font-weight: 600; color: var(--muted); }
+.parcel-from span:not(:empty)::before { content: "· "; }
+.parcel-text h2 { margin: 0; font: 650 clamp(1.6rem, 3.6vw, 2.4rem)/1.15 var(--font); letter-spacing: normal; text-transform: none; color: var(--text); }
+.parcel.is-problem .parcel-text h2 { color: var(--alert); }
+.parcel-full { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 1.4; }
+.parcel-full:empty { display: none; }
+.parcel-others-title { margin: 6px 0 0; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.parcel-others-title[hidden] { display: none; }
+.parcel-others { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.parcel-others:empty { display: none; }
+.parcel-text .primary { margin-top: auto; align-self: flex-start; min-width: 9rem; min-height: 48px; font-size: 1.05rem; }
+@media (max-width: 640px) {
+  .parcel[open] { grid-template-columns: 1fr; }
+  .parcel-photo { min-height: 180px; }
+}
+
 /* L'adresse de retour de SmartThings (étape 86) */
 .st-page { min-height: 100vh; display: grid; place-items: center; padding: 16px; background: var(--bg); color: var(--text); }
 .st-card { max-width: 34rem; background: var(--card); border-radius: 20px; padding: 1.5rem; display: grid; gap: 0.8rem; }

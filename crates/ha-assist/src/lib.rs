@@ -625,6 +625,10 @@ pub fn understand(text: &str, devices: &[Device]) -> Result<Understood, NotUnder
     if let Some(added) = add_to_list(text, devices) {
         return added.map(|order| Understood::Orders(vec![order]));
     }
+    // « J'ai un colis ? » (étape 87), même dit sans le ton d'une question.
+    if mentions_parcels(&raw) && (is_question(text, &raw) || verb(&raw).is_none()) {
+        return Ok(Understood::Answer(parcels(devices)));
+    }
     if is_question(text, &raw) {
         return Ok(Understood::Answer(answer(
             devices, &raw, &words, plural, hint,
@@ -871,6 +875,78 @@ fn is_question(text: &str, raw: &[&str]) -> bool {
         || raw
             .windows(2)
             .any(|pair| matches!(pair, ["est", "il" | "elle"] | ["sont", "ils" | "elles"]))
+}
+
+/// La phrase parle-t-elle des colis ?
+fn mentions_parcels(raw: &[&str]) -> bool {
+    raw.iter().any(|word| {
+        matches!(
+            *word,
+            "colis" | "paquet" | "paquets" | "livraison" | "livraisons" | "amazon"
+        )
+    })
+}
+
+/// Les colis Amazon (`sensor.colis_amazon`, étape 87) : « Plaid arrive
+/// aujourd'hui ; Câble USB est en route. »
+fn parcels(devices: &[Device]) -> String {
+    let Some(sensor) = devices
+        .iter()
+        .find(|d| d.state.entity_id().as_str() == "sensor.colis_amazon")
+    else {
+        return "Je ne suis pas les colis : voir docs/colis.md.".into();
+    };
+    let list = sensor
+        .attr("colis")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_default();
+    let names = |step: &str| -> Vec<&str> {
+        list.iter()
+            .filter(|p| p.get("etat").and_then(Value::as_str) == Some(step))
+            .filter_map(|p| p.get("article").and_then(Value::as_str))
+            .take(3)
+            .collect()
+    };
+    let mut parts = Vec::new();
+    let arriving = names("en_livraison");
+    if !arriving.is_empty() {
+        let verb = if arriving.len() == 1 {
+            "arrive"
+        } else {
+            "arrivent"
+        };
+        parts.push(format!("{} {verb} aujourd'hui", arriving.join(" et ")));
+    }
+    let problem = names("probleme");
+    if !problem.is_empty() {
+        parts.push(format!("{} : livraison ratée", problem.join(" et ")));
+    }
+    let mut on_the_way = names("expedie");
+    on_the_way.extend(names("retard"));
+    if !on_the_way.is_empty() {
+        let verb = if on_the_way.len() == 1 { "est" } else { "sont" };
+        parts.push(format!("{} {verb} en route", on_the_way.join(" et ")));
+    }
+    let delivered = sensor
+        .attr("livres_aujourdhui")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    if delivered > 0 {
+        parts.push(if delivered == 1 {
+            "1 colis livré aujourd'hui".to_owned()
+        } else {
+            format!("{delivered} colis livrés aujourd'hui")
+        });
+    }
+    if parts.is_empty() {
+        return "Aucun colis Amazon en route.".into();
+    }
+    let mut sentence = parts.join(" ; ");
+    if let Some(first) = sentence.get(..1) {
+        sentence = first.to_uppercase() + &sentence[1..];
+    }
+    sentence + "."
 }
 
 /// Les mots d'une question qui ne désignent rien.
@@ -1584,6 +1660,46 @@ mod tests {
         assert_eq!(
             understand("Où en est la machine ?", std::slice::from_ref(&washer)),
             expected
+        );
+    }
+
+    #[test]
+    fn parcels_are_answered() {
+        let core = Core::new();
+        let sensor = device(
+            &core,
+            "sensor.colis_amazon",
+            "2",
+            "Colis Amazon",
+            None,
+            json!({
+                "livres_aujourdhui": 1,
+                "colis": [
+                    {"etat": "en_livraison", "article": "Plaid"},
+                    {"etat": "expedie", "article": "Câble USB"},
+                    {"etat": "livre", "article": "Livre"},
+                ],
+            }),
+        );
+        let expected = Ok(Understood::Answer(
+            "Plaid arrive aujourd'hui ; Câble USB est en route ; 1 colis livré aujourd'hui.".into(),
+        ));
+        for question in [
+            "J'ai un colis ?",
+            "est-ce qu'il y a une livraison aujourd'hui",
+            "mes colis",
+        ] {
+            assert_eq!(
+                understand(question, std::slice::from_ref(&sensor)),
+                expected,
+                "{question}"
+            );
+        }
+        assert_eq!(
+            understand("J'ai un colis ?", &[]),
+            Ok(Understood::Answer(
+                "Je ne suis pas les colis : voir docs/colis.md.".into()
+            ))
         );
     }
 

@@ -91,6 +91,13 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
   serveur renouvelle ; retour d'autorisation vérifié par un état aléatoire ; HTTPS vers `api.smartthings.com`
   seulement, sans redirection, réponses limitées à 4 Mio ; identifiants d'appareils vérifiés ; chaque ordre suit le
   chemin d'un toucher.
+- Colis Amazon (étape 87) : la boîte Gmail est lue en **lecture seule** (IMAP `EXAMINE` et `BODY.PEEK`, aucune
+  commande qui modifie, déplace ou supprime un e-mail, jamais d'envoi), par TLS avec certificat vérifié ; mot de passe
+  d'application chiffré dans la base, jamais affiché ni journalisé ; seuls les e-mails d'Amazon des 14 derniers jours
+  (60 au plus, tailles bornées) ; un e-mail ne compte que s'il vient d'un domaine d'Amazon **et** porte une signature
+  DKIM ou DMARC vérifiée par Gmail (le premier `Authentication-Results`) ; photo téléchargée seulement depuis les
+  serveurs d'images d'Amazon, en HTTPS, sans redirection, 2 Mio au plus, JPEG ou PNG ; seuls l'article, l'étape,
+  l'heure et la commande sont publiés.
 - Agendas en ligne (ICS) : HTTPS seulement, sans redirection, 2 Mio au plus ; l'adresse (qui peut contenir une
   clé secrète) n'est jamais journalisée ni publiée, seulement le nom du site ; lecture seule.
 - Alexa (faux pont Hue, sans authentification possible) : désactivée par défaut ; seuls les appareils listés

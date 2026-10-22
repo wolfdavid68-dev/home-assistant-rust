@@ -161,11 +161,7 @@ pub fn public_client() -> Result<reqwest::Client, TlsError> {
 /// serveur de notifications chez toi, par exemple) : c'est à l'appelant de
 /// le vérifier.
 pub fn web_client(https_only: bool) -> Result<reqwest::Client, TlsError> {
-    let provider = Arc::new(rustls::crypto::ring::default_provider());
-    let config = rustls::ClientConfig::builder_with_provider(provider)
-        .with_safe_default_protocol_versions()?
-        .with_platform_verifier()?
-        .with_no_client_auth();
+    let config = public_config()?;
     Ok(reqwest::Client::builder()
         .tls_backend_preconfigured(config)
         .https_only(https_only)
@@ -175,6 +171,17 @@ pub fn web_client(https_only: bool) -> Result<reqwest::Client, TlsError> {
         .connect_timeout(std::time::Duration::from_secs(10))
         .timeout(std::time::Duration::from_secs(30))
         .build()?)
+}
+
+/// La configuration TLS vers un service sur Internet : certificat vérifié
+/// par les autorités de confiance du système. Sert aussi hors HTTP (la
+/// boîte aux lettres des colis, en IMAP sur TLS, étape 87).
+pub fn public_config() -> Result<rustls::ClientConfig, TlsError> {
+    let provider = Arc::new(rustls::crypto::ring::default_provider());
+    Ok(rustls::ClientConfig::builder_with_provider(provider)
+        .with_safe_default_protocol_versions()?
+        .with_platform_verifier()?
+        .with_no_client_auth())
 }
 
 /// Vérifie une adresse d'appareil : une adresse IPv4 ou un nom d'hôte

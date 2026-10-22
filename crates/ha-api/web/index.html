@@ -28,6 +28,7 @@
   <script src="/agenda.js" defer></script>
   <script src="/hub.js" defer></script>
   <script src="/sonnette.js" defer></script>
+  <script src="/colis.js" defer></script>
   <script src="/voix.js" defer></script>
   <script src="/pretes.js" defer></script>
 </head>
@@ -531,6 +532,21 @@
         <p id="doorbell-wait" class="doorbell-wait">La nouvelle photo arrive…</p>
       </div>
       <p id="doorbell-shot" class="doorbell-shot"></p>
+    </dialog>
+    <!-- Les colis Amazon (étape 87) : « Plaid va arriver aujourd'hui », comme l'Echo. -->
+    <dialog id="parcel" class="parcel" aria-labelledby="parcel-title">
+      <div class="parcel-photo">
+        <img id="parcel-img" alt="" hidden>
+        <span id="parcel-icon" class="parcel-icon"></span>
+      </div>
+      <div class="parcel-text">
+        <p class="parcel-from">Amazon <span id="parcel-when"></span></p>
+        <h2 id="parcel-title"></h2>
+        <p id="parcel-full" class="parcel-full"></p>
+        <p id="parcel-others-title" class="parcel-others-title" hidden>Aussi en route</p>
+        <ul id="parcel-others" class="parcel-others"></ul>
+        <button id="parcel-close" class="primary" type="button">OK</button>
+      </div>
     </dialog>
     <dialog id="hub-say" class="hub-say" aria-labelledby="hub-say-title">
       <form id="hub-say-form">
