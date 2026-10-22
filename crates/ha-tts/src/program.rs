@@ -242,9 +242,15 @@ fn private_dir() -> Result<PathBuf, TtsError> {
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.subsec_nanos());
     let dir = std::env::temp_dir().join(format!("ha-piper-{}-{nanos:08x}", std::process::id()));
-    let mut builder = std::fs::DirBuilder::new();
     #[cfg(unix)]
-    std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
+    let builder = {
+        let mut builder = std::fs::DirBuilder::new();
+        std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
+        builder
+    };
+    // Sous Windows, le dossier temporaire est déjà propre au compte.
+    #[cfg(not(unix))]
+    let builder = std::fs::DirBuilder::new();
     // Échoue si le dossier existe déjà : on ne réutilise jamais celui d'un autre.
     builder.create(&dir).map_err(TtsError::Start)?;
     Ok(dir)
