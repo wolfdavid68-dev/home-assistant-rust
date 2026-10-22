@@ -1286,6 +1286,26 @@ mod tests {
     }
 
     #[test]
+    fn ring_mqtt_battery_with_default_filter() {
+        let c = config(
+            "sensor",
+            r#"{"name": "Battery", "unique_id": "abc123_battery",
+                "state_topic": "ring/lieu/camera/abc123/info/state",
+                "device_class": "battery", "unit_of_measurement": "%",
+                "value_template": "{{ value_json[\"batteryLevel\"] | default(\"\") }}",
+                "device": {"ids": ["abc123"], "name": "Porte", "mf": "Ring"}}"#,
+        );
+        assert_eq!(c.unit_of_measurement.as_deref(), Some("%"));
+        assert_eq!(
+            c.value_template
+                .render(r#"{"batteryLevel": 28}"#)
+                .as_deref(),
+            Some("28")
+        );
+        assert_eq!(c.value_template.render(r#"{"wirelessSignal": -54}"#), None);
+    }
+
+    #[test]
     fn tasmota_switch_with_base_topic() {
         let c = config(
             "switch",

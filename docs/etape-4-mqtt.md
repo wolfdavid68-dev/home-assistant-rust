@@ -81,7 +81,8 @@ le serveur.
   description incomprise est **refusée** (avec un message dans les logs), jamais devinée.
 - **Pas d'exécution de code.** Home Assistant accepte de vrais programmes Jinja2 dans les
   descriptions. Ici, seuls les chemins simples (`value_json.a['b'][0]`) sont acceptés : un
-  message reçu ne peut que lire un champ.
+  message reçu ne peut que lire un champ. Seul filtre permis, à la fin : `| default("…")` (un
+  texte entre guillemets ou un nombre), utilisé par ring-mqtt pour la batterie de la sonnette.
 - **Sujets contrôlés.** Pas de jokers (`+`, `#`) dans les sujets d'état ou de commande, et un
   appareil ne peut pas nous faire publier sous `homeassistant/…` (sinon il pourrait créer de
   fausses entités).
