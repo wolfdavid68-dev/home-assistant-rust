@@ -1633,6 +1633,9 @@ async fn colis_inner(args: &[&str], store: &Store) -> Result<(), Box<dyn Error>>
             {
                 return Err("adresse e-mail invalide".into());
             }
+            if is_microsoft_mailbox(&host, &username) {
+                return Err(MICROSOFT_MAILBOX.into());
+            }
             let pasted = ask_secret("Mot de passe d'application (16 lettres) : ")?;
             // Google l'affiche en quatre groupes : les espaces ne comptent pas.
             let password = Zeroizing::new(pasted.split_whitespace().collect::<String>());
@@ -1646,7 +1649,7 @@ async fn colis_inner(args: &[&str], store: &Store) -> Result<(), Box<dyn Error>>
                 password,
             };
             println!("connexion…");
-            let parcels =
+            let report =
                 ha_colis::check(&mailbox, &account)
                     .await
                     .map_err(|error| match error {
@@ -1658,7 +1661,7 @@ async fn colis_inner(args: &[&str], store: &Store) -> Result<(), Box<dyn Error>>
                     })?;
             store.save_mail_account(&account).await?;
             println!("associée !");
-            print_parcels(&parcels);
+            print_report(&report);
             println!();
             println!("Redémarre le serveur : sudo systemctl restart ha-maison");
             Ok(())
@@ -1669,8 +1672,8 @@ async fn colis_inner(args: &[&str], store: &Store) -> Result<(), Box<dyn Error>>
                 return Ok(());
             };
             println!("boîte : {} sur {}", account.username, account.host);
-            let parcels = ha_colis::check(&mailbox, &account).await?;
-            print_parcels(&parcels);
+            let report = ha_colis::check(&mailbox, &account).await?;
+            print_report(&report);
             Ok(())
         }
         ["forget"] => {
@@ -1683,6 +1686,43 @@ async fn colis_inner(args: &[&str], store: &Store) -> Result<(), Box<dyn Error>>
             Ok(())
         }
         _ => Err(USAGE.into()),
+    }
+}
+
+/// Hotmail, Outlook.com, Live, MSN : Microsoft refuse les mots de passe
+/// aux programmes (IMAP), il faut passer par une redirection vers Gmail.
+const MICROSOFT_MAILBOX: &str = "\
+Hotmail / Outlook.com n'accepte plus de mot de passe pour lire la boîte depuis un
+programme (Microsoft exige une application enregistrée chez Azure).
+Le plus simple : une règle Hotmail qui redirige les e-mails d'Amazon vers une
+boîte Gmail, et associer cette boîte Gmail ici. Voir docs/colis.md, « Avec Hotmail ».";
+
+fn is_microsoft_mailbox(host: &str, username: &str) -> bool {
+    let host = host.to_ascii_lowercase();
+    let domain = username
+        .rsplit_once('@')
+        .map(|(_, domain)| domain.to_ascii_lowercase())
+        .unwrap_or_default();
+    host.contains("outlook")
+        || host.contains("office365")
+        || host.contains("hotmail")
+        || ["hotmail.", "outlook.", "live.", "msn."]
+            .iter()
+            .any(|prefix| domain.starts_with(prefix))
+}
+
+/// Ce que la boîte montre : les colis, et les e-mails ignorés.
+fn print_report(report: &ha_colis::Report) {
+    print_parcels(&report.parcels);
+    if report.unsigned > 0 {
+        println!();
+        println!(
+            "attention : {} e-mail(s) « d'Amazon » sur {} ignoré(s) : la signature d'Amazon",
+            report.unsigned, report.mails
+        );
+        println!(
+            "n'a pas été vérifiée (un faux, ou un transfert qui l'a cassée : voir docs/colis.md)."
+        );
     }
 }
 
@@ -1789,5 +1829,22 @@ async fn timetree_inner(args: &[&str], store: &Store) -> Result<(), Box<dyn Erro
             Ok(())
         }
         _ => Err(USAGE.into()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_microsoft_mailbox;
+
+    #[test]
+    fn microsoft_mailboxes_are_spotted() {
+        assert!(is_microsoft_mailbox("imap.gmail.com", "david@hotmail.fr"));
+        assert!(is_microsoft_mailbox("imap.gmail.com", "David@Outlook.com"));
+        assert!(is_microsoft_mailbox(
+            "outlook.office365.com",
+            "a@exemple.fr"
+        ));
+        assert!(!is_microsoft_mailbox("imap.gmail.com", "maison@gmail.com"));
+        assert!(!is_microsoft_mailbox("imap.gmail.com", "a@livebox.fr"));
     }
 }

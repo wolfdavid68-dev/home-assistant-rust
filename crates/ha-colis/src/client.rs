@@ -122,19 +122,43 @@ impl<T: AsyncRead + AsyncWrite + Unpin + Send> Stream for T {}
 struct Cache {
     folder: Option<String>,
     validity: u64,
-    notices: HashMap<u32, Option<Notice>>,
+    notices: HashMap<u32, Seen>,
 }
 
-/// Un e-mail lu, compris (ou `None` : pas d'Amazon, ou pas un colis).
-fn understand(uid: u32, headers: &[u8], text: &[u8]) -> Option<Notice> {
+impl Cache {
+    fn notices(&self) -> Vec<Notice> {
+        self.notices
+            .values()
+            .filter_map(|seen| match seen {
+                Seen::Parcel(notice) => Some(notice.clone()),
+                Seen::Other | Seen::Unsigned => None,
+            })
+            .collect()
+    }
+}
+
+/// Ce qu'on a tiré d'un e-mail.
+#[derive(Debug, Clone)]
+enum Seen {
+    Parcel(Notice),
+    /// D'Amazon, mais pas un colis (publicité, facture…), ou illisible.
+    Other,
+    /// Pas de signature d'Amazon vérifiée : ignoré.
+    Unsigned,
+}
+
+/// Un e-mail lu, compris.
+fn understand(uid: u32, headers: &[u8], text: &[u8]) -> Seen {
     let headers = Headers::parse(headers);
     if !headers.is_from_amazon() {
         debug!("colis : e-mail {uid} ignoré (pas signé par Amazon)");
-        return None;
+        return Seen::Unsigned;
     }
-    let step = amazon::classify(&headers.subject)?;
+    let Some(step) = amazon::classify(&headers.subject) else {
+        return Seen::Other;
+    };
     let text = mail::readable_text(text);
-    Some(Notice {
+    Seen::Parcel(Notice {
         uid,
         step,
         article: amazon::article(&headers.subject),
@@ -188,24 +212,46 @@ async fn read_mail(
         if cache.notices.contains_key(&uid) {
             continue;
         }
-        let notice = session
+        let seen = session
             .fetch(uid)
             .await?
-            .and_then(|(headers, text)| understand(uid, &headers, &text));
-        cache.notices.insert(uid, notice);
+            .map_or(Seen::Other, |(headers, text)| {
+                understand(uid, &headers, &text)
+            });
+        cache.notices.insert(uid, seen);
     }
     session.logout().await;
-    Ok(cache.notices.values().flatten().cloned().collect())
+    Ok(cache.notices())
+}
+
+/// Ce que voit `ha-server colis pair` et `status`.
+#[derive(Debug, Clone)]
+pub struct Report {
+    /// Les colis des deux dernières semaines.
+    pub parcels: Vec<Parcel>,
+    /// Les e-mails « d'Amazon » des deux dernières semaines.
+    pub mails: usize,
+    /// Ceux qui ont été ignorés : pas de signature d'Amazon vérifiée (un
+    /// faux, ou un transfert qui l'a cassée).
+    pub unsigned: usize,
 }
 
 /// Vérifie le compte et lit les colis, pour `ha-server colis pair` et
 /// `status`.
-pub async fn check(mailbox: &Mailbox, account: &MailAccount) -> Result<Vec<Parcel>, ColisError> {
+pub async fn check(mailbox: &Mailbox, account: &MailAccount) -> Result<Report, ColisError> {
     let mut cache = Cache::default();
     let notices = tokio::time::timeout(TIMEOUT, read_mail(mailbox, account, &mut cache))
         .await
         .map_err(|_| ColisError::Timeout)??;
-    Ok(amazon::parcels(&notices))
+    Ok(Report {
+        parcels: amazon::parcels(&notices),
+        mails: cache.notices.len(),
+        unsigned: cache
+            .notices
+            .values()
+            .filter(|seen| matches!(seen, Seen::Unsigned))
+            .count(),
+    })
 }
 
 /// L'intégration des colis, en marche.

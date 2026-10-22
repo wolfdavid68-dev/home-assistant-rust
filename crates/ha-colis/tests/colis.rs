@@ -223,8 +223,9 @@ async fn a_parcel_on_its_way_then_delivered() {
         password: Zeroizing::new(PASSWORD.into()),
         ..account
     };
-    let parcels = ha_colis::check(&mailbox, &account).await.unwrap();
-    assert_eq!(parcels.len(), 1, "{parcels:?}");
+    let report = ha_colis::check(&mailbox, &account).await.unwrap();
+    assert_eq!(report.parcels.len(), 1, "{report:?}");
+    assert_eq!((report.mails, report.unsigned), (3, 1));
     store.save_mail_account(&account).await.unwrap();
 
     let core = Arc::new(Core::new());

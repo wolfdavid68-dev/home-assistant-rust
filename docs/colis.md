@@ -54,6 +54,10 @@ Et deux évènements, pour les automatisations : `colis_en_livraison` et `colis_
 
 ## L'installer (5 minutes)
 
+La maison lit une boîte **Gmail**. Les e-mails d'Amazon arrivent sur Hotmail ou Outlook.com ?
+Fais d'abord l'étape [Avec Hotmail](#avec-hotmail-ou-outlookcom), puis celles-ci avec la boîte
+Gmail qui les reçoit.
+
 ### 1. Un mot de passe d'application Google
 
 La maison ne reçoit **pas** ton mot de passe Gmail : Google donne un mot de passe à part, pour
@@ -112,7 +116,50 @@ rien d'autre :
    adresse ;
 3. associe la boîte de la maison (`colis pair`) au lieu de la tienne.
 
-La signature d'Amazon reste valable après le transfert : la maison les reconnaît pareil.
+Un e-mail transféré tel quel garde la signature d'Amazon : la maison le reconnaît pareil
+(`colis status` prévient si ce n'est pas le cas).
+
+### Avec Hotmail (ou Outlook.com)
+
+Depuis fin 2024, Microsoft **refuse les mots de passe** (même les mots de passe d'application)
+aux programmes qui lisent une boîte Hotmail, Outlook.com, Live ou MSN : il faut une application
+enregistrée chez Microsoft Azure, avec un compte Azure. `colis pair` refuse donc une adresse
+Hotmail, et explique quoi faire.
+
+Le plus simple : **Hotmail redirige les e-mails d'Amazon vers une boîte Gmail**, et la maison lit
+celle-ci. Avec un compte Gmail créé exprès pour la maison, elle ne voit **que** les e-mails
+d'Amazon : rien d'autre de ta boîte Hotmail.
+
+1. **Une boîte Gmail pour la maison** : crée un compte Google (par exemple
+   `maison.colis.dupont@gmail.com`), active la validation en deux étapes, et crée son mot de
+   passe d'application ([étape 1](#1-un-mot-de-passe-dapplication-google)).
+2. **La règle dans Hotmail**, sur [outlook.live.com](https://outlook.live.com) depuis un
+   ordinateur :
+   1. la roue dentée (Paramètres) → **Courrier** → **Règles** → **Ajouter une nouvelle règle** ;
+   2. nom : `Colis Amazon` ;
+   3. condition : **L'adresse de l'expéditeur inclut** → `amazon.fr` ;
+   4. action : **Rediriger vers** → l'adresse Gmail de la maison ;
+   5. **Enregistrer**.
+
+   Choisis bien **Rediriger vers**, pas « Transférer à » : un transfert devient un e-mail venant
+   de toi, sans la signature d'Amazon, et la maison l'ignore. Avec la redirection, l'e-mail
+   arrive tel qu'Amazon l'a envoyé. Tu continues de le recevoir aussi dans Hotmail.
+3. **Associer** la boîte Gmail de la maison : `sudo ha-maison colis pair`
+   ([étape 2](#2-associer-la-boîte)).
+
+La règle ne vaut que pour les **nouveaux** e-mails : la maison verra les colis à partir du
+prochain e-mail d'Amazon. Après celui-ci, vérifie :
+
+```bash
+sudo ha-maison colis status
+```
+
+Le colis doit apparaître. Si la commande dit « e-mail(s) d'Amazon ignoré(s) : la signature
+d'Amazon n'a pas été vérifiée », la redirection l'a abîmée : dis-le-moi. Si rien n'arrive dans
+la boîte Gmail, Microsoft bloque parfois la redirection vers une autre adresse pour un compte
+récent ou non vérifié : Paramètres → Courrier → Transfert indique alors pourquoi. Et si les
+e-mails d'Amazon arrivent dans les **Spams** de la boîte Gmail, ouvre-en un et clique
+**Signaler comme non-spam** : la maison ne lit pas les spams.
 
 ### Une notification sur le téléphone
 

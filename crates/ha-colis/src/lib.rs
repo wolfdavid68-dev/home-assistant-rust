@@ -21,7 +21,7 @@ mod error;
 pub mod imap;
 pub mod mail;
 
-pub use client::{Colis, Mailbox, POLL, check};
+pub use client::{Colis, Mailbox, POLL, Report, check};
 pub use error::ColisError;
 
 /// L'identifiant de l'intégration, propriétaire de ses entités.
