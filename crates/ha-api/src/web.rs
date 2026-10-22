@@ -12,14 +12,20 @@
 //!   mémoire. Le tableau de bord passe d'environ 570 Kio à 150 Kio ;
 //! - **l'empreinte (`ETag`)** : le navigateur garde sa copie et demande
 //!   seulement « a-t-elle changé ? ». Tant que le serveur n'est pas mis à
-//!   jour, la réponse est un `304` vide.
+//!   jour, la réponse est un `304` vide ;
+//! - **l'adresse avec l'empreinte** (étape 88) : `index.html` charge
+//!   `/app.js?v=9f40f79eaf237fc5`. À cette adresse-là, le fichier ne change
+//!   jamais : le navigateur le garde sans même redemander (`immutable`). Une
+//!   mise à jour du serveur change l'empreinte, donc l'adresse. Seul
+//!   `index.html` est revérifié à chaque ouverture : 1 requête au lieu de 30.
 
+use std::borrow::Cow;
 use std::fmt::Write as _;
 use std::io::Write as _;
 use std::sync::OnceLock;
 
 use axum::Router;
-use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
+use axum::http::{HeaderMap, HeaderValue, StatusCode, Uri, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use flate2::Compression;
@@ -47,6 +53,9 @@ const REVALIDATE: &str = "no-cache";
 /// Les images et les polices : elles ne changent qu'avec une nouvelle version
 /// du serveur, le navigateur peut les garder une semaine.
 const ONE_WEEK: &str = "public, max-age=604800";
+/// Un fichier demandé à l'adresse qui contient son empreinte : il ne
+/// changera jamais à cette adresse.
+const FOREVER: &str = "public, max-age=31536000, immutable";
 
 const JS: &str = "text/javascript; charset=utf-8";
 
@@ -64,6 +73,10 @@ struct Asset {
 }
 
 struct Prepared {
+    /// Le contenu servi (pour `index.html` : les adresses avec empreinte).
+    body: Cow<'static, [u8]>,
+    /// L'empreinte courte, pour l'adresse : `/app.js?v=…`.
+    version: String,
     etag: HeaderValue,
     /// `None` pour les fichiers déjà compressés (PNG, WOFF2) ou trop petits.
     gzip: Option<(Vec<u8>, HeaderValue)>,
@@ -162,7 +175,7 @@ pub(crate) fn router<S: Clone + Send + Sync + 'static>() -> Router<S> {
     ASSETS.iter().fold(Router::new(), |router, asset| {
         router.route(
             asset.path,
-            get(move |headers: HeaderMap| async move { serve(asset, &headers) }),
+            get(move |uri: Uri, headers: HeaderMap| async move { serve(asset, &uri, &headers) }),
         )
     })
 }
@@ -170,24 +183,53 @@ pub(crate) fn router<S: Clone + Send + Sync + 'static>() -> Router<S> {
 impl Asset {
     fn prepared(&self) -> &Prepared {
         self.prepared.get_or_init(|| {
+            let body: Cow<'static, [u8]> = if self.path == "/" {
+                Cow::Owned(versioned_index(self.body))
+            } else {
+                Cow::Borrowed(self.body)
+            };
             // L'empreinte : le début du SHA-256 du fichier, en hexadécimal.
-            let digest = Sha256::digest(self.body);
+            let digest = Sha256::digest(&body);
             let mut hex = String::with_capacity(32);
             for byte in &digest[..16] {
                 let _ = write!(hex, "{byte:02x}");
             }
             let gzip = compressible(self.content_type)
-                .then(|| gzip(self.body))
+                .then(|| gzip(&body))
                 .flatten()
                 // Garder la version compressée seulement si elle est plus petite.
-                .filter(|compressed| compressed.len() < self.body.len())
+                .filter(|compressed| compressed.len() < body.len())
                 .map(|compressed| (compressed, etag(&format!("\"{hex}-gz\""))));
             Prepared {
+                version: hex[..16].to_owned(),
                 etag: etag(&format!("\"{hex}\"")),
+                body,
                 gzip,
             }
         })
     }
+
+    /// Chargé par `index.html` à une adresse avec son empreinte ? Pas le
+    /// service worker (son adresse doit rester la même), ni `ecoute.js`
+    /// (chargé par `voix.js`), ni les fichiers de l'appli installée.
+    fn versioned(&self) -> bool {
+        (self.content_type == JS && !matches!(self.path, "/sw.js" | "/ecoute.js"))
+            || matches!(self.path, "/style.css" | "/icon.svg")
+    }
+}
+
+/// `index.html`, avec l'empreinte dans chaque adresse : `src="/app.js"` →
+/// `src="/app.js?v=9f40f79eaf237fc5"`.
+fn versioned_index(index: &'static [u8]) -> Vec<u8> {
+    let mut text = String::from_utf8_lossy(index).into_owned();
+    for asset in ASSETS.iter().filter(|asset| asset.versioned()) {
+        let version = &asset.prepared().version;
+        text = text.replace(
+            &format!("=\"{}\"", asset.path),
+            &format!("=\"{}?v={version}\"", asset.path),
+        );
+    }
+    text.into_bytes()
 }
 
 fn etag(value: &str) -> HeaderValue {
@@ -249,14 +291,20 @@ fn still_fresh(headers: &HeaderMap, etag: &HeaderValue) -> bool {
         .any(|tag| tag == etag || tag == "*")
 }
 
-fn serve(asset: &'static Asset, headers: &HeaderMap) -> Response {
+fn serve(asset: &'static Asset, uri: &Uri, headers: &HeaderMap) -> Response {
     let prepared = asset.prepared();
     let (body, etag, gzipped): (&'static [u8], &HeaderValue, bool) = match &prepared.gzip {
         Some((compressed, gz_etag)) if accepts_gzip(headers) => {
             (compressed.as_slice(), gz_etag, true)
         }
-        _ => (asset.body, &prepared.etag, false),
+        _ => (prepared.body.as_ref(), &prepared.etag, false),
     };
+    // À l'adresse avec la bonne empreinte : gardé pour toujours.
+    let forever = asset.versioned()
+        && uri
+            .query()
+            .and_then(|query| query.strip_prefix("v="))
+            .is_some_and(|version| version == prepared.version);
 
     let mut response = if still_fresh(headers, etag) {
         StatusCode::NOT_MODIFIED.into_response()
@@ -275,7 +323,10 @@ fn serve(asset: &'static Asset, headers: &HeaderMap) -> Response {
     };
     let out = response.headers_mut();
     out.insert(header::ETAG, etag.clone());
-    out.insert(header::CACHE_CONTROL, HeaderValue::from_static(asset.cache));
+    out.insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static(if forever { FOREVER } else { asset.cache }),
+    );
     if prepared.gzip.is_some() {
         // Les caches doivent garder une copie par encodage.
         out.insert(header::VARY, HeaderValue::from_static("Accept-Encoding"));
@@ -286,6 +337,48 @@ fn serve(asset: &'static Asset, headers: &HeaderMap) -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn asset(path: &str) -> &'static Asset {
+        ASSETS
+            .iter()
+            .find(|asset| asset.path == path)
+            .unwrap_or(&ASSETS[0])
+    }
+
+    #[test]
+    fn index_loads_files_by_their_fingerprint() {
+        let index = String::from_utf8(asset("/").prepared().body.to_vec()).unwrap_or_default();
+        let app = &asset("/app.js").prepared().version;
+        assert_eq!(app.len(), 16);
+        assert!(
+            index.contains(&format!("src=\"/app.js?v={app}\"")),
+            "{index}"
+        );
+        assert!(index.contains("href=\"/style.css?v="));
+        // Ni le manifeste ni les icônes de l'appli installée.
+        assert!(index.contains("href=\"/manifest.webmanifest\""));
+        assert!(!index.contains("src=\"/utils.js\""));
+    }
+
+    #[test]
+    fn a_fingerprinted_address_is_kept_forever() {
+        let app = asset("/app.js");
+        let version = &app.prepared().version;
+        let cache = |uri: &str| {
+            serve(app, &uri.parse().unwrap_or_default(), &HeaderMap::new())
+                .headers()
+                .get(header::CACHE_CONTROL)
+                .and_then(|value| value.to_str().ok())
+                .unwrap_or_default()
+                .to_owned()
+        };
+        assert_eq!(cache(&format!("/app.js?v={version}")), FOREVER);
+        // Une autre empreinte (une ancienne page) : revérifié.
+        assert_eq!(cache("/app.js?v=0000000000000000"), REVALIDATE);
+        assert_eq!(cache("/app.js"), REVALIDATE);
+        // Le service worker garde son adresse.
+        assert!(!asset("/sw.js").versioned());
+    }
 
     fn headers(pairs: &[(header::HeaderName, &'static str)]) -> HeaderMap {
         let mut map = HeaderMap::new();

@@ -2820,6 +2820,9 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
    l'heure, la météo et l'agenda à gauche, les scènes et les pièces à droite.
    Par-dessus le tableau de bord (les fenêtres s'ouvrent au-dessus). */
 :root[data-hub="on"] body { overflow: hidden; }
+/* Sous la vue hub, le tableau de bord ne se voit pas : le navigateur ne le
+   calcule plus (étape 88). Il garde sa mise en page pour le retour. */
+:root[data-hub="on"] #dashboard-view > :is(.hero, .layout, .agenda-view) { content-visibility: hidden; }
 .hub {
   position: fixed;
   inset: 0;

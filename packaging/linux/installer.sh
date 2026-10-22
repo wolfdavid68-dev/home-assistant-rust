@@ -6,7 +6,7 @@
 #   sudo ./installer.sh --sonos --ring    en plus : la voix des annonces sur les
 #                                         enceintes Sonos, et la sonnette Ring
 #   sudo ./installer.sh --voix            en plus : parler à la maison depuis
-#                                         la tablette (Whisper, 400 Mo)
+#                                         la tablette (Parakeet, 670 Mo)
 #
 # Les options sont retenues (/etc/ha-maison/options) : la mise à jour de
 # chaque nuit les garde. Guide : docs/mini-pc.md
@@ -20,7 +20,7 @@
 #     avec des mots de passe tirés au hasard (étape 83) ;
 #   - avec --sonos : la voix (Piper), téléchargée et vérifiée ;
 #   - avec --ring : ring-mqtt, dans un conteneur à la version épinglée ;
-#   - avec --voix : l'écoute (Whisper) et la voix (Piper), téléchargées et
+#   - avec --voix : l'écoute (Parakeet) et la voix (Piper), téléchargées et
 #     vérifiées, l'écoute dans son propre service (ha-maison-ecoute) ;
 #   - le service systemd, démarré tout de suite et à chaque allumage ;
 #   - la mise à jour automatique, chaque nuit (mise-a-jour.sh).

@@ -7,7 +7,7 @@
 #     (127.0.0.1), un compte par programme, mots de passe tirés au hasard ;
 #   - avec --sonos : Piper et la voix française, vérifiés par leur empreinte ;
 #   - avec --ring : ring-mqtt, dans un conteneur épinglé (ha-maison-ring.service) ;
-#   - avec --voix : parler à la maison depuis la tablette (étape 84) : Whisper
+#   - avec --voix : parler à la maison depuis la tablette (étape 84) : Parakeet
 #     et sherpa-onnx, vérifiés par leur empreinte (ha-maison-ecoute.service),
 #     et Piper pour répondre.
 #
@@ -25,17 +25,19 @@ VOIX_URL=https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/fr/fr_FR/siw
 VOIX_ONNX_SHA256=641d1ab097da2b81128c076810edb052b385decc8be3381814802a64a73baf99
 VOIX_JSON_SHA256=39479916c2db192b5ac9764daddd0c744d83e023ad890c6976c0633ae4df8959
 
-# L'écoute (étape 84) : sherpa-onnx 1.13.8 (le programme et sa bibliothèque,
-# pris dans ses paquets Python officiels) et Whisper « small » en entiers
-# 8 bits, à une version figée.
+# L'écoute (étapes 84 et 88) : sherpa-onnx 1.13.8 (le programme et sa
+# bibliothèque, pris dans ses paquets Python officiels) et Parakeet TDT 0.6b v3
+# de NVIDIA en entiers 8 bits (français compris), à une version figée : 4 fois
+# plus rapide que Whisper « small », et plus juste.
 SHERPA_BIN_URL=https://files.pythonhosted.org/packages/py3/s/sherpa-onnx-bin/sherpa_onnx_bin-1.13.8-py3-none-manylinux2014_x86_64.whl
 SHERPA_BIN_SHA256=cb835b6fd48a1d74809bf327b01515ec94c93428203c858885e9b09f3fe63227
 SHERPA_CORE_URL=https://files.pythonhosted.org/packages/py3/s/sherpa-onnx-core/sherpa_onnx_core-1.13.8-py3-none-manylinux2014_x86_64.whl
 SHERPA_CORE_SHA256=4da90acf435373d7b2ba9cc0be806e7e274d28f63f5780880b5dea6721626e36
-WHISPER_URL=https://huggingface.co/csukuangfj/sherpa-onnx-whisper-small/resolve/8f3c18b358db4d1f2fc1eae49d75cd20989e4309
-WHISPER_ENCODER_SHA256=4cbe7b22fa9026b843b60a68640c747de05bafb1a11b57edc0e66c232d9f33a9
-WHISPER_DECODER_SHA256=acad50b5c782696e91b55914cc5ab4f756f1532f76e22aa6fc615f39fb69a8ee
-WHISPER_TOKENS_SHA256=b34b360dbb493e781e479794586d661700670d65564001f23024971d1f2fa126
+PARAKEET_URL=https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/2bda32ec70b097a55adaa07d9a7173915b43cc78
+PARAKEET_ENCODER_SHA256=acfc2b4456377e15d04f0243af540b7fe7c992f8d898d751cf134c3a55fd2247
+PARAKEET_DECODER_SHA256=179e50c43d1a9de79c8a24149a2f9bac6eb5981823f2a2ed88d655b24248db4e
+PARAKEET_JOINER_SHA256=3164c13fc2821009440d20fcb5fdc78bff28b4db2f8d0f0b329101719c0948b3
+PARAKEET_TOKENS_SHA256=d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d
 ECOUTE=/opt/ha-maison/ecoute
 
 MOSQUITTO_CONF=/etc/mosquitto/conf.d/ha-maison.conf
@@ -224,10 +226,10 @@ FIN
   fi
 }
 
-# L'écoute (étape 84) : Whisper, gardé en mémoire par un service à part.
+# L'écoute (étapes 84 et 88) : Parakeet, gardé en mémoire par un service à part.
 ecoute() {
   if [ "$avec_voix" != true ]; then
-    # Retirée des options : on l'arrête (les fichiers restent, 400 Mo).
+    # Retirée des options : on l'arrête (les fichiers restent, 670 Mo).
     if [ -e /etc/systemd/system/ha-maison-ecoute.service ]; then
       systemctl disable --now ha-maison-ecoute.service >/dev/null 2>&1 || true
     fi
@@ -235,20 +237,22 @@ ecoute() {
   fi
   memoire=$(awk '/^MemTotal:/ { print int($2 / 1024) }' /proc/meminfo)
   if [ "${memoire:-0}" -lt 3000 ]; then
-    echo "  attention : $memoire Mo de mémoire ; l'écoute en prend 800 à elle seule"
+    echo "  attention : $memoire Mo de mémoire ; l'écoute en prend 900 à elle seule"
   fi
   fichiers_neufs=false
-  if ! echo "$WHISPER_ENCODER_SHA256  $ECOUTE/encoder.onnx" | sha256sum -c --quiet - >/dev/null 2>&1 ||
-    ! echo "$WHISPER_DECODER_SHA256  $ECOUTE/decoder.onnx" | sha256sum -c --quiet - >/dev/null 2>&1 ||
+  # Les fichiers d'avant (Whisper, étape 84) sont remplacés par Parakeet.
+  if ! echo "$PARAKEET_ENCODER_SHA256  $ECOUTE/encoder.onnx" | sha256sum -c --quiet - >/dev/null 2>&1 ||
+    ! echo "$PARAKEET_JOINER_SHA256  $ECOUTE/joiner.onnx" | sha256sum -c --quiet - >/dev/null 2>&1 ||
     [ ! -x "$ECOUTE/sherpa-onnx-offline-websocket-server" ]; then
-    echo "  l'écoute (Whisper et sherpa-onnx, 400 Mo)…"
+    echo "  l'écoute (Parakeet et sherpa-onnx, 670 Mo)…"
     paquets wget ca-certificates unzip
     dossier=$(mktemp -d)
     telecharge "$SHERPA_BIN_URL" "$dossier/bin.whl" "$SHERPA_BIN_SHA256"
     telecharge "$SHERPA_CORE_URL" "$dossier/core.whl" "$SHERPA_CORE_SHA256"
-    telecharge "$WHISPER_URL/small-encoder.int8.onnx" "$dossier/encoder.onnx" "$WHISPER_ENCODER_SHA256"
-    telecharge "$WHISPER_URL/small-decoder.int8.onnx" "$dossier/decoder.onnx" "$WHISPER_DECODER_SHA256"
-    telecharge "$WHISPER_URL/small-tokens.txt" "$dossier/tokens.txt" "$WHISPER_TOKENS_SHA256"
+    telecharge "$PARAKEET_URL/encoder.int8.onnx" "$dossier/encoder.onnx" "$PARAKEET_ENCODER_SHA256"
+    telecharge "$PARAKEET_URL/decoder.int8.onnx" "$dossier/decoder.onnx" "$PARAKEET_DECODER_SHA256"
+    telecharge "$PARAKEET_URL/joiner.int8.onnx" "$dossier/joiner.onnx" "$PARAKEET_JOINER_SHA256"
+    telecharge "$PARAKEET_URL/tokens.txt" "$dossier/tokens.txt" "$PARAKEET_TOKENS_SHA256"
     unzip -q -j -o "$dossier/bin.whl" \
       'sherpa_onnx_bin-1.13.8.data/data/bin/sherpa-onnx-offline-websocket-server' -d "$dossier" ||
       die "paquet sherpa-onnx illisible"
@@ -258,13 +262,13 @@ ecoute() {
     install -d -m 0755 "$ECOUTE.nouveau"
     install -m 0755 "$dossier/sherpa-onnx-offline-websocket-server" "$ECOUTE.nouveau/"
     install -m 0644 "$dossier/libonnxruntime.so" "$dossier/encoder.onnx" \
-      "$dossier/decoder.onnx" "$dossier/tokens.txt" "$ECOUTE.nouveau/"
+      "$dossier/decoder.onnx" "$dossier/joiner.onnx" "$dossier/tokens.txt" "$ECOUTE.nouveau/"
     rm -rf "$dossier" "$ECOUTE"
     mv "$ECOUTE.nouveau" "$ECOUTE"
     fichiers_neufs=true
     echo "  écoute installée"
   fi
-  # Le nombre de processeurs pour Whisper : tous, jusqu'à 4.
+  # Le nombre de processeurs pour l'écoute : tous, jusqu'à 4.
   fils=$(nproc 2>/dev/null || echo 2)
   [ "$fils" -le 4 ] || fils=4
   printf 'ECOUTE_FILS=%s\n' "$fils" >/etc/ha-maison/ecoute.env
@@ -273,7 +277,7 @@ ecoute() {
   install -m 0644 ha-maison-ecoute.service /etc/systemd/system/
   systemctl daemon-reload
   systemctl enable ha-maison-ecoute.service >/dev/null 2>&1
-  # Redémarré seulement s'il a changé : il garde Whisper en mémoire.
+  # Redémarré seulement s'il a changé : il garde le modèle en mémoire.
   if [ "$fichiers_neufs" = true ] || [ "$ancien" != "$(cat ha-maison-ecoute.service)" ]; then
     systemctl restart ha-maison-ecoute.service
   else

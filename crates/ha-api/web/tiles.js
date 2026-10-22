@@ -60,10 +60,19 @@ function joinNames(names) {
 
 function renderHome() {
   const now = new Date();
-  $("#today").textContent = fullDate.format(now);
-  $("#clock").textContent = hourMinute.format(now);
+  setText($("#today"), fullDate.format(now));
+  setText($("#clock"), hourMinute.format(now));
   renderNotices();
   if ($("#energy").open) renderEnergyNow();
+  // Sous la vue hub, le tableau de bord ne se voit pas : on ne redessine que
+  // ce qui peut se voir (une pièce ouverte, le dessin de la maison), puis la
+  // vue hub. Le tableau est redessiné en quittant la vue hub (étape 88).
+  if (typeof hubShouldShow === "function" && hubShouldShow()) {
+    if ($("#room").open && typeof renderRoomHead === "function") renderRoomHead();
+    if (typeof house !== "undefined" && house.loading === null && token.get()) loadHouse();
+    updateHub();
+    return;
+  }
 
   // La salutation, et ce qui demande de l'attention.
   const hour = now.getHours();
@@ -74,7 +83,7 @@ function renderHome() {
   // Un rendez-vous dans l'heure (agenda.js, étape 75).
   const soon = typeof agendaSoon === "function" ? agendaSoon() : null;
   if (found.length === 0) {
-    greeting.replaceChildren(`${hello}${who}. Tout est calme.`, ...(soon ? [" ", soon, "."] : []));
+    swap(greeting, `${hello}${who}. Tout est calme.`, ...(soon ? [" ", soon, "."] : []));
   } else if (found.length === 1) {
     // Demain est dans la tuile de Tempo aujourd'hui.
     const target = found[0].state.entity_id === TEMPO_TOMORROW ? TEMPO_TODAY : found[0].state.entity_id;
@@ -86,9 +95,9 @@ function renderHome() {
       tile?.scrollIntoView({ behavior: "smooth", block: "center" });
       tile?.querySelector("button")?.focus({ preventScroll: true });
     });
-    greeting.replaceChildren(`${hello}${who}. Tout est calme, sauf `, link, ".");
+    swap(greeting, `${hello}${who}. Tout est calme, sauf `, link, ".");
   } else {
-    greeting.replaceChildren(`${hello}${who}. ${found.length} choses demandent ton attention.`);
+    swap(greeting, `${hello}${who}. ${found.length} choses demandent ton attention.`);
   }
 
   // Qui est là.
@@ -104,23 +113,22 @@ function renderHome() {
     if (next && next.startDate <= now) parts.push(`En ce moment : ${next.summary}`);
     else if (next && agendaDay(next.startDate) === "Aujourd'hui") parts.push(`${next.summary} à ${hourMinute.format(next.startDate)}`);
   }
-  $("#summary").textContent = parts.join(" · ");
+  setText($("#summary"), parts.join(" · "));
 
   // La météo, en une pastille.
   const weather = [...entities.values()].find((s) => domainOf(s) === "weather");
   const pill = $("#weather-pill");
-  pill.hidden = !weather;
+  const pillParts = [];
   if (weather) {
     const label = lookup(WEATHER_LABELS, weather.state)?.[0] ?? "";
     const temp = finite(weather.attributes.temperature) ? `${number.format(weather.attributes.temperature)}°` : "";
-    pill.replaceChildren(svgIcon(weatherIcon(weather.state)), el("strong", { text: temp }), label);
+    pillParts.push(svgIcon(weatherIcon(weather.state)), el("strong", { text: temp }), label);
   }
   // La vigilance, dès le jaune : dans la pastille (même sans la météo).
   const vigilance = entities.get(VIGILANCE_TODAY);
-  if (vigilance && vigilanceRank(vigilance.state) >= 1) {
-    pill.hidden = false;
-    pill.append(vigilanceBadge(vigilance.state));
-  }
+  if (vigilance && vigilanceRank(vigilance.state) >= 1) pillParts.push(vigilanceBadge(vigilance.state));
+  pill.hidden = pillParts.length === 0;
+  swap(pill, ...pillParts);
 
   renderPlan();
   renderScenes();
@@ -205,7 +213,7 @@ function renderPlan() {
     const mean = temps.reduce((sum, t) => sum + t, 0) / temps.length;
     legend.append(el("span", {}, el("b", { text: `${number.format(mean)}°` }), " en moyenne"));
   }
-  card.replaceChildren(
+  swap(card,
     el("div", { class: "plan-head" }, el("h2", { text: "La maison" })),
     el("div", { class: "plan" }, ...rooms),
     legend,
@@ -230,7 +238,7 @@ function renderScenes() {
     .sort((a, b) => nameOf(a).localeCompare(nameOf(b), "fr"));
   const nav = $("#scenes");
   nav.hidden = list.length === 0;
-  nav.replaceChildren(...list.map((state) => {
+  swap(nav, ...list.map((state) => {
     const isScript = domainOf(state) === "script";
     const running = isScript && state.state === "on";
     const button = el(

@@ -17,7 +17,10 @@ mod program;
 pub mod wyoming;
 
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
+
+use tokio::sync::Mutex;
 
 pub use audio::{Announcement, Pcm, announcement};
 
@@ -63,10 +66,12 @@ pub enum Engine {
     },
 }
 
-/// La voix, prête à parler.
+/// La voix, prête à parler. Ses copies partagent le même Piper gardé en
+/// marche.
 #[derive(Debug, Clone)]
 pub struct Tts {
     engine: Engine,
+    resident: Arc<Mutex<program::Slot>>,
 }
 
 impl Tts {
@@ -92,12 +97,10 @@ impl Tts {
                     "HA_PIPER_VOIX : nom de voix invalide « {voice} » (exemple : {DEFAULT_VOICE})"
                 )));
             }
-            return Ok(Self {
-                engine: Engine::Wyoming {
-                    address: address.to_owned(),
-                    voice: voice.map(str::to_owned),
-                },
-            });
+            return Ok(Self::new(Engine::Wyoming {
+                address: address.to_owned(),
+                voice: voice.map(str::to_owned),
+            }));
         }
         if piper.is_empty() {
             return Err(TtsError::Config("HA_PIPER est vide".into()));
@@ -124,15 +127,26 @@ impl Tts {
                 model.display()
             )));
         }
-        Ok(Self {
-            engine: Engine::Program { program, model },
-        })
+        Ok(Self::new(Engine::Program { program, model }))
     }
 
     /// Une voix déjà décrite (pour les tests et les réglages faits ailleurs).
     #[must_use]
     pub fn new(engine: Engine) -> Self {
-        Self { engine }
+        Self {
+            engine,
+            resident: Arc::default(),
+        }
+    }
+
+    /// Démarre Piper à l'avance (il charge sa voix, ≈ 0,6 s) : la première
+    /// réponse n'attend pas. Sans effet avec le service Wyoming.
+    pub async fn warm_up(&self) {
+        if let Engine::Program { program, model } = &self.engine
+            && let Err(error) = self.resident.lock().await.ensure(program, model)
+        {
+            tracing::warn!("voix : Piper ne reste pas en marche ({error}), une phrase à la fois");
+        }
     }
 
     #[must_use]
@@ -163,7 +177,23 @@ impl Tts {
         let text = clean_text(text).ok_or(TtsError::Empty)?;
         let speaking = async {
             match &self.engine {
-                Engine::Program { program, model } => program::speak(program, model, &text).await,
+                Engine::Program { program, model } => {
+                    // Piper gardé en marche d'abord ; s'il ne marche pas, un
+                    // Piper lancé pour cette phrase.
+                    let kept = self
+                        .resident
+                        .lock()
+                        .await
+                        .speak(program, model, &text)
+                        .await;
+                    match kept {
+                        Ok(pcm) => Ok(pcm),
+                        Err(error) => {
+                            tracing::debug!("voix : Piper gardé en marche indisponible ({error})");
+                            program::speak(program, model, &text).await
+                        }
+                    }
+                }
                 Engine::Wyoming { address, voice } => {
                     wyoming::speak(address, voice.as_deref(), &text).await
                 }

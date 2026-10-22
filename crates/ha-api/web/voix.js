@@ -9,8 +9,9 @@
 const VOICE_RATE = 16000;
 /** Une phrase dure au plus 12 s (le serveur en accepte 15). */
 const VOICE_MAX_MS = 12_000;
-/** Ce silence après la phrase la termine. */
-const VOICE_SILENCE_MS = 1_200;
+/** Ce silence après la phrase la termine (étape 88 : 0,9 s au lieu de 1,2 s,
+ *  la réponse arrive d'autant plus tôt ; une courte hésitation passe encore). */
+const VOICE_SILENCE_MS = 900;
 /** Sans rien entendre pendant ce temps, on abandonne. */
 const VOICE_WAIT_MS = 6_000;
 
@@ -19,7 +20,12 @@ const voice = {
   speak: false,
   state: "idle",
   stream: null,
+  /** Le son du micro : gardé d'une phrase à l'autre (en pause entre deux),
+   *  avec son module d'écoute déjà chargé : le micro s'ouvre plus vite. */
   context: null,
+  ready: false,
+  source: null,
+  node: null,
   player: null,
   chunks: [],
   rate: 48_000,
@@ -87,9 +93,13 @@ async function voiceStart() {
       audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
     });
     voice.stream = stream;
-    const context = new AudioContext();
-    voice.context = context;
-    await context.audioWorklet.addModule("/ecoute.js");
+    voice.context ??= new AudioContext();
+    const context = voice.context;
+    await context.resume();
+    if (!voice.ready) {
+      await context.audioWorklet.addModule("/ecoute.js");
+      voice.ready = true;
+    }
     // Assist fermé pendant que le micro s'ouvrait : on n'écoute pas.
     if (voice.state !== "starting" || voice.stream !== stream) {
       if (voice.stream === stream) voiceClose();
@@ -99,6 +109,8 @@ async function voiceStart() {
     const node = new AudioWorkletNode(context, "ecoute", { numberOfOutputs: 0 });
     node.port.onmessage = (event) => voiceChunk(event.data);
     source.connect(node);
+    voice.source = source;
+    voice.node = node;
     Object.assign(voice, {
       chunks: [],
       rate: context.sampleRate,
@@ -147,12 +159,16 @@ function voiceChunk(samples) {
   }
 }
 
-/** Ferme le micro (le voyant du navigateur s'éteint). */
+/** Ferme le micro (le voyant du navigateur s'éteint). Le son reste prêt, en
+ *  pause, pour la phrase suivante. */
 function voiceClose() {
   for (const track of voice.stream?.getTracks() ?? []) track.stop();
   voice.stream = null;
-  voice.context?.close().catch(() => {});
-  voice.context = null;
+  voice.source?.disconnect();
+  voice.node?.port.close();
+  voice.source = null;
+  voice.node = null;
+  voice.context?.suspend().catch(() => {});
 }
 
 /** La phrase est finie : elle part au serveur, la réponse revient. */
