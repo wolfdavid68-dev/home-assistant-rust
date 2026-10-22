@@ -997,7 +997,7 @@ pub(crate) async fn integrations(
 
 /// `GET /api/areas` : les pièces de la maison et leurs appareils.
 pub(crate) async fn areas(State(state): State<Arc<ApiState>>, auth: Authenticated) -> Json<Value> {
-    let areas: Vec<Value> = state
+    let mut areas: Vec<(String, Vec<Value>)> = state
         .areas
         .iter()
         .map(|area| {
@@ -1010,8 +1010,48 @@ pub(crate) async fn areas(State(state): State<Arc<ApiState>>, auth: Authenticate
                 })
                 .map(|entity| json!({"entity_id": entity.entity_id.as_str(), "name": entity.name}))
                 .collect();
-            json!({"name": area.name, "entities": entities})
+            (area.name.clone(), entities)
         })
+        .collect();
+    // Les appareils dont l'intégration donne la pièce (SmartThings, étape 86)
+    // et qui ne sont pas dans areas.yaml : dans la pièce du même nom, ou
+    // dans une nouvelle pièce, à la fin.
+    let placed: std::collections::HashSet<&EntityId> = state
+        .areas
+        .iter()
+        .flat_map(|area| area.entities.iter().map(|e| &e.entity_id))
+        .collect();
+    let mut extra = state.core.states.all();
+    extra.sort_by(|a, b| a.entity_id().as_str().cmp(b.entity_id().as_str()));
+    for entity in extra {
+        let Some(room) = entity
+            .attributes()
+            .get("piece")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|room| !room.is_empty())
+        else {
+            continue;
+        };
+        if placed.contains(entity.entity_id())
+            || !roles::can_see(&auth.user, entity.entity_id(), Some(&entity))
+        {
+            continue;
+        }
+        let key = ha_assist::normalize(room);
+        let item = json!({"entity_id": entity.entity_id().as_str(), "name": Value::Null});
+        if let Some(index) = areas
+            .iter()
+            .position(|(name, _)| ha_assist::normalize(name) == key)
+        {
+            areas[index].1.push(item);
+        } else if areas.len() < 100 {
+            areas.push((room.chars().take(64).collect(), vec![item]));
+        }
+    }
+    let areas: Vec<Value> = areas
+        .into_iter()
+        .map(|(name, entities)| json!({"name": name, "entities": entities}))
         .collect();
     Json(json!({ "areas": areas }))
 }

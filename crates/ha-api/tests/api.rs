@@ -627,6 +627,7 @@ async fn dashboard_files_are_served_with_security_headers() {
         ("/fonts/geist-mono.woff2", "font/woff2"),
         ("/fonts/bricolage-grotesque.woff2", "font/woff2"),
         ("/sw.js", "text/javascript; charset=utf-8"),
+        ("/smartthings", "text/html; charset=utf-8"),
         ("/icon-192.png", "image/png"),
         ("/icon-512.png", "image/png"),
         ("/apple-touch-icon.png", "image/png"),
@@ -2400,6 +2401,43 @@ async fn assist_understands_french_and_obeys_the_same_rules() {
         )
         .await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+/// Une pièce donnée par l'intégration (SmartThings, étape 86) compte pour
+/// Assist comme une pièce d'areas.yaml.
+#[tokio::test]
+async fn assist_knows_the_room_given_by_an_integration() {
+    let app = TestApp::new().await;
+    for (id, name) in [
+        ("light.bureau_haut", "Plafonnier"),
+        ("light.bureau_lampe", "Lampe"),
+    ] {
+        let mut attributes = Attributes::new();
+        attributes.insert("friendly_name".into(), name.into());
+        attributes.insert("piece".into(), "Bureau".into());
+        app.state
+            .core
+            .states
+            .set(id.parse().unwrap(), "on", attributes)
+            .unwrap();
+    }
+    let david = app.login().await;
+    let (status, body) = app
+        .request(
+            "POST",
+            "/api/conversation/process",
+            Some(&david),
+            Some(json!({"text": "éteins les lumières du bureau"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let speech = body["response"]["speech"]["plain"]["speech"]
+        .as_str()
+        .unwrap();
+    assert!(
+        speech.contains("Plafonnier") && speech.contains("Lampe"),
+        "{speech}"
+    );
 }
 
 /// « Ajoute du pain à la liste de courses » (étape 84) : un ordre à la liste.

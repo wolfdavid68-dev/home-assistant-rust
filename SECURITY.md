@@ -85,6 +85,12 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
   enregistrées comme une automatisation écrite à la main (droit de modifier, mot de passe redemandé, audit, notification) ;
   réglages contrôlés (heures, consignes de 5 à 30 °C, délais bornés, champs inconnus refusés) ; jamais de serrure ni
   d'alarme, garage et portail seulement surveillés.
+- SmartThings (étape 86) : API officielle, OAuth avec une application propre à la maison et le minimum de droits
+  (lire et commander les appareils, lire les pièces) ; secret de l'application et jetons chiffrés dans la base, jamais
+  affichés ni journalisés ; le jeton de renouvellement, à usage unique, est enregistré avant d'être utilisé, et seul le
+  serveur renouvelle ; retour d'autorisation vérifié par un état aléatoire ; HTTPS vers `api.smartthings.com`
+  seulement, sans redirection, réponses limitées à 4 Mio ; identifiants d'appareils vérifiés ; chaque ordre suit le
+  chemin d'un toucher.
 - Agendas en ligne (ICS) : HTTPS seulement, sans redirection, 2 Mio au plus ; l'adresse (qui peut contenir une
   clé secrète) n'est jamais journalisée ni publiée, seulement le nom du site ; lecture seule.
 - Alexa (faux pont Hue, sans authentification possible) : désactivée par défaut ; seuls les appareils listés

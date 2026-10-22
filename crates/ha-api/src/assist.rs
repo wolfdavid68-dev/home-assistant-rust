@@ -82,10 +82,19 @@ pub(crate) fn devices(state: &ApiState, auth: &Authenticated) -> Vec<Device> {
                 .map(str::to_owned)
                 .or_else(|| placed.as_ref().and_then(|(_, name)| name.clone()))
                 .unwrap_or_else(|| entity.entity_id().to_string());
+            // Sans pièce dans areas.yaml : celle que donne l'intégration
+            // (la pièce SmartThings, étape 86).
+            let area = placed.map(|(area, _)| area).or_else(|| {
+                entity
+                    .attributes()
+                    .get("piece")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned)
+            });
             Device {
                 state: entity,
                 name,
-                area: placed.map(|(area, _)| area),
+                area,
             }
         })
         .collect()

@@ -1166,6 +1166,7 @@ dependencies = [
 name = "ha-server"
 version = "0.1.0"
 dependencies = [
+ "getrandom 0.4.3",
  "ha-agenda",
  "ha-alert",
  "ha-alexa",
@@ -1189,6 +1190,7 @@ dependencies = [
  "ha-shade",
  "ha-shedding",
  "ha-simulation",
+ "ha-smartthings",
  "ha-somfy",
  "ha-sonos",
  "ha-storage",
@@ -1250,6 +1252,25 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "ha-smartthings"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "base64 0.22.1",
+ "getrandom 0.4.3",
+ "ha-core",
+ "ha-storage",
+ "ha-tls",
+ "reqwest",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "url",
+ "zeroize",
 ]
 
 [[package]]

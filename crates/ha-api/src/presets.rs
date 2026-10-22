@@ -64,7 +64,11 @@ pub(crate) fn house(state: &ApiState) -> House {
             .or_else(|| placed.and_then(|(_, name)| *name))
             .unwrap_or(entity.entity_id().object_id())
             .to_owned();
-        let room = placed.map_or("", |(area, _)| area);
+        // La pièce d'areas.yaml, sinon celle de l'intégration (SmartThings).
+        let room = placed
+            .map(|(area, _)| *area)
+            .or_else(|| attributes.get("piece").and_then(Value::as_str))
+            .unwrap_or("");
         let device = || Device {
             entity_id: id.clone(),
             name: name.clone(),
