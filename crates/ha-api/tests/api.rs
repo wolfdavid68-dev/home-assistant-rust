@@ -187,6 +187,8 @@ async fn every_route_requires_a_token() {
         ("GET", "/api/automations/soir/versions"),
         ("GET", "/api/automations/matin/traces"),
         ("PUT", "/api/automations/matin/layout"),
+        ("GET", "/api/automations/presets"),
+        ("PUT", "/api/automations/presets/nuit"),
         ("GET", "/api/energy"),
         ("GET", "/api/home/drawing"),
         ("PUT", "/api/home/drawing"),
@@ -615,6 +617,7 @@ async fn dashboard_files_are_served_with_security_headers() {
         ("/hub.js", "text/javascript; charset=utf-8"),
         ("/sonnette.js", "text/javascript; charset=utf-8"),
         ("/voix.js", "text/javascript; charset=utf-8"),
+        ("/pretes.js", "text/javascript; charset=utf-8"),
         ("/ecoute.js", "text/javascript; charset=utf-8"),
         ("/house.svg", "image/svg+xml"),
         ("/style.css", "text/css; charset=utf-8"),
@@ -721,6 +724,7 @@ fn dashboard_never_uses_inner_html() {
         ("hub.js", include_str!("../web/hub.js")),
         ("sonnette.js", include_str!("../web/sonnette.js")),
         ("voix.js", include_str!("../web/voix.js")),
+        ("pretes.js", include_str!("../web/pretes.js")),
         ("ecoute.js", include_str!("../web/ecoute.js")),
         ("sw.js", include_str!("../web/sw.js")),
     ];
@@ -1298,6 +1302,177 @@ async fn the_place_of_the_blocks_is_kept_without_confirmation() {
             "/api/automations/matin/layout",
             Some(&family),
             Some(json!({})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+/// Les automatisations toutes prêtes (étape 85) : cochées, elles deviennent
+/// des automatisations ordinaires, fabriquées d'après les appareils.
+#[tokio::test]
+async fn ready_made_automations_are_ticked() {
+    let app = TestApp::new().await;
+    furnish(&app);
+    let set = |id: &str, value: &str, attributes: Value| {
+        let Value::Object(attributes) = attributes else {
+            panic!()
+        };
+        app.state
+            .core
+            .states
+            .set(id.parse().unwrap(), value, attributes)
+            .unwrap();
+    };
+    set("zone.home", "1", json!({}));
+    set("climate.salon", "heat", json!({"temperature": 20}));
+    set("light.prise_frigo", "on", json!({"device_class": "outlet"}));
+    set(
+        "binary_sensor.fenetre",
+        "off",
+        json!({"device_class": "window", "friendly_name": "Fenêtre"}),
+    );
+    let token = app.login().await;
+
+    let (status, body) = app
+        .request("GET", "/api/automations/presets", Some(&token), None)
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let names: Vec<&str> = body["presets"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| p["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["depart", "retour", "nuit", "matin", "vacances"]);
+    let depart = &body["presets"][0];
+    assert_eq!(depart["enabled"], false);
+    assert_eq!(depart["options"]["chauffage"], 17.0);
+    // La prise n'est pas une lumière ; le garage est une ouverture.
+    assert_eq!(
+        body["house"]["lights"],
+        json!([{"entity_id": "light.salon", "name": "salon"}])
+    );
+    assert_eq!(body["house"]["openings"], 2);
+    assert_eq!(body["house"]["people"], true);
+
+    let tick = json!({"enabled": true, "options": {"volets": true}});
+    let (status, body) = app
+        .request(
+            "PUT",
+            "/api/automations/presets/depart",
+            Some(&token),
+            Some(tick.clone()),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "le mot de passe d'abord");
+    assert_eq!(body["confirm"], true);
+    let (status, _) = app
+        .request(
+            "POST",
+            "/api/auth/confirm",
+            Some(&token),
+            Some(json!({"password": PASSWORD})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, body) = app
+        .request(
+            "PUT",
+            "/api/automations/presets/depart",
+            Some(&token),
+            Some(tick),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let actions: Vec<&str> = body["config"]["actions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|a| a["action"].as_str().unwrap_or("if"))
+        .collect();
+    assert_eq!(
+        actions,
+        [
+            "light.turn_off",
+            "cover.close_cover",
+            "climate.set_temperature",
+            "if"
+        ]
+    );
+
+    // Une automatisation ordinaire, active, et les réglages gardés.
+    let (_, body) = app
+        .request("GET", "/api/automations", Some(&token), None)
+        .await;
+    let entry = body["automations"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|a| a["id"] == "pret_depart")
+        .unwrap()
+        .clone();
+    assert_eq!(entry["enabled"], true);
+    assert_eq!(entry["source"], "editor");
+    let (_, body) = app
+        .request("GET", "/api/automations/presets", Some(&token), None)
+        .await;
+    assert_eq!(body["presets"][0]["enabled"], true);
+    assert_eq!(body["presets"][0]["options"]["volets"], true);
+
+    // Décochée : gardée, désactivée.
+    let (status, _) = app
+        .request(
+            "PUT",
+            "/api/automations/presets/depart",
+            Some(&token),
+            Some(json!({"enabled": false, "options": {"volets": true}})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let (_, body) = app
+        .request("GET", "/api/automations/presets", Some(&token), None)
+        .await;
+    assert_eq!(body["presets"][0]["enabled"], false);
+    assert_eq!(body["presets"][0]["exists"], true);
+
+    // Des réglages faux, une automatisation inconnue.
+    let (status, body) = app
+        .request(
+            "PUT",
+            "/api/automations/presets/nuit",
+            Some(&token),
+            Some(json!({"enabled": true, "options": {"heure": "25:00"}})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(body["error"].as_str().unwrap().contains("heure"), "{body}");
+    let (status, _) = app
+        .request(
+            "PUT",
+            "/api/automations/presets/cafe",
+            Some(&token),
+            Some(json!({"enabled": true})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _) = app
+        .request(
+            "PUT",
+            "/api/automations/presets/nuit",
+            Some(&token),
+            Some(json!({"enabled": true, "options": {"cafe": true}})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "réglage inconnu refusé");
+
+    // Un invité ne coche rien.
+    let guest = app.login_as("visiteur", ha_auth::Role::Guest).await;
+    let (status, _) = app
+        .request(
+            "PUT",
+            "/api/automations/presets/nuit",
+            Some(&guest),
+            Some(json!({"enabled": true})),
         )
         .await;
     assert_eq!(status, StatusCode::FORBIDDEN);

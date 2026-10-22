@@ -87,6 +87,10 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
   joignable que depuis le mini-PC (`IPAddressAllow=localhost`, et le serveur refuse une autre adresse que la boucle
   locale), sous un compte jetable sans droit d'écriture ; ses fichiers sont vérifiés par leur empreinte SHA-256 ; chaque
   ordre suit le chemin d'un toucher (Assist).
+- Automatisations toutes prêtes (étape 85) : fabriquées par le serveur d'après les appareils, puis vérifiées et
+  enregistrées comme une automatisation écrite à la main (droit de modifier, mot de passe redemandé, audit, notification) ;
+  réglages contrôlés (heures, consignes de 5 à 30 °C, délais bornés, champs inconnus refusés) ; jamais de serrure ni
+  d'alarme, garage et portail seulement surveillés.
 - Agendas en ligne (ICS) : HTTPS seulement, sans redirection, 2 Mio au plus ; l'adresse (qui peut contenir une
   clé secrète) n'est jamais journalisée ni publiée, seulement le nom du site ; lecture seule.
 - Alexa (faux pont Hue, sans authentification possible) : désactivée par défaut ; seuls les appareils listés

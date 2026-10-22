@@ -18,6 +18,7 @@ mod engine;
 pub mod entities;
 mod error;
 pub mod evaluator;
+pub mod presets;
 pub mod scripts;
 pub mod template;
 pub mod trace;

@@ -18,6 +18,8 @@
 //! | PUT / DELETE | `/api/automations/{id}` | Crée, modifie, supprime (confirmation requise) |
 //! | GET | `/api/automations/{id}/versions` | Versions précédentes |
 //! | GET | `/api/automations/{id}/traces` | Dernières exécutions (historique) |
+//! | GET | `/api/automations/presets` | Les automatisations toutes prêtes (étape 85) et ce qui est coché |
+//! | PUT | `/api/automations/presets/{name}` | En active une (ou la désactive) avec ses réglages |
 //! | PUT | `/api/automations/{id}/layout` | Place des blocs dans le schéma |
 //! | GET / PUT | `/api/home/drawing` | Dessin de la maison (style « plan ») : assemblage |
 //! | GET / PUT / DELETE | `/api/home/images/{name}` | Ses images (fond, calques) |
@@ -41,6 +43,7 @@ mod drawing;
 mod error;
 mod json;
 mod mcp;
+mod presets;
 mod push;
 mod rest;
 mod roles;
@@ -168,6 +171,8 @@ pub fn router(state: Arc<ApiState>) -> Router {
         .route("/api/auth/confirm", post(automations::confirm))
         .route("/api/automations", get(automations::list))
         .route("/api/automations/check", post(automations::check))
+        .route("/api/automations/presets", get(presets::list))
+        .route("/api/automations/presets/{name}", put(presets::save))
         .route(
             "/api/automations/{id}",
             put(automations::save).delete(automations::delete),

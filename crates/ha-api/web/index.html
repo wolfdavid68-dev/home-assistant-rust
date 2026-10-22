@@ -29,6 +29,7 @@
   <script src="/hub.js" defer></script>
   <script src="/sonnette.js" defer></script>
   <script src="/voix.js" defer></script>
+  <script src="/pretes.js" defer></script>
 </head>
 <body>
   <!-- Écran de connexion -->
@@ -348,6 +349,12 @@
           L'éditeur est en lecture seule (<code>HA_AUTOMATION_EDITOR=off</code>).
         </p>
         <p id="auto-notice" class="notice ok" role="status" hidden></p>
+        <!-- Les automatisations toutes prêtes (étape 85) : on coche, c'est prêt. -->
+        <section id="auto-presets" class="auto-presets" aria-labelledby="auto-presets-title" hidden>
+          <h3 id="auto-presets-title">Toutes prêtes</h3>
+          <p class="auto-presets-hint">Coche, règle si besoin : elles se servent des appareils de la maison.</p>
+          <ul id="auto-preset-list" class="preset-list"></ul>
+        </section>
         <div class="auto-toolbar">
           <button id="auto-new" class="primary small" type="button">Nouvelle automatisation</button>
         </div>
