@@ -234,7 +234,8 @@ function renderHubAgenda(now) {
   const next = events.find((e) => !e.allDay && e.startDate > now);
   const rows = events.map((e) => {
     const later = e.startDate >= tomorrow;
-    const sub = [later ? "demain" : "", e.location || "", ...(e.calendarNames ?? [e.calendar.name])].filter(Boolean).join(" · ");
+    // Pas le nom de l'agenda : sa couleur, sur la barre, suffit.
+    const sub = [later ? "demain" : "", e.location || ""].filter(Boolean).join(" · ");
     const row = el("button", { type: "button", class: e === next ? "hub-event next" : "hub-event" },
       el("span", { class: "hub-event-bar" }),
       el("span", { class: "hub-event-time", text: e.allDay ? "jour" : hourMinute.format(e.startDate) }),
@@ -258,8 +259,7 @@ function hubEventWhen(e, next, later, now) {
 }
 
 /** Le même rendez-vous dans deux agendas (les vacances dans l'agenda de la
- *  famille et dans celui des vacances scolaires) : une seule ligne, avec les
- *  deux noms d'agenda. */
+ *  famille et dans celui des vacances scolaires) : une seule ligne. */
 function hubMergeSame(events) {
   const seen = new Map();
   const out = [];
@@ -267,14 +267,9 @@ function hubMergeSame(events) {
     // Sur deux jours, deux journées entières du même nom sont la même chose,
     // même si l'une commence un jour plus tôt.
     const key = `${e.allDay ? "jour" : e.startDate.getTime()}|${String(e.summary ?? "").trim().toLowerCase()}`;
-    const first = seen.get(key);
-    if (first) {
-      if (!first.calendarNames.includes(e.calendar.name)) first.calendarNames.push(e.calendar.name);
-      continue;
-    }
-    const copy = { ...e, calendarNames: [e.calendar.name] };
-    seen.set(key, copy);
-    out.push(copy);
+    if (seen.has(key)) continue;
+    seen.set(key, e);
+    out.push(e);
   }
   return out;
 }

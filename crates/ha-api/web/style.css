@@ -802,11 +802,15 @@ body.tablet .clock {
 .account strong { color: var(--text); }
 
 /* Écran de veille de la tablette murale : la maison en grand, l'heure, la
-   météo. Plus sombre la nuit ; décalé de quelques pixels chaque minute. */
+   météo. Derrière, la même image floutée remplit l'écran (start.js) et la
+   maison s'y fond, sans bords. Plus sombre la nuit ; décalé de quelques
+   pixels chaque minute. */
 .saver {
   position: fixed;
   inset: 0;
   z-index: 50;
+  overflow: hidden;
+  isolation: isolate;
   background: #07080b;
   color: #eef1f6;
   cursor: none;
@@ -814,15 +818,37 @@ body.tablet .clock {
   transition: filter 2s ease;
 }
 .saver:not([hidden]) { display: grid; grid-template-rows: 1fr auto; }
+/* Le fond : l'image très floutée et assombrie (rien sans image). */
+.saver::before {
+  content: "";
+  position: absolute;
+  inset: -10%;
+  z-index: -2;
+  background: var(--saver-photo, none) center / cover no-repeat;
+  filter: blur(56px) saturate(1.25) brightness(0.42);
+  pointer-events: none;
+}
+/* Un voile : les bords plus sombres, et le côté de l'heure aussi, pour
+   qu'elle se lise sur n'importe quelle image. */
+.saver::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(90deg, transparent 45%, rgb(7 8 11 / 0.55) 100%),
+    radial-gradient(120% 100% at 38% 50%, transparent 45%, rgb(7 8 11 / 0.7) 100%);
+  pointer-events: none;
+}
 .saver.night { filter: brightness(0.45); }
 /* La nuit, le dessin (souvent clair) s'efface encore plus que le texte. */
 .saver.night .saver-house { filter: brightness(0.45); }
 .saver-inner {
   display: grid;
-  grid-template-columns: minmax(0, 1.7fr) minmax(16rem, 1fr);
+  grid-template-columns: minmax(0, 2fr) minmax(15rem, 1fr);
   align-items: center;
-  gap: clamp(1rem, 4vw, 4rem);
-  padding: clamp(1rem, 4vw, 3.5rem);
+  gap: clamp(0.5rem, 2vw, 2rem);
+  padding: clamp(1rem, 3vw, 2.5rem) clamp(1rem, 4vw, 3.5rem);
   min-height: 0;
   transform: translate(var(--shift-x, 0), var(--shift-y, 0));
   transition: transform 1s ease;
@@ -830,8 +856,33 @@ body.tablet .clock {
 .saver-house { container-type: size; height: 100%; min-height: 0; display: grid; place-items: center; }
 .saver-house:empty { display: none; }
 .saver-house:empty + .saver-side { grid-column: 1 / -1; justify-items: center; text-align: center; }
-.saver-house #house-stage { width: min(100cqw, calc(100cqh * var(--ratio, 1.35))); pointer-events: none; }
-.saver-side { display: grid; gap: 0.6rem; align-content: center; }
+.saver-house #house-stage {
+  width: min(100cqw, calc(100cqh * var(--ratio, 1.35)));
+  pointer-events: none;
+  /* Les bords de l'image s'effacent dans le fond flouté. */
+  -webkit-mask-image: radial-gradient(farthest-side, #000 58%, transparent 100%);
+  mask-image: radial-gradient(farthest-side, #000 58%, transparent 100%);
+}
+/* Une maquette détourée (house.js, makeCutout) flotte avec son ombre : pas
+   besoin du fondu, qui rognerait les coins du socle. */
+.saver-house #house-stage.cutout { -webkit-mask-image: none; mask-image: none; isolation: isolate; overflow: visible; }
+.saver-house .house-stage.cutout img {
+  -webkit-mask-image: var(--house-cut);
+  mask-image: var(--house-cut);
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+.saver-house .house-stage.cutout::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 -8% 0;
+  z-index: -1;
+  background: var(--house-shadow) center / 100% 100% no-repeat;
+  pointer-events: none;
+}
+.saver-side { display: grid; gap: 0.6rem; align-content: center; text-shadow: 0 2px 24px rgb(0 0 0 / 0.55); }
 .saver-side p { margin: 0; }
 .saver-clock {
   font-family: var(--font-display);
@@ -841,18 +892,23 @@ body.tablet .clock {
   letter-spacing: -0.04em;
   font-variant-numeric: tabular-nums;
 }
-.saver-date { font-size: clamp(1.1rem, 2.4vw, 1.8rem); color: #aeb6c4; }
+.saver-date { font-size: clamp(1.1rem, 2.4vw, 1.8rem); color: #c3cad6; }
 .saver-date::first-letter { text-transform: uppercase; }
 .saver-weather { display: flex; align-items: center; gap: 0.6rem; font-size: clamp(1.1rem, 2.4vw, 1.8rem); color: #d6dbe4; }
 .saver-weather svg { width: 1.6em; height: 1.6em; }
 .saver-weather strong { font-weight: 600; font-variant-numeric: tabular-nums; }
-.saver-side .saver-status { margin-top: 0.8rem; font-size: clamp(1rem, 1.8vw, 1.3rem); color: #8f98a8; }
+.saver-side .saver-status { margin-top: 0.8rem; font-size: clamp(1rem, 1.8vw, 1.3rem); color: #a3abba; }
 .saver-status.alert { color: #ffb86b; }
 .saver-approvals { font-size: clamp(1rem, 1.8vw, 1.3rem); color: #ff7a6b; font-weight: 600; }
-.saver-hint { margin: 0; padding: 0 0 1.2rem; text-align: center; font-size: 0.85rem; color: #5d6575; }
+.saver-hint { margin: 0; padding: 0 0 1.2rem; text-align: center; font-size: 0.85rem; color: rgb(238 241 246 / 0.4); }
 @media (max-width: 760px), (orientation: portrait) {
   .saver-inner { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; align-items: stretch; }
   .saver-side { justify-items: center; text-align: center; }
+  .saver::after {
+    background:
+      linear-gradient(180deg, transparent 50%, rgb(7 8 11 / 0.55) 100%),
+      radial-gradient(120% 90% at 50% 38%, transparent 45%, rgb(7 8 11 / 0.7) 100%);
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .saver, .saver-inner { transition: none; }

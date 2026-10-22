@@ -41,6 +41,12 @@ function showSaver() {
   const stage = $("#house-stage");
   const hubOn = typeof hub !== "undefined" && hub.on;
   if ((!$("#house").hidden || hubOn) && stage.childElementCount > 0) $("#saver-house").append(stage);
+  // La même image, floutée, remplit tout l'écran derrière : plus de grand
+  // rectangle sur fond noir, ses couleurs débordent jusqu'aux bords.
+  const photo = $("#saver-house .house-base");
+  const src = photo?.currentSrc || photo?.src || "";
+  if (src) $("#saver").style.setProperty("--saver-photo", `url("${src}")`);
+  else $("#saver").style.removeProperty("--saver-photo");
   $("#saver").hidden = false;
   renderSaver();
   saver.refresh = setInterval(renderSaver, 20_000);

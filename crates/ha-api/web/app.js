@@ -212,8 +212,10 @@ function onStateChanged({ entity_id, old_state, new_state }) {
   // pièce (house.js) : on remplace chacune.
   const existing = document.querySelectorAll(`:is(.sections, .room-body) #${CSS.escape(tileId(entity_id))}`);
   if (existing.length > 0 && new_state) for (const tile of existing) tile.replaceWith(renderTile(new_state));
-  else {
-    // Entité ajoutée ou supprimée : on redessine tout.
+  else if (!old_state || !new_state) {
+    // Entité ajoutée ou supprimée : on redessine tout. Une entité sans tuile
+    // (rangée dans une pièce du tableau, une scène…) n'a rien à remplacer :
+    // ses cartes (pièces, volets) suivent avec scheduleHome().
     renderAll();
     refreshEntityList();
   }
@@ -375,6 +377,11 @@ function renderAll() {
   groups.push({ title: "Autres", items: loose.filter((s) => !used.has(s.entity_id)) });
   // Un onglet limité à quelques pièces (Garage…) ne montre que leurs appareils.
   if (pageAreas !== null && isBoard()) groups.length = 0;
+
+  // Mise en page « tableau » : les pièces sont déjà en cartes compactes (le
+  // plan, en haut) et s'ouvrent en fenêtre ; les redessiner en entier ici
+  // doublerait tout, les volets compris. Restent les appareils sans pièce.
+  if (isBoard()) areaGroups.length = 0;
 
   container.replaceChildren(
     ...[...areaGroups, ...groups]

@@ -507,7 +507,7 @@ function listEvent(e, now) {
   const row = el("button", { type: "button", class: `agenda-list-event${e.endDate < now ? " past" : ""}` },
     colorDot(e.color, "agenda-list-icon"),
     el("span", { class: "agenda-list-text" }, el("b", { text: e.summary }),
-      el("small", { text: [e.label || e.calendar.name, e.location].filter(Boolean).join(" · ") })),
+      el("small", { text: [e.label, e.location].filter(Boolean).join(" · ") })),
     el("span", { class: "agenda-list-time", text: `${hourMinute.format(e.startDate)}\n${hourMinute.format(e.endDate)}` }));
   tint(row, e.color, 14);
   row.addEventListener("click", () => openEventDetails(e));
@@ -543,7 +543,7 @@ function todayCard(calendars, home) {
     const note = e === next ? inMinutes(e.startDate) : past ? "fait" : e.label || e.location || "";
     const row = el("button", { type: "button", class: `agenda-today-line${e === next ? " next" : ""}${past ? " past" : ""}` },
       el("span", { class: "agenda-today-time", text: when }), colorDot(e.color, "agenda-today-icon"),
-      el("span", { class: "agenda-today-text" }, el("b", { text: e.summary }), el("small", { text: isTomorrow && !e.allDay ? hourMinute.format(e.startDate) : e.location || e.calendar.name })),
+      el("span", { class: "agenda-today-text" }, el("b", { text: e.summary }), el("small", { text: isTomorrow && !e.allDay ? hourMinute.format(e.startDate) : e.location || "" })),
       el("span", { class: "agenda-today-note", text: note }));
     row.addEventListener("click", () => openEventDetails(e));
     rows.push(row);
