@@ -107,6 +107,12 @@ fn phrase(old: &State, new: &State) -> Option<String> {
             mode => format!("passe en mode {}", water_heater_mode(mode)),
         }),
         "input_boolean" => on_off("a été activé", "a été désactivé"),
+        // La sonnette (étape 82) : « Porte d'entrée a sonné » ; la fin de la
+        // sonnerie, quelques secondes plus tard, n'apprend rien.
+        "binary_sensor" if is_doorbell(new.entity_id().as_str()) => match value {
+            "on" => Some("a sonné".into()),
+            _ => None,
+        },
         "binary_sensor" => {
             let (on, off) = binary_words(text(attributes, "device_class"));
             on_off(on, off)
@@ -301,6 +307,11 @@ fn agree(mut phrase: String) -> String {
         phrase.push('e');
     }
     phrase
+}
+
+/// Une sonnette (ring-mqtt) : `binary_sensor.<porte>_sonnette` ou `_ding`.
+fn is_doorbell(entity_id: &str) -> bool {
+    entity_id.ends_with("_sonnette") || entity_id.ends_with("_ding")
 }
 
 /// Les mots d'un détecteur, d'après sa sorte (`device_class`).
@@ -647,6 +658,34 @@ mod tests {
                 "{entity} {from} → {to}"
             );
         }
+    }
+
+    #[test]
+    fn a_doorbell_rang() {
+        let attributes = json!({"device_class": "occupancy"});
+        assert_eq!(
+            change(
+                "binary_sensor.porte_d_entree_sonnette",
+                "off",
+                "on",
+                attributes.clone()
+            )
+            .as_deref(),
+            Some("a sonné")
+        );
+        assert_eq!(
+            change(
+                "binary_sensor.porte_d_entree_sonnette",
+                "on",
+                "off",
+                attributes.clone()
+            ),
+            None
+        );
+        assert_eq!(
+            change("binary_sensor.porte_ding", "off", "on", attributes).as_deref(),
+            Some("a sonné")
+        );
     }
 
     #[test]

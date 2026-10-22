@@ -200,6 +200,7 @@ async fn every_route_requires_a_token() {
         ("DELETE", "/api/push/subscriptions/1"),
         ("POST", "/api/push/test"),
         ("POST", "/api/approvals/1"),
+        ("GET", "/api/camera_proxy/camera.porte"),
     ] {
         let (status, _) = app.request(method, uri, None, None).await;
         assert_eq!(status, StatusCode::UNAUTHORIZED, "{method} {uri}");
@@ -612,6 +613,7 @@ async fn dashboard_files_are_served_with_security_headers() {
         ("/house.js", "text/javascript; charset=utf-8"),
         ("/agenda.js", "text/javascript; charset=utf-8"),
         ("/hub.js", "text/javascript; charset=utf-8"),
+        ("/sonnette.js", "text/javascript; charset=utf-8"),
         ("/house.svg", "image/svg+xml"),
         ("/style.css", "text/css; charset=utf-8"),
         ("/icon.svg", "image/svg+xml"),
@@ -715,6 +717,7 @@ fn dashboard_never_uses_inner_html() {
         ("house.js", include_str!("../web/house.js")),
         ("agenda.js", include_str!("../web/agenda.js")),
         ("hub.js", include_str!("../web/hub.js")),
+        ("sonnette.js", include_str!("../web/sonnette.js")),
         ("sw.js", include_str!("../web/sw.js")),
     ];
     for (name, script) in scripts {
@@ -3596,4 +3599,53 @@ async fn the_dashboard_is_served_in_https_and_plain_http_is_redirected() {
         )
         .await;
     assert!(refused.is_err());
+}
+
+/// La photo de la sonnette (étape 82) : servie à la famille, jamais gardée par
+/// le navigateur ; un invité ne la voit pas.
+#[tokio::test]
+async fn the_doorbell_snapshot_is_served_to_the_family_only() {
+    let app = TestApp::new().await;
+    let camera: ha_core::EntityId = "camera.porte".parse().unwrap();
+    app.state
+        .core
+        .states
+        .set(camera.clone(), "idle", Attributes::new())
+        .unwrap();
+    let family = app.login_as("famille", ha_auth::Role::Family).await;
+    // Pas encore de photo.
+    let (status, _, _) = app
+        .send_bytes("GET", "/api/camera_proxy/camera.porte", &family, Vec::new())
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    let jpeg = vec![0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3];
+    app.state.core.images.set(camera, &jpeg).unwrap();
+    let request = Request::builder()
+        .uri("/api/camera_proxy/camera.porte")
+        .header(header::AUTHORIZATION, format!("Bearer {family}"))
+        .body(Body::empty())
+        .unwrap();
+    let response = app.router().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()[header::CONTENT_TYPE], "image/jpeg");
+    assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+    let body = axum::body::to_bytes(response.into_body(), 1 << 20)
+        .await
+        .unwrap();
+    assert_eq!(body.as_ref(), jpeg.as_slice());
+
+    // Un invité : comme si elle n'existait pas.
+    let guest = app.login_as("visiteur", ha_auth::Role::Guest).await;
+    let (status, _, _) = app
+        .send_bytes("GET", "/api/camera_proxy/camera.porte", &guest, Vec::new())
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (_, listed) = app.request("GET", "/api/states", Some(&guest), None).await;
+    assert!(!listed.to_string().contains("camera.porte"));
+    // Une autre entité que la caméra n'a pas d'image.
+    let (status, _, _) = app
+        .send_bytes("GET", "/api/camera_proxy/light.salon", &family, Vec::new())
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
 }

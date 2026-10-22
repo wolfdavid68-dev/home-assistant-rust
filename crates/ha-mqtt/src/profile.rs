@@ -143,6 +143,8 @@ pub struct Profile {
     pub free: FreeState,
     /// Les sortes d'événements annoncées (entité `event` : `single`, `double`…).
     pub event_types: Vec<String>,
+    /// Une caméra dont l'image arrive en base64 (`image_encoding: b64`).
+    pub image_base64: bool,
 }
 
 impl Profile {

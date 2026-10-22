@@ -160,6 +160,7 @@ pub fn router(state: Arc<ApiState>) -> Router {
                 .delete(rest::delete_state),
         )
         .route("/api/history/{entity_id}", get(rest::history))
+        .route("/api/camera_proxy/{entity_id}", get(rest::camera_image))
         .route("/api/history/{entity_id}/series", get(rest::history_series))
         .route("/api/statistics/{entity_id}", get(rest::statistics))
         .route("/api/logbook", get(rest::logbook))

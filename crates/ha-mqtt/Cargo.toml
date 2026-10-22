@@ -9,6 +9,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+base64.workspace = true
 ha-core = { path = "../ha-core" }
 jiff.workspace = true
 rumqttc.workspace = true

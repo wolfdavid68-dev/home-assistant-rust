@@ -7,7 +7,11 @@
 //! broker MQTT.
 
 use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
+use base64::Engine as _;
+use ha_core::images::Images;
 use ha_core::{Attributes, EntityId, StateMachine};
 use serde_json::{Value, json};
 use tracing::{debug, info, warn};
@@ -54,6 +58,8 @@ pub struct Bridge {
     by_entity: HashMap<EntityId, String>,
     /// Sujets d'état écoutés, avec le nombre d'entités qui les utilisent.
     subscriptions: HashMap<String, usize>,
+    /// Où ranger l'image des caméras (étape 82) ; sans, elle est ignorée.
+    images: Option<Arc<Images>>,
 }
 
 impl Bridge {
@@ -63,7 +69,15 @@ impl Bridge {
             entities: HashMap::new(),
             by_entity: HashMap::new(),
             subscriptions: HashMap::new(),
+            images: None,
         }
+    }
+
+    /// Range l'image des caméras ici (`core.images`).
+    #[must_use]
+    pub fn with_images(mut self, images: Arc<Images>) -> Self {
+        self.images = Some(images);
+        self
     }
 
     /// Les abonnements nécessaires pour recevoir les descriptions.
@@ -293,6 +307,9 @@ impl Bridge {
         };
         self.by_entity.remove(&tracked.entity_id);
         states.remove(&tracked.entity_id);
+        if let Some(images) = &self.images {
+            images.remove(&tracked.entity_id);
+        }
         info!("entité MQTT retirée : {}", tracked.entity_id);
         listened_topics(&tracked.config)
             .into_iter()
@@ -339,6 +356,10 @@ impl Bridge {
     /// Un message d'état : met à jour toutes les entités qui écoutent ce sujet
     /// (Zigbee2MQTT envoie température, humidité et batterie dans le même message).
     fn update_states(&self, topic: &str, payload: &[u8], states: &StateMachine) -> Vec<Action> {
+        // L'image d'une caméra : binaire, et plus grosse qu'un état.
+        if self.camera_image(topic, payload, states) {
+            return Vec::new();
+        }
         if payload.len() > MAX_STATE_PAYLOAD {
             warn!(
                 "message trop gros sur {topic} ({} octets), ignoré",
@@ -400,6 +421,61 @@ impl Bridge {
             }
         }
         actions
+    }
+}
+
+impl Bridge {
+    /// Une image reçue pour une caméra : rangée, et l'entité dit quand.
+    /// Rend `true` si le sujet n'était écouté que par des caméras.
+    fn camera_image(&self, topic: &str, payload: &[u8], states: &StateMachine) -> bool {
+        let mut cameras = 0;
+        let mut others = false;
+        for tracked in self.entities.values() {
+            if tracked.config.state_topic.as_deref() != Some(topic) {
+                continue;
+            }
+            if tracked.config.component != Component::Camera {
+                others = true;
+                continue;
+            }
+            cameras += 1;
+            let id = &tracked.entity_id;
+            let decoded;
+            let bytes = if tracked.config.profile.image_base64 {
+                let text: Vec<u8> = payload
+                    .iter()
+                    .copied()
+                    .filter(|b| !b.is_ascii_whitespace())
+                    .collect();
+                let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(text) else {
+                    warn!("image illisible (base64) pour {id}");
+                    continue;
+                };
+                decoded = bytes;
+                decoded.as_slice()
+            } else {
+                payload
+            };
+            let Some(images) = &self.images else {
+                continue;
+            };
+            match images.set(id.clone(), bytes) {
+                Ok(_) => {
+                    let mut attributes = base_attributes(&tracked.config);
+                    let at = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX));
+                    // Le tableau de bord recharge l'image quand ce nombre change.
+                    attributes.insert("image_at".into(), json!(at));
+                    attributes.insert("image_size".into(), json!(bytes.len()));
+                    if let Err(error) = states.set_by(crate::ID, id.clone(), "idle", attributes) {
+                        warn!("état refusé pour {id} : {error}");
+                    }
+                }
+                Err(error) => warn!("image refusée pour {id} : {error}"),
+            }
+        }
+        cameras > 0 && !others
     }
 }
 

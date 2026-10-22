@@ -316,3 +316,107 @@ fn changing_the_state_topic_moves_the_subscription() {
     assert_eq!(bridge.len(), 1);
     assert!(state(&core, "sensor.t").is_some());
 }
+
+/// La sonnette Ring, comme ring-mqtt l'annonce (étape 82) : « Ding » et la
+/// photo, envoyée telle quelle (JPEG) sur son sujet.
+#[test]
+fn a_ring_doorbell_and_its_snapshot() {
+    let core = Core::new();
+    let mut bridge = Bridge::new("homeassistant").with_images(std::sync::Arc::clone(&core.images));
+    let device = r#""device": {"name": "Porte d'entrée", "ids": ["abc"], "mf": "Ring"}"#;
+    bridge.handle_message(
+        "homeassistant/binary_sensor/loc1/abc_ding/config",
+        format!(
+            r#"{{"name": "Ding", "unique_id": "abc_ding", "device_class": "occupancy",
+               "state_topic": "ring/loc1/camera/abc/ding/state",
+               "json_attributes_topic": "ring/loc1/camera/abc/ding/attributes",
+               "availability_topic": "ring/loc1/camera/abc/status", {device}}}"#
+        )
+        .as_bytes(),
+        &core.states,
+    );
+    let actions = bridge.handle_message(
+        "homeassistant/camera/loc1/abc_snapshot/config",
+        format!(
+            r#"{{"name": "Snapshot", "unique_id": "abc_snapshot",
+               "topic": "ring/loc1/camera/abc/snapshot/image",
+               "json_attributes_topic": "ring/loc1/camera/abc/snapshot/attributes",
+               "availability_topic": "ring/loc1/camera/abc/status", {device}}}"#
+        )
+        .as_bytes(),
+        &core.states,
+    );
+    assert_eq!(
+        actions,
+        [Action::Subscribe(
+            "ring/loc1/camera/abc/snapshot/image".into()
+        )]
+    );
+
+    bridge.handle_message("ring/loc1/camera/abc/ding/state", b"ON", &core.states);
+    let ding = core
+        .states
+        .get(&id("binary_sensor.porte_d_entree_sonnette"))
+        .unwrap();
+    assert_eq!(ding.state(), "on");
+    assert_eq!(ding.attributes()["device_class"], "occupancy");
+    assert_eq!(
+        ding.attributes()["friendly_name"],
+        "Porte d'entrée Sonnette",
+        "en français"
+    );
+
+    // Une photo de 100 Kio, plus que la limite d'un état (64 Kio).
+    let mut jpeg = vec![0xFF, 0xD8, 0xFF, 0xE0];
+    jpeg.resize(100 * 1024, 0x42);
+    bridge.handle_message("ring/loc1/camera/abc/snapshot/image", &jpeg, &core.states);
+    let camera = id("camera.porte_d_entree_photo");
+    let state = core.states.get(&camera).unwrap();
+    assert_eq!(state.state(), "idle");
+    assert_eq!(state.attributes()["friendly_name"], "Porte d'entrée Photo");
+    assert_eq!(state.attributes()["image_size"], 100 * 1024);
+    let image = core.images.get(&camera).unwrap();
+    assert_eq!(image.content_type, "image/jpeg");
+    assert_eq!(image.bytes.len(), 100 * 1024);
+
+    // Pas une image : refusée, la précédente reste.
+    bridge.handle_message(
+        "ring/loc1/camera/abc/snapshot/image",
+        b"<script>",
+        &core.states,
+    );
+    assert_eq!(core.images.get(&camera).unwrap().bytes.len(), 100 * 1024);
+
+    // La caméra retirée : son image aussi.
+    bridge.handle_message(
+        "homeassistant/camera/loc1/abc_snapshot/config",
+        b"",
+        &core.states,
+    );
+    assert!(core.images.get(&camera).is_none());
+}
+
+/// Une image en base64 (`image_encoding: b64`), comme Frigate.
+#[test]
+fn a_base64_camera() {
+    let core = Core::new();
+    let mut bridge = Bridge::new("homeassistant").with_images(std::sync::Arc::clone(&core.images));
+    bridge.handle_message(
+        "homeassistant/camera/porte/config",
+        br#"{"name": "Porte", "topic": "cam/porte", "image_encoding": "b64"}"#,
+        &core.states,
+    );
+    // « /9j/4A== » : les octets FF D8 FF E0.
+    bridge.handle_message("cam/porte", b"/9j/4A==\n", &core.states);
+    assert_eq!(
+        core.images.get(&id("camera.porte")).unwrap().content_type,
+        "image/jpeg"
+    );
+    // Un autre encodage est refusé.
+    bridge.handle_message(
+        "homeassistant/camera/autre/config",
+        br#"{"name": "Autre", "topic": "cam/autre", "image_encoding": "hex"}"#,
+        &core.states,
+    );
+    assert!(core.states.get(&id("camera.autre")).is_none());
+}

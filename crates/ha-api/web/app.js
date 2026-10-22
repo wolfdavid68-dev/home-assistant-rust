@@ -198,9 +198,11 @@ function setStatus(text, isLive) {
   status.classList.toggle("live", isLive);
 }
 
-function onStateChanged({ entity_id, new_state }) {
+function onStateChanged({ entity_id, old_state, new_state }) {
   if (new_state) entities.set(entity_id, new_state);
   else entities.delete(entity_id);
+  // La sonnette (sonnette.js, étape 82) : la photo de la porte en grand.
+  if (typeof doorbellChanged === "function") doorbellChanged(entity_id, old_state, new_state);
   scheduleHome();
   // La tuile est dans les sections, et peut-être aussi dans la fenêtre d'une
   // pièce (house.js) : on remplace chacune.
