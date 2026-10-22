@@ -952,6 +952,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "ha-colis"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "ha-core",
+ "ha-storage",
+ "ha-tls",
+ "jiff",
+ "reqwest",
+ "rustls",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tokio-rustls",
+ "tracing",
+ "zeroize",
+]
+
+[[package]]
 name = "ha-core"
 version = "0.1.0"
 dependencies = [
@@ -1192,6 +1211,7 @@ dependencies = [
  "ha-areas",
  "ha-auth",
  "ha-automation",
+ "ha-colis",
  "ha-core",
  "ha-derived",
  "ha-energy",

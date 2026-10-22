@@ -169,6 +169,8 @@ const live = {
             for (const state of message.result) entities.set(state.entity_id, state);
             renderAll();
             refreshEntityList();
+            // Un colis annoncé pendant que la tablette était déconnectée (colis.js).
+            if (typeof parcelChanged === "function") parcelChanged("sensor.colis_amazon", null, entities.get("sensor.colis_amazon"));
           }
           break;
         case "event":
@@ -203,6 +205,8 @@ function onStateChanged({ entity_id, old_state, new_state }) {
   else entities.delete(entity_id);
   // La sonnette (sonnette.js, étape 82) : la photo de la porte en grand.
   if (typeof doorbellChanged === "function") doorbellChanged(entity_id, old_state, new_state);
+  // Les colis Amazon (colis.js, étape 87) : « Plaid va arriver aujourd'hui ».
+  if (typeof parcelChanged === "function") parcelChanged(entity_id, old_state, new_state);
   scheduleHome();
   // La tuile est dans les sections, et peut-être aussi dans la fenêtre d'une
   // pièce (house.js) : on remplace chacune.

@@ -25,6 +25,7 @@
 //! ha-server timetree pair         associe le compte TimeTree de la maison
 //! ha-server iglou pair            relie la liste de courses de l'appli Iglou
 //! ha-server smartthings pair      associe la maison SmartThings de Samsung
+//! ha-server colis pair            associe la boîte Gmail des colis Amazon
 //! ha-server sonos                 liste les enceintes Sonos trouvées
 //! ha-server voix "<phrase>"       essaie la voix des annonces (essai-voix.wav)
 //! ha-server ecoute <fichier.wav>  essaie l'écoute de la tablette (Whisper, étape 84)
@@ -181,6 +182,7 @@ async fn main() -> ExitCode {
         ["timetree", rest @ ..] => cli::timetree_command(rest).await,
         ["iglou", rest @ ..] => cli::iglou_command(rest).await,
         ["smartthings", rest @ ..] => cli::smartthings_command(rest).await,
+        ["colis", rest @ ..] => cli::colis_command(rest).await,
         ["sonos"] => match sonos_hosts() {
             Ok(hosts) => cli::list_sonos(&hosts).await,
             Err(error) => Err(error.into()),
@@ -751,6 +753,19 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
             None
         }
     };
+    // Les colis Amazon, lus dans les e-mails (étape 87).
+    let colis = match store.mail_account().await {
+        Ok(Some(_)) => Some(ha_colis::Colis::start(
+            store.clone(),
+            colis_mailbox(),
+            Arc::clone(&core),
+        )),
+        Ok(None) => None,
+        Err(error) => {
+            warn!("colis : boîte illisible ({error}). Refais « ha-server colis pair ».");
+            None
+        }
+    };
     let freebox = match ha_freebox::pairing::load(&store).await {
         Ok(pairing) => {
             pairing.map(|pairing| Freebox::start(pairing, store.clone(), Arc::clone(&core)))
@@ -898,6 +913,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     }
     if let Some(smartthings) = smartthings {
         smartthings.stop().await;
+    }
+    if let Some(colis) = colis {
+        colis.stop().await;
     }
     if let Some(hue) = hue {
         hue.stop().await;
@@ -1088,6 +1106,19 @@ pub(crate) fn smartthings_endpoint() -> ha_smartthings::api::Endpoint {
         .ok()
         .and_then(|url| ha_smartthings::api::Endpoint::local(&url))
         .unwrap_or_else(ha_smartthings::api::Endpoint::smartthings)
+}
+
+/// Où lire les e-mails des colis. `HA_COLIS_IMAP_TEST` (et
+/// `HA_COLIS_IMAGES_TEST`) ne servent qu'aux essais, avec un faux serveur
+/// sur ce PC (`127.0.0.1:…`) : toute autre adresse est ignorée.
+pub(crate) fn colis_mailbox() -> ha_colis::Mailbox {
+    std::env::var("HA_COLIS_IMAP_TEST")
+        .ok()
+        .and_then(|imap| {
+            let images = std::env::var("HA_COLIS_IMAGES_TEST").ok();
+            ha_colis::Mailbox::local(&imap, images.as_deref())
+        })
+        .unwrap_or_else(ha_colis::Mailbox::real)
 }
 
 /// `HA_SONOS` : les enceintes (vide : les chercher).

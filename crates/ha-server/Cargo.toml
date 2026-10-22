@@ -35,6 +35,7 @@ ha-logbook = { path = "../ha-logbook" }
 ha-shedding = { path = "../ha-shedding" }
 ha-simulation = { path = "../ha-simulation" }
 ha-smartthings = { path = "../ha-smartthings" }
+ha-colis = { path = "../ha-colis" }
 ha-somfy = { path = "../ha-somfy" }
 ha-sonos = { path = "../ha-sonos" }
 ha-thermostat = { path = "../ha-thermostat" }

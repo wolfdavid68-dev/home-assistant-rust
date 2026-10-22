@@ -48,6 +48,9 @@ utilisation :
   ha-server smartthings status    affiche l'association et ses jetons
   ha-server smartthings devices   liste les appareils SmartThings et leurs entités
   ha-server smartthings forget    oublie l'association
+  ha-server colis pair            associe la boîte Gmail des colis Amazon (docs/colis.md)
+  ha-server colis status          vérifie la boîte et affiche les colis
+  ha-server colis forget          oublie la boîte
   ha-server sonos                 liste les enceintes Sonos trouvées
   ha-server voix \"<phrase>\"       essaie la voix des annonces (écrit essai-voix.wav)
   ha-server automations check     vérifie automatisations, scripts et scènes
@@ -552,12 +555,14 @@ async fn audit_cli(store: &Store, domain: &str, args: &[&str]) {
         ),
         ("freebox", ["track", mac, _]) => ("freebox_track".to_owned(), Some(*mac)),
         ("freebox", ["untrack", name]) => ("freebox_untrack".to_owned(), Some(*name)),
-        ("hue" | "somfy" | "freebox" | "timetree" | "iglou" | "smartthings", ["forget"]) => {
-            (format!("{domain}_forget"), None)
-        }
+        (
+            "hue" | "somfy" | "freebox" | "timetree" | "iglou" | "smartthings" | "colis",
+            ["forget"],
+        ) => (format!("{domain}_forget"), None),
         ("timetree", ["pair"]) => ("timetree_pair".to_owned(), None),
         ("iglou", ["pair"]) => ("iglou_pair".to_owned(), None),
         ("smartthings", ["pair"]) => ("smartthings_pair".to_owned(), None),
+        ("colis", ["pair"]) => ("colis_pair".to_owned(), None),
         ("automations", ["delete", id]) => ("automation_delete".to_owned(), Some(*id)),
         _ => return,
     };
@@ -1597,6 +1602,152 @@ fn print_smartthings_devices(devices: Vec<ha_smartthings::api::Device>) {
     }
 }
 
+/// `colis pair|status|forget` : la boîte aux lettres où arrivent les
+/// e-mails d'Amazon (étape 87).
+pub(crate) async fn colis_command(args: &[&str]) -> Result<(), Box<dyn Error>> {
+    let store = crate::open_store().await?;
+    let result = colis_inner(args, &store).await;
+    if result.is_ok() {
+        audit_cli(&store, "colis", args).await;
+    }
+    store.close().await;
+    result
+}
+
+async fn colis_inner(args: &[&str], store: &Store) -> Result<(), Box<dyn Error>> {
+    let mailbox = crate::colis_mailbox();
+    match args {
+        ["pair"] => {
+            println!("La maison lit les e-mails d'Amazon (lecture seule) pour suivre les colis.");
+            println!("Il faut un « mot de passe d'application » Google, pas ton mot de passe");
+            println!("habituel : voir docs/colis.md (myaccount.google.com/apppasswords).");
+            println!();
+            let host = ask_line("Serveur IMAP [imap.gmail.com] : ")?;
+            let host = if host.is_empty() {
+                "imap.gmail.com".to_owned()
+            } else {
+                host
+            };
+            if !ha_tls::is_valid_host(&host) || host.contains(':') {
+                return Err("serveur invalide".into());
+            }
+            let username = ask_line("Adresse e-mail : ")?;
+            if !username.contains('@')
+                || username.len() > 254
+                || !username.chars().all(|c| c.is_ascii_graphic())
+            {
+                return Err("adresse e-mail invalide".into());
+            }
+            if is_microsoft_mailbox(&host, &username) {
+                return Err(MICROSOFT_MAILBOX.into());
+            }
+            let pasted = ask_secret("Mot de passe d'application (16 lettres) : ")?;
+            // Google l'affiche en quatre groupes : les espaces ne comptent pas.
+            let password = Zeroizing::new(pasted.split_whitespace().collect::<String>());
+            if password.is_empty() || password.len() > 256 {
+                return Err("mot de passe invalide".into());
+            }
+            let account = ha_storage::MailAccount {
+                host,
+                port: 993,
+                username,
+                password,
+            };
+            println!("connexion…");
+            let report =
+                ha_colis::check(&mailbox, &account)
+                    .await
+                    .map_err(|error| match error {
+                        ha_colis::ColisError::Unauthorized => {
+                            "compte refusé : vérifie l'adresse et le mot de passe d'application"
+                                .to_owned()
+                        }
+                        other => other.to_string(),
+                    })?;
+            store.save_mail_account(&account).await?;
+            println!("associée !");
+            print_report(&report);
+            println!();
+            println!("Redémarre le serveur : sudo systemctl restart ha-maison");
+            Ok(())
+        }
+        ["status"] => {
+            let Some(account) = store.mail_account().await? else {
+                println!("aucune boîte associée (ha-server colis pair)");
+                return Ok(());
+            };
+            println!("boîte : {} sur {}", account.username, account.host);
+            let report = ha_colis::check(&mailbox, &account).await?;
+            print_report(&report);
+            Ok(())
+        }
+        ["forget"] => {
+            if store.forget_mail_account().await? {
+                println!("boîte oubliée. Pour couper aussi l'accès côté Google : supprime le mot");
+                println!("de passe d'application sur myaccount.google.com/apppasswords.");
+            } else {
+                println!("aucune boîte associée");
+            }
+            Ok(())
+        }
+        _ => Err(USAGE.into()),
+    }
+}
+
+/// Hotmail, Outlook.com, Live, MSN : Microsoft refuse les mots de passe
+/// aux programmes (IMAP), il faut passer par une redirection vers Gmail.
+const MICROSOFT_MAILBOX: &str = "\
+Hotmail / Outlook.com n'accepte plus de mot de passe pour lire la boîte depuis un
+programme (Microsoft exige une application enregistrée chez Azure).
+Le plus simple : une règle Hotmail qui redirige les e-mails d'Amazon vers une
+boîte Gmail, et associer cette boîte Gmail ici. Voir docs/colis.md, « Avec Hotmail ».";
+
+fn is_microsoft_mailbox(host: &str, username: &str) -> bool {
+    let host = host.to_ascii_lowercase();
+    let domain = username
+        .rsplit_once('@')
+        .map(|(_, domain)| domain.to_ascii_lowercase())
+        .unwrap_or_default();
+    host.contains("outlook")
+        || host.contains("office365")
+        || host.contains("hotmail")
+        || ["hotmail.", "outlook.", "live.", "msn."]
+            .iter()
+            .any(|prefix| domain.starts_with(prefix))
+}
+
+/// Ce que la boîte montre : les colis, et les e-mails ignorés.
+fn print_report(report: &ha_colis::Report) {
+    print_parcels(&report.parcels);
+    if report.unsigned > 0 {
+        println!();
+        println!(
+            "attention : {} e-mail(s) « d'Amazon » sur {} ignoré(s) : la signature d'Amazon",
+            report.unsigned, report.mails
+        );
+        println!(
+            "n'a pas été vérifiée (un faux, ou un transfert qui l'a cassée : voir docs/colis.md)."
+        );
+    }
+}
+
+/// Les colis des deux dernières semaines.
+fn print_parcels(parcels: &[ha_colis::amazon::Parcel]) {
+    if parcels.is_empty() {
+        println!("aucun colis Amazon ces deux dernières semaines");
+        return;
+    }
+    println!("colis Amazon des deux dernières semaines :");
+    for parcel in parcels.iter().rev() {
+        let name = ha_colis::amazon::short_name(&parcel.article);
+        let when = parcel
+            .at
+            .to_zoned(jiff::tz::TimeZone::system())
+            .strftime("%d/%m %H:%M");
+        println!("  {when}  {}", parcel.step.sentence(&name));
+    }
+}
+
 /// `timetree pair|status|forget` : le compte TimeTree de la maison
 /// (étape 74).
 pub(crate) async fn timetree_command(args: &[&str]) -> Result<(), Box<dyn Error>> {
@@ -1819,5 +1970,22 @@ async fn iglou_inner(args: &[&str], store: &Store) -> Result<(), Box<dyn Error>>
             Ok(())
         }
         _ => Err(USAGE.into()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_microsoft_mailbox;
+
+    #[test]
+    fn microsoft_mailboxes_are_spotted() {
+        assert!(is_microsoft_mailbox("imap.gmail.com", "david@hotmail.fr"));
+        assert!(is_microsoft_mailbox("imap.gmail.com", "David@Outlook.com"));
+        assert!(is_microsoft_mailbox(
+            "outlook.office365.com",
+            "a@exemple.fr"
+        ));
+        assert!(!is_microsoft_mailbox("imap.gmail.com", "maison@gmail.com"));
+        assert!(!is_microsoft_mailbox("imap.gmail.com", "a@livebox.fr"));
     }
 }
