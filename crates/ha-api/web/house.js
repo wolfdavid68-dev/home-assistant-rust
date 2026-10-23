@@ -708,7 +708,7 @@ function fxTick(now) {
   fxLast = now;
   for (const fx of fxViews) {
     if (!fx.canvas.isConnected) { fxViews.delete(fx); continue; }
-    fxStep(fx, dt, now / 1000, still);
+    (fx.step ?? fxStep)(fx, dt, now / 1000, still);
   }
   if (!still) fxSchedule();
 }
@@ -736,7 +736,7 @@ function fxPart(fx, type, top = false) {
 function fxSeed(fx) {
   const area = (fx.w * fx.h) / 10_000;
   const phone = fx.w < 600 ? 0.7 : 1;
-  const count = Math.min(900, Math.round(area * (FX_DENSITY[fx.kind] ?? 0) * (FX_LEVEL[fx.level] ?? 1) * phone));
+  const count = Math.min(900, Math.round(area * (FX_DENSITY[fx.kind] ?? 0) * (FX_LEVEL[fx.level] ?? 1) * phone * (fx.boost ?? 1)));
   const types = {
     "pluie": ["rain"], "averses": ["pour"], "orage": ["pour", "rain"], "grele": ["hail", "rain"], "neige": ["snow"],
     "pluie-neige": ["rain", "snow"], "vent": ["streak", "streak", "leaf"], "etoiles": ["star"], "brouillard": [],
@@ -762,9 +762,14 @@ function fxStep(fx, dt, t, still) {
     fx.ink = getComputedStyle(canvas).getPropertyValue("--fx-ink").trim() || "225 235 255";
     fxSeed(fx);
   }
-  const { w, h, ink } = fx;
   ctx.setTransform(fx.dpr, 0, 0, fx.dpr, 0, 0);
-  ctx.clearRect(0, 0, w, h);
+  ctx.clearRect(0, 0, fx.w, fx.h);
+  fxPaint(fx, dt, t, still);
+}
+
+/** Dessine l'effet par-dessus ce qu'il y a déjà (fx.ctx, à la taille fx.w × fx.h). */
+function fxPaint(fx, dt, t, still) {
+  const { ctx, w, h, ink } = fx;
 
   // Le brouillard : de grands voiles flous qui dérivent.
   for (const f of fx.fog) {
@@ -1154,10 +1159,276 @@ function tempColor(value) {
   return `color-mix(in oklab, ${c1} ${Math.round((v - t0) / (t1 - t0) * 100)}%, ${c0})`;
 }
 
-/** Dehors : seulement la température, en grand, dans sa couleur. La touche en
- *  plus : un reflet traverse les chiffres, vers le haut quand ça se réchauffe,
- *  vers le bas quand ça se rafraîchit (sur la dernière heure), et rien quand
- *  c'est stable. Sous 0 °C, les chiffres givrent. Toucher : l'historique. */
+// ---------------------------------------------------------------- Le temps dans les chiffres
+// Dehors, les chiffres de la température sont des fenêtres sur le temps qu'il
+// fait : derrière eux, le ciel du moment (jour, crépuscule, nuit) et le même
+// moteur que les effets du dessin (pluie, neige, grêle, brouillard, vent,
+// orage, dont l'éclair allume la pastille) ; le soleil et ses rayons par beau
+// temps, les étoiles d'une nuit claire. Un seul dessin, gardé d'un rendu à
+// l'autre : la pluie ne repart pas de zéro à chaque mise à jour.
+
+/** Le ciel, de haut en bas, le jour. */
+const SKY_DAY = {
+  "soleil": ["#8fd3ff", "#3d8fe6"], "eclaircies": ["#a5d4f4", "#5b92c8"], "nuageux": ["#b8c4d1", "#6c7c8f"],
+  "brouillard": ["#cfd6dc", "#8b97a3"], "vent": ["#9cc3e0", "#557fa6"], "pluie": ["#a3b3c7", "#5a6b84"],
+  "averses": ["#97a8be", "#4f5f78"], "orage": ["#8e9ab8", "#434c6e"], "grele": ["#a9b6c8", "#5b6a80"],
+  "neige": ["#aebfd6", "#5e7899"], "pluie-neige": ["#a3b1c2", "#56657a"],
+};
+const SKY_HOT = ["#ffd765", "#ff5f2e"]; // le grand soleil, quand il fait chaud
+const SKY_HOT_FROM = 20;
+const SKY_DUSK = ["#3f3b7d", "#ff8a5c"];
+const SKY_NIGHT = ["#2a3d80", "#5a7ed0"];
+const SKY_NIGHT_GREY = ["#4a5670", "#262e40"];
+const SKY_EFFECT = { "brouillard": "brouillard", "vent": "vent", "pluie": "pluie", "averses": "averses", "orage": "orage", "grele": "grele", "neige": "neige", "pluie-neige": "pluie-neige" };
+// Le dessin est petit : bien plus de gouttes au cm², qui tombent moins vite.
+const SKY_BOOST = 50;
+const SKY_PACE = 0.35;
+// Autour des chiffres, la place du halo (en px, comme dans style.css).
+const SKY_PAD_X = 12;
+const SKY_PAD_Y = 8;
+
+let sky = null;
+
+function skyInit() {
+  const layer = () => { const canvas = document.createElement("canvas"); return { canvas, ctx: canvas.getContext("2d") }; };
+  const shown = el("canvas", { class: "g-sky", "aria-hidden": "true" });
+  const scene = layer();
+  sky = {
+    shown, view: shown.getContext("2d"), scene, cut: layer(), edge: layer(), haze: layer(),
+    key: "", text: "", font: null, chip: null, colors: SKY_DAY.soleil, sun: false, clouds: 0, bolt: null, acc: 0, glow: 0,
+    // Pour le moteur des effets : il dessine dans la scène, et vit tant que la
+    // pastille est à l'écran.
+    fx: { canvas: shown, ctx: scene.ctx, kind: null, level: "", w: 0, h: 0, dpr: 1, ink: "255 255 255", parts: [], fog: [], flash: 0, nextFlash: 0, boost: SKY_BOOST, step: skyStep },
+  };
+  document.fonts?.ready.then(() => { sky.font = null; fxSchedule(); });
+}
+
+/** Le ciel du moment, pour une température dehors. */
+function skyOf(value) {
+  const weather = weatherKind();
+  const night = houseNight();
+  const fair = weather === "soleil" || weather === "eclaircies";
+  const calm = fair || weather === "nuageux";
+  let colors = SKY_DAY[weather] ?? SKY_DAY.soleil;
+  if (calm && houseDusk()) colors = SKY_DUSK;
+  else if (night) colors = fair ? SKY_NIGHT : SKY_NIGHT_GREY;
+  else if (weather === "soleil" && value >= SKY_HOT_FROM) colors = SKY_HOT;
+  return {
+    colors,
+    kind: night && fair ? "etoiles" : lookup(SKY_EFFECT, weather) ?? null,
+    sun: !night && fair && colors !== SKY_DUSK,
+    clouds: weather === "eclaircies" ? 2 : weather === "nuageux" ? 4 : 0,
+  };
+}
+
+/** Met la scène dans la pastille qu'on vient de faire. */
+function skyMount(chip, strong, value) {
+  if (sky === null) skyInit();
+  const scene = skyOf(value);
+  const key = `${scene.kind}|${scene.colors}|${scene.sun}|${scene.clouds}`;
+  if (key !== sky.key) {
+    Object.assign(sky, { key, colors: scene.colors, sun: scene.sun, clouds: scene.clouds, bolt: null });
+    sky.fx.kind = scene.kind;
+    sky.fx.flash = 0;
+    sky.fx.w = 0; // à repeupler
+  }
+  sky.text = number.format(value);
+  sky.font = null;
+  sky.chip = chip;
+  sky.glow = -1;
+  chip.classList.add("sky");
+  chip.style.setProperty("--sky", scene.colors[1]);
+  strong.append(sky.shown);
+  fxViews.add(sky.fx);
+  fxSchedule();
+}
+
+/** Le moteur peuplé à la taille de la pastille, avec ses nuages. */
+function skySeed(fx) {
+  fxSeed(fx);
+  const { w, h } = fx;
+  for (const p of fx.parts) if (p.type === "star") p.y = rand(0, h);
+  if (sky.clouds > 0) {
+    fx.fog = Array.from({ length: sky.clouds }, (_, i) => ({
+      x: rand(0, w), y: rand(0.1, 0.55) * h, rx: rand(0.28, 0.45) * w, ry: rand(0.14, 0.22) * h,
+      vx: rand(3, 7) * (i % 2 ? -1 : 1), a: houseNight() ? rand(0.12, 0.2) : rand(0.4, 0.6),
+    }));
+  }
+}
+
+function skyStep(fx, dt, t, still) {
+  const cw = fx.canvas.clientWidth;
+  const ch = fx.canvas.clientHeight;
+  if (cw === 0 || ch === 0 || !sky.view) return;
+  sky.acc += dt;
+  // Trente images par seconde suffisent, pour si peu.
+  if (!still && cw === fx.w && ch === fx.h && sky.font && sky.acc < 1 / 30) return;
+  const step = sky.acc * SKY_PACE;
+  sky.acc = 0;
+  if (cw !== fx.w || ch !== fx.h) {
+    fx.dpr = Math.min(2, devicePixelRatio || 1);
+    const W = Math.round(cw * fx.dpr);
+    const H = Math.round(ch * fx.dpr);
+    for (const c of [fx.canvas, sky.scene.canvas, sky.cut.canvas, sky.edge.canvas]) { c.width = W; c.height = H; }
+    sky.haze.canvas.width = Math.ceil(W / 8);
+    sky.haze.canvas.height = Math.ceil(H / 8);
+    fx.w = cw;
+    fx.h = ch;
+    skySeed(fx);
+  }
+  if (!sky.font) skyFont();
+  const { w, h, dpr } = fx;
+  const W = fx.canvas.width;
+  const H = fx.canvas.height;
+
+  // La scène : le ciel, le soleil, puis le moteur (et l'éclair).
+  const s = sky.scene.ctx;
+  s.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const air = s.createLinearGradient(0, 0, 0, h);
+  air.addColorStop(0, sky.colors[0]);
+  air.addColorStop(1, sky.colors[1]);
+  s.fillStyle = air;
+  s.fillRect(0, 0, w, h);
+  if (sky.sun) skySun(s, w, h, still ? 0 : t);
+  fxPaint(fx, step, t, still);
+  if (fx.kind === "orage") skyBolt(s, fx, w, h);
+
+  // Les chiffres, remplis de la scène.
+  const c = sky.cut.ctx;
+  c.globalCompositeOperation = "source-over";
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  c.clearRect(0, 0, W, H);
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.fillStyle = "#fff";
+  skyText(c, false);
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  c.globalCompositeOperation = "source-in";
+  c.drawImage(sky.scene.canvas, 0, 0);
+
+  // Le contour, seulement au-dehors des chiffres (sinon les traits se
+  // croisent là où les chiffres se touchent).
+  const e = sky.edge.ctx;
+  e.globalCompositeOperation = "source-over";
+  e.setTransform(1, 0, 0, 1, 0, 0);
+  e.clearRect(0, 0, W, H);
+  e.setTransform(dpr, 0, 0, dpr, 0, 0);
+  e.strokeStyle = sky.font.edge;
+  e.lineWidth = 1.2;
+  e.lineJoin = "round";
+  skyText(e, true);
+  e.globalCompositeOperation = "destination-out";
+  e.fillStyle = "#000";
+  skyText(e, false);
+
+  // Le halo (la scène très floue : en tout petit, puis agrandie), le
+  // contour, les chiffres.
+  const z = sky.haze.ctx;
+  z.clearRect(0, 0, z.canvas.width, z.canvas.height);
+  z.drawImage(sky.cut.canvas, 0, 0, z.canvas.width, z.canvas.height);
+  const v = sky.view;
+  v.setTransform(1, 0, 0, 1, 0, 0);
+  v.clearRect(0, 0, W, H);
+  v.imageSmoothingEnabled = true;
+  v.imageSmoothingQuality = "high";
+  v.globalAlpha = 0.45;
+  v.drawImage(sky.haze.canvas, 0, 0, W, H);
+  v.globalAlpha = 0.5;
+  v.drawImage(sky.edge.canvas, 0, 0);
+  v.globalAlpha = 1;
+  v.drawImage(sky.cut.canvas, 0, 0);
+
+  // L'éclair allume toute la pastille.
+  const glow = fx.kind === "orage" ? Math.round(fx.flash * 50) / 50 : 0;
+  if (glow !== sky.glow) {
+    sky.glow = glow;
+    sky.chip?.style.setProperty("--flash", String(glow));
+  }
+}
+
+/** La police des chiffres, celle de la page (lue une fois à l'écran). */
+function skyFont() {
+  const css = getComputedStyle(sky.shown.parentElement);
+  const size = parseFloat(css.fontSize) || 24;
+  const spacing = parseFloat(css.letterSpacing) || 0;
+  const font = `${css.fontWeight} ${size}px ${css.fontFamily}`;
+  const ctx = sky.view;
+  ctx.font = font;
+  const m = ctx.measureText("0");
+  const ascent = m.fontBoundingBoxAscent ?? size * 0.8;
+  const descent = m.fontBoundingBoxDescent ?? size * 0.2;
+  sky.font = {
+    font, spacing,
+    small: `${css.fontWeight} ${size / 2}px ${css.fontFamily}`,
+    // Ligne de hauteur 1 : la ligne de base des chiffres, puis celle du « ° »
+    // (en haut, à demi-taille, comme le <sup>).
+    base: SKY_PAD_Y + (size - ascent - descent) / 2 + ascent,
+    sup: SKY_PAD_Y + 0.39 * size + (ascent - descent) / 4,
+    edge: css.getPropertyValue("--ink").trim() || "#fff",
+  };
+}
+
+function skyText(ctx, stroke) {
+  const f = sky.font;
+  const spaced = "letterSpacing" in ctx;
+  const draw = (text, x, y) => (stroke ? ctx.strokeText(text, x, y) : ctx.fillText(text, x, y));
+  ctx.textBaseline = "alphabetic";
+  ctx.textAlign = "left";
+  ctx.font = f.font;
+  if (spaced) ctx.letterSpacing = `${f.spacing}px`;
+  draw(sky.text, SKY_PAD_X, f.base);
+  const x = SKY_PAD_X + ctx.measureText(sky.text).width + (spaced ? 0 : f.spacing * sky.text.length) + 1;
+  ctx.font = f.small;
+  if (spaced) ctx.letterSpacing = "0px";
+  draw("°", x, f.sup);
+}
+
+/** Le soleil : un disque blanc, et ses rayons qui tournent doucement. */
+function skySun(ctx, w, h, t) {
+  const x = w * 0.66;
+  const y = h * 0.4;
+  const r = h * 0.22;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(t * 0.25);
+  ctx.fillStyle = "rgb(255 255 255 / 0.28)";
+  ctx.beginPath();
+  for (let i = 0; i < 12; i += 1) {
+    const a = (i / 12) * Math.PI * 2;
+    ctx.moveTo(Math.cos(a - 0.09) * r * 1.3, Math.sin(a - 0.09) * r * 1.3);
+    ctx.lineTo(Math.cos(a) * r * 4.2, Math.sin(a) * r * 4.2);
+    ctx.lineTo(Math.cos(a + 0.09) * r * 1.3, Math.sin(a + 0.09) * r * 1.3);
+  }
+  ctx.fill();
+  ctx.restore();
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r * 1.8);
+  g.addColorStop(0, "rgb(255 255 255 / 1)");
+  g.addColorStop(0.5, "rgb(255 250 225 / 0.95)");
+  g.addColorStop(1, "rgb(255 240 190 / 0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(x - r * 2, y - r * 2, r * 4, r * 4);
+}
+
+/** L'éclair : un trait brisé, le temps du flash. */
+function skyBolt(ctx, fx, w, h) {
+  if (fx.flash < 0.15) { sky.bolt = null; return; }
+  if (sky.bolt === null && fx.flash > 0.6) {
+    let x = rand(0.25, 0.75) * w;
+    sky.bolt = [[x, -2]];
+    for (let i = 1; i <= 5; i += 1) { x += rand(-0.09, 0.09) * w; sky.bolt.push([x, (i / 5) * h]); }
+  }
+  if (sky.bolt === null) return;
+  ctx.strokeStyle = `rgb(255 255 255 / ${Math.min(1, fx.flash).toFixed(2)})`;
+  ctx.lineWidth = 1.6;
+  ctx.lineJoin = "round";
+  ctx.beginPath();
+  sky.bolt.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+  ctx.stroke();
+}
+
+/** Dehors : seulement la température, en grand, ses chiffres ouverts sur le
+ *  temps qu'il fait (voir plus haut). Sur le plan, à l'encre, avec un reflet
+ *  qui monte quand ça se réchauffe et descend quand ça se rafraîchit. Toucher :
+ *  l'historique. */
 function outsideGauge(value) {
   const probe = entities.get("sensor.temperature_exterieure");
   const id = probe && Number(probe.state) === value ? probe.entity_id : null;
@@ -1166,11 +1437,11 @@ function outsideGauge(value) {
   const said = [`Dehors : ${number.format(value)} °C`];
   if (trend) said.push(trend.text);
   const classes = ["gauge", "g-outside", trend?.way, value <= 0 ? "frost" : null].filter(Boolean).join(" ");
+  const temp = el("strong", { class: "g-temp" }, number.format(value), el("sup", { text: "°" }));
   const chip = el("span", { class: classes, title: said.join(", "), "aria-label": said.join(", ") },
-    el("b", { class: "g-now" },
-      el("small", { text: value <= 0 ? "Dehors · gel" : "Dehors" }),
-      el("strong", { class: "g-temp" }, number.format(value), el("sup", { text: "°" }))));
+    el("b", { class: "g-now" }, el("small", { text: value <= 0 ? "Dehors · gel" : "Dehors" }), temp));
   chip.style.setProperty("--temp", tempColor(value));
+  skyMount(chip, temp, value);
   if (history) {
     chip.setAttribute("role", "button");
     chip.tabIndex = 0;
