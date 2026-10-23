@@ -15,7 +15,7 @@ use crate::error::SomfyError;
 pub const LOCAL_PORT: u16 = 8443;
 const BASE_PATH: &str = "/enduser-mobile-web/1/enduserAPI";
 const MAX_RESPONSE: usize = 4 * 1024 * 1024;
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
+pub(crate) const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// Un appareil connu de la box.
 #[derive(Debug, Clone, Deserialize)]
@@ -222,7 +222,7 @@ pub(crate) async fn read_json<T: DeserializeOwned>(
 }
 
 /// Un morceau d'adresse sûr (identifiant d'écouteur…) : lettres, chiffres, `-`.
-fn is_safe_path_part(value: &str) -> bool {
+pub(crate) fn is_safe_path_part(value: &str) -> bool {
     (1..=100).contains(&value.len())
         && value
             .bytes()

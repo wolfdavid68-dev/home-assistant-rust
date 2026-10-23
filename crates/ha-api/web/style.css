@@ -2181,6 +2181,12 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .cover-row-buttons { margin-left: auto; display: flex; gap: 4px; flex: none; }
 .cover-row-buttons .round { flex: none; width: 40px; height: 36px; }
 .board-covers > h2 { margin: 0; }
+/* Le chauffage : la consigne entre les boutons −/+. */
+.heat-target { flex: none; min-width: 4.2em; text-align: center; font-size: 0.9rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.heat-row > .heat-target { margin-left: auto; }
+.heat-row .cover-row-buttons { align-items: center; }
+.heat-row.on .house-action-icon { background: var(--heat-soft); color: var(--heat-ink); }
+.heat-row:not(.on) .heat-target { color: var(--muted); }
 
 @media (min-width: 1000px) {
   /* L'en-tête suit exactement la grille du dessous. */
