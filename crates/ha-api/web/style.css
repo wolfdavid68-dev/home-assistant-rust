@@ -2711,7 +2711,21 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
   .g-outside .g-temp { animation: none !important; }
 }
 
-/* Le plan : à l'encre, sans halo ; le reflet reste. */
+/* Les chiffres ouverts sur le temps qu'il fait (house.js, « Le temps dans les
+   chiffres ») : le dessin déborde des chiffres de 12 px × 8 px pour son halo ;
+   le texte reste dessous, invisible, pour la place et les lecteurs d'écran.
+   L'éclair d'un orage (--flash, de 0 à 1) allume toute la pastille. */
+.gauge.g-outside .g-temp { position: relative; }
+.g-sky { display: none; position: absolute; left: -12px; top: -8px; width: calc(100% + 24px); height: calc(100% + 16px); pointer-events: none; }
+:root:not([data-theme|="plan"]) .gauge.g-outside.sky {
+  --lit: rgb(225 235 255 / calc(var(--flash, 0) * 0.3));
+  background-image: linear-gradient(var(--lit), var(--lit)), radial-gradient(130% 190% at 20% 55%, color-mix(in oklab, var(--sky) 32%, transparent), transparent 66%);
+  box-shadow: 0 0 calc(var(--flash, 0) * 22px) rgb(200 215 255 / calc(var(--flash, 0) * 0.7));
+}
+:root:not([data-theme|="plan"]) .gauge.g-outside.sky .g-sky { display: block; }
+:root:not([data-theme|="plan"]) .gauge.g-outside.sky .g-temp { font-size: 1.75rem; background: none; filter: none; animation: none; }
+
+/* Le plan : à l'encre, sans halo ni dessin ; le reflet reste. */
 [data-theme|="plan"] .gauge.g-outside { background-image: none; }
 [data-theme|="plan"] .gauge.g-outside .g-temp { --ink-temp: linear-gradient(var(--ink), var(--ink)); filter: none; }
 
