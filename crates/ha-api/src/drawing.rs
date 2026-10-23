@@ -99,11 +99,17 @@ const EFFECTS: [&str; 10] = [
 /// Leur intensité ; sans réglage : normale.
 const EFFECT_LEVELS: [&str; 2] = ["discret", "fort"];
 
-/// Une ambiance : le moment, puis le temps (`jour-pluie`, `nuit-pluie-neige`).
+/// Les moments de la journée : le crépuscule (soleil entre −6° et +6°,
+/// comme sur domo-blog) a ses propres fonds, facultatifs.
+const MOMENTS: [&str; 3] = ["jour", "crepuscule", "nuit"];
+
+/// Une ambiance : le moment, puis le temps (`jour-pluie`, `nuit-pluie-neige`),
+/// ou le crépuscule seul (`crepuscule`, son fond par beau temps).
 fn is_ambiance(key: &str) -> bool {
-    key.split_once('-').is_some_and(|(moment, weather)| {
-        (moment == "jour" || moment == "nuit") && WEATHERS.contains(&weather)
-    })
+    key == "crepuscule"
+        || key.split_once('-').is_some_and(|(moment, weather)| {
+            MOMENTS.contains(&moment) && WEATHERS.contains(&weather)
+        })
 }
 
 /// Les onglets du tableau de bord (Maison, Garage, Piscine…), chacun avec
@@ -150,12 +156,13 @@ struct Page {
     layers: Vec<Layer>,
     #[serde(default)]
     labels: Vec<Label>,
-    /// Les fonds d'ambiance : `"jour-pluie": "maison_pluie"`… Il en manque ?
-    /// Le plus proche s'affiche (nuit-pluie → nuit → jour-pluie → jour).
+    /// Les fonds d'ambiance : `"jour-pluie": "maison_pluie"`, `"crepuscule"`…
+    /// Il en manque ? Le plus proche s'affiche (nuit-pluie → nuit →
+    /// jour-pluie → jour ; le crépuscule, puis le jour ou la nuit).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     ambiances: BTreeMap<String, String>,
     /// Une ambiance imposée (pour essayer) au lieu de suivre la météo et le
-    /// soleil : `jour`, `nuit`, ou une des ambiances.
+    /// soleil : `jour`, `nuit`, `crepuscule`, ou une des ambiances.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     forced: Option<String>,
     /// Les effets animés : `off`, ou un effet imposé ; absent : selon la météo.
@@ -389,7 +396,7 @@ fn check_page(config: &Page, images: &HashSet<String>) -> Result<(), ApiError> {
     }
     if let Some(key) = config.ambiances.keys().find(|key| !is_ambiance(key)) {
         return Err(ApiError::BadRequest(format!(
-            "ambiance « {key} » inconnue : jour- ou nuit- puis {}",
+            "ambiance « {key} » inconnue : crepuscule, ou jour-, crepuscule- ou nuit- puis {}",
             WEATHERS.join(", ")
         )));
     }
@@ -817,6 +824,10 @@ mod tests {
             r#"{"background":"jour","ambiances":{"jour-pluie":"garage","nuit-pluie-neige":"jour","jour-orage":"jour"},"forced":"nuit-pluie-neige"}"#,
         );
         assert!(check_page(&rainy, &images).is_ok());
+        let dusk = config(
+            r#"{"background":"jour","ambiances":{"crepuscule":"garage","crepuscule-neige":"jour"},"forced":"crepuscule"}"#,
+        );
+        assert!(check_page(&dusk, &images).is_ok());
         let effects = config(r#"{"effects":"orage","effects_level":"fort"}"#);
         assert!(check_page(&effects, &images).is_ok());
         assert!(check_page(&config(r#"{"effects":"off"}"#), &images).is_ok());
@@ -856,6 +867,8 @@ mod tests {
             r#"{"ambiances":{"jour-pluie":"garage"}}"#,
             r#"{"background":"jour","ambiances":{"jour-pluie":"absente"}}"#,
             r#"{"forced":"tempete"}"#,
+            r#"{"background":"jour","ambiances":{"crepuscule-tempete":"garage"}}"#,
+            r#"{"background":"jour","ambiances":{"crepuscule-":"garage"}}"#,
             r#"{"effects":"tornade"}"#,
             r#"{"effects":"neige","effects_level":"enorme"}"#,
             r#"{"charts":[{"entity_id":"sensor.nas","color":"fuchsia","hours":24}]}"#,

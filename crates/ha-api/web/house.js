@@ -28,7 +28,12 @@ const MAX_HOUSE_IMAGE = 3 * 1024 * 1024;
 const WHEN_LABELS = [["always", "Toujours"], ["day", "Le jour"], ["night", "La nuit"]];
 // Les ambiances : le moment, puis le temps qu'il fait. « jour » et « nuit »
 // (soleil) sont le fond de jour et le fond de nuit.
-const MOMENTS = [["jour", "Jour"], ["nuit", "Nuit"]];
+// « crepuscule » (le soleil entre −6° et +6°, comme sur domo-blog) n'est
+// choisi que si l'onglet a au moins un fond de crépuscule.
+const MOMENTS = [["jour", "Jour"], ["crepuscule", "Crépuscule"], ["nuit", "Nuit"]];
+const DUSK_ELEVATION = 6;
+// Pluie annoncée et 1 °C ou moins dehors (la sonde) : il neige, comme sur domo-blog.
+const SNOW_BELOW = 1;
 // Tous les temps de la météo, avec le temps « parent » qu'on prend s'il
 // manque un fond (orage → pluie → nuageux → soleil).
 const WEATHERS = [
@@ -38,7 +43,7 @@ const WEATHERS = [
   ["neige", "Neige", "nuageux"], ["pluie-neige", "Pluie et neige", "neige"],
 ];
 const WEATHER_PARENT = Object.fromEntries(WEATHERS.map(([key, , parent]) => [key, parent]));
-const AMBIANCE_KEYS = MOMENTS.flatMap(([moment]) => WEATHERS.filter(([key]) => key !== "soleil").map(([key]) => `${moment}-${key}`));
+const AMBIANCE_KEYS = ["crepuscule", ...MOMENTS.flatMap(([moment]) => WEATHERS.filter(([key]) => key !== "soleil").map(([key]) => `${moment}-${key}`))];
 /** La condition de la météo (Home Assistant) → le temps. */
 const CONDITION_WEATHER = {
   "sunny": "soleil", "clear-night": "soleil", "partlycloudy": "eclaircies", "cloudy": "nuageux",
@@ -171,13 +176,41 @@ function houseNight() {
 /** Le temps qu'il fait, d'après la condition de la météo. */
 function weatherKind() {
   const weather = [...entities.values()].find((s) => domainOf(s) === "weather");
-  return lookup(CONDITION_WEATHER, weather?.state) ?? "soleil";
+  const kind = lookup(CONDITION_WEATHER, weather?.state) ?? "soleil";
+  // La pluie par 1 °C ou moins dehors devient de la neige.
+  if ((kind === "pluie" || kind === "averses") && outsideTemperature() <= SNOW_BELOW) return "neige";
+  return kind;
 }
+
+/** La température dehors : la sonde de la pompe à chaleur, sinon la météo. */
+function outsideTemperature() {
+  const reading = (id) => {
+    const state = entities.get(id);
+    return state && state.state !== "" ? Number(state.state) : NaN;
+  };
+  const probe = reading("sensor.temperature_exterieure");
+  if (Number.isFinite(probe)) return probe;
+  const weather = [...entities.values()].find((s) => domainOf(s) === "weather");
+  if (finite(weather?.attributes.temperature)) return weather.attributes.temperature;
+  return reading("sensor.meteo_temperature");
+}
+
+/** Le crépuscule : le soleil entre −6° et +6°. */
+function houseDusk() {
+  const elevation = entities.get("sun.sun")?.attributes.elevation;
+  return finite(elevation) && Math.abs(elevation) < DUSK_ELEVATION;
+}
+
+/** L'onglet a-t-il un fond de crépuscule ? Sinon, jour ou nuit comme avant. */
+const hasDusk = (page) => Object.keys(page.ambiances ?? {}).some((key) => key.startsWith("crepuscule"));
+
+/** Le moment d'une ambiance (« crepuscule-pluie » → crepuscule). */
+const momentOf = (ambiance) => ambiance.split("-")[0];
 
 /** L'ambiance du moment (« nuit-pluie »…), ou celle imposée par le réglage. */
 function ambianceOf(page) {
   if (page.forced) return page.forced;
-  const moment = houseNight() ? "nuit" : "jour";
+  const moment = hasDusk(page) && houseDusk() ? "crepuscule" : houseNight() ? "nuit" : "jour";
   const weather = weatherKind();
   return weather === "soleil" ? moment : `${moment}-${weather}`;
 }
@@ -192,11 +225,15 @@ function backgroundFor(page, ambiance) {
   const chain = (when) => {
     const names = [];
     for (let w = weather; w; w = WEATHER_PARENT[w]) {
-      names.push(w === "soleil" ? (when === "jour" ? page.background : page.night) : page.ambiances[`${when}-${w}`]);
+      const clear = when === "jour" ? page.background : when === "nuit" ? page.night : page.ambiances.crepuscule;
+      names.push(w === "soleil" ? clear : page.ambiances[`${when}-${w}`]);
     }
     return names;
   };
-  const candidates = moment === "nuit" ? [...chain("nuit"), ...chain("jour")] : chain("jour");
+  // Au crépuscule sans son fond : la nuit si le soleil est couché, sinon le jour.
+  const dusk = moment === "crepuscule" ? chain("crepuscule") : [];
+  const night = moment === "nuit" || (moment === "crepuscule" && houseNight());
+  const candidates = [...dusk, ...(night ? [...chain("nuit"), ...chain("jour")] : chain("jour"))];
   return candidates.find((name) => name && houseUrl(name)) ?? page.background;
 }
 
@@ -631,7 +668,7 @@ function effectOf(page) {
   if (page.effects) return page.effects;
   const ambiance = ambianceOf(page);
   const cut = ambiance.indexOf("-");
-  if (cut < 0) return ambiance === "nuit" ? "etoiles" : null;
+  if (cut < 0) return ambiance === "nuit" || (ambiance === "crepuscule" && houseNight()) ? "etoiles" : null;
   return lookup(WEATHER_EFFECT, ambiance.slice(cut + 1)) ?? null;
 }
 
@@ -840,6 +877,7 @@ const AI_WEATHER = {
   "neige": "SNOW: fresh snow covering the roofs, ground, hedges and trees, a few falling snowflakes, cold soft light, driveway lightly covered.",
   "pluie-neige": "SLEET: wet slushy snow patches on the roofs and lawn, rain and snow falling together, cold grey light.",
 };
+const AI_DUSK = "DUSK: the sun has just set, warm orange-pink glow low on the horizon, long soft shadows, blue-hour tones on the shaded walls. All interior and exterior lights stay OFF (they will be added later as separate layers).";
 const AI_NIGHT = "NIGHT: deep blue ambient light, soft cool moonlight. All interior and exterior lights stay OFF (they will be added later as separate layers).";
 const AI_CORRECTIONS = [
   ["camera", "Correction : le cadrage a bougé", "You moved the camera. Go back to the exact framing, camera angle and scale of the reference image, then apply only the requested change."],
@@ -896,14 +934,19 @@ function aiPrompt(choice, draft, style) {
     };
   }
   if (choice === "nuit" || AMBIANCE_KEYS.includes(choice)) {
-    const night = choice.startsWith("nuit");
+    const moment = momentOf(choice);
+    const night = moment === "nuit";
+    const dusk = moment === "crepuscule";
     const weather = choice.includes("-") ? choice.slice(choice.indexOf("-") + 1) : null;
-    // La nuit sous la pluie : à partir de la pluie de jour, si on l'a déjà.
+    // La nuit (ou le crépuscule) sous la pluie : à partir de la pluie de
+    // jour, si on l'a déjà.
     const dayWeather = weather ? draft.ambiances[`jour-${weather}`] : null;
-    const reference = night && weather ? `${dayWeather ?? aiFileName(`jour-${weather}`)}.webp (la même météo de jour ; sinon ${base}.webp)` : `${base}.webp (le fond de jour)`;
+    const reference = moment !== "jour" && weather ? `${dayWeather ?? aiFileName(`jour-${weather}`)}.webp (la même météo de jour ; sinon ${base}.webp)` : `${base}.webp (le fond de jour)`;
     const lines = [AI_REFERENCE];
     if (night && style === "plan") lines.push("NIGHT BLUEPRINT: white ink lines on deep blue paper, like a cyanotype print. All lights stay OFF.");
     else if (night) lines.push(AI_NIGHT);
+    else if (dusk && style === "plan") lines.push("DUSK BLUEPRINT: dark-blue ink lines on paper washed with a soft orange-to-blue sunset gradient. All lights stay OFF.");
+    else if (dusk) lines.push(AI_DUSK);
     if (weather) lines.push(AI_WEATHER[weather]);
     if (choice === "nuit" && style !== "plan") lines.push("Clear sky feeling, calm night.");
     lines.push(bg);
@@ -1993,7 +2036,7 @@ function renderDrawingEditor() {
     ...MOMENTS.map(([moment, momentLabel]) => el("optgroup", { label: `Ambiances : ${momentLabel.toLowerCase()}` },
       ...WEATHERS.filter(([key]) => !(moment === "jour" && key === "soleil")).map(([key, label]) => {
         const value = key === "soleil" ? moment : `${moment}-${key}`;
-        const weatherText = moment === "nuit" && key === "soleil" ? "ciel clair" : label.toLowerCase();
+        const weatherText = moment !== "jour" && key === "soleil" ? "ciel clair" : label.toLowerCase();
         return el("option", { value, text: `${momentLabel}, ${weatherText}` });
       }))),
     el("optgroup", { label: "Calques" }, ...aiLayerEntities(draft).map((state) => el("option", { value: `calque:${state.entity_id}`, text: aiLayerName(state) }))),
@@ -2069,10 +2112,11 @@ function renderDrawingEditor() {
   });
   const nowKey = ambianceOf({ ...draft, forced: undefined });
   const nowWeather = nowKey.includes("-") ? nowKey.slice(nowKey.indexOf("-") + 1) : "soleil";
-  const nowText = `Maintenant : ${nowKey.startsWith("nuit") ? "nuit" : "jour"}, ${(WEATHERS.find(([key]) => key === nowWeather)?.[1] ?? nowWeather).toLowerCase()}`;
+  const nowMoment = MOMENTS.find(([key]) => key === momentOf(nowKey))?.[1] ?? "Jour";
+  const nowText = `Maintenant : ${nowMoment.toLowerCase()}, ${(WEATHERS.find(([key]) => key === nowWeather)?.[1] ?? nowWeather).toLowerCase()}`;
   const backgrounds = drawingFieldset(
     "Fonds et ambiances",
-    "Comme sur les tableaux de domo-blog : un fond par ambiance, choisi d'après le soleil et la météo. Il en manque un ? Le plus proche s'affiche (orage → pluie → nuageux → soleil ; la nuit, puis le même temps de jour).",
+    "Comme sur les tableaux de domo-blog : un fond par ambiance, choisi d'après le soleil et la météo. Il en manque un ? Le plus proche s'affiche (orage → pluie → nuageux → soleil ; la nuit, puis le même temps de jour). Le crépuscule (soleil entre −6° et +6°) ne sert que si tu lui donnes au moins un fond. La pluie par 1 °C ou moins dehors compte comme de la neige.",
     ...groups,
     el("div", { class: "drawing-grid" }, field("Ambiance affichée", forced)),
     el("p", { class: "auto-meta", text: nowText }),
