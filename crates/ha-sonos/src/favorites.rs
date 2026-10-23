@@ -10,7 +10,7 @@ use ha_core::Attributes;
 use serde_json::json;
 
 use crate::api::Media;
-use crate::xml;
+use crate::{art, xml};
 
 /// Au plus autant de favoris (l'appli Sonos en accepte bien moins en
 /// pratique).
@@ -26,6 +26,8 @@ pub struct Favorite {
     pub metadata: String,
     /// Le service : « YouTube Music », « TuneIn »…
     pub service: String,
+    /// L'adresse de sa pochette, telle que l'enceinte la donne (étape 92).
+    pub art: Option<String>,
 }
 
 /// Comment le lancer.
@@ -81,11 +83,14 @@ pub fn parse(didl: &str) -> Vec<Favorite> {
         if title.is_empty() || uri.is_empty() || list.iter().any(|f| f.title == title) {
             continue;
         }
+        let metadata = xml::element_text(item, "resMD").unwrap_or_default();
+        let art = art::in_metadata(item).or_else(|| art::in_metadata(&metadata));
         list.push(Favorite {
             title,
             uri,
-            metadata: xml::element_text(item, "resMD").unwrap_or_default(),
+            metadata,
             service: field("description"),
+            art,
         });
     }
     list
@@ -166,6 +171,27 @@ mod tests {
         assert_eq!(list[0].launch(), Launch::Queue);
         assert_eq!(list[1].launch(), Launch::Direct);
         assert_eq!(parse("pas du xml"), []);
+    }
+
+    #[test]
+    fn covers_of_the_favorites() {
+        // La pochette à côté du titre, ou seulement dans les métadonnées.
+        let beside = item("Rock", "x-rincon-cpcontainer:a", "YouTube Music").replace(
+            "<r:type>",
+            "<upnp:albumArtURI>https://yt3.example.com/a=w544</upnp:albumArtURI><r:type>",
+        );
+        let inside = item("FIP", "x-sonosapi-stream:s1", "TuneIn").replace(
+            "&lt;/dc:title&gt;",
+            "&lt;/dc:title&gt;&lt;upnp:albumArtURI&gt;/getaa?s=1&amp;amp;u=fip&lt;/upnp:albumArtURI&gt;",
+        );
+        let none = item("Jazz", "x-rincon-cpcontainer:b", "YouTube Music");
+        let list = parse(&format!("<DIDL-Lite>{beside}{inside}{none}</DIDL-Lite>"));
+        assert_eq!(
+            list[0].art.as_deref(),
+            Some("https://yt3.example.com/a=w544")
+        );
+        assert_eq!(list[1].art.as_deref(), Some("/getaa?s=1&u=fip"));
+        assert_eq!(list[2].art, None);
     }
 
     #[test]

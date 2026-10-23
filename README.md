@@ -104,6 +104,7 @@ Un noyau domotique en Rust, inspiré de Home Assistant.
 - [Étape 89 : un tableau sans doublons et un écran de veille sans cadre, expliqués](docs/interface-allegee.md)
 - [Étape 90 : un onglet par pièce, et tout sur un écran, expliqués](docs/onglets-pieces.md)
 - [Étape 91 : les favoris Sonos d'un toucher, expliqués](docs/favoris-sonos.md)
+- [Étape 92 : le lecteur de musique, expliqué](docs/lecteur-musique.md)
 - [Étape 5 : les automatisations, expliqué](docs/etape-5-automatisations.md)
 - [Modernisation du code, expliquée](docs/modernisation.md)
 - [Étape 6 : l'interface web, expliquée](docs/etape-6-interface-web.md)

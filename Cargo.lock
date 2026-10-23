@@ -1347,6 +1347,7 @@ dependencies = [
  "jiff",
  "reqwest",
  "serde_json",
+ "sha2 0.11.1",
  "thiserror",
  "tokio",
  "tracing",
