@@ -131,6 +131,25 @@ docker compose pull && docker compose up -d
 Pour rester sur une version précise, remplace `latest` par son numéro dans `compose.yaml` (par
 exemple `0.1.0`).
 
+### Essayer les nouveautés avant une version
+
+À chaque fusion sur `main`, GitHub fabrique et publie une image de test : `main` (et
+`main-<commit>`, pour revenir à une image précise). Rien à compiler chez soi :
+
+1. dans `compose.yaml`, remplace `:latest` par `:main` ;
+2. à chaque nouveauté :
+   ```bash
+   docker compose pull && docker compose up -d
+   ```
+
+C'est la même image que les versions (construite, démarrée et vérifiée avant d'être publiée),
+mais sans attendre la version : elle peut contenir une nouveauté pas encore essayée chez toi.
+Pour revenir aux versions, remets `:latest`. La base, la clé et tes réglages ne bougent pas.
+
+La première fois que l'image `main` est publiée, vérifie sur GitHub (ton profil, onglet
+**Packages**, `home-assistant-rust`, **Package settings**) qu'elle est **publique** : sinon
+`docker compose pull` demanderait un compte.
+
 ## Depuis le téléphone
 
 Par défaut, le serveur n'écoute que sur le PC lui-même (`127.0.0.1`). Pour l'ouvrir à ton

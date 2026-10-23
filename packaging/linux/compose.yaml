@@ -15,7 +15,9 @@
 services:
   ha-server:
     # « latest » suit la dernière version ; pour rester sur une version,
-    # remplace-le par son numéro (par exemple 0.1.0).
+    # remplace-le par son numéro (par exemple 0.1.0). Pour essayer les
+    # nouveautés avant une version : « main » (refaite à chaque fusion,
+    # voir docs/installation.md).
     image: ghcr.io/wolfdavid68-dev/home-assistant-rust:latest
     restart: unless-stopped
     ports:

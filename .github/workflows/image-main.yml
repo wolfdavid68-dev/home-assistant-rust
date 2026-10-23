@@ -1,0 +1,75 @@
+name: Image main
+
+# Une image Docker de test, refaite à chaque fusion sur `main` :
+# ghcr.io/<dépôt>:main (et :main-<commit>). Pour essayer les nouveautés
+# avant une version, sans rien compiler chez soi : `image: …:main` dans
+# compose.yaml, puis `docker compose pull && docker compose up -d`
+# (docs/installation.md). Les versions officielles (`latest`, `0.1.0`…)
+# restent faites par release.yml, seulement avec l'accord de David.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Seule la dernière fusion compte.
+concurrency:
+  group: image-main
+  cancel-in-progress: true
+
+jobs:
+  image:
+    name: image Docker « main »
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build
+        run: |
+          docker build \
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --label "org.opencontainers.image.version=main-${GITHUB_SHA::7}" \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --label org.opencontainers.image.licenses=MIT \
+            -t ha-server:main .
+
+      - name: Smoke test
+        # Les mêmes protections que compose.yaml : elle doit démarrer et
+        # répondre avant d'être publiée.
+        run: |
+          docker run -d --name ha --read-only --tmpfs /tmp \
+            --cap-drop ALL --security-opt no-new-privileges:true \
+            -p 127.0.0.1:8123:8123 ha-server:main
+          status=starting
+          for _ in $(seq 1 60); do
+            status=$(docker inspect --format '{{.State.Health.Status}}' ha)
+            [ "$status" = healthy ] && break
+            sleep 2
+          done
+          docker logs ha
+          test "$status" = healthy
+          curl -fsS -D - -o /dev/null http://127.0.0.1:8123/ | grep -i '^content-security-policy:'
+          docker stop ha
+
+      - name: Publier sur ghcr.io
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          image=ghcr.io/${GITHUB_REPOSITORY}
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker tag ha-server:main "$image:main"
+          docker tag ha-server:main "$image:main-${GITHUB_SHA::7}"
+          docker push "$image:main"
+          docker push "$image:main-${GITHUB_SHA::7}"
+          docker logout ghcr.io
