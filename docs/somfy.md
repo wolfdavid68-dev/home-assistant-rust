@@ -27,13 +27,14 @@ le créer avec ton compte Somfy. Ensuite, plus aucun échange avec le serveur So
 | Détecteurs de présence, de fumée | « Présence », « Fumée ! »… | non (capteur) |
 | Alarme | « Désactivée », « Activée (totale) », « Intrusion détectée ! »… | **pas encore** |
 | Chauffage (radiateurs, vannes) | température (et consigne en attribut) | **pas encore** |
+| Pompe à chaleur Atlantic (Pass APC) | Section **Chauffage** : zones, eau chaude, sonde extérieure | **oui** : consigne, confort/éco/programme, marche/arrêt (voir plus bas) |
 | Portail, porte de garage | — | ignorés volontairement |
 
-Pourquoi « pas encore » pour l'alarme et le chauffage ?
+Pourquoi « pas encore » pour l'alarme et les autres chauffages ?
 
-- **Chauffage** : Somfy a des dizaines de modèles, chacun avec ses commandes. Plutôt que de
-  deviner, lance `ha-server somfy devices` et envoie-moi le résultat : la commande pour régler la
-  consigne sera écrite pour **tes** appareils exactement.
+- **Chauffage** : Somfy a des dizaines de modèles, chacun avec ses commandes. Seule la pompe à
+  chaleur Atlantic « Pass APC » est pilotée, d'après ses commandes exactes. Pour un autre modèle,
+  lance `ha-server somfy devices` et envoie-moi le résultat.
 - **Alarme** : la désactiver à distance mérite des protections en plus (confirmation, code,
   journal d'audit). Elle est donc en lecture seule pour l'instant.
 - **Portail et porte de garage** : ignorés pour la même raison. On n'ouvre pas une porte
@@ -88,10 +89,66 @@ qu'il me faut pour le chauffage.** Il ne contient aucun secret (ni jeton, ni mot
 
 Autres commandes : `somfy status` (box associée et empreinte), `somfy forget`.
 
+## Le chauffage Atlantic (pompe à chaleur)
+
+La pompe à chaleur Atlantic se règle dans l'appli TaHoma, mais **la box ne la montre pas à son
+API locale**. Elle est donc lue et pilotée par le **serveur Somfy**, avec ton compte, comme le
+fait l'appli. C'est une boucle à part : si le serveur Somfy ne répond pas, les volets continuent
+de marcher.
+
+| Appareil | Entité | Pilotable |
+|---|---|---|
+| Chaque zone (« Etage », « RdC »…) | `climate.etage`, `climate.rdc`… | consigne (15 à 26 °C), confort / éco / programme, marche / arrêt |
+| Eau chaude (ballon) | `climate.eau_chaude` | consigne (40 à 65 °C), confort / éco / boost, marche / arrêt |
+| Sonde extérieure | `sensor.temperature_exterieure` | non |
+| Pompe à chaleur | `sensor.pompe_a_chaleur` (« chauffage », « arrêt »…) | non |
+| Compteurs d'énergie | `sensor.pac_consommation_totale`, `_chauffage`, `_eau_chaude` (kWh) | non |
+
+Sur la page **Maison**, les zones et l'eau chaude s'affichent au-dessus des volets, avec la
+température mesurée, la consigne et ses boutons − / +. La sonde extérieure donne la température
+« Dehors » (avant la météo).
+
+Changer la consigne d'une zone en mode programme la règle **jusqu'au prochain changement du
+programme** (une « dérogation », comme dans l'appli). En mode confort ou éco, c'est la consigne
+de ce mode qui change.
+
+**Mettre en place.** Le mot de passe Somfy reste dans un fichier **hors du dépôt** :
+
+1. Crée le fichier `secrets/somfy_password` à côté de `compose.override.yaml`, avec le mot de
+   passe sur une seule ligne. Personne d'autre que toi ne le tape.
+2. Dans `compose.override.yaml` (lui aussi hors du dépôt), ajoute :
+
+   ```yaml
+   services:
+     ha-server:
+       environment:
+         HA_SOMFY_EMAIL: moi@exemple.fr
+         HA_SOMFY_PASSWORD_FILE: /run/secrets/somfy_password
+       secrets:
+         - somfy_password
+   secrets:
+     somfy_password:
+       file: ./secrets/somfy_password
+   ```
+
+3. Relance le serveur. Le journal dit `chauffage : connecté, N entités`, et l'intégration
+   « Chauffage Atlantic » apparaît dans l'état des intégrations.
+
+Sans Docker : `HA_SOMFY_EMAIL` et `HA_SOMFY_PASSWORD_FILE` (chemin du fichier) dans
+l'environnement. `HA_SOMFY_PASSWORD` existe aussi, mais un fichier est plus sûr.
+
+Le serveur Somfy est relevé toutes les 30 s, et toutes les 5 s pendant 90 s après un ordre. Si
+le mot de passe est refusé, le serveur attend **une heure** avant de réessayer, pour ne pas faire
+bloquer le compte.
+
 ## Sécurité
 
-- **Ton mot de passe Somfy n'est jamais enregistré.** Il sert une seule fois à créer le jeton,
-  puis il est effacé de la mémoire, et la session Somfy est fermée.
+- **Pour les volets, ton mot de passe Somfy n'est jamais enregistré.** Il sert une seule fois à
+  créer le jeton, puis il est effacé de la mémoire, et la session Somfy est fermée.
+- **Pour le chauffage**, il est lu dans `secrets/somfy_password`, un fichier hors du dépôt. Il
+  n'apparaît jamais dans les logs ni dans un affichage de débogage (vérifié), ni l'e-mail, ni la
+  session. Les ordres sont limités aux commandes que l'appareil annonce, et aux plages de
+  consigne ci-dessus.
 - **La connexion au serveur Somfy** est vérifiée comme dans un navigateur, avec les autorités de
   confiance de ton système (magasin de certificats de Windows).
 - **La connexion à la box** utilise le **certificat épinglé** à l'association, comme pour Hue. Un
@@ -111,7 +168,9 @@ Autres commandes : `somfy status` (box associée et empreinte), `somfy forget`.
 
 | Fichier | Contenu |
 |---------|---------|
-| [cloud.rs](../crates/ha-somfy/src/cloud.rs) | Création du jeton avec le compte Somfy (une seule fois) |
+| [cloud.rs](../crates/ha-somfy/src/cloud.rs) | Serveur Somfy : création du jeton, et appareils, ordres, événements pour le chauffage |
+| [heating.rs](../crates/ha-somfy/src/heating.rs) | Chauffage Atlantic ⇄ entités, états, ordres (sans réseau, testé) |
+| [heating_client.rs](../crates/ha-somfy/src/heating_client.rs) | Boucle du chauffage : connexion, relevé toutes les 30 s, reconnexion |
 | [api.rs](../crates/ha-somfy/src/api.rs) | API locale : appareils, commandes, événements |
 | [devices.rs](../crates/ha-somfy/src/devices.rs) | Appareils ⇄ entités, états, commandes (sans réseau, testé) |
 | [client.rs](../crates/ha-somfy/src/client.rs) | Boucle principale, relevé des événements toutes les 2 s, reconnexion |
@@ -146,6 +205,10 @@ le mode développeur. Les tests vérifient le comportement contre une **fausse b
 
 Le tableau de bord a aussi été testé dans Chromium contre le vrai serveur associé à une fausse
 box : boutons, curseur, alarme traduite, aucune erreur.
+
+Le chauffage Atlantic est testé sans réseau, avec les vrais types d'appareils de la pompe à
+chaleur (zones, sondes, eau chaude, compteurs) : entités, températures, préréglages, ordres
+(dérogation en mode programme, consignes, marche/arrêt), et refus des valeurs hors plage.
 
 **Ton premier essai avec la vraie box** nous dira si tout fonctionne. Si quelque chose coince,
 copie-moi les lignes du journal qui commencent par `Somfy :`, et le résultat de `somfy devices`.

@@ -1558,7 +1558,7 @@ function tickCountdowns() {
 }
 setInterval(tickCountdowns, 1000);
 
-const PRESET_LABELS = { confort: "Confort", eco: "Éco", absent: "Absent", hors_gel: "Hors-gel", nuit: "Nuit" };
+const PRESET_LABELS = { confort: "Confort", eco: "Éco", absent: "Absent", hors_gel: "Hors-gel", nuit: "Nuit", programme: "Programme", boost: "Boost" };
 
 function climateTile(state) {
   const a = state.attributes;
@@ -1567,7 +1567,10 @@ function climateTile(state) {
   const target = finite(a.temperature) ? a.temperature : null;
   const step = finite(a.target_temp_step) && a.target_temp_step > 0 ? a.target_temp_step : 0.5;
   const measured = finite(a.current_temperature) ? `${degrees(a.current_temperature)} mesurés` : "température inconnue";
-  const subtitle = [on ? (heating ? "Chauffe" : "En veille") : "Arrêté", measured].join(" · ");
+  // Sans « hvac_action » (le chauffage Atlantic ne le dit pas), juste « Allumé ».
+  const activity = typeof a.hvac_action === "string" ? (heating ? "Chauffe" : "En veille") : "Allumé";
+  // Le ballon d'eau chaude ne donne pas sa température : rien à dire alors.
+  const subtitle = [on ? activity : "Arrêté", Object.hasOwn(a, "current_temperature") ? measured : null].filter(Boolean).join(" · ");
   const command = (service, data = {}) => {
     markPending(state.entity_id);
     callService("climate", service, { entity_id: state.entity_id, ...data });
