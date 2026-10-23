@@ -12,7 +12,12 @@
 //! - à l'association, le mot de passe n'est **jamais enregistré** : il sert à
 //!   cette connexion, puis il est effacé de la mémoire. Pour le chauffage, il
 //!   est lu dans un fichier hors du dépôt (`HA_SOMFY_PASSWORD_FILE`) ;
-//! - la session (un cookie) n'apparaît jamais dans les journaux.
+//! - le jeton de session n'apparaît jamais dans les journaux.
+//!
+//! Connexion : comme l'appli TaHoma, on demande un jeton au serveur des
+//! comptes Somfy (`accounts.somfy.com`, OAuth2 « password »), puis on l'envoie
+//! à chaque requête (`Authorization: Bearer …`). L'ancienne connexion
+//! (`/login` avec `userId` et `userPassword`) est refusée par Somfy.
 
 use std::fmt::Write as _;
 
@@ -20,21 +25,41 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use zeroize::Zeroizing;
 
-use crate::api::{Device, Event, REQUEST_TIMEOUT, is_safe_path_part, read_json};
+use crate::api::{Device, Event, REQUEST_TIMEOUT, is_safe_path_part, read_json, read_limited};
 use crate::error::SomfyError;
 
+/// Un serveur Somfy : celui des comptes (la connexion) et celui de l'API.
+#[derive(Debug, Clone, Copy)]
+pub struct SomfyServer<'a> {
+    /// Le serveur des comptes, qui donne le jeton.
+    pub accounts: &'a str,
+    /// L'API des appareils.
+    pub api: &'a str,
+}
+
 /// Serveur Somfy pour l'Europe.
-pub const SOMFY_EUROPE: &str = "https://ha101-1.overkiz.com/enduser-mobile-web/enduserAPI";
+pub const SOMFY_EUROPE: SomfyServer<'static> = SomfyServer {
+    accounts: "https://accounts.somfy.com",
+    api: "https://ha101-1.overkiz.com/enduser-mobile-web/enduserAPI",
+};
+
+/// L'identifiant de l'appli TaHoma auprès du serveur des comptes Somfy.
+/// Ce n'est pas un secret personnel : il est le même pour tout le monde, et
+/// publié (bibliothèque `pyoverkiz`, utilisée par Home Assistant).
+const CLIENT_ID: &str =
+    "0d8e920c-1478-11e7-a377-02dd59bd3041_1ewvaqmclfogo4kcsoo0c8k4kso884owg08sg8c40sk4go4ksg";
+const CLIENT_SECRET: &str = "12k73w1n540g8o4cokg0cw84cog840k84cwggscwg884004kgk";
 
 /// Une session ouverte sur le serveur Somfy.
 #[derive(Clone)]
 pub struct CloudSession {
     http: reqwest::Client,
     base: String,
-    cookie: Zeroizing<String>,
+    /// `Bearer <jeton>`, prêt pour l'en-tête `Authorization`.
+    authorization: Zeroizing<String>,
 }
 
-/// Jamais le cookie de session dans un affichage de débogage.
+/// Jamais le jeton de session dans un affichage de débogage.
 impl std::fmt::Debug for CloudSession {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CloudSession")
@@ -47,46 +72,48 @@ impl CloudSession {
     /// Se connecte avec le compte Somfy (e-mail et mot de passe).
     pub async fn login(
         http: reqwest::Client,
-        base: &str,
+        server: SomfyServer<'_>,
         email: &str,
         password: &str,
     ) -> Result<Self, SomfyError> {
         let form = Zeroizing::new(format!(
-            "userId={}&userPassword={}",
+            "grant_type=password&client_id={}&client_secret={}&username={}&password={}",
+            form_encode(CLIENT_ID),
+            form_encode(CLIENT_SECRET),
             form_encode(email),
             form_encode(password)
         ));
         let response = http
-            .post(format!("{base}/login"))
+            .post(format!("{}/oauth/oauth/v2/token/jwt", server.accounts))
             .header("Content-Type", "application/x-www-form-urlencoded")
             .body(form.as_str().to_owned())
             .timeout(REQUEST_TIMEOUT)
             .send()
             .await?;
-        if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+        let status = response.status();
+        // La réponse contient le jeton : elle n'est jamais recopiée dans une erreur.
+        let body = Zeroizing::new(read_limited(response).await?);
+        let reply: Value = serde_json::from_slice(&body).unwrap_or(Value::Null);
+        let refused = reply.get("message").and_then(Value::as_str) == Some("error.invalid.grant")
+            || reply.get("error").and_then(Value::as_str) == Some("invalid_grant")
+            || status == reqwest::StatusCode::UNAUTHORIZED;
+        if refused {
             return Err(SomfyError::BadCredentials);
         }
-        // La session est un cookie `JSESSIONID`.
-        let cookie = response
-            .headers()
-            .get_all(reqwest::header::SET_COOKIE)
-            .iter()
-            .filter_map(|value| value.to_str().ok())
-            .find_map(|value| {
-                value
-                    .split(';')
-                    .next()
-                    .filter(|c| c.starts_with("JSESSIONID="))
-            })
-            .map(str::to_owned);
-        let reply: Value = read_json(response).await?;
-        let Some(cookie) = cookie.filter(|_| reply.get("success") == Some(&json!(true))) else {
-            return Err(SomfyError::BadCredentials);
-        };
+        if !status.is_success() {
+            return Err(SomfyError::Unexpected(format!(
+                "serveur des comptes Somfy : {status}"
+            )));
+        }
+        let token = reply
+            .get("access_token")
+            .and_then(Value::as_str)
+            .filter(|t| is_header_token(t))
+            .ok_or_else(|| SomfyError::Unexpected("pas de jeton Somfy dans la réponse".into()))?;
         Ok(Self {
             http,
-            base: base.to_owned(),
-            cookie: Zeroizing::new(cookie),
+            base: server.api.to_owned(),
+            authorization: Zeroizing::new(format!("Bearer {token}")),
         })
     }
 
@@ -130,7 +157,7 @@ impl CloudSession {
         let response = self
             .http
             .post(format!("{}/config/{gateway_id}/local/tokens", self.base))
-            .header(reqwest::header::COOKIE, self.cookie.as_str())
+            .header(reqwest::header::AUTHORIZATION, self.authorization.as_str())
             .header("Content-Type", "application/json")
             .body(body.to_string())
             .send()
@@ -191,7 +218,7 @@ impl CloudSession {
         let _ = self
             .http
             .post(format!("{}/logout", self.base))
-            .header(reqwest::header::COOKIE, self.cookie.as_str())
+            .header(reqwest::header::AUTHORIZATION, self.authorization.as_str())
             .timeout(REQUEST_TIMEOUT)
             .send()
             .await;
@@ -201,7 +228,7 @@ impl CloudSession {
         let response = self
             .http
             .get(format!("{}{path}", self.base))
-            .header(reqwest::header::COOKIE, self.cookie.as_str())
+            .header(reqwest::header::AUTHORIZATION, self.authorization.as_str())
             .timeout(REQUEST_TIMEOUT)
             .send()
             .await?;
@@ -212,7 +239,7 @@ impl CloudSession {
         let response = self
             .http
             .post(format!("{}{path}", self.base))
-            .header(reqwest::header::COOKIE, self.cookie.as_str())
+            .header(reqwest::header::AUTHORIZATION, self.authorization.as_str())
             .header("Content-Type", "application/json")
             .body(body.to_string())
             .timeout(REQUEST_TIMEOUT)
@@ -226,6 +253,12 @@ impl CloudSession {
 #[must_use]
 pub fn is_gateway_id(value: &str) -> bool {
     (4..=40).contains(&value.len()) && value.bytes().all(|b| b.is_ascii_digit() || b == b'-')
+}
+
+/// Un jeton envoyable tel quel dans un en-tête : caractères visibles, sans
+/// espace, de taille raisonnable.
+fn is_header_token(value: &str) -> bool {
+    (10..=8192).contains(&value.len()) && value.bytes().all(|b| b.is_ascii_graphic())
 }
 
 /// Encodage d'un champ de formulaire (`application/x-www-form-urlencoded`).
@@ -251,6 +284,17 @@ mod tests {
         assert_eq!(form_encode("moi@exemple.fr"), "moi%40exemple.fr");
         assert_eq!(form_encode("a&b=c d"), "a%26b%3Dc%20d");
         assert_eq!(form_encode("é"), "%C3%A9");
+    }
+
+    #[test]
+    fn header_tokens() {
+        assert!(is_header_token("eyJhbGciOi.eyJzdWIiOi.c2lnbmF0dXJl"));
+        assert!(!is_header_token("court"));
+        assert!(!is_header_token("avec espace dans le jeton"));
+        assert!(!is_header_token(
+            "retour
+X-Autre: 1"
+        ));
     }
 
     #[test]

@@ -201,15 +201,7 @@ pub(crate) async fn read_json<T: DeserializeOwned>(
     if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
         return Err(SomfyError::Unauthorized);
     }
-    let mut body = Vec::new();
-    let mut chunks = response.bytes_stream();
-    while let Some(chunk) = chunks.next().await {
-        let chunk = chunk?;
-        if body.len() + chunk.len() > MAX_RESPONSE {
-            return Err(SomfyError::TooLarge);
-        }
-        body.extend_from_slice(&chunk);
-    }
+    let body = read_limited(response).await?;
     if !status.is_success() {
         let detail: String = String::from_utf8_lossy(&body)
             .chars()
@@ -219,6 +211,20 @@ pub(crate) async fn read_json<T: DeserializeOwned>(
         return Err(SomfyError::Unexpected(format!("{status} {detail}")));
     }
     serde_json::from_slice(&body).map_err(|error| SomfyError::Unexpected(format!("JSON : {error}")))
+}
+
+/// Lit le corps d'une réponse, en refusant les réponses démesurées.
+pub(crate) async fn read_limited(response: reqwest::Response) -> Result<Vec<u8>, SomfyError> {
+    let mut body = Vec::new();
+    let mut chunks = response.bytes_stream();
+    while let Some(chunk) = chunks.next().await {
+        let chunk = chunk?;
+        if body.len() + chunk.len() > MAX_RESPONSE {
+            return Err(SomfyError::TooLarge);
+        }
+        body.extend_from_slice(&chunk);
+    }
+    Ok(body)
 }
 
 /// Un morceau d'adresse sûr (identifiant d'écouteur…) : lettres, chiffres, `-`.
