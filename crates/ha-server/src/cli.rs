@@ -65,6 +65,7 @@ utilisation :
   ha-server protection-solaire check  vérifie la protection solaire des volets
   ha-server guard check           vérifie la garde (pièces protégées, heures calmes)
   ha-server alexa check           vérifie le fichier des appareils pour Alexa
+  ha-server alexa relay [pont]    relais pour Alexa quand le serveur est dans Docker Desktop
   ha-server thermostats check     vérifie le fichier des thermostats
   ha-server persons check         vérifie le fichier des personnes
   ha-server inputs check          vérifie le fichier des entrées
@@ -1246,6 +1247,23 @@ pub fn check_alexa(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
         }
     }
     Ok(())
+}
+
+/// `ha-server alexa relay` : le relais, sur la machine, devant un serveur
+/// lancé dans Docker Desktop (voir `ha_alexa::relay`). Tourne jusqu'à Ctrl+C.
+pub async fn run_alexa_relay(
+    settings: ha_alexa::relay::RelaySettings,
+    stop: impl std::future::Future<Output = std::io::Result<()>>,
+) -> Result<(), Box<dyn Error>> {
+    let target = settings.target;
+    let relay = ha_alexa::relay::Relay::start(settings).await?;
+    println!(
+        "Relais Alexa : l'Echo trouvera le pont sur http://{}/, relayé vers {target}. Ctrl+C pour arrêter.",
+        relay.address
+    );
+    let stopped = stop.await;
+    relay.stop().await;
+    Ok(stopped?)
 }
 
 /// `ha-server thermostats check` : vérifie `thermostats.yaml`.
