@@ -22,8 +22,19 @@ d'après le soleil (`sun.sun`) et la météo (`weather`).
 | Neige            | `snowy`                                 | nuageux               |
 | Pluie et neige   | `snowy-rainy`                           | neige                 |
 
-Soit 22 fonds possibles par onglet (11 temps, de jour et de nuit), tous facultatifs sauf le fond de
-jour.
+Soit 33 fonds possibles par onglet (11 temps, de jour, au crépuscule et de nuit), tous facultatifs
+sauf le fond de jour.
+
+### Le crépuscule et la neige, comme sur domo-blog
+
+- **Le crépuscule** : quand le soleil est entre −6° et +6° au-dessus de l'horizon (l'attribut
+  `elevation` de `sun.sun`), le dessin prend les fonds « Crépuscule ». Il ne s'en sert que si
+  l'onglet en a **au moins un** : sans fond de crépuscule, rien ne change (jour, puis nuit au
+  coucher du soleil). S'il manque le fond du temps qu'il fait, on remonte les temps au crépuscule,
+  puis on prend la nuit (soleil couché) ou le jour (soleil encore levé).
+- **La neige par la sonde** : de la pluie ou des averses annoncées avec **1 °C ou moins dehors**,
+  c'est de la neige. La température vient de la sonde extérieure de la pompe à chaleur
+  (`sensor.temperature_exterieure`), sinon de la météo.
 
 ## Régler les fonds
 
@@ -38,7 +49,7 @@ jour.
   aux orages et à la grêle ;
 - **Ambiance affichée** : « Automatique », ou une ambiance imposée, pour essayer ses images sans
   attendre la pluie ;
-- « Maintenant : nuit, pluie » dit l'ambiance qui serait choisie en ce moment.
+- « Maintenant : crépuscule, pluie » dit l'ambiance qui serait choisie en ce moment.
 
 Le passage d'une ambiance à l'autre se fait en fondu. Les calques (garage ouvert, lumières…) et
 les valeurs restent posés par-dessus.
