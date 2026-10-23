@@ -2757,6 +2757,11 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .room-body { columns: 290px 3; column-gap: 1rem; }
 .room-group { break-inside: avoid; margin-bottom: 1rem; }
 .room-body .grid { grid-template-columns: 1fr; }
+/* Une tuile « large » (météo, vigilance, agenda, listes) demande deux
+   colonnes ; ici il n'y en a qu'une, et la grille en ajoutait une seconde,
+   étroite, où les autres tuiles se tassaient (noms écrits lettre par
+   lettre). Dans une pièce, chaque tuile prend la colonne entière. */
+.room-body .grid > * { grid-column: 1 / -1; }
 .room-dialog[open] { animation: room-in 0.18s ease-out; }
 @keyframes room-in { from { opacity: 0; transform: translateY(10px) scale(0.985); } }
 @media (max-width: 640px) {
@@ -2776,7 +2781,6 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .room-view[hidden] { display: none; }
 .room-view .room-sheet { max-height: none; overflow: visible; padding: 0.4rem 0 0; }
 .room-view #room-close, .room-view .room-grab { display: none; }
-.room-view .room-chart-card .chart-line { height: 44px; }
 @media (min-width: 1000px) {
   [data-layout="board"] .room-view { padding-left: calc(68px + var(--gutter)); padding-bottom: 16px; }
   /* Une pièce à 19 appareils tient sur un écran 1920 × 1080 : jusqu'à cinq
@@ -3453,24 +3457,37 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .music-progress.live input[type="range"] { opacity: 0.5; }
 .music-times { display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 
-/* Les boutons : aléatoire, précédent, lecture (en grand), suivant, répétition. */
-.music-transport { display: flex; align-items: center; justify-content: center; gap: clamp(6px, 2.2vw, 22px); }
+/* Les boutons : aléatoire, précédent, lecture (en grand), suivant, répétition.
+   Leur taille suit la largeur de la rangée (unités cqi) : à côté de la grande
+   pochette, la colonne est étroite, et un bouton qui rétrécit seulement en
+   largeur devient une ellipse. Ils ne rétrécissent donc jamais (flex: none),
+   restent carrés (aspect-ratio), et leurs icônes suivent leur taille. */
+.music-transport {
+  container-type: inline-size;
+  display: flex; align-items: center; justify-content: center;
+}
 .music-transport button {
+  flex: none;
+  /* L'écart entre les boutons (cqi : la rangée, pas l'écran). */
+  margin-left: clamp(2px, 2.5cqi, 22px);
+  aspect-ratio: 1;
+  padding: 0;
   display: grid; place-items: center;
   border: 0; border-radius: 50%;
   background: transparent;
   transition: transform 0.12s ease, background-color 0.2s ease;
 }
+.music-transport button:first-child { margin-left: 0; }
 .music-transport button:active:not(:disabled) { transform: scale(0.92); }
 .music-transport button:disabled { opacity: 0.35; cursor: default; }
-.music-skip { width: 56px; height: 56px; }
-.music-skip svg { width: 28px; height: 28px; }
+.music-skip { width: clamp(40px, 16cqi, 56px); height: auto; }
+.music-skip svg { width: 50%; height: 50%; }
 .music-skip svg path { fill: currentColor; }
-.music-transport .music-play { width: 76px; height: 76px; background: var(--accent); color: var(--accent-ink); box-shadow: var(--shadow-float); }
-.music-play svg { width: 32px; height: 32px; }
+.music-transport .music-play { width: clamp(48px, 22cqi, 76px); height: auto; background: var(--accent); color: var(--accent-ink); box-shadow: var(--shadow-float); }
+.music-play svg { width: 42%; height: 42%; }
 .music-play svg path { fill: currentColor; }
-.music-mode { position: relative; width: 48px; height: 48px; color: var(--muted); }
-.music-mode svg { width: 21px; height: 21px; }
+.music-mode { position: relative; width: clamp(36px, 13cqi, 48px); height: auto; color: var(--muted); }
+.music-mode svg { width: 44%; height: 44%; }
 .music-mode[aria-pressed="true"] { color: var(--accent); }
 .music-mode[aria-pressed="true"]::after {
   content: ""; position: absolute; bottom: 5px; left: 50%;
@@ -3532,14 +3549,16 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 
 /* Un grand écran : la pochette à gauche, le reste à droite ; les favoris à côté. */
 @media (min-width: 760px) {
-  .music-now { grid-template-columns: minmax(200px, 42%) minmax(0, 1fr); column-gap: 28px; align-items: center; }
+  .music-now { grid-template-columns: minmax(180px, 40%) minmax(0, 1fr); column-gap: clamp(20px, 2.4vw, 28px); align-items: center; }
   .music-art { grid-row: 1 / span 4; width: 100%; max-width: 420px; }
   .music-info { text-align: left; }
   .music-transport { justify-content: flex-start; }
 }
 @media (min-width: 1000px) {
   [data-layout="board"] .music-view { padding-left: calc(68px + var(--gutter)); padding-bottom: 16px; }
-  .music-view { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }
+  /* Le lecteur prend plus de place que les favoris : sa colonne de droite
+     (titre, barre, boutons, volume) ne doit pas être tassée. */
+  .music-view { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }
   .music-speakers { grid-column: 1 / -1; }
   .music-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
 }
@@ -3583,7 +3602,7 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .board-music.playing .board-music-art { box-shadow: 0 0 0 2px var(--accent); }
 .board-music-buttons { flex: none; display: flex; gap: 6px; }
 .board-music :is(.board-music-play, .board-music-skip) {
-  width: 40px; height: 40px; padding: 0;
+  flex: none; width: 40px; height: 40px; padding: 0;
   display: grid; place-items: center;
   border: 0; border-radius: 50%;
   background: var(--card-2); color: var(--text);

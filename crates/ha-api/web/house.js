@@ -1827,9 +1827,7 @@ function seriesFor(chart) {
       .then(({ status, data }) => {
         entry.loading = false;
         if (status !== 200 || !Array.isArray(data.numeric)) return;
-        entry.points = data.numeric
-          .map((p) => [Date.parse(p.at), Number(p.mean)])
-          .filter(([t, v]) => Number.isFinite(t) && Number.isFinite(v));
+        entry.points = seriesPoints(data);
         if (isBoard()) {
           renderCharts();
           renderGauges();
@@ -1839,6 +1837,23 @@ function seriesFor(chart) {
       .catch(() => { entry.loading = false; });
   }
   return series.get(key)?.points ?? null;
+}
+
+/** Les points d'une courbe (réponse de /api/history/…/series) : la moyenne
+ *  de chaque tranche, précédée de la valeur au début de la période. Sans
+ *  elle, un capteur qui change rarement (une température dehors) n'avait
+ *  que deux ou trois relevés récents, et la courbe se tassait au bord droit. */
+function seriesPoints(data) {
+  const points = data.numeric
+    .map((p) => [Date.parse(p.at), Number(p.mean)])
+    .filter(([t, v]) => Number.isFinite(t) && Number.isFinite(v));
+  const since = Date.parse(data.since);
+  const first = Array.isArray(data.changes) ? data.changes[0] : undefined;
+  const start = typeof first?.state === "string" && first.state.trim() !== "" ? Number(first.state) : NaN;
+  if (Number.isFinite(since) && Date.parse(first?.at) === since && Number.isFinite(start) && !(points[0]?.[0] <= since)) {
+    points.unshift([since, start]);
+  }
+  return points;
 }
 
 /** Une courbe en SVG : une ligne, et un dégradé dessous. */
