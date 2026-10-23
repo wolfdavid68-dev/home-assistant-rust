@@ -1140,16 +1140,8 @@ function gauge(icon, label, value, kind) {
 function renderGauges() {
   const box = $("#gauges");
   const items = [];
-  const weather = [...entities.values()].find((s) => domainOf(s) === "weather");
-  const reading = (id) => {
-    const state = entities.get(id);
-    return state && state.state !== "" && Number.isFinite(Number(state.state)) ? Number(state.state) : NaN;
-  };
   // D'abord la sonde de la pompe à chaleur, posée dehors ; sinon la météo.
-  const probe = reading("sensor.temperature_exterieure");
-  const outsideTemp = Number.isFinite(probe) ? probe
-    : finite(weather?.attributes.temperature) ? weather.attributes.temperature
-      : reading("sensor.meteo_temperature");
+  const outsideTemp = outsideTemperature();
   if (Number.isFinite(outsideTemp)) items.push(gauge(ICONS.temperature, "Dehors", `${number.format(outsideTemp)} °C`, "outside"));
   const temps = areas.map(roomInfo).map((info) => info.temperature).filter((t) => Number.isFinite(t));
   if (temps.length > 0) {
