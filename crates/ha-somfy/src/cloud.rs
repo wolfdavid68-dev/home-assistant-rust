@@ -1,32 +1,46 @@
-//! Obtention du jeton de l'API locale, **une seule fois**, à l'association.
+//! Le serveur Somfy (le « cloud », comme l'appli TaHoma).
 //!
-//! Somfy ne permet de créer ce jeton qu'en passant par son serveur, avec ton
-//! compte Somfy (procédure officielle du « mode développeur »). Ensuite, tout
-//! se passe en local : le serveur Somfy n'est plus jamais contacté.
+//! Deux usages :
+//! - l'obtention du jeton de l'API locale, **une seule fois**, à
+//!   l'association (procédure officielle du « mode développeur ») ;
+//! - le chauffage Atlantic (voir [`crate::heating`]) : la box ne le montre
+//!   pas à son API locale, seul le serveur Somfy le connaît.
 //!
 //! Sécurité :
 //! - la connexion au serveur Somfy est vérifiée comme dans un navigateur
 //!   (autorités de confiance du système) ;
-//! - le mot de passe n'est **jamais enregistré** : il sert à cette connexion,
-//!   puis il est effacé de la mémoire ;
-//! - on se déconnecte du serveur Somfy à la fin.
+//! - à l'association, le mot de passe n'est **jamais enregistré** : il sert à
+//!   cette connexion, puis il est effacé de la mémoire. Pour le chauffage, il
+//!   est lu dans un fichier hors du dépôt (`HA_SOMFY_PASSWORD_FILE`) ;
+//! - la session (un cookie) n'apparaît jamais dans les journaux.
 
 use std::fmt::Write as _;
 
+use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use zeroize::Zeroizing;
 
-use crate::api::read_json;
+use crate::api::{Device, Event, REQUEST_TIMEOUT, is_safe_path_part, read_json};
 use crate::error::SomfyError;
 
 /// Serveur Somfy pour l'Europe.
 pub const SOMFY_EUROPE: &str = "https://ha101-1.overkiz.com/enduser-mobile-web/enduserAPI";
 
 /// Une session ouverte sur le serveur Somfy.
+#[derive(Clone)]
 pub struct CloudSession {
     http: reqwest::Client,
     base: String,
     cookie: Zeroizing<String>,
+}
+
+/// Jamais le cookie de session dans un affichage de débogage.
+impl std::fmt::Debug for CloudSession {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CloudSession")
+            .field("base", &self.base)
+            .finish_non_exhaustive()
+    }
 }
 
 impl CloudSession {
@@ -46,6 +60,7 @@ impl CloudSession {
             .post(format!("{base}/login"))
             .header("Content-Type", "application/x-www-form-urlencoded")
             .body(form.as_str().to_owned())
+            .timeout(REQUEST_TIMEOUT)
             .send()
             .await?;
         if response.status() == reqwest::StatusCode::UNAUTHORIZED {
@@ -124,21 +139,83 @@ impl CloudSession {
         Ok(token)
     }
 
+    /// Tous les appareils du compte, avec leurs états.
+    pub async fn devices(&self) -> Result<Vec<Device>, SomfyError> {
+        self.get("/setup/devices").await
+    }
+
+    /// Envoie des commandes à un appareil, en un seul ordre, par exemple
+    /// `setDerogatedTargetTemperature` avec `[20]`.
+    pub async fn execute(
+        &self,
+        device_url: &str,
+        commands: &[(String, Vec<Value>)],
+    ) -> Result<(), SomfyError> {
+        let commands: Vec<Value> = commands
+            .iter()
+            .map(|(name, parameters)| json!({"name": name, "parameters": parameters}))
+            .collect();
+        let body = json!({
+            "label": "ha-rust",
+            "actions": [{"deviceURL": device_url, "commands": commands}],
+        });
+        let _: Value = self.post("/exec/apply", &body).await?;
+        Ok(())
+    }
+
+    /// Ouvre un « écouteur » d'événements, à relever avec
+    /// [`CloudSession::fetch_events`] (sinon le serveur l'oublie).
+    pub async fn register_listener(&self) -> Result<String, SomfyError> {
+        let reply: Value = self.post("/events/register", &json!({})).await?;
+        reply
+            .get("id")
+            .and_then(Value::as_str)
+            .filter(|id| is_safe_path_part(id))
+            .map(str::to_owned)
+            .ok_or_else(|| SomfyError::Unexpected("identifiant d'écouteur invalide".into()))
+    }
+
+    /// Les événements arrivés depuis le dernier relevé.
+    pub async fn fetch_events(&self, listener: &str) -> Result<Vec<Event>, SomfyError> {
+        if !is_safe_path_part(listener) {
+            return Err(SomfyError::Unexpected(
+                "identifiant d'écouteur invalide".into(),
+            ));
+        }
+        self.post(&format!("/events/{listener}/fetch"), &json!({}))
+            .await
+    }
+
     /// Ferme la session sur le serveur Somfy.
     pub async fn logout(self) {
         let _ = self
             .http
             .post(format!("{}/logout", self.base))
             .header(reqwest::header::COOKIE, self.cookie.as_str())
+            .timeout(REQUEST_TIMEOUT)
             .send()
             .await;
     }
 
-    async fn get(&self, path: &str) -> Result<Value, SomfyError> {
+    async fn get<T: DeserializeOwned>(&self, path: &str) -> Result<T, SomfyError> {
         let response = self
             .http
             .get(format!("{}{path}", self.base))
             .header(reqwest::header::COOKIE, self.cookie.as_str())
+            .timeout(REQUEST_TIMEOUT)
+            .send()
+            .await?;
+        read_json(response).await
+    }
+
+    async fn post<T: DeserializeOwned>(&self, path: &str, body: &Value) -> Result<T, SomfyError> {
+        let response = self
+            .http
+            .post(format!("{}{path}", self.base))
+            .header(reqwest::header::COOKIE, self.cookie.as_str())
+            .header("Content-Type", "application/json")
+            .body(body.to_string())
+            .timeout(REQUEST_TIMEOUT)
             .send()
             .await?;
         read_json(response).await

@@ -108,6 +108,9 @@
 //!   `HA_SONOS_AUDIO` : adresse de ce PC vue par les enceintes (devinée par
 //!   défaut, port 8124) ; `HA_PIPER` : la voix des annonces, programme
 //!   `piper` ou service `tcp://hôte:10200` ; `HA_PIPER_VOIX` : la voix ;
+//! - `HA_SOMFY_EMAIL` et `HA_SOMFY_PASSWORD_FILE` (fichier contenant le mot
+//!   de passe, ou `HA_SOMFY_PASSWORD`) : compte Somfy de l'appli TaHoma, pour
+//!   le chauffage Atlantic (voir docs/somfy.md) ;
 //! - `HA_TLS` : `on` pour le tableau de bord en HTTPS sur le réseau de la
 //!   maison (étape 79) ; `HA_TLS_NOMS` : noms ou adresses en plus dans le
 //!   certificat (`.local` ou adresses privées) ; `HA_TLS_DIR` : dossier de
@@ -135,7 +138,7 @@ use ha_core::{Attributes, Core, EntityId, Event};
 use ha_freebox::Freebox;
 use ha_hue::Hue;
 use ha_mqtt::{Mqtt, MqttConfig};
-use ha_somfy::Somfy;
+use ha_somfy::{CloudAccount, HeatingCloud, Somfy};
 use ha_storage::{Recorder, Store};
 use ha_sun::{Location, SunTracker};
 use serde_json::json;
@@ -381,6 +384,7 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         .map_err(|error| format!("{} : {error}", energy_path().display()))?;
     let teleinfo_config = teleinfo_config()?;
     let sonos_config = sonos_config()?;
+    let somfy_account = somfy_account()?;
     let thermostat_configs = ha_thermostat::load(&thermostats_path())
         .map_err(|error| format!("{} : {error}", thermostats_path().display()))?;
     if location.is_none() && ha_automation::uses_sun(&automations) {
@@ -742,6 +746,8 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
             None
         }
     };
+    // Le chauffage Atlantic, par le serveur Somfy (la box ne le montre pas).
+    let heating = somfy_account.map(|account| HeatingCloud::start(account, Arc::clone(&core)));
     // SmartThings de Samsung (étape 86).
     let smartthings = match store.smartthings_account().await {
         Ok(Some(_)) => Some(ha_smartthings::SmartThings::start(
@@ -809,6 +815,7 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     let mut simulation = if mqtt.is_none()
         && hue.is_none()
         && somfy.is_none()
+        && heating.is_none()
         && smartthings.is_none()
         && freebox.is_none()
         && teleinfo.is_none()
@@ -914,6 +921,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     }
     if let Some(somfy) = somfy {
         somfy.stop().await;
+    }
+    if let Some(heating) = heating {
+        heating.stop().await;
     }
     if let Some(smartthings) = smartthings {
         smartthings.stop().await;
@@ -1317,6 +1327,37 @@ fn ntfy_config() -> Result<Option<ha_notify::Config>, String> {
 }
 
 /// Lit la configuration MQTT. `None` si `HA_MQTT_HOST` n'est pas défini.
+/// Le compte Somfy pour le chauffage Atlantic : `HA_SOMFY_EMAIL` et le mot
+/// de passe dans un fichier (`HA_SOMFY_PASSWORD_FILE`), hors du dépôt.
+fn somfy_account() -> Result<Option<CloudAccount>, String> {
+    let Ok(email) = std::env::var("HA_SOMFY_EMAIL") else {
+        return Ok(None);
+    };
+    let email = email.trim().to_owned();
+    if email.is_empty() || email.len() > 200 || !email.contains('@') {
+        return Err("HA_SOMFY_EMAIL invalide (exemple : moi@exemple.fr)".into());
+    }
+    // Comme pour MQTT : un fichier est préférable à une variable d'environnement.
+    let password = match std::env::var("HA_SOMFY_PASSWORD_FILE") {
+        Ok(path) => {
+            let content = Zeroizing::new(std::fs::read_to_string(&path).map_err(|error| {
+                format!("lecture de HA_SOMFY_PASSWORD_FILE ({path}) : {error}")
+            })?);
+            Zeroizing::new(content.trim_end_matches(['\r', '\n']).to_owned())
+        }
+        Err(_) => std::env::var("HA_SOMFY_PASSWORD")
+            .map(Zeroizing::new)
+            .map_err(|_| {
+                "HA_SOMFY_EMAIL : il faut aussi le mot de passe Somfy \
+                 (HA_SOMFY_PASSWORD_FILE), voir docs/somfy.md"
+            })?,
+    };
+    if password.is_empty() {
+        return Err("mot de passe Somfy vide (HA_SOMFY_PASSWORD_FILE)".into());
+    }
+    Ok(Some(CloudAccount::new(email, password)))
+}
+
 fn mqtt_config() -> Result<Option<MqttConfig>, String> {
     let Ok(host) = std::env::var("HA_MQTT_HOST") else {
         return Ok(None);

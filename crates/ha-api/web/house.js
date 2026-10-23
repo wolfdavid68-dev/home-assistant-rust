@@ -1071,10 +1071,12 @@ function renderTabs() {
   }
   // L'onglet Agenda, s'il y a un agenda (étape 75).
   const withAgenda = typeof agendaCalendars === "function" && agendaCalendars().length > 0;
-  if (withAgenda) specs.push({ key: "agenda", label: "Agenda", icon: ICONS.calendar, current: agendaOpen, open: () => openAgenda() });
+  // Sur un grand écran, le rail de gauche a déjà ses boutons : ces deux
+  // onglets y sont cachés (`.in-rail`).
+  if (withAgenda) specs.push({ key: "agenda", label: "Agenda", icon: ICONS.calendar, inRail: true, current: agendaOpen, open: () => openAgenda() });
   // L'onglet Musique, s'il y a une enceinte (étape 92, musique.js).
   const withMusic = typeof musicPlayers === "function" && musicPlayers().length > 0;
-  if (withMusic) specs.push({ key: "music", label: "Musique", icon: ICONS.music, current: musicOpen, open: () => openMusic() });
+  if (withMusic) specs.push({ key: "music", label: "Musique", icon: ICONS.music, inRail: true, current: musicOpen, open: () => openMusic() });
 
   // Rien n'a changé : on garde les boutons (et le focus du clavier).
   const signature = specs.map((s) => `${s.key}|${s.label}|${s.current ? 1 : 0}|${s.lit ? 1 : 0}`).join("\n");
@@ -1084,6 +1086,7 @@ function renderTabs() {
     const classes = ["board-tab-item"];
     if (spec.current) classes.push("active");
     if (spec.lit) classes.push("lit");
+    if (spec.inRail) classes.push("in-rail");
     const tab = el("button", { type: "button", class: classes.join(" "), "aria-current": spec.current ? "page" : "false" },
       ...(spec.icon ? [svgIcon(spec.icon)] : []), spec.label);
     if (spec.lit) tab.setAttribute("aria-label", `${spec.label}, lumières allumées`);
@@ -1095,6 +1098,14 @@ function renderTabs() {
   // prennent leur propre ligne en haut de l'écran.
   nav.classList.toggle("single", tabs.length === 1);
   nav.classList.toggle("many", tabs.length > 4);
+  // Une ligne qui déborde : l'onglet ouvert reste en vue.
+  const active = nav.querySelector(".active");
+  if (active && active.offsetParent !== null) {
+    const left = active.offsetLeft - nav.offsetLeft;
+    if (left < nav.scrollLeft || left + active.offsetWidth > nav.scrollLeft + nav.clientWidth) {
+      nav.scrollLeft = left - (nav.clientWidth - active.offsetWidth) / 2;
+    }
+  }
 }
 
 function buildHouse() {
@@ -1130,9 +1141,15 @@ function renderGauges() {
   const box = $("#gauges");
   const items = [];
   const weather = [...entities.values()].find((s) => domainOf(s) === "weather");
-  const outside = entities.get("sensor.meteo_temperature");
-  const outsideTemp = finite(weather?.attributes.temperature) ? weather.attributes.temperature
-    : outside && Number.isFinite(Number(outside.state)) ? Number(outside.state) : NaN;
+  const reading = (id) => {
+    const state = entities.get(id);
+    return state && state.state !== "" && Number.isFinite(Number(state.state)) ? Number(state.state) : NaN;
+  };
+  // D'abord la sonde de la pompe à chaleur, posée dehors ; sinon la météo.
+  const probe = reading("sensor.temperature_exterieure");
+  const outsideTemp = Number.isFinite(probe) ? probe
+    : finite(weather?.attributes.temperature) ? weather.attributes.temperature
+      : reading("sensor.meteo_temperature");
   if (Number.isFinite(outsideTemp)) items.push(gauge(ICONS.temperature, "Dehors", `${number.format(outsideTemp)} °C`, "outside"));
   const temps = areas.map(roomInfo).map((info) => info.temperature).filter((t) => Number.isFinite(t));
   if (temps.length > 0) {
@@ -1263,8 +1280,70 @@ function coverRow(state) {
   return row;
 }
 
-/** Les volets (pas les portes de garage ni les portails, ni ceux déjà en
- *  boutons rapides), en lignes sous le dessin. */
+// ---------------------------------------------------------------- Chauffage en lignes
+// Au-dessus des volets : chaque zone (Etage, RdC…) et l'eau chaude, avec la
+// température mesurée, la consigne et ses boutons −/+.
+
+const degreesText = (value) => `${number.format(value)} °C`;
+
+/** « 19,5 °C mesurés · Confort », ou « Arrêté ». */
+function heatingText(state) {
+  const a = state.attributes;
+  if (state.state === "unavailable") return "Indisponible";
+  const parts = [];
+  if (finite(a.current_temperature)) parts.push(`${degreesText(a.current_temperature)} mesurés`);
+  if (state.state === "off") parts.push("Arrêté");
+  else if (typeof a.preset_mode === "string") parts.push(lookup(PRESET_LABELS, a.preset_mode) ?? a.preset_mode);
+  if (a.derogation === true) parts.push("manuel");
+  return parts.join(" · ") || statusText(state);
+}
+
+function heatingRow(state) {
+  const a = state.attributes;
+  const on = state.state === "heat";
+  const target = finite(a.temperature) ? a.temperature : null;
+  const step = finite(a.target_temp_step) && a.target_temp_step > 0 ? a.target_temp_step : 0.5;
+  const min = finite(a.min_temp) ? a.min_temp : 5;
+  const max = finite(a.max_temp) ? a.max_temp : 30;
+  const water = state.entity_id === "climate.eau_chaude";
+  const adjust = (delta, label) => {
+    const next = target === null ? null : Math.min(max, Math.max(min, target + delta));
+    const button = el("button", { type: "button", class: "round", "aria-label": `${label} la consigne de ${nameOf(state)}`, text: delta > 0 ? "+" : "−" });
+    button.disabled = !on || next === null || next === target;
+    button.addEventListener("click", () => {
+      row.classList.add("pending");
+      setTimeout(() => row.classList.remove("pending"), 5000);
+      callService("climate", "set_temperature", { entity_id: state.entity_id, temperature: next });
+    });
+    return button;
+  };
+  const targetText = on && target !== null ? degreesText(target) : "—";
+  const row = el("div", { class: `cover-row heat-row${on ? " on" : ""}${a.hvac_action === "heating" ? " heating" : ""}` },
+    el("span", { class: "house-action-icon" }, svgIcon(water ? ICONS.humidity : ICONS.flame)),
+    el("span", { class: "house-action-text" }, el("b", { text: nameOf(state) }), el("span", { text: heatingText(state) })),
+    canControl(state)
+      ? el("span", { class: "cover-row-buttons" },
+        adjust(-step, "Baisser"),
+        el("strong", { class: "heat-target", title: "Consigne", text: targetText }),
+        adjust(step, "Monter"))
+      : el("strong", { class: "heat-target", title: "Consigne", text: targetText }));
+  return row;
+}
+
+/** Le chauffage piloté par la box Somfy (les entités `climate`), les zones
+ *  d'abord, l'eau chaude ensuite. */
+function heatingStates(inPage) {
+  const placed = new Set(areas.flatMap((a) => a.entities.map((e) => e.entity_id)));
+  return [...entities.values()]
+    .filter((s) => domainOf(s) === "climate"
+      // Une entité rangée dans une pièce ne s'affiche que sur la page de cette pièce.
+      && (inPage === null || !placed.has(s.entity_id) || inPage.has(s.entity_id)))
+    .sort((a, b) => (a.entity_id === "climate.eau_chaude") - (b.entity_id === "climate.eau_chaude")
+      || nameOf(a).localeCompare(nameOf(b), "fr"));
+}
+
+/** Le chauffage, puis les volets (pas les portes de garage ni les portails,
+ *  ni ceux déjà en boutons rapides), en lignes sous le dessin. */
 function renderCovers() {
   const box = $("#board-covers");
   const inPage = pageAreas === null ? null
@@ -1273,8 +1352,11 @@ function renderCovers() {
     .filter((s) => domainOf(s) === "cover" && !ALERT_COVERS.includes(s.attributes.device_class)
       && !house.config.actions.includes(s.entity_id) && (inPage === null || inPage.has(s.entity_id)))
     .sort((a, b) => nameOf(a).localeCompare(nameOf(b), "fr"));
-  box.hidden = covers.length === 0;
-  box.replaceChildren(el("h2", { text: "Volets" }), el("div", { class: "cover-rows" }, ...covers.map(coverRow)));
+  const heating = heatingStates(inPage);
+  box.hidden = covers.length === 0 && heating.length === 0;
+  const title = heating.length === 0 ? "Volets" : covers.length === 0 ? "Chauffage" : "Chauffage et volets";
+  box.setAttribute("aria-label", title);
+  box.replaceChildren(el("h2", { text: title }), el("div", { class: "cover-rows" }, ...heating.map(heatingRow), ...covers.map(coverRow)));
 }
 
 // ---------------------------------------------------------------- Courbes
@@ -1396,6 +1478,7 @@ function renderHouse() {
     $("#board-people").hidden = true;
     $("#board-charts").hidden = true;
     $("#board-agenda").hidden = true;
+    $("#board-music").hidden = true;
     return;
   }
   if (house.loading === null && token.get()) loadHouse();
@@ -1407,6 +1490,7 @@ function renderHouse() {
   renderPeople();
   renderCharts();
   if (typeof renderBoardAgenda === "function") renderBoardAgenda();
+  if (typeof renderBoardMusic === "function") renderBoardMusic();
   if (isPlan()) renderTitleBlock();
 }
 
@@ -2515,3 +2599,20 @@ new ResizeObserver(() => { if (house.view) fitLabels(house.view); }).observe($("
 new ResizeObserver(([entry]) => {
   document.documentElement.style.setProperty("--hero-h", `${Math.ceil(entry.target.offsetHeight)}px`);
 }).observe($(".hero"));
+
+/** Un fondu au bord d'une liste qui défile (les onglets, les volets sur une
+ *  tablette), tant qu'il reste quelque chose à voir de ce côté. */
+function edgeFade(box, horizontal) {
+  const update = () => {
+    const pos = horizontal ? box.scrollLeft : box.scrollTop;
+    const max = horizontal ? box.scrollWidth - box.clientWidth : box.scrollHeight - box.clientHeight;
+    box.classList.toggle("fade-start", pos > 1);
+    box.classList.toggle("fade-end", pos < max - 1);
+  };
+  box.addEventListener("scroll", update, { passive: true });
+  new ResizeObserver(update).observe(box);
+  new MutationObserver(update).observe(box, { childList: true, subtree: true });
+  update();
+}
+edgeFade($("#board-tabs"), true);
+edgeFade($("#board-covers"), false);

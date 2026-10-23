@@ -1731,7 +1731,7 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
    ====================================================================== */
 
 /* Ce qui n'existe que dans les styles « plan » et la mise en page « tableau ». */
-.house, .gauges, .title-block, .room-hum, .room-line, .board-covers, .house-actions, .board-people, .board-charts { display: none; }
+.house, .gauges, .title-block, .room-hum, .room-line, .board-covers, .house-actions, .board-people, .board-charts, .board-music { display: none; }
 
 :root[data-theme="plan"] {
   --bar: #e4e8ef;
@@ -2181,6 +2181,12 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .cover-row-buttons { margin-left: auto; display: flex; gap: 4px; flex: none; }
 .cover-row-buttons .round { flex: none; width: 40px; height: 36px; }
 .board-covers > h2 { margin: 0; }
+/* Le chauffage : la consigne entre les boutons −/+. */
+.heat-target { flex: none; min-width: 4.2em; text-align: center; font-size: 0.9rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.heat-row > .heat-target { margin-left: auto; }
+.heat-row .cover-row-buttons { align-items: center; }
+.heat-row.on .house-action-icon { background: var(--heat-soft); color: var(--heat-ink); }
+.heat-row:not(.on) .heat-target { color: var(--muted); }
 
 @media (min-width: 1000px) {
   /* L'en-tête suit exactement la grille du dessous. */
@@ -2189,10 +2195,11 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
   [data-layout="board"] .layout {
     max-width: 1760px;
     grid-template-columns: minmax(300px, 30%) minmax(0, 1fr);
-    grid-template-areas: "overview house" "covers house";
+    grid-template-areas: "overview house" "covers covers";
   }
-  /* Les volets sous l'agenda, dans la colonne de gauche, un par ligne. */
-  [data-layout="board"] .cover-rows { grid-template-columns: 1fr; gap: 6px; }
+  /* Les volets en bande sous l'agenda et le dessin, sur toute la largeur,
+     en colonnes (comme le tableau isométrique de domo-blog). */
+  [data-layout="board"] .cover-rows { grid-template-columns: repeat(auto-fill, minmax(min(100%, 270px), 1fr)); gap: 8px; }
   /* La barre de navigation devient un rail d'icônes à gauche, comme dans
      Home Assistant ; les boutons du haut ne servent plus. */
   [data-layout="board"] .dock {
@@ -2223,19 +2230,33 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
      première rangée (pièces | dessin) prend la hauteur que laissent l'en-tête
      et les volets ; le dessin s'y adapte en gardant ses proportions. */
   /* Une seule page : l'en-tête, puis la grille à la hauteur de l'écran
-     (l'agenda et les volets à gauche, le dessin à droite), puis la ligne du
-     journal. Rien ne défile. */
-  [data-layout="board"] .layout { grid-template-rows: auto minmax(0, 1fr); height: max(520px, calc(100dvh - var(--hero-h, 76px) - 52px)); margin-top: 0; gap: 10px; }
+     (l'agenda à gauche, le dessin à droite, les volets en bande dessous),
+     puis la ligne du journal. Rien ne défile. */
+  /* Pas de marge en bas : elle laissait la place à la barre du bas des
+     téléphones, ici remplacée par le rail ; elle faisait une bande vide. */
+  [data-layout="board"] .layout { grid-template-rows: minmax(0, 1fr) auto; height: max(520px, calc(100dvh - var(--hero-h, 76px) - 52px)); margin-top: 0; gap: 10px; padding-bottom: 0; }
   /* Le cartouche et les sections ne servent plus : les pièces ont leurs onglets. */
   [data-layout="board"] :is(.sections, .title-block, .title-block:not([hidden])) { display: none; }
-  [data-layout="board"] .board-covers { align-self: stretch; min-height: 0; overflow: hidden; align-content: start; }
-  [data-layout="board"] .house:not([hidden]) { grid-row: 1 / 3; }
+  /* Les volets : deux rangées au plus ; s'il y en a davantage, la bande
+     défile sous le doigt au lieu de pousser le dessin. Un fondu en bas
+     montre qu'il en reste. */
+  [data-layout="board"] .board-covers {
+    max-height: 7.5rem; min-height: 0; align-content: start;
+    overflow: hidden auto; overscroll-behavior: contain; scrollbar-width: none;
+  }
+  [data-layout="board"] .board-covers::-webkit-scrollbar { display: none; }
   [data-layout="board"] .journal { padding-bottom: 0; padding-left: calc(68px + var(--gutter)); max-width: 1760px; }
   [data-layout="board"] .journal summary { padding: 0.5rem 0; font-size: 0.85rem; }
   /* La colonne tient dans sa rangée (sinon, plus haute que l'écran, elle
      passait par-dessus les volets), sans barre de défilement : les pièces
      sont dans leurs onglets (étape 90), il ne reste que l'essentiel. */
   [data-layout="board"] .overview { align-self: stretch; min-height: 0; overflow: hidden; align-content: start; gap: 10px; }
+  /* Si la colonne manque de hauteur, c'est la liste du jour qui cède la
+     place (elle défile) : la semaine et le lecteur de musique restent entiers. */
+  [data-layout="board"] .overview { grid-auto-rows: minmax(0, auto); }
+  [data-layout="board"] .board-agenda:not([hidden]) { min-height: 0; grid-template-rows: minmax(0, auto) auto; }
+  [data-layout="board"] .agenda-home-today { min-height: 0; overflow: hidden auto; overscroll-behavior: contain; scrollbar-width: none; }
+  [data-layout="board"] .agenda-home-today::-webkit-scrollbar { display: none; }
   [data-layout="board"] .house:not([hidden]) { display: flex; flex-direction: column; min-height: 0; gap: 8px; align-self: stretch; }
   [data-layout="board"] .house-frame { flex: 1; min-height: 0; container-type: size; display: grid; place-items: center; }
   [data-layout="board"] #house-stage { width: min(100cqw, calc(100cqh * var(--ratio, 1.35))); }
@@ -2314,11 +2335,30 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .board-tab-item svg { width: 16px; height: 16px; margin-right: 0.35rem; }
 @media (min-width: 1000px) {
   /* Beaucoup d'onglets (les pièces) : ils prennent leur propre ligne, en
-     haut, sur toute la largeur. */
+     haut, sur toute la largeur. Une seule ligne : si elle déborde (une
+     tablette), on la fait glisser du doigt ; un fondu à droite le montre. */
   [data-layout="board"] .hero:has(.board-tabs.many) { flex-wrap: wrap; row-gap: 0; }
   [data-layout="board"] .board-tab:has(.board-tabs.many) { flex-basis: 100%; }
-  [data-layout="board"] .board-tabs.many { flex-wrap: wrap; }
   [data-layout="board"] .board-tabs.many .board-tab-item { padding-inline: 0.75rem; }
+  /* Agenda et Musique ont déjà leur bouton dans le rail de gauche. */
+  [data-layout="board"] .board-tab-item.in-rail { display: none; }
+}
+
+/* Un fondu au bord d'une liste qui défile, tant qu'il reste quelque chose à
+   voir de ce côté (`edgeFade`, house.js). */
+.fade-start { --fade-start: 36px; }
+.fade-end { --fade-end: 36px; }
+@media (min-width: 1000px) {
+  [data-layout="board"] .board-tabs:is(.fade-start, .fade-end) {
+    mask-image: linear-gradient(to right, transparent, #000 var(--fade-start, 0px), #000 calc(100% - var(--fade-end, 0px)), transparent);
+  }
+  [data-layout="board"] :is(.board-covers, .agenda-home-today):is(.fade-start, .fade-end) {
+    mask-image: linear-gradient(to bottom, transparent, #000 var(--fade-start, 0px), #000 calc(100% - var(--fade-end, 0px)), transparent);
+  }
+}
+@media (min-width: 1000px) and (max-width: 1399px) {
+  /* Une tablette : des onglets un peu plus serrés, pour qu'ils tiennent. */
+  [data-layout="board"] .board-tabs.many .board-tab-item { padding-inline: 0.55rem; }
 }
 @media (max-width: 999px) {
   [data-layout="board"] .board-tab { flex-basis: 100%; order: 10; }
@@ -3407,6 +3447,39 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .media-now-text span { font-size: 0.8rem; color: var(--muted); }
 .media-now-text span:empty { display: none; }
 .media-now > svg { flex: none; width: 18px; height: 18px; color: var(--muted); }
+
+/* Le lecteur en petit sur la page Maison, sous l'agenda (musique.js). */
+[data-layout="board"] .board-music:not([hidden]) {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0;
+  padding: 8px 10px 4px 8px;
+  background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.board-music-open {
+  all: unset; cursor: pointer;
+  flex: 1; min-width: 0;
+  display: flex; align-items: center; gap: 10px;
+  border-radius: 10px;
+}
+.board-music-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.board-music .board-music-art { width: 46px; height: 46px; background: var(--card-2); }
+.board-music.playing .board-music-art { box-shadow: 0 0 0 2px var(--accent); }
+.board-music-buttons { flex: none; display: flex; gap: 6px; }
+.board-music :is(.board-music-play, .board-music-skip) {
+  width: 40px; height: 40px; padding: 0;
+  display: grid; place-items: center;
+  border: 0; border-radius: 50%;
+  background: var(--card-2); color: var(--text);
+}
+.board-music .board-music-play { background: var(--accent); color: var(--accent-ink); }
+.board-music button svg { width: 18px; height: 18px; }
+.board-music-play svg path { fill: currentColor; }
+.board-music button:disabled { opacity: 0.45; cursor: default; }
+/* Le volume sur une deuxième ligne, sous la pochette et les boutons. */
+.board-music .music-volume { flex-basis: 100%; gap: 6px; }
+.board-music .music-mute { width: 36px; height: 36px; }
+.board-music .music-mute svg { width: 20px; height: 20px; }
+[data-theme="maquette"][data-layout="board"] .board-music { box-shadow: none; }
+[data-theme|="plan"][data-layout="board"] .board-music { box-shadow: 0 0 0 1.25px var(--ink); border-radius: 6px; }
 
 /* Le thème plan : des angles nets, des traits à l'encre. */
 [data-theme|="plan"] :is(.music-card, .music-speaker) { border-radius: 4px; box-shadow: inset 0 0 0 1px var(--ink-line); background: var(--card); }
