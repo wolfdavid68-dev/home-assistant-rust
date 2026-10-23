@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use ha_core::{Attributes, Core, EntityId};
-use ha_somfy::cloud::CloudSession;
+use ha_somfy::cloud::{CloudSession, SomfyServer};
 use ha_somfy::{Pairing, Somfy, SomfyError, pairing};
 use ha_storage::Store;
 use serde_json::{Value, json};
@@ -410,17 +410,35 @@ async fn token_is_created_with_the_somfy_account() {
         log.lock()
             .unwrap()
             .push(format!("{} {}", request.method, request.path));
-        let logged_in = request.head.contains("JSESSIONID=session-42");
+        let logged_in = request.head.contains("Bearer jeton.de.session-42");
         match (request.method.as_str(), request.path.as_str()) {
-            ("POST", "/login")
-                if request.body == "userId=moi%40exemple.fr&userPassword=p%40ss%20word" =>
+            // Le serveur des comptes Somfy (OAuth2 « password »), comme l'appli TaHoma.
+            ("POST", "/oauth/oauth/v2/token/jwt")
+                if request
+                    .body
+                    .starts_with("grant_type=password&client_id=0d8e920c-")
+                    && request.body.contains("&client_secret=")
+                    && request
+                        .body
+                        .ends_with("&username=moi%40exemple.fr&password=p%40ss%20word") =>
             {
                 (
                     200,
-                    "Set-Cookie: JSESSIONID=session-42; Path=/; Secure; HttpOnly\r\n".into(),
-                    json!({"success": true}),
+                    String::new(),
+                    json!({
+                        "access_token": "jeton.de.session-42",
+                        "refresh_token": "a-renouveler",
+                        "expires_in": 3600,
+                        "token_type": "bearer",
+                    }),
                 )
             }
+            ("POST", "/oauth/oauth/v2/token/jwt") => (
+                400,
+                String::new(),
+                json!({"message": "error.invalid.grant", "data": []}),
+            ),
+            // L'ancienne connexion n'existe plus.
             ("POST", "/login") => (401, String::new(), json!({"error": "Bad credentials"})),
             _ if !logged_in => (401, String::new(), json!({"error": "Not authenticated"})),
             ("GET", "/setup/gateways") => {
@@ -441,16 +459,20 @@ async fn token_is_created_with_the_somfy_account() {
     });
     let (host, _) = https_server(handler).await;
     let base = format!("https://{host}");
+    let server = SomfyServer {
+        accounts: &base,
+        api: &base,
+    };
     // Le vrai serveur Somfy est vérifié avec les autorités du système ; le
     // faux a un certificat auto-signé, d'où un client « tout accepter » ici.
     let (http, _) = ha_tls::client(None).unwrap();
 
     assert!(matches!(
-        CloudSession::login(http.clone(), &base, "moi@exemple.fr", "mauvais").await,
+        CloudSession::login(http.clone(), server, "moi@exemple.fr", "mauvais").await,
         Err(SomfyError::BadCredentials)
     ));
 
-    let session = CloudSession::login(http, &base, "moi@exemple.fr", "p@ss word")
+    let session = CloudSession::login(http, server, "moi@exemple.fr", "p@ss word")
         .await
         .unwrap();
     let gateways = session.gateways().await.unwrap();

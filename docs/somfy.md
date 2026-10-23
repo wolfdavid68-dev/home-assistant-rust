@@ -141,6 +141,12 @@ Le serveur Somfy est relevé toutes les 30 s, et toutes les 5 s pendant 90 s apr
 le mot de passe est refusé, le serveur attend **une heure** avant de réessayer, pour ne pas faire
 bloquer le compte.
 
+**La connexion au compte** se fait comme dans l'appli TaHoma : le serveur des comptes Somfy
+(`accounts.somfy.com`) donne un jeton de session, envoyé ensuite à chaque requête. L'ancienne
+connexion (`/login` sur le serveur de l'API) est refusée par Somfy, même avec le bon mot de passe.
+L'identifiant de l'appli envoyé avec la demande est public (le même pour tout le monde, publié par
+la bibliothèque `pyoverkiz` de Home Assistant) : ce n'est pas un secret.
+
 ## Sécurité
 
 - **Pour les volets, ton mot de passe Somfy n'est jamais enregistré.** Il sert une seule fois à
@@ -195,7 +201,8 @@ Pas encore avec une vraie box : je n'en ai pas. L'API utilisée est celle docume
 le mode développeur. Les tests vérifient le comportement contre une **fausse box TaHoma** et un
 **faux serveur Somfy**, en HTTPS :
 
-- création du jeton avec le compte (mauvais mot de passe refusé), puis association et sauvegarde ;
+- connexion au compte par le serveur des comptes Somfy (mauvais mot de passe refusé), puis
+  création du jeton, association et sauvegarde ;
 - refus d'un mauvais jeton, et d'une fausse box au certificat différent ;
 - volets : apparition, ouverture à 30 % (la box reçoit bien « fermé à 70 % », car Somfy compte la
   fermeture), fermeture ;
