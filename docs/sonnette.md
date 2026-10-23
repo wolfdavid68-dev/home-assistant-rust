@@ -112,6 +112,21 @@ sonnette la rouvre.
 
 ![La tuile de la photo sur le téléphone : « Porte d'entrée Photo », la photo, « Photo de 08:42 »](images/sonnette-tuile.png)
 
+## Sur le dessin de la maison
+
+La porte d'entrée peut aussi s'allumer **sur le dessin**, sur tous les écrans :
+
+1. Sous le dessin, **Régler** → **Zones à toucher** → **+ Placer la sonnette** (le bouton n'apparaît que si une
+   sonnette est connue et pas encore placée).
+2. **Tracer** la zone sur la porte, dans l'aperçu, puis **Enregistrer**.
+
+Quand on sonne, la zone s'allume en ambre : une cloche qui bat, des ondes, et une petite carte avec
+la photo et l'heure. Ensuite, la porte reste marquée **« On a sonné à 08:42 »** pendant un quart
+d'heure (la cloche, sans la photo). Toucher la porte ouvre la fenêtre de la sonnette avec la
+dernière photo ; un appui long montre l'historique, comme pour les autres zones.
+
+Si les photos du dessin changent, il suffit de **retracer** la zone : rien d'autre à refaire.
+
 ## Sécurité
 
 - **La photo ne quitte jamais le mini-PC** autrement que vers le tableau de bord d'un compte

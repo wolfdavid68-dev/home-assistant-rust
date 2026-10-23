@@ -551,6 +551,11 @@ function updateHouse(view) {
       continue;
     }
     const state = entities.get(zone.entity_id);
+    // La sonnette : la porte s'allume quand on sonne (sonnette.js).
+    if (state && isDoorbell(state)) {
+      doorbellZone(node, zone, state);
+      continue;
+    }
     const name = zone.name ?? (state ? nameOf(state) : zone.entity_id);
     const command = state ? actionCommand(state) : null;
     const readonly = command === null || !canControl(state);
@@ -614,6 +619,7 @@ function zoneTouch(zone, node) {
     if (zone.area) return openRoom(zone.area);
     const state = entities.get(zone.entity_id);
     if (!state) return;
+    if (isDoorbell(state)) return openDoorbell(state);
     const command = actionCommand(state);
     // Un capteur, ou un appareil que ce compte ne commande pas : l'historique.
     if (command === null || !canControl(state)) return zoneHistory(zone);
@@ -1137,12 +1143,139 @@ function gauge(icon, label, value, kind) {
   return el("span", { class: `gauge g-${kind}`, title: label }, svgIcon(icon), el("span", { text: label }), el("strong", { text: value }));
 }
 
+/** La couleur d'une température, de 0 °C (bleu) à 28 °C (rouge), en passant
+ *  par le turquoise d'un matin frais et l'ambre d'un après-midi doux. */
+const TEMP_RAMP = [[0, "#4fb8f5"], [8, "#4fd6c4"], [15, "#ffc15a"], [22, "#ff8f4d"], [28, "#ff5a45"]];
+
+function tempColor(value) {
+  const v = Math.min(28, Math.max(0, value));
+  const i = Math.max(1, TEMP_RAMP.findIndex(([t]) => t >= v));
+  const [[t0, c0], [t1, c1]] = [TEMP_RAMP[i - 1], TEMP_RAMP[i]];
+  return `color-mix(in oklab, ${c1} ${Math.round((v - t0) / (t1 - t0) * 100)}%, ${c0})`;
+}
+
+/** Dehors : la température en grand, sa tendance sur l'heure, et le « ruban »
+ *  des dernières 24 h (d'après l'historique de la sonde, s'il y en a une). */
+function outsideGauge(value) {
+  const probe = entities.get("sensor.temperature_exterieure");
+  const id = probe && Number(probe.state) === value ? probe.entity_id : null;
+  const history = id !== null && account.permissions.history !== false;
+  const points = history ? seriesFor({ entity_id: id, hours: 24 }) ?? [] : [];
+  const now = Date.now();
+  const day = [...points.filter(([t]) => t >= now - 24 * 3_600_000 && t < now), [now, value]];
+  const said = [`Dehors : ${number.format(value)} °C`];
+
+  // La tendance : l'écart avec la valeur d'il y a une heure environ.
+  const hourAgo = day.slice(0, -1)
+    .filter(([t]) => t >= now - 2 * 3_600_000 && t <= now - 30 * 60_000)
+    .sort((a, b) => Math.abs(a[0] - (now - 3_600_000)) - Math.abs(b[0] - (now - 3_600_000)))[0];
+  const head = el("small", { text: value <= 0 ? "Dehors · gel" : "Dehors" });
+  if (hourAgo) {
+    const delta = (value - hourAgo[1]) / ((now - hourAgo[0]) / 3_600_000);
+    const trend = delta > 0.3 ? "up" : delta < -0.3 ? "down" : "steady";
+    const amount = number.format(Math.abs(Math.round(delta * 10) / 10));
+    head.append(el("i", { class: `g-trend ${trend}`,
+      text: trend === "up" ? `↗ +${amount}°/h` : trend === "down" ? `↘ −${amount}°/h` : "→ stable" }));
+    said.push(trend === "up" ? `en hausse de ${amount} °C par heure` : trend === "down" ? `en baisse de ${amount} °C par heure` : "stable");
+  }
+  const level = el("i", { class: "g-level", "aria-hidden": "true" });
+  level.style.setProperty("--fill", `${Math.round(8 + Math.min(1, Math.max(0, value / 28)) * 92)}%`);
+  const parts = [level, el("b", { class: "g-now" }, head, el("strong", {}, number.format(value), el("sup", { text: "°" })))];
+
+  if (day.length >= 3) {
+    const values = day.map(([, v]) => v);
+    const [lo, hi] = [Math.min(...values), Math.max(...values)];
+    parts.push(outsideRibbon(day, now, lo, hi));
+    said.push(`de ${number.format(lo)} à ${number.format(hi)} °C sur 24 h`);
+  }
+
+  const chip = el("span", { class: "gauge g-outside", title: said.join(", "), "aria-label": said.join(", ") }, ...parts);
+  chip.style.setProperty("--temp", tempColor(value));
+  if (history) {
+    chip.setAttribute("role", "button");
+    chip.tabIndex = 0;
+    chip.addEventListener("click", () => openHistory(id));
+    chip.addEventListener("keydown", (event) => { if (event.key === "Enter") openHistory(id); });
+  }
+  return chip;
+}
+
+/** Le ruban des 24 h : la courbe prend la couleur de la température à chaque
+ *  instant, les nuits sont ombrées (d'après le soleil), le mini et le maxi
+ *  sont posés dessus, et « maintenant » bat au bout. */
+function outsideRibbon(day, now, lo, hi) {
+  const W = 116;
+  const H = 32;
+  const [top, bottom] = [10.5, 22];
+  const since = now - 24 * 3_600_000;
+  // Au moins 2 °C d'écart : une nuit sans vent ne doit pas ressembler à une tempête.
+  const pad = Math.max(0, 2 - (hi - lo)) / 2;
+  const [min, max] = [lo - pad, hi + pad];
+  const x = (t) => 3 + ((Math.max(t, since) - since) / (now - since)) * (W - 10);
+  const y = (v) => bottom - ((v - min) / (max - min)) * (bottom - top);
+  const box = svg("svg", { class: "g-ribbon", viewBox: `0 0 ${W} ${H}`, width: W, height: H, "aria-hidden": "true" });
+
+  // Le dégradé suit la température elle-même, pas la hauteur du ruban.
+  const ramp = svg("linearGradient", { id: "g-outside-ramp", gradientUnits: "userSpaceOnUse", x1: 0, x2: 0, y1: y(28).toFixed(1), y2: y(0).toFixed(1) });
+  for (const [t, color] of [...TEMP_RAMP].reverse()) ramp.append(svg("stop", { offset: (1 - t / 28).toFixed(3), "stop-color": color }));
+  const defs = svg("defs");
+  defs.append(ramp);
+  box.append(defs);
+
+  const sun = entities.get("sun.sun")?.attributes;
+  const rise = Date.parse(sun?.next_rising);
+  const set = Date.parse(sun?.next_setting);
+  if (Number.isFinite(rise) && Number.isFinite(set)) {
+    const DAY = 24 * 3_600_000;
+    for (const k of [1, 2]) {
+      const from = Math.max(set - k * DAY, since);
+      let to = rise - k * DAY;
+      if (to < set - k * DAY) to += DAY;
+      to = Math.min(to, now);
+      if (to - from > 10 * 60_000) {
+        box.append(svg("rect", { class: "g-night", x: x(from).toFixed(1), y: 1, width: (x(to) - x(from)).toFixed(1), height: H - 2, rx: 4 }));
+        if (x(to) - x(from) > 14) {
+          const moon = svg("text", { class: "g-moon", x: ((x(from) + x(to)) / 2).toFixed(1), y: 8 });
+          moon.textContent = "☾";
+          box.append(moon);
+        }
+      }
+    }
+  }
+
+  const line = day.map(([t, v], i) => `${i === 0 ? "M" : "L"}${x(t).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  box.append(
+    svg("path", { class: "g-area", d: `${line} L${x(now).toFixed(1)},${H} L${x(day[0][0]).toFixed(1)},${H} Z` }),
+    svg("path", { class: "g-curve", d: line }));
+
+  const mark = (v, above) => {
+    const [t] = day.find(([, w]) => w === v);
+    const px = x(t);
+    const py = y(v);
+    box.append(svg("circle", { class: "g-mark", cx: px.toFixed(1), cy: py.toFixed(1), r: 1.7 }));
+    const label = svg("text", { class: `g-label ${above ? "hi" : "lo"}`, x: Math.min(W - 18, Math.max(11, px)).toFixed(1), y: (above ? py - 3.6 : py + 9.6).toFixed(1) });
+    label.textContent = `${number.format(v)}°`;
+    box.append(label);
+  };
+  if (hi - lo >= 0.5) {
+    mark(hi, true);
+    mark(lo, false);
+  }
+
+  const cx = x(now).toFixed(1);
+  const cy = y(day.at(-1)[1]).toFixed(1);
+  box.append(
+    svg("circle", { class: "g-pulse", cx, cy, r: 3 }),
+    svg("circle", { class: "g-dot", cx, cy, r: 2.6 }));
+  return box;
+}
+
 function renderGauges() {
   const box = $("#gauges");
   const items = [];
   // D'abord la sonde de la pompe à chaleur, posée dehors ; sinon la météo.
   const outsideTemp = outsideTemperature();
-  if (Number.isFinite(outsideTemp)) items.push(gauge(ICONS.temperature, "Dehors", `${number.format(outsideTemp)} °C`, "outside"));
+  if (Number.isFinite(outsideTemp)) items.push(outsideGauge(outsideTemp));
   const temps = areas.map(roomInfo).map((info) => info.temperature).filter((t) => Number.isFinite(t));
   if (temps.length > 0) {
     items.push(gauge(ICONS.home, "Dedans", `${number.format(temps.reduce((a, b) => a + b, 0) / temps.length)} °C`, "inside"));
@@ -1500,7 +1633,10 @@ function seriesFor(chart) {
         entry.points = data.numeric
           .map((p) => [Date.parse(p.at), Number(p.mean)])
           .filter(([t, v]) => Number.isFinite(t) && Number.isFinite(v));
-        if (isBoard()) renderCharts();
+        if (isBoard()) {
+          renderCharts();
+          renderGauges();
+        }
         if (roomShown()) renderRoomHead();
       })
       .catch(() => { entry.loading = false; });
@@ -2520,11 +2656,25 @@ function renderDrawingEditor() {
     refresh();
     $("#drawing-form .drawing-zones .drawing-item:last-child input")?.focus();
   });
+  // La sonnette pas encore posée sur le dessin : un bouton pour tracer sa porte.
+  const bell = [...entities.values()].find(isDoorbell);
+  let addBell = "";
+  if (bell && !draft.zones.some((z) => z.entity_id === bell.entity_id)) {
+    addBell = el("button", { type: "button", class: "ghost small", text: "+ Placer la sonnette" });
+    addBell.disabled = draft.zones.length >= 24;
+    addBell.addEventListener("click", () => {
+      draft.zones.push({ entity_id: bell.entity_id, name: doorbellPlace(bell), x: 45, y: 50, w: 8, h: 14 });
+      drawingEdit.tracing = draft.zones.length - 1;
+      drawingEdit.placing = -1;
+      refresh();
+      showPreview();
+    });
+  }
   const zones = drawingFieldset(
     "Zones à toucher",
-    "Le porche, la porte du garage, le salon… : trace un rectangle sur le dessin. Un toucher allume, éteint, ouvre ou ferme l'appareil, ou ouvre la pièce ; un appui long ouvre l'historique (24 au plus).",
+    "Le porche, la porte du garage, le salon… : trace un rectangle sur le dessin. Un toucher allume, éteint, ouvre ou ferme l'appareil, ou ouvre la pièce ; un appui long ouvre l'historique (24 au plus). La sonnette : trace sa zone sur la porte d'entrée ; elle s'allume avec la photo quand on sonne.",
     el("ol", { class: "drawing-items" }, ...zoneRows),
-    addZone,
+    el("div", { class: "drawing-zone-buttons" }, addZone, addBell),
   );
   zones.classList.add("drawing-zones");
 
