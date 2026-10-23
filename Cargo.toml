@@ -101,3 +101,13 @@ opt-level = 3
 
 [profile.dev.package.blake2]
 opt-level = 3
+
+# Les images de test « main » (workflow image-main.yml) : aussi rapides à
+# l'usage, mais bien plus rapides à fabriquer. Sans l'optimisation
+# « tout le programme d'un coup » (LTO) ni la compilation en un seul
+# morceau : chaque partie se compile à part, en parallèle, et seules celles
+# qui changent sont refaites. Les versions gardent `release`.
+[profile.essai]
+inherits = "release"
+lto = false
+codegen-units = 16

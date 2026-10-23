@@ -6,6 +6,14 @@ name: Image main
 # compose.yaml, puis `docker compose pull && docker compose up -d`
 # (docs/installation.md). Les versions officielles (`latest`, `0.1.0`…)
 # restent faites par release.yml, seulement avec l'accord de David.
+#
+# Pour qu'elle soit prête vite (2 à 4 min au lieu de 6) :
+# - les dépendances compilées sont gardées d'une fois sur l'autre (cache) :
+#   seul le code de la maison est recompilé ;
+# - le profil `essai` (Cargo.toml) : sans l'optimisation « tout le
+#   programme d'un coup » (LTO), qui refait tout à chaque changement ;
+# - la compilation se fait dans la même image Rust (Debian 12) que le
+#   Dockerfile : le programme marche avec la bibliothèque C de l'image finale.
 
 on:
   push:
@@ -24,8 +32,41 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  binaire:
+    name: programme (profil essai)
+    runs-on: ubuntu-latest
+    container:
+      # La même image que l'étape « builder » du Dockerfile.
+      image: rust:1.99-slim-bookworm@sha256:2c3a22f0a5533ea2dd5a16627bc841228151faa2d4de2644ac9987e4a2f1f2fa
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Le Rust de l'image (épinglé), pas la « stable » du moment demandée
+      # par ce fichier (comme dans le Dockerfile).
+      - name: Rust de l'image
+        run: rm rust-toolchain.toml
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: image-main
+
+      - name: Compiler
+        run: |
+          cargo build --profile essai --locked -p ha-server
+          target/essai/ha-server --version
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ha-server
+          path: target/essai/ha-server
+          retention-days: 1
+          if-no-files-found: error
+
   image:
     name: image Docker « main »
+    needs: binaire
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -35,14 +76,21 @@ jobs:
         with:
           persist-credentials: false
 
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ha-server
+          path: contexte
+
       - name: Build
         run: |
-          docker build \
+          chmod 0755 contexte/ha-server
+          mkdir contexte/vide
+          docker build -f Dockerfile --build-arg SOURCE=fourni \
             --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
             --label "org.opencontainers.image.version=main-${GITHUB_SHA::7}" \
             --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
             --label org.opencontainers.image.licenses=MIT \
-            -t ha-server:main .
+            -t ha-server:main contexte
 
       - name: Smoke test
         # Les mêmes protections que compose.yaml : elle doit démarrer et

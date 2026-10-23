@@ -134,7 +134,8 @@ exemple `0.1.0`).
 ### Essayer les nouveautés avant une version
 
 À chaque fusion sur `main`, GitHub fabrique et publie une image de test : `main` (et
-`main-<commit>`, pour revenir à une image précise). Rien à compiler chez soi :
+`main-<commit>`, pour revenir à une image précise), prête 2 à 4 minutes après la fusion (les
+dépendances compilées sont gardées d'une fois sur l'autre). Rien à compiler chez soi :
 
 1. dans `compose.yaml`, remplace `:latest` par `:main` ;
 2. à chaque nouveauté :
