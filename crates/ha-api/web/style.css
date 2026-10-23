@@ -2107,9 +2107,6 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .person-chip.home .person-avatar { background: var(--accent); color: var(--accent-ink); box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--ok); }
 [data-theme|="plan"] .person-chip { border: 1px solid var(--ink-line); box-shadow: none; border-radius: 4px; }
 [data-layout="board"] .board-covers:not([hidden]) { display: grid; gap: 0.75rem; min-width: 0; }
-/* Le chauffage, sous la musique : une zone par ligne, dans la colonne. */
-[data-layout="board"] .board-heating:not([hidden]) { display: block; min-width: 0; }
-[data-layout="board"] .board-heating .cover-rows { grid-template-columns: minmax(0, 1fr); gap: 6px; }
 [data-layout="board"] .house-actions:not([hidden]) { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 8px; }
 /* Sous le dessin, seulement « Régler » (pour l'administrateur), discret. */
 [data-layout="board"] .house-caption { justify-content: flex-end; }
@@ -2184,12 +2181,6 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .cover-row-buttons { margin-left: auto; display: flex; gap: 4px; flex: none; }
 .cover-row-buttons .round { flex: none; width: 40px; height: 36px; }
 .board-covers > h2 { margin: 0; }
-/* Le chauffage : la consigne entre les boutons −/+. */
-.heat-target { flex: none; min-width: 4.2em; text-align: center; font-size: 0.9rem; font-weight: 600; font-variant-numeric: tabular-nums; }
-.heat-row > .heat-target { margin-left: auto; }
-.heat-row .cover-row-buttons { align-items: center; }
-.heat-row.on .house-action-icon { background: var(--heat-soft); color: var(--heat-ink); }
-.heat-row:not(.on) .heat-target { color: var(--muted); }
 
 @media (min-width: 1000px) {
   /* L'en-tête suit exactement la grille du dessous. */
@@ -3484,6 +3475,111 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .board-music .music-mute svg { width: 20px; height: 20px; }
 [data-theme="maquette"][data-layout="board"] .board-music { box-shadow: none; }
 [data-theme|="plan"][data-layout="board"] .board-music { box-shadow: 0 0 0 1.25px var(--ink); border-radius: 6px; }
+
+/* ---------------------------------------------------------------- Le chauffage en cadrans
+   Sous le lecteur de musique (house.js) : un cadran par zone, l'arc se
+   remplit du froid au chaud jusqu'à la consigne, un point marque la
+   température mesurée, −/+ au bout de l'arc. Tout se règle sur la largeur
+   du cadran (cqi), pour tenir de la tablette au grand écran. */
+[data-layout="board"] .board-heating:not([hidden]) {
+  display: grid; gap: 6px; min-width: 0;
+  padding: 8px 8px 8px;
+  background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
+  --heat-cold: #4fb8f5; --heat-mild: #ffc15a; --heat-hot: #ff6a45;
+}
+.heat-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 4px; min-width: 0; }
+.heat-head h2 { margin: 0; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
+.heat-chips { display: flex; gap: 5px; min-width: 0; overflow: hidden; }
+.heat-chip {
+  flex: none; padding: 2px 8px; border-radius: 999px;
+  background: var(--card-2); color: var(--muted);
+  font-size: 0.7rem; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.heat-chip.running { background: var(--heat-soft); color: var(--heat-ink); }
+.heat-chip.running::before {
+  content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 5px; vertical-align: 1px;
+  border-radius: 50%; background: currentColor; animation: heat-breathe 2.4s ease-in-out infinite;
+}
+.heat-chip.alert { background: var(--alert); color: #fff; }
+
+.heat-dials { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; }
+.heat-dial {
+  display: grid; justify-items: center; gap: 2px; min-width: 0;
+  padding: 4px 2px 7px; border-radius: calc(var(--radius) - 4px);
+  background: color-mix(in srgb, var(--card-2) 55%, transparent);
+}
+.heat-face { position: relative; width: 100%; max-width: 150px; aspect-ratio: 120 / 112; container-type: inline-size; }
+.heat-arc { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.heat-track { fill: none; stroke: color-mix(in srgb, var(--muted) 24%, transparent); stroke-width: 7; stroke-linecap: round; }
+.heat-fill { fill: none; stroke-width: 7; stroke-linecap: round; }
+.heat-stop-cold { stop-color: var(--heat-cold); }
+.heat-stop-mild { stop-color: var(--heat-mild); }
+.heat-stop-hot { stop-color: var(--heat-hot); }
+.heat-now-dot { fill: var(--card); stroke: var(--text); stroke-width: 2.4; }
+.heat-dial.warming .heat-fill { filter: drop-shadow(0 0 3px color-mix(in srgb, var(--heat-hot) 70%, transparent)); }
+
+.heat-center {
+  position: absolute; inset: 22% 18% 30%;
+  display: grid; place-content: center; justify-items: center; text-align: center; line-height: 1;
+}
+.heat-set { display: flex; align-items: flex-start; font-size: 24cqi; font-weight: 650; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; color: var(--text); }
+.heat-set small { font-size: 0.48em; font-weight: 650; margin-top: 0.1em; letter-spacing: 0; }
+.heat-set i { font-style: normal; font-size: 0.48em; font-weight: 500; margin-top: 0.1em; color: var(--muted); }
+.heat-set.off { font-size: 14cqi; font-weight: 600; color: var(--muted); letter-spacing: 0; }
+.heat-now { display: inline-flex; align-items: center; gap: 2.5cqi; margin-top: 3cqi; font-size: 9cqi; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* Le petit rond rappelle le point sur l'arc : c'est la température mesurée. */
+.heat-now:not(.glyph)::before { content: ""; width: 4.6cqi; height: 4.6cqi; border-radius: 50%; box-sizing: border-box; border: 1.6px solid var(--text); background: var(--card); }
+.heat-now.glyph svg { width: 12cqi; height: 12cqi; color: var(--heat-ink); }
+.heat-dial.water .heat-now.glyph svg { color: var(--heat-cold); }
+.heat-dial.pending .heat-set { animation: pulse 1s ease-in-out infinite; }
+
+.heat-btn {
+  position: absolute; bottom: 0; width: 25cqi; height: 25cqi; min-width: 30px; min-height: 30px;
+  display: grid; place-items: center; padding: 0;
+  border: 0; border-radius: 50%; cursor: pointer;
+  background: var(--card-2); color: var(--text);
+  font: inherit; font-size: 15cqi; font-weight: 600; line-height: 1;
+  transition: transform 0.12s ease, background 0.15s ease;
+}
+.heat-btn.minus { left: 3%; }
+.heat-btn.plus { right: 3%; }
+.heat-btn:active:not(:disabled) { transform: scale(0.9); }
+.heat-btn:disabled { opacity: 0.35; cursor: default; }
+.heat-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.heat-label { display: grid; justify-items: center; gap: 1px; min-width: 0; max-width: 100%; padding: 0 4px; text-align: center; }
+.heat-label b { display: inline-flex; align-items: center; gap: 3px; font-size: 0.82rem; }
+.heat-label b svg { width: 12px; height: 12px; color: var(--heat-hot); transform-origin: 50% 90%; animation: heat-flicker 1.6s ease-in-out infinite; }
+.heat-label span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.7rem; color: var(--muted); }
+.heat-dial:not(.on) .heat-label b { color: var(--muted); }
+
+@keyframes heat-breathe { 50% { opacity: 0.3; } }
+@keyframes heat-flicker {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  30% { transform: scale(1.08, 0.94) rotate(-5deg); }
+  65% { transform: scale(0.95, 1.07) rotate(4deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .heat-chip.running::before, .heat-label b svg, .heat-dial.pending .heat-set { animation: none; }
+}
+
+/* La maquette : les couleurs de la maison (cyan, violet, corail), sans ombre. */
+[data-theme="maquette"][data-layout="board"] .board-heating { box-shadow: none; --heat-cold: var(--m-cyan); --heat-mild: var(--m-purple); --heat-hot: #ff7a59; }
+[data-theme="maquette"] .heat-dial { background: rgb(255 255 255 / 0.035); }
+[data-theme="maquette"] .heat-btn { background: rgb(255 255 255 / 0.07); color: #d0d0d8; }
+[data-theme="maquette"] .heat-btn:hover:not(:disabled) { background: rgb(255 255 255 / 0.13); }
+[data-theme="maquette"] .heat-chip { background: rgb(255 255 255 / 0.06); }
+[data-theme="maquette"] .heat-chip.running { background: rgb(255 122 89 / 0.16); color: #ffb59a; }
+
+/* Le plan : un cadran gradué, tracé à l'encre. */
+[data-theme|="plan"][data-layout="board"] .board-heating { box-shadow: 0 0 0 1.25px var(--ink); border-radius: 6px; }
+[data-theme|="plan"] .heat-dial { background: none; border-radius: 4px; box-shadow: inset 0 0 0 1px var(--ink-line); }
+[data-theme|="plan"] .heat-track { stroke: var(--ink-line); stroke-linecap: butt; stroke-dasharray: 0.5 2.6; }
+[data-theme|="plan"] .heat-fill { stroke: var(--ink); stroke-width: 3.5; }
+[data-theme|="plan"] .heat-dial.warming .heat-fill { filter: none; }
+[data-theme|="plan"] .heat-now-dot { stroke: var(--ink); }
+[data-theme|="plan"] .heat-btn { border-radius: 4px; background: none; box-shadow: inset 0 0 0 1px var(--ink-line); color: var(--ink); }
+[data-theme|="plan"] .heat-chip { border-radius: 3px; background: none; box-shadow: inset 0 0 0 1px var(--ink-line); }
 
 /* Le thème plan : des angles nets, des traits à l'encre. */
 [data-theme|="plan"] :is(.music-card, .music-speaker) { border-radius: 4px; box-shadow: inset 0 0 0 1px var(--ink-line); background: var(--card); }

@@ -1272,54 +1272,164 @@ function coverRow(state) {
   return row;
 }
 
-// ---------------------------------------------------------------- Chauffage en lignes
-// Dans la colonne de gauche, sous la musique : chaque zone (Etage, RdC…) et l'eau chaude, avec la
-// température mesurée, la consigne et ses boutons −/+.
+// ---------------------------------------------------------------- Chauffage en cadrans
+// Dans la colonne de gauche, sous la musique : un cadran par zone (Etage,
+// RdC…) et un pour l'eau chaude. L'arc se remplit du froid au chaud jusqu'à
+// la consigne (en grand au centre), un point marque la température mesurée,
+// et les boutons −/+ sont au bout de l'arc.
 
-const degreesText = (value) => `${number.format(value)} °C`;
+const HEAT_SWEEP = 240; // l'arc fait 240°, ouvert en bas
+const HEAT_BOX = { cx: 60, cy: 54, r: 44 };
 
-/** « 19,5 °C mesurés · Confort », ou « Arrêté ». */
-function heatingText(state) {
-  const a = state.attributes;
-  if (state.state === "unavailable") return "Indisponible";
-  const parts = [];
-  if (finite(a.current_temperature)) parts.push(`${degreesText(a.current_temperature)} mesurés`);
-  if (state.state === "off") parts.push("Arrêté");
-  else if (typeof a.preset_mode === "string") parts.push(lookup(PRESET_LABELS, a.preset_mode) ?? a.preset_mode);
-  if (a.derogation === true) parts.push("manuel");
-  return parts.join(" · ") || statusText(state);
+/** Un point de l'arc, de 0 (en bas à gauche) à 1 (en bas à droite). */
+function heatPoint(t) {
+  const angle = ((150 + HEAT_SWEEP * Math.min(1, Math.max(0, t))) * Math.PI) / 180;
+  return [HEAT_BOX.cx + HEAT_BOX.r * Math.cos(angle), HEAT_BOX.cy + HEAT_BOX.r * Math.sin(angle)];
 }
 
-function heatingRow(state) {
+const HEAT_ARC = (() => {
+  const [x0, y0] = heatPoint(0);
+  const [x1, y1] = heatPoint(1);
+  const f = (v) => v.toFixed(2);
+  return `M${f(x0)} ${f(y0)} A${HEAT_BOX.r} ${HEAT_BOX.r} 0 1 1 ${f(x1)} ${f(y1)}`;
+})();
+
+/** Les consignes en cours d'envoi : on voit tout de suite la nouvelle valeur,
+ *  et plusieurs appuis rapides partent en un seul ordre à la box. */
+const heatPending = new Map();
+
+function heatTarget(state) {
+  const pending = heatPending.get(state.entity_id);
+  if (pending) return pending.value;
+  return finite(state.attributes.temperature) ? state.attributes.temperature : null;
+}
+
+function heatLimits(state) {
   const a = state.attributes;
-  const on = state.state === "heat";
-  const target = finite(a.temperature) ? a.temperature : null;
-  const step = finite(a.target_temp_step) && a.target_temp_step > 0 ? a.target_temp_step : 0.5;
-  const min = finite(a.min_temp) ? a.min_temp : 5;
-  const max = finite(a.max_temp) ? a.max_temp : 30;
-  const water = state.entity_id === "climate.eau_chaude";
-  const adjust = (delta, label) => {
-    const next = target === null ? null : Math.min(max, Math.max(min, target + delta));
-    const button = el("button", { type: "button", class: "round", "aria-label": `${label} la consigne de ${nameOf(state)}`, text: delta > 0 ? "+" : "−" });
-    button.disabled = !on || next === null || next === target;
-    button.addEventListener("click", () => {
-      row.classList.add("pending");
-      setTimeout(() => row.classList.remove("pending"), 5000);
-      callService("climate", "set_temperature", { entity_id: state.entity_id, temperature: next });
-    });
-    return button;
+  return {
+    step: finite(a.target_temp_step) && a.target_temp_step > 0 ? a.target_temp_step : 0.5,
+    min: finite(a.min_temp) ? a.min_temp : 5,
+    max: finite(a.max_temp) ? a.max_temp : 30,
   };
-  const targetText = on && target !== null ? degreesText(target) : "—";
-  const row = el("div", { class: `cover-row heat-row${on ? " on" : ""}${a.hvac_action === "heating" ? " heating" : ""}` },
-    el("span", { class: "house-action-icon" }, svgIcon(water ? ICONS.humidity : ICONS.flame)),
-    el("span", { class: "house-action-text" }, el("b", { text: nameOf(state) }), el("span", { text: heatingText(state) })),
-    canControl(state)
-      ? el("span", { class: "cover-row-buttons" },
-        adjust(-step, "Baisser"),
-        el("strong", { class: "heat-target", title: "Consigne", text: targetText }),
-        adjust(step, "Monter"))
-      : el("strong", { class: "heat-target", title: "Consigne", text: targetText }));
-  return row;
+}
+
+/** −/+ : relit l'état au moment du toucher (le cadran affiché peut être ancien). */
+function nudgeHeating(entityId, direction) {
+  const state = entities.get(entityId);
+  if (!state || state.state !== "heat") return;
+  const target = heatTarget(state);
+  if (target === null) return;
+  const { step, min, max } = heatLimits(state);
+  const next = Math.round(Math.min(max, Math.max(min, target + direction * step)) * 10) / 10;
+  if (next === target) return;
+  const old = heatPending.get(entityId);
+  clearTimeout(old?.send);
+  clearTimeout(old?.expire);
+  const pending = { value: next };
+  pending.send = setTimeout(() => {
+    callService("climate", "set_temperature", { entity_id: entityId, temperature: next });
+    // Si la box ne confirme pas, on revient à ce qu'elle dit.
+    pending.expire = setTimeout(() => {
+      if (heatPending.get(entityId) === pending) heatPending.delete(entityId);
+      renderHeating();
+    }, 20000);
+  }, 700);
+  heatPending.set(entityId, pending);
+  renderHeating();
+}
+
+/** « 19 » puis « ,5 » en petit, comme sur un thermostat. */
+function heatNumber(value) {
+  const [whole, decimals] = number.format(value).split(",");
+  return el("strong", { class: "heat-set" }, whole, decimals ? el("small", { text: `,${decimals}` }) : "", el("i", { text: "°" }));
+}
+
+function heatMode(state) {
+  const a = state.attributes;
+  if (state.state === "unavailable") return "Indisponible";
+  if (state.state === "off") return "Arrêt";
+  if (a.derogation === true) return finite(a.derogation_minutes) ? `Manuel · ${a.derogation_minutes} min` : "Manuel";
+  if (typeof a.preset_mode === "string") return lookup(PRESET_LABELS, a.preset_mode) ?? a.preset_mode;
+  return statusText(state);
+}
+
+function heatingDial(state) {
+  const a = state.attributes;
+  const id = state.entity_id;
+  const on = state.state === "heat";
+  const water = id === "climate.eau_chaude";
+  const target = heatTarget(state);
+  const current = finite(a.current_temperature) ? a.current_temperature : null;
+  const { step, min, max } = heatLimits(state);
+  const ratio = (v) => (max > min ? (v - min) / (max - min) : 0);
+  const warming = on && current !== null && target !== null && current < target - 0.05;
+  const slug = id.replace(/[^a-z0-9]/gi, "-");
+
+  const arc = svg("svg", { class: "heat-arc", viewBox: "0 0 120 112", "aria-hidden": "true" });
+  const gradient = svg("linearGradient", { id: `heat-grad-${slug}`, gradientUnits: "userSpaceOnUse", x1: 16, y1: 0, x2: 104, y2: 0 });
+  gradient.append(
+    svg("stop", { offset: "0", class: "heat-stop-cold" }),
+    svg("stop", { offset: "0.55", class: "heat-stop-mild" }),
+    svg("stop", { offset: "1", class: "heat-stop-hot" }));
+  const defs = svg("defs");
+  defs.append(gradient);
+  arc.append(defs, svg("path", { class: "heat-track", d: HEAT_ARC, pathLength: 100 }));
+  if (on && target !== null) {
+    const fill = Math.max(0.5, ratio(target) * 100);
+    arc.append(svg("path", { class: "heat-fill", d: HEAT_ARC, pathLength: 100, stroke: `url(#heat-grad-${slug})`, "stroke-dasharray": `${fill.toFixed(1)} 100` }));
+  }
+  if (current !== null) {
+    const [x, y] = heatPoint(ratio(current));
+    arc.append(svg("circle", { class: "heat-now-dot", cx: x.toFixed(2), cy: y.toFixed(2), r: 4.2 }));
+  }
+
+  const button = (direction) => {
+    const next = target === null ? null : target + direction * step;
+    const b = el("button", {
+      type: "button",
+      class: `heat-btn ${direction > 0 ? "plus" : "minus"}`,
+      "aria-label": `${direction > 0 ? "Monter" : "Baisser"} la consigne de ${nameOf(state)}`,
+      text: direction > 0 ? "+" : "−",
+    });
+    b.disabled = !on || !canControl(state) || next === null || next < min - 1e-9 || next > max + 1e-9;
+    b.addEventListener("click", () => nudgeHeating(id, direction));
+    return b;
+  };
+
+  const center = el("div", { class: "heat-center" },
+    on && target !== null ? heatNumber(target) : el("strong", { class: "heat-set off", text: state.state === "off" ? "Arrêt" : "—" }),
+    current !== null
+      ? el("span", { class: "heat-now", title: "Température mesurée", text: `${number.format(current)}°` })
+      : el("span", { class: "heat-now glyph" }, svgIcon(water ? ICONS.humidity : ICONS.flame)));
+
+  const label = [`${nameOf(state)} : ${heatMode(state)}`];
+  if (on && target !== null) label.push(`consigne ${number.format(target)} °C`);
+  if (current !== null) label.push(`${number.format(current)} °C mesurés`);
+
+  return el("article", {
+    class: `heat-dial${on ? " on" : ""}${warming ? " warming" : ""}${water ? " water" : ""}${heatPending.has(id) ? " pending" : ""}`,
+    "aria-label": label.join(", "),
+  },
+  el("div", { class: "heat-face" }, arc, center, button(-1), button(1)),
+  el("div", { class: "heat-label" },
+    el("b", {}, warming ? svgIcon(ICONS.flame) : "", nameOf(state)),
+    el("span", { text: heatMode(state) })));
+}
+
+/** L'en-tête : la pompe à chaleur et la température dehors, s'il y en a. */
+function heatingHead() {
+  const chips = [];
+  const pump = entities.get("sensor.pompe_a_chaleur");
+  if (pump && pump.state !== "unknown" && pump.state !== "unavailable") {
+    const error = finite(pump.attributes.code_erreur);
+    const text = error ? `PAC · erreur ${pump.attributes.code_erreur}` : `PAC · ${pump.state}`;
+    chips.push(el("span", { class: `heat-chip${error ? " alert" : pump.state === "chauffage" ? " running" : ""}`, text }));
+  }
+  const outside = entities.get("sensor.temperature_exterieure");
+  if (outside && outside.state !== "" && Number.isFinite(Number(outside.state))) {
+    chips.push(el("span", { class: "heat-chip", text: `Dehors ${number.format(Number(outside.state))}°` }));
+  }
+  return el("div", { class: "heat-head" }, el("h2", { text: "Chauffage" }), el("span", { class: "heat-chips" }, ...chips));
 }
 
 /** Le chauffage piloté par la box Somfy (les entités `climate`), les zones
@@ -1340,8 +1450,20 @@ function renderHeating() {
   const inPage = pageAreas === null ? null
     : new Set(areas.filter((a) => pageAreas.has(a.name)).flatMap((a) => a.entities.map((e) => e.entity_id)));
   const heating = heatingStates(inPage);
+  // Une consigne confirmée par la box n'a plus besoin d'être retenue ici.
+  for (const state of heating) {
+    const pending = heatPending.get(state.entity_id);
+    if (pending?.expire && state.attributes.temperature === pending.value) {
+      clearTimeout(pending.expire);
+      heatPending.delete(state.entity_id);
+    }
+  }
   box.hidden = heating.length === 0;
-  box.replaceChildren(...(heating.length === 0 ? [] : [el("div", { class: "cover-rows" }, ...heating.map(heatingRow))]));
+  if (heating.length === 0) {
+    box.replaceChildren();
+    return;
+  }
+  swap(box, heatingHead(), el("div", { class: "heat-dials" }, ...heating.map(heatingDial)));
 }
 
 /** Les volets (pas les portes de garage ni les portails, ni ceux déjà en
