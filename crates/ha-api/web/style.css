@@ -2662,69 +2662,58 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
   .house-zone.doorbell-zone.ringing, .bell-core svg, .bell-card { animation: none; }
 }
 
-/* ---------- Dehors, dans les repères du haut : la température en grand, sur
-   un halo de sa couleur ; une jauge qui monte avec elle ; la tendance sur
-   l'heure ; et le ruban des dernières 24 h (la courbe prend la couleur de la
-   température, les nuits sont ombrées, « maintenant » bat au bout).
-   Toucher : l'historique. */
+/* ---------- Dehors, dans les repères du haut : seulement la température, en
+   grand, dans sa couleur (bleu, turquoise, ambre, rouge), sur un halo.
+   La touche en plus : un reflet traverse les chiffres, vers le haut quand ça
+   se réchauffe, vers le bas quand ça se rafraîchit ; rien quand c'est stable.
+   Sous 0 °C, les chiffres givrent. Toucher : l'historique. */
 .gauge.g-outside {
-  --cold: #4fb8f5;
-  gap: 0.55rem;
+  --shine: rgb(255 255 255 / 0.85);
   padding-block: 0.1rem;
-  padding-inline: 0.55rem 0.5rem;
-  background-image: radial-gradient(120% 170% at 0% 50%, color-mix(in oklab, var(--temp) 32%, transparent), transparent 64%);
+  padding-inline: 0.75rem 0.8rem;
+  background-image: radial-gradient(130% 190% at 20% 55%, color-mix(in oklab, var(--temp) 30%, transparent), transparent 66%);
 }
 .gauge.g-outside[role="button"] { cursor: pointer; transition: transform 0.15s ease; }
 .gauge.g-outside[role="button"]:active { transform: scale(0.97); }
 .gauge.g-outside:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-.g-level { position: relative; flex: none; width: 5px; height: 24px; border-radius: 3px; background: color-mix(in srgb, var(--muted) 24%, transparent); }
-.g-level::after {
-  content: ""; position: absolute; inset: auto 0 0; height: var(--fill); border-radius: inherit;
-  background: linear-gradient(to top, var(--cold), var(--temp));
-  box-shadow: 0 0 7px color-mix(in oklab, var(--temp) 70%, transparent);
+.g-now { display: grid; gap: 1px; font-weight: 400; line-height: 1; }
+.g-now small { font-size: 0.56rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.gauge.g-outside .g-temp {
+  --ink-temp: linear-gradient(165deg, color-mix(in oklab, var(--temp) 40%, #fff), var(--temp) 72%);
+  padding-right: 0.08em;
+  font-size: 1.5rem; font-weight: 700; letter-spacing: -0.045em; font-variant-numeric: tabular-nums;
+  /* Le reflet (une bande claire, trois fois plus haute que les chiffres,
+     hors de vue au repos) par-dessus la couleur de la température. */
+  background-image: linear-gradient(transparent 41%, var(--shine) 50%, transparent 59%), var(--ink-temp);
+  background-size: 100% 300%, 100% 100%;
+  background-position: 0 0, 0 0;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 9px color-mix(in oklab, var(--temp) 45%, transparent));
 }
-
-.g-now { display: grid; gap: 2px; font-weight: 400; line-height: 1; }
-.g-now small {
-  display: flex; align-items: center; gap: 0.4rem;
-  font-size: 0.56rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted);
+.g-temp sup { position: relative; top: 0.14em; margin-left: 1px; font-size: 0.5em; vertical-align: top; line-height: 1; }
+.g-outside.frost .g-temp { --ink-temp: linear-gradient(165deg, #fff 20%, #c4ebff 50%, #6cc4f7); }
+.g-outside.up .g-temp { animation: g-rise 3.6s ease-in-out infinite; }
+.g-outside.down .g-temp { animation: g-fall 3.6s ease-in-out infinite; }
+@keyframes g-rise {
+  0% { background-position: 0 0, 0 0; }
+  60%, 100% { background-position: 0 100%, 0 0; }
 }
-.gauge.g-outside .g-now strong { font-size: 1.15rem; font-weight: 650; letter-spacing: -0.03em; }
-.g-now sup { position: relative; top: -0.05em; margin-left: 1px; font-size: 0.62em; vertical-align: top; line-height: 1; color: var(--temp); }
-.g-trend { font-style: normal; font-weight: 700; letter-spacing: 0.02em; text-transform: none; font-variant-numeric: tabular-nums; }
-.g-trend.up { color: #ff8a65; }
-.g-trend.down { color: #6cc4f7; }
-.g-trend.steady { color: var(--muted); font-weight: 600; }
-
-.gauge.g-outside svg.g-ribbon { flex: none; width: 116px; height: 32px; overflow: visible; color: var(--text); stroke: none; }
-.g-night { fill: color-mix(in srgb, var(--muted) 13%, transparent); }
-.g-moon { font-size: 7px; fill: var(--muted); opacity: 0.8; text-anchor: middle; }
-.g-area { fill: url(#g-outside-ramp); opacity: 0.22; }
-.g-curve { fill: none; stroke: url(#g-outside-ramp); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
-.g-mark { fill: url(#g-outside-ramp); }
-.g-label { font-family: var(--font); font-size: 8.5px; font-weight: 650; fill: var(--muted); text-anchor: middle; font-variant-numeric: tabular-nums; }
-.g-dot { fill: var(--temp); stroke: #fff; stroke-opacity: 0.85; stroke-width: 1.1; }
-.g-pulse { fill: var(--temp); transform-box: fill-box; transform-origin: center; animation: g-pulse 2.6s ease-out infinite; }
-@keyframes g-pulse {
-  from { transform: scale(1); opacity: 0.6; }
-  to { transform: scale(3.2); opacity: 0; }
+@keyframes g-fall {
+  0% { background-position: 0 100%, 0 0; }
+  60%, 100% { background-position: 0 0, 0 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .g-pulse { animation: none; opacity: 0; }
+  .g-outside .g-temp { animation: none !important; }
 }
 
-/* Le plan : tout à l'encre, sans halo. */
+/* Le plan : à l'encre, sans halo ; le reflet reste. */
 [data-theme|="plan"] .gauge.g-outside { background-image: none; }
-[data-theme|="plan"] .g-level::after { background: var(--ink); box-shadow: none; }
-[data-theme|="plan"] .g-now sup { color: var(--ink); }
-[data-theme|="plan"] .g-night { fill: var(--ink-line); opacity: 0.45; }
-[data-theme|="plan"] .g-moon { fill: var(--ink); }
-[data-theme|="plan"] .g-trend.up { color: #c94a26; }
-[data-theme|="plan"] .g-trend.down { color: #1f74b5; }
-[data-theme|="plan"] .g-area { fill: var(--ink); opacity: 0.08; }
-[data-theme|="plan"] .g-curve { stroke: var(--ink); stroke-width: 1.6; }
-[data-theme|="plan"] :is(.g-mark, .g-dot, .g-pulse) { fill: var(--ink); }
+[data-theme|="plan"] .gauge.g-outside .g-temp { --ink-temp: linear-gradient(var(--ink), var(--ink)); filter: none; }
 
 /* ---------- Une pièce, en fenêtre (étape 42) : au centre sur grand écran,
    montée du bas sur téléphone. */
