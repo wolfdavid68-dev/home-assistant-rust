@@ -493,6 +493,87 @@ function mediaNowPlaying(state) {
   return button;
 }
 
+// ---------------------------------------------------------------- Sur la page Maison
+// Le lecteur en petit, sous l'agenda (mise en page « tableau ») : la pochette,
+// le titre, lecture/pause, morceau suivant et le volume. Un toucher sur la
+// pochette ouvre le lecteur.
+
+const boardMusicUi = (() => {
+  const img = el("img", { alt: "", decoding: "async", draggable: "false" });
+  img.hidden = true;
+  const ui = {
+    root: $("#board-music"),
+    img,
+    title: el("b"),
+    sub: el("span"),
+    open: el("button", { type: "button", class: "board-music-open" }),
+    play: el("button", { type: "button", class: "board-music-play" }),
+    next: el("button", { type: "button", class: "board-music-skip", "aria-label": "Morceau suivant" }, svgIcon(ICONS.next)),
+    mute: el("button", { type: "button", class: "music-mute" }),
+    volume: el("input", { type: "range", class: "music-volume-slider", min: "0", max: "100", step: "1", value: "0", "aria-label": "Volume" }),
+    volumeValue: el("span", { class: "music-volume-value" }),
+  };
+  ui.open.append(
+    el("span", { class: "media-now-art board-music-art" }, svgIcon(ICONS.music), img),
+    el("span", { class: "media-now-text" }, ui.title, ui.sub),
+  );
+  ui.root.append(
+    ui.open,
+    el("span", { class: "board-music-buttons" }, ui.play, ui.next),
+    el("div", { class: "music-volume" }, ui.mute, ui.volume, ui.volumeValue),
+  );
+  fillSlider(ui.volume);
+  ui.open.addEventListener("click", () => openMusic());
+  const act = (handler) => () => {
+    const state = musicPlayer();
+    if (state && canControl(state)) handler(state);
+  };
+  ui.play.addEventListener("click", act((state) => musicCommand(state, state.state === "playing" ? "media_pause" : "media_play")));
+  ui.next.addEventListener("click", act((state) => musicCommand(state, "media_next_track")));
+  ui.mute.addEventListener("click", act((state) => musicCommand(state, "volume_mute", { is_volume_muted: state.attributes.is_volume_muted !== true })));
+  ui.volume.addEventListener("input", () => setText(ui.volumeValue, `${ui.volume.value} %`));
+  ui.volume.addEventListener("change", act((state) => musicCommand(state, "volume_set", { volume_level: Number(ui.volume.value) / 100 })));
+  return ui;
+})();
+
+/** Appelé avec le tableau (house.js). */
+function renderBoardMusic() {
+  const ui = boardMusicUi;
+  const state = musicPlayer();
+  ui.root.hidden = state === null || !isBoard();
+  if (ui.root.hidden) return;
+  const a = state.attributes;
+  const available = !["unavailable", "unknown"].includes(state.state);
+  const playing = state.state === "playing";
+  const active = playing || state.state === "paused";
+  const allowed = canControl(state) && available;
+  const text = (value) => (typeof value === "string" && value.trim() !== "" ? value.trim() : "");
+  const title = active ? text(a.media_title) || text(a.media_channel) || text(a.source) : "";
+  const status = available ? lookup(MEDIA_LABELS, state.state) ?? statusText(state) : "Injoignable";
+  setText(ui.title, title || "Musique");
+  setText(ui.sub, [active ? text(a.media_artist) || status : status, nameOf(state)].filter(Boolean).join(" · "));
+  showCover(ui.img, active ? a.entity_picture : null);
+  ui.root.classList.toggle("playing", playing);
+  ui.open.setAttribute("aria-label", `Ouvrir le lecteur${title ? ` : ${title}` : ""}`);
+  ui.play.replaceChildren(svgIcon(playing ? ICONS.pause : ICONS.play));
+  ui.play.setAttribute("aria-label", playing ? "Mettre en pause" : "Lancer la lecture");
+  ui.play.disabled = !allowed;
+  ui.next.disabled = !allowed || !active;
+  // Le volume, comme dans le lecteur.
+  const volume = finite(a.volume_level) ? Math.round(a.volume_level * 100) : 0;
+  const muted = a.is_volume_muted === true;
+  ui.mute.replaceChildren(svgIcon(muted ? ICONS.muted : ICONS.speaker));
+  ui.mute.setAttribute("aria-label", muted ? "Remettre le son" : "Couper le son");
+  ui.mute.setAttribute("aria-pressed", String(muted));
+  ui.mute.disabled = !allowed;
+  ui.volume.disabled = !allowed;
+  if (document.activeElement !== ui.volume) {
+    ui.volume.value = String(volume);
+    ui.volume.dispatchEvent(new Event("input"));
+  }
+  ui.volume.setAttribute("aria-valuetext", muted ? `${volume} %, son coupé` : `${volume} %`);
+}
+
 /** Toutes les entités viennent d'arriver (app.js, à la connexion). */
 function musicLoaded() {
   musicNav();

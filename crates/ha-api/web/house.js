@@ -1364,6 +1364,7 @@ function renderHouse() {
     $("#board-people").hidden = true;
     $("#board-charts").hidden = true;
     $("#board-agenda").hidden = true;
+    $("#board-music").hidden = true;
     return;
   }
   if (house.loading === null && token.get()) loadHouse();
@@ -1375,6 +1376,7 @@ function renderHouse() {
   renderPeople();
   renderCharts();
   if (typeof renderBoardAgenda === "function") renderBoardAgenda();
+  if (typeof renderBoardMusic === "function") renderBoardMusic();
   if (isPlan()) renderTitleBlock();
 }
 

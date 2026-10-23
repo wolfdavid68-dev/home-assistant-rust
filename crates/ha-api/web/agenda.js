@@ -719,7 +719,18 @@ function renderBoardAgenda() {
   }
   const weekCard = el("div", { class: "agenda-card agenda-home-weekcard" },
     el("div", { class: "agenda-card-head" }, el("h3", { text: "Cette semaine" })), week);
+  const scrolled = box.querySelector(".agenda-home-today")?.scrollTop ?? 0;
   box.replaceChildren(today, weekCard);
+  // Moins haute que ses rendez-vous (une tablette, avec le lecteur de musique
+  // dessous) : la liste du jour défile, avec un fondu au bord, comme les volets.
+  const fade = () => {
+    const max = today.scrollHeight - today.clientHeight;
+    today.classList.toggle("fade-start", today.scrollTop > 1);
+    today.classList.toggle("fade-end", today.scrollTop < max - 1);
+  };
+  today.scrollTop = scrolled;
+  today.addEventListener("scroll", fade, { passive: true });
+  requestAnimationFrame(fade);
 }
 
 /** Le prochain rendez-vous d'aujourd'hui, pour les repères et l'accueil. */
