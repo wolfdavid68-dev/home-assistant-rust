@@ -2743,6 +2743,11 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .room-body { columns: 290px 3; column-gap: 1rem; }
 .room-group { break-inside: avoid; margin-bottom: 1rem; }
 .room-body .grid { grid-template-columns: 1fr; }
+/* Une tuile « large » (météo, vigilance, agenda, listes) demande deux
+   colonnes ; ici il n'y en a qu'une, et la grille en ajoutait une seconde,
+   étroite, où les autres tuiles se tassaient (noms écrits lettre par
+   lettre). Dans une pièce, chaque tuile prend la colonne entière. */
+.room-body .grid > * { grid-column: 1 / -1; }
 .room-dialog[open] { animation: room-in 0.18s ease-out; }
 @keyframes room-in { from { opacity: 0; transform: translateY(10px) scale(0.985); } }
 @media (max-width: 640px) {
@@ -2762,7 +2767,6 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .room-view[hidden] { display: none; }
 .room-view .room-sheet { max-height: none; overflow: visible; padding: 0.4rem 0 0; }
 .room-view #room-close, .room-view .room-grab { display: none; }
-.room-view .room-chart-card .chart-line { height: 44px; }
 @media (min-width: 1000px) {
   [data-layout="board"] .room-view { padding-left: calc(68px + var(--gutter)); padding-bottom: 16px; }
   /* Une pièce à 19 appareils tient sur un écran 1920 × 1080 : jusqu'à cinq
