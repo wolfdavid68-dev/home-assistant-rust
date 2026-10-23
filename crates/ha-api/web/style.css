@@ -2374,6 +2374,11 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 [data-theme="maquette"] :is(.hero, .login) { background: none; }
 [data-theme="maquette"] :is(.history-dialog, .canvas-panel, .canvas-menu, .login-card) { background: #1c1b22; }
 [data-theme="maquette"] :is(.ghost, .period) { background: rgb(0 0 0 / 0.3); border-color: rgb(255 255 255 / 0.1); }
+/* La règle du dessus passe après celle du bouton choisi : sans ceci, son
+   texte (couleur du fond) devient invisible sur un fond sombre. */
+[data-theme="maquette"] .period[aria-pressed="true"] { background: var(--text); color: var(--bg); border-color: var(--text); }
+[data-theme="maquette"] .presets .period { background: transparent; }
+[data-theme="maquette"] .presets .period[aria-pressed="true"] { background: rgb(255 255 255 / 0.12); color: var(--text); }
 [data-theme="maquette"] .scene { background: var(--card); border: 0; }
 [data-theme="maquette"] .scene.on { background: rgb(255 193 7 / 0.18); color: var(--m-amber); }
 
