@@ -88,6 +88,62 @@ sudo ha-maison ecoute /tmp/phrase.wav        # fait écouter un enregistrement
 `ffmpeg -i enregistrement.m4a -ac 1 -ar 16000 /tmp/phrase.wav`). La réponse :
 « entendu en 0,6 s : « Ajoute du pain à la liste de courses. » ».
 
+### Avec Docker
+
+Dans [compose.yaml](../compose.yaml), enlève les « # » :
+
+1. du service **`piper`** et du volume **`piper-voix`** (la voix qui répond, aussi celle des
+   [annonces Sonos](sonos.md)) ;
+2. du service **`ecoute`** (Parakeet et sherpa-onnx) ;
+3. des réglages **`HA_PIPER: tcp://piper:10200`** et **`HA_ECOUTE: ws://127.0.0.1:10350`** de
+   `ha-server`.
+
+Puis :
+
+```bash
+docker compose build ecoute      # une fois : 670 Mo téléchargés, chaque fichier vérifié
+docker compose up -d
+```
+
+L'écoute est construite sur ta machine par
+[packaging/docker/ecoute/Dockerfile](../packaging/docker/ecoute/Dockerfile), avec **les mêmes
+fichiers et les mêmes empreintes** que `installer.sh --voix` : un fichier modifié arrête la
+construction. Elle **partage le réseau de `ha-server`** (`network_mode: "service:ha-server"`) : lui
+seul la joint, sur `127.0.0.1`, et aucun port n'est ouvert. Elle tourne sans privilège, sans droit
+d'écrire, avec 1,5 Go de mémoire au plus. Elle en prend environ **820 Mo**, et Piper **130 Mo**.
+
+**Pas avec `network_mode: host`** (le réglage d'[Alexa](alexa.md)) : l'écoute serait alors
+ouverte à tout le réseau de la maison, sans mot de passe. Garde l'une ou l'autre.
+
+**Le micro veut toujours du HTTPS** : `HA_TLS: "on"` ([étape 79](https-maison.md)), ou un relais
+qui fournit le HTTPS, comme `tailscale serve` ([étape 7](etape-7-deploiement.md)), réservé à tes
+appareils.
+
+Pour essayer, avec un enregistrement `phrase.wav` (même format qu'au-dessus) :
+
+```bash
+docker compose exec -T ha-server ha-server ecoute /dev/stdin < phrase.wav
+```
+
+**Si Piper n'arrive pas à télécharger la voix** (« CERTIFICATE_VERIFY_FAILED » dans
+`docker compose logs piper`, vu derrière certains réseaux), télécharge-la toi-même et vérifie-la :
+
+```bash
+curl -LO https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/fr/fr_FR/siwis/medium/fr_FR-siwis-medium.onnx
+curl -LO https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/fr/fr_FR/siwis/medium/fr_FR-siwis-medium.onnx.json
+sha256sum fr_FR-siwis-medium.onnx fr_FR-siwis-medium.onnx.json
+```
+
+Les empreintes attendues sont `VOIX_ONNX_SHA256` et `VOIX_JSON_SHA256` dans
+[tout-compris.sh](../packaging/linux/tout-compris.sh). Si elles sont bonnes, copie les deux
+fichiers dans le volume, puis redémarre Piper :
+
+```bash
+docker compose cp fr_FR-siwis-medium.onnx piper:/data/
+docker compose cp fr_FR-siwis-medium.onnx.json piper:/data/
+docker compose restart piper
+```
+
 ### Sans le mini-PC
 
 Sur un PC, sans service : télécharge `sherpa-onnx-offline` (paquet Python `sherpa-onnx-bin`, et
@@ -98,7 +154,7 @@ pour chaque phrase : quelques secondes de plus, le temps de relire le modèle.
 
 | Réglage | Rôle |
 |---------|------|
-| `HA_ECOUTE=ws://127.0.0.1:10350` | Le service d'écoute (mis par `--voix`) ; seulement sur cette machine |
+| `HA_ECOUTE=ws://127.0.0.1:10350` | Le service d'écoute (mis par `--voix`, ou le service `ecoute` avec Docker) ; seulement sur cette machine |
 | `HA_ECOUTE=/chemin/du/dossier` | Ou le programme, lancé pour chaque phrase |
 | `HA_PIPER` | La voix qui répond ([étape 73](sonos.md)) ; sans elle, la réponse est seulement écrite |
 
@@ -130,6 +186,7 @@ pour chaque phrase : quelques secondes de plus, le temps de relire le modèle.
 | [web/ecoute.js](../crates/ha-api/web/ecoute.js) | Nouveau : le petit programme qui reçoit le son du micro, dans le fil audio du navigateur |
 | [packaging/linux/ha-maison-ecoute.service](../packaging/linux/ha-maison-ecoute.service) | Nouveau : le service d'écoute, enfermé |
 | [packaging/linux/tout-compris.sh](../packaging/linux/tout-compris.sh) | `--voix` : téléchargement vérifié, installation, réglage `HA_ECOUTE` |
+| [packaging/docker/ecoute/Dockerfile](../packaging/docker/ecoute/Dockerfile) | Le même service en Docker : mêmes fichiers, mêmes empreintes, sans privilège ; service `ecoute` de [compose.yaml](../compose.yaml) |
 
 Essayé :
 - dans Chromium, avec un micro simulé qui « dit » une phrase : « Bonjour, allume la lumière du
@@ -137,7 +194,9 @@ Essayé :
   ajouté à la liste ;
 - dans un Debian 13 avec systemd : `installer.sh --voix` (400 Mo téléchargés et vérifiés), le
   service démarré avec tout son durcissement, une phrase écrite en 3,8 s, une connexion depuis le
-  réseau bloquée ; relancé sans option, rien retéléchargé ni redémarré.
+  réseau bloquée ; relancé sans option, rien retéléchargé ni redémarré ;
+- avec Docker Desktop : l'image `ecoute` construite (empreintes vérifiées), une phrase écrite en
+  0,2 s par le service, la réponse de Piper produite en moins d'une seconde.
 
 La voix de synthèse (Piper) qui a servi à ces essais avale parfois la première syllabe d'une phrase
 (« lume la lumière »), l'écoute aussi alors ; une vraie voix n'a pas ce défaut. Les essais ont donc
