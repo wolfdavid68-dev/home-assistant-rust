@@ -551,6 +551,11 @@ function updateHouse(view) {
       continue;
     }
     const state = entities.get(zone.entity_id);
+    // La sonnette : la porte s'allume quand on sonne (sonnette.js).
+    if (state && isDoorbell(state)) {
+      doorbellZone(node, zone, state);
+      continue;
+    }
     const name = zone.name ?? (state ? nameOf(state) : zone.entity_id);
     const command = state ? actionCommand(state) : null;
     const readonly = command === null || !canControl(state);
@@ -614,6 +619,7 @@ function zoneTouch(zone, node) {
     if (zone.area) return openRoom(zone.area);
     const state = entities.get(zone.entity_id);
     if (!state) return;
+    if (isDoorbell(state)) return openDoorbell(state);
     const command = actionCommand(state);
     // Un capteur, ou un appareil que ce compte ne commande pas : l'historique.
     if (command === null || !canControl(state)) return zoneHistory(zone);
@@ -1137,12 +1143,65 @@ function gauge(icon, label, value, kind) {
   return el("span", { class: `gauge g-${kind}`, title: label }, svgIcon(icon), el("span", { text: label }), el("strong", { text: value }));
 }
 
+/** La couleur d'une température, de 0 °C (bleu) à 28 °C (rouge), en passant
+ *  par le turquoise d'un matin frais et l'ambre d'un après-midi doux. */
+const TEMP_RAMP = [[0, "#4fb8f5"], [8, "#4fd6c4"], [15, "#ffc15a"], [22, "#ff8f4d"], [28, "#ff5a45"]];
+
+function tempColor(value) {
+  const v = Math.min(28, Math.max(0, value));
+  const i = Math.max(1, TEMP_RAMP.findIndex(([t]) => t >= v));
+  const [[t0, c0], [t1, c1]] = [TEMP_RAMP[i - 1], TEMP_RAMP[i]];
+  return `color-mix(in oklab, ${c1} ${Math.round((v - t0) / (t1 - t0) * 100)}%, ${c0})`;
+}
+
+/** Dehors : seulement la température, en grand, dans sa couleur. La touche en
+ *  plus : un reflet traverse les chiffres, vers le haut quand ça se réchauffe,
+ *  vers le bas quand ça se rafraîchit (sur la dernière heure), et rien quand
+ *  c'est stable. Sous 0 °C, les chiffres givrent. Toucher : l'historique. */
+function outsideGauge(value) {
+  const probe = entities.get("sensor.temperature_exterieure");
+  const id = probe && Number(probe.state) === value ? probe.entity_id : null;
+  const history = id !== null && account.permissions.history !== false;
+  const trend = history ? outsideTrend(id, value) : null;
+  const said = [`Dehors : ${number.format(value)} °C`];
+  if (trend) said.push(trend.text);
+  const classes = ["gauge", "g-outside", trend?.way, value <= 0 ? "frost" : null].filter(Boolean).join(" ");
+  const chip = el("span", { class: classes, title: said.join(", "), "aria-label": said.join(", ") },
+    el("b", { class: "g-now" },
+      el("small", { text: value <= 0 ? "Dehors · gel" : "Dehors" }),
+      el("strong", { class: "g-temp" }, number.format(value), el("sup", { text: "°" }))));
+  chip.style.setProperty("--temp", tempColor(value));
+  if (history) {
+    chip.setAttribute("role", "button");
+    chip.tabIndex = 0;
+    chip.addEventListener("click", () => openHistory(id));
+    chip.addEventListener("keydown", (event) => { if (event.key === "Enter") openHistory(id); });
+  }
+  return chip;
+}
+
+/** La tendance : l'écart avec la valeur d'il y a une heure environ ; rien si
+ *  c'est stable (moins de 0,3 °C par heure) ou si on ne sait pas. */
+function outsideTrend(id, value) {
+  const now = Date.now();
+  const hourAgo = (seriesFor({ entity_id: id, hours: 24 }) ?? [])
+    .filter(([t]) => t >= now - 2 * 3_600_000 && t <= now - 30 * 60_000)
+    .sort((a, b) => Math.abs(a[0] - (now - 3_600_000)) - Math.abs(b[0] - (now - 3_600_000)))[0];
+  if (!hourAgo) return null;
+  const delta = (value - hourAgo[1]) / ((now - hourAgo[0]) / 3_600_000);
+  if (Math.abs(delta) <= 0.3) return null;
+  const amount = number.format(Math.abs(Math.round(delta * 10) / 10));
+  return delta > 0
+    ? { way: "up", text: `en hausse de ${amount} °C par heure` }
+    : { way: "down", text: `en baisse de ${amount} °C par heure` };
+}
+
 function renderGauges() {
   const box = $("#gauges");
   const items = [];
   // D'abord la sonde de la pompe à chaleur, posée dehors ; sinon la météo.
   const outsideTemp = outsideTemperature();
-  if (Number.isFinite(outsideTemp)) items.push(gauge(ICONS.temperature, "Dehors", `${number.format(outsideTemp)} °C`, "outside"));
+  if (Number.isFinite(outsideTemp)) items.push(outsideGauge(outsideTemp));
   const temps = areas.map(roomInfo).map((info) => info.temperature).filter((t) => Number.isFinite(t));
   if (temps.length > 0) {
     items.push(gauge(ICONS.home, "Dedans", `${number.format(temps.reduce((a, b) => a + b, 0) / temps.length)} °C`, "inside"));
@@ -1500,7 +1559,10 @@ function seriesFor(chart) {
         entry.points = data.numeric
           .map((p) => [Date.parse(p.at), Number(p.mean)])
           .filter(([t, v]) => Number.isFinite(t) && Number.isFinite(v));
-        if (isBoard()) renderCharts();
+        if (isBoard()) {
+          renderCharts();
+          renderGauges();
+        }
         if (roomShown()) renderRoomHead();
       })
       .catch(() => { entry.loading = false; });
@@ -2520,11 +2582,25 @@ function renderDrawingEditor() {
     refresh();
     $("#drawing-form .drawing-zones .drawing-item:last-child input")?.focus();
   });
+  // La sonnette pas encore posée sur le dessin : un bouton pour tracer sa porte.
+  const bell = [...entities.values()].find(isDoorbell);
+  let addBell = "";
+  if (bell && !draft.zones.some((z) => z.entity_id === bell.entity_id)) {
+    addBell = el("button", { type: "button", class: "ghost small", text: "+ Placer la sonnette" });
+    addBell.disabled = draft.zones.length >= 24;
+    addBell.addEventListener("click", () => {
+      draft.zones.push({ entity_id: bell.entity_id, name: doorbellPlace(bell), x: 45, y: 50, w: 8, h: 14 });
+      drawingEdit.tracing = draft.zones.length - 1;
+      drawingEdit.placing = -1;
+      refresh();
+      showPreview();
+    });
+  }
   const zones = drawingFieldset(
     "Zones à toucher",
-    "Le porche, la porte du garage, le salon… : trace un rectangle sur le dessin. Un toucher allume, éteint, ouvre ou ferme l'appareil, ou ouvre la pièce ; un appui long ouvre l'historique (24 au plus).",
+    "Le porche, la porte du garage, le salon… : trace un rectangle sur le dessin. Un toucher allume, éteint, ouvre ou ferme l'appareil, ou ouvre la pièce ; un appui long ouvre l'historique (24 au plus). La sonnette : trace sa zone sur la porte d'entrée ; elle s'allume avec la photo quand on sonne.",
     el("ol", { class: "drawing-items" }, ...zoneRows),
-    addZone,
+    el("div", { class: "drawing-zone-buttons" }, addZone, addBell),
   );
   zones.classList.add("drawing-zones");
 

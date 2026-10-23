@@ -9,12 +9,18 @@
 // par-dessus tout (vue hub, écran de veille compris), qui se met à jour quand
 // la nouvelle photo arrive. Elle se ferme d'elle-même au bout de 3 minutes.
 //
+// Sur le dessin de la maison, une zone tracée sur la porte avec la sonnette
+// comme appareil : elle s'allume quand on sonne (ondes, photo, heure), reste
+// marquée « On a sonné » un quart d'heure, et un toucher ouvre la photo.
+//
 // Les images ne s'affichent pas par une simple adresse : une balise <img> ne
 // sait pas envoyer le jeton. Elles sont lues avec fetch, comme le dessin de la
 // maison, et jamais gardées par le navigateur (no-store).
 "use strict";
 
 const DOORBELL_OPEN = 3 * 60_000;
+/** Combien de temps la porte du dessin reste marquée « On a sonné ». */
+const DOORBELL_RECENT = 15 * 60_000;
 const doorbell = {
   /** La sonnette qui a sonné (son identifiant), tant que la fenêtre est ouverte. */
   current: null,
@@ -22,10 +28,66 @@ const doorbell = {
   closeTimer: null,
   /** Les images déjà lues : « camera.x@<image_at> » → adresse blob:. */
   urls: new Map(),
+  /** L'heure du dernier coup de chaque sonnette, vu depuis l'ouverture de la page. */
+  rang: new Map(),
+  /** Pour retirer « On a sonné » du dessin, le moment venu. */
+  zoneTimer: null,
 };
 
 function isDoorbell(state) {
   return domainOf(state) === "binary_sensor" && /_(ding|sonnette)$/.test(state.entity_id);
+}
+
+/** L'heure du coup de sonnette (en ms), si on la connaît. */
+function doorbellRang(state) {
+  if (state.state === "on") return Date.parse(state.last_changed) || doorbell.rang.get(state.entity_id) || Date.now();
+  return doorbell.rang.get(state.entity_id) ?? null;
+}
+
+/** La zone de la sonnette sur le dessin (appelé par updateHouse). */
+function doorbellZone(node, zone, state) {
+  const place = zone.name ?? doorbellPlace(state);
+  const ringing = state.state === "on";
+  const at = doorbellRang(state);
+  const recent = !ringing && at !== null && Date.now() - at < DOORBELL_RECENT;
+  node.classList.add("doorbell-zone");
+  node.classList.remove("readonly", "on");
+  node.classList.toggle("ringing", ringing);
+  node.classList.toggle("rang", recent);
+  node.classList.toggle("below", zone.y < 30);
+  const when = at !== null ? ` à ${hourMinute.format(new Date(at))}` : "";
+  setAttr(node, "aria-label", ringing ? `On sonne : ${place}${when}. Toucher pour voir la photo.`
+    : recent ? `On a sonné : ${place}${when}. Toucher pour voir la photo.` : `${place}. Toucher pour voir la dernière photo.`);
+  setAttr(node, "title", place);
+  if (!ringing && !recent) {
+    if (node.firstChild) node.replaceChildren();
+    return;
+  }
+  // Construit une fois : la photo se charge à part, sans tout refaire.
+  let card = node.querySelector(".bell-card");
+  if (!card) {
+    const img = el("img", { alt: "" });
+    img.hidden = true;
+    card = el("span", { class: "bell-card" },
+      el("span", { class: "bell-photo" }, img),
+      el("span", { class: "bell-text" }, el("b"), el("small")));
+    node.replaceChildren(
+      el("span", { class: "bell-pin", "aria-hidden": "true" },
+        el("i", { class: "bell-wave" }), el("i", { class: "bell-wave" }),
+        el("span", { class: "bell-core" }, svgIcon(ICONS.bell))),
+      card);
+  }
+  setText(card.querySelector("b"), ringing ? "On sonne" : "On a sonné");
+  setText(card.querySelector("small"), when.trim());
+  const camera = doorbellCamera(state.entity_id);
+  const img = card.querySelector("img");
+  if (camera) showCameraImage(camera, img);
+  else img.hidden = true;
+  card.classList.toggle("no-photo", !camera);
+  if (recent) {
+    clearTimeout(doorbell.zoneTimer);
+    doorbell.zoneTimer = setTimeout(() => { if (house.view) updateHouse(house.view); }, at + DOORBELL_RECENT - Date.now() + 1000);
+  }
 }
 
 /** La caméra de la même porte : `binary_sensor.porte_ding` → `camera.porte_…`. */
@@ -79,6 +141,7 @@ async function showCameraImage(state, img, caption) {
 /** Appelé à chaque changement d'état (app.js). */
 function doorbellChanged(entityId, oldState, newState) {
   if (newState && isDoorbell(newState) && newState.state === "on" && oldState?.state !== "on") {
+    doorbell.rang.set(entityId, Date.parse(newState.last_changed) || Date.now());
     ringDoorbell(newState);
   }
   // La nouvelle photo arrive (quelques secondes après le coup de sonnette).
@@ -91,10 +154,17 @@ function ringDoorbell(state) {
   // Sur un téléphone, c'est la notification qui prévient (voir docs/sonnette.md).
   if (!document.body.classList.contains("tablet")) return;
   if (typeof saver !== "undefined" && saver.on) hideSaver();
+  openDoorbell(state, Date.now());
+}
+
+/** La fenêtre de la sonnette : au coup de sonnette, ou en touchant la porte
+ *  sur le dessin (alors la dernière photo, sans attendre de nouvelle). */
+function openDoorbell(state, at = doorbellRang(state)) {
+  const live = state.state === "on";
   doorbell.current = state.entity_id;
-  doorbell.at = Date.now();
-  $("#doorbell-title").textContent = `On sonne : ${doorbellPlace(state)}`;
-  $("#doorbell-when").textContent = `à ${hourMinute.format(new Date(doorbell.at))}`;
+  doorbell.at = live && at !== null ? at : 0;
+  $("#doorbell-title").textContent = live ? `On sonne : ${doorbellPlace(state)}` : doorbellPlace(state);
+  $("#doorbell-when").textContent = at === null ? "La dernière photo" : `${live ? "" : "On a sonné "}à ${hourMinute.format(new Date(at))}`;
   renderDoorbellPhoto();
   const dialog = $("#doorbell");
   if (!dialog.open) dialog.showModal();

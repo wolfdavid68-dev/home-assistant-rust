@@ -2494,7 +2494,6 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 [data-theme="maquette"] .gauge { background: rgb(0 0 0 / 0.36); border: 0; box-shadow: none; color: #e9e9ee; min-height: 30px; font-size: 0.76rem; }
 [data-theme="maquette"] .gauge > span { display: none; }
 [data-theme="maquette"] .gauge strong { font-family: var(--font); font-weight: 600; }
-[data-theme="maquette"] .gauge.g-outside svg { color: var(--m-red); }
 [data-theme="maquette"] .gauge.g-inside svg { color: var(--m-cyan); }
 [data-theme="maquette"] .gauge.g-power svg { color: var(--m-amber); }
 [data-theme="maquette"] .gauge.g-lights svg { color: var(--m-orange); }
@@ -2605,6 +2604,116 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 @media (prefers-reduced-motion: reduce) {
   .house-zone.hit { animation: none; background: color-mix(in srgb, var(--glow) 30%, transparent); }
 }
+
+/* ---------- La sonnette sur le dessin (sonnette.js) : la zone tracée sur la
+   porte s'allume quand on sonne (ondes, cloche, photo, heure), puis reste
+   marquée « On a sonné » un quart d'heure, plus discrète. */
+.drawing-zone-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.house-zone.doorbell-zone { --bell: #ffb020; }
+.house-zone.doorbell-zone.ringing {
+  z-index: 3;
+  background: color-mix(in srgb, var(--bell) 16%, transparent);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--bell) 85%, transparent), 0 0 28px 4px color-mix(in srgb, var(--bell) 40%, transparent);
+  animation: bell-glow 1.6s ease-in-out infinite;
+}
+.house-zone.doorbell-zone.rang { z-index: 2; }
+.bell-pin { position: absolute; left: 50%; top: 50%; width: 34px; height: 34px; translate: -50% -50%; pointer-events: none; }
+.bell-wave { position: absolute; inset: 0; border: 2px solid var(--bell); border-radius: 50%; opacity: 0; animation: bell-wave 1.8s ease-out infinite; }
+.bell-wave + .bell-wave { animation-delay: 0.9s; }
+.bell-core {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  border-radius: 50%; background: var(--bell); color: #2a1a00;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.45), 0 0 0 3px rgb(255 255 255 / 0.9);
+}
+.bell-core svg { width: 18px; height: 18px; stroke-width: 2.3; transform-origin: 50% 15%; animation: bell-shake 1.2s ease-in-out infinite; }
+.bell-card {
+  position: absolute; left: 50%; bottom: calc(50% + 26px); translate: -50% 0;
+  display: grid; width: 132px; overflow: hidden; pointer-events: none;
+  border-radius: 12px; background: rgb(14 14 20 / 0.88); color: #ffffff; text-align: left;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.14);
+  animation: bell-card-in 0.35s ease-out both;
+}
+.house-zone.below .bell-card { bottom: auto; top: calc(50% + 26px); }
+.bell-photo { display: block; aspect-ratio: 4 / 3; background: rgb(255 255 255 / 0.07); }
+.bell-photo img:not([hidden]) { display: block; width: 100%; height: 100%; object-fit: cover; }
+.bell-card.no-photo .bell-photo, .bell-photo:has(> img[hidden]) { display: none; }
+.bell-text { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 6px 9px 7px; }
+.bell-text b { font-size: 0.8rem; color: var(--bell); white-space: nowrap; }
+.bell-text small { font-size: 0.7rem; color: rgb(255 255 255 / 0.75); white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* Un quart d'heure après : la cloche, sans ondes, et l'heure, sans la photo. */
+.house-zone.rang .bell-wave, .house-zone.rang .bell-photo { display: none; }
+.house-zone.rang .bell-pin { width: 28px; height: 28px; }
+.house-zone.rang .bell-core { box-shadow: 0 3px 10px rgb(0 0 0 / 0.4), 0 0 0 2px rgb(255 255 255 / 0.85); }
+.house-zone.rang .bell-core svg { width: 15px; height: 15px; animation: none; }
+.house-zone.rang .bell-card { width: max-content; bottom: calc(50% + 20px); animation: none; }
+.house-zone.rang.below .bell-card { bottom: auto; top: calc(50% + 20px); }
+@keyframes bell-wave { from { transform: scale(1); opacity: 0.9; } to { transform: scale(2.7); opacity: 0; } }
+@keyframes bell-shake {
+  0%, 50%, 100% { rotate: 0deg; }
+  10% { rotate: 16deg; }
+  20% { rotate: -14deg; }
+  30% { rotate: 10deg; }
+  40% { rotate: -6deg; }
+}
+@keyframes bell-glow { 50% { box-shadow: inset 0 0 0 2px var(--bell), 0 0 44px 10px color-mix(in srgb, var(--bell) 55%, transparent); } }
+@keyframes bell-card-in { from { opacity: 0; translate: -50% 8px; } }
+@media (prefers-reduced-motion: reduce) {
+  .bell-wave { display: none; }
+  .house-zone.doorbell-zone.ringing, .bell-core svg, .bell-card { animation: none; }
+}
+
+/* ---------- Dehors, dans les repères du haut : seulement la température, en
+   grand, dans sa couleur (bleu, turquoise, ambre, rouge), sur un halo.
+   La touche en plus : un reflet traverse les chiffres, vers le haut quand ça
+   se réchauffe, vers le bas quand ça se rafraîchit ; rien quand c'est stable.
+   Sous 0 °C, les chiffres givrent. Toucher : l'historique. */
+.gauge.g-outside {
+  --shine: rgb(255 255 255 / 0.85);
+  padding-block: 0.1rem;
+  padding-inline: 0.75rem 0.8rem;
+  background-image: radial-gradient(130% 190% at 20% 55%, color-mix(in oklab, var(--temp) 30%, transparent), transparent 66%);
+}
+.gauge.g-outside[role="button"] { cursor: pointer; transition: transform 0.15s ease; }
+.gauge.g-outside[role="button"]:active { transform: scale(0.97); }
+.gauge.g-outside:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.g-now { display: grid; gap: 1px; font-weight: 400; line-height: 1; }
+.g-now small { font-size: 0.56rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.gauge.g-outside .g-temp {
+  --ink-temp: linear-gradient(165deg, color-mix(in oklab, var(--temp) 40%, #fff), var(--temp) 72%);
+  padding-right: 0.08em;
+  font-size: 1.5rem; font-weight: 700; letter-spacing: -0.045em; font-variant-numeric: tabular-nums;
+  /* Le reflet (une bande claire, trois fois plus haute que les chiffres,
+     hors de vue au repos) par-dessus la couleur de la température. */
+  background-image: linear-gradient(transparent 41%, var(--shine) 50%, transparent 59%), var(--ink-temp);
+  background-size: 100% 300%, 100% 100%;
+  background-position: 0 0, 0 0;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 9px color-mix(in oklab, var(--temp) 45%, transparent));
+}
+.g-temp sup { position: relative; top: 0.14em; margin-left: 1px; font-size: 0.5em; vertical-align: top; line-height: 1; }
+.g-outside.frost .g-temp { --ink-temp: linear-gradient(165deg, #fff 20%, #c4ebff 50%, #6cc4f7); }
+.g-outside.up .g-temp { animation: g-rise 3.6s ease-in-out infinite; }
+.g-outside.down .g-temp { animation: g-fall 3.6s ease-in-out infinite; }
+@keyframes g-rise {
+  0% { background-position: 0 0, 0 0; }
+  60%, 100% { background-position: 0 100%, 0 0; }
+}
+@keyframes g-fall {
+  0% { background-position: 0 100%, 0 0; }
+  60%, 100% { background-position: 0 0, 0 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .g-outside .g-temp { animation: none !important; }
+}
+
+/* Le plan : à l'encre, sans halo ; le reflet reste. */
+[data-theme|="plan"] .gauge.g-outside { background-image: none; }
+[data-theme|="plan"] .gauge.g-outside .g-temp { --ink-temp: linear-gradient(var(--ink), var(--ink)); filter: none; }
 
 /* ---------- Une pièce, en fenêtre (étape 42) : au centre sur grand écran,
    montée du bas sur téléphone. */
