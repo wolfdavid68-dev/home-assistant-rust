@@ -226,6 +226,28 @@ pub fn check(domain: &str, service: &str, data: &Attributes, state: &State) -> R
         ("media_player", "select_source") => {
             one_of(state, data, "source", "source_list", "favori", true)
         }
+        // Le lecteur du tableau de bord (étape 92) : aller à un moment du
+        // morceau, lecture aléatoire, répétition.
+        ("media_player", "media_seek") => {
+            let duration = attr_number(state, "media_duration")
+                .filter(|d| *d > 0.0)
+                .unwrap_or(86_399.0);
+            in_range(
+                data,
+                "seek_position",
+                "position (s)",
+                (0.0, duration.min(86_399.0)),
+                true,
+            )
+        }
+        ("media_player", "shuffle_set") => match data.get("shuffle") {
+            Some(Value::Bool(_)) => Ok(()),
+            _ => Err("lecture aléatoire : true ou false (« shuffle »)".to_owned()),
+        },
+        ("media_player", "repeat_set") => match data.get("repeat").and_then(Value::as_str) {
+            Some("off" | "all" | "one") => Ok(()),
+            _ => Err("répétition : off, all ou one (« repeat »)".to_owned()),
+        },
         // Une annonce (étape 73) : le volume en %, un message court.
         ("tts", "speak") => {
             in_range(
@@ -505,6 +527,38 @@ mod tests {
             )
             .is_err()
         );
+        let playing = device(
+            "media_player.salle_a_manger",
+            json!({"media_duration": 200}),
+        );
+        let seek = |position: Value| {
+            check(
+                "media_player",
+                "media_seek",
+                &data(json!({ "seek_position": position })),
+                &playing,
+            )
+        };
+        assert!(seek(json!(42)).is_ok());
+        assert!(seek(json!(200)).is_ok());
+        let error = seek(json!(201)).unwrap_err();
+        assert!(error.contains("entre 0 et 200"), "{error}");
+        assert!(seek(json!(-1)).is_err());
+        assert!(seek(json!("42")).is_err());
+        let mode = |service, field, value: Value| {
+            let mut fields = serde_json::Map::new();
+            fields.insert(field, value);
+            check(
+                "media_player",
+                service,
+                &data(Value::Object(fields)),
+                &playing,
+            )
+        };
+        assert!(mode("shuffle_set", "shuffle".into(), json!(true)).is_ok());
+        assert!(mode("shuffle_set", "shuffle".into(), json!("oui")).is_err());
+        assert!(mode("repeat_set", "repeat".into(), json!("one")).is_ok());
+        assert!(mode("repeat_set", "repeat".into(), json!("toujours")).is_err());
         let tts = device("tts.annonces", json!({}));
         assert!(
             check(

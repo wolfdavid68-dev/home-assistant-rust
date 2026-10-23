@@ -147,6 +147,8 @@ function openAgenda(date, view) {
   if (view) setAgendaView(view, false);
   // Une pièce ouverte dans son onglet (house.js) : on la referme.
   if (typeof closeRoomTab === "function") closeRoomTab(false);
+  // La page Musique (musique.js) aussi.
+  if (typeof music !== "undefined" && music.open) closeMusic(false);
   agenda.open = true;
   $(".layout").hidden = true;
   $("#empty").hidden = true;
@@ -178,7 +180,7 @@ function agendaNav() {
   }
   $("#open-agenda").hidden = !any;
   dock.classList.toggle("active", agenda.open);
-  $("#dock-home").classList.toggle("active", !agenda.open && !(typeof roomTab !== "undefined" && roomTab.open));
+  $("#dock-home").classList.toggle("active", !agenda.open && !(typeof roomTab !== "undefined" && roomTab.open) && !(typeof music !== "undefined" && music.open));
   if (typeof renderTabs === "function" && typeof house !== "undefined" && house.pages?.length) renderTabs();
 }
 

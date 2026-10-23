@@ -360,6 +360,35 @@ pub(crate) async fn camera_image(
         .into_response())
 }
 
+/// `GET /api/media_cover/{key}` : une pochette (étape 92), rangée par
+/// l'intégration de musique. Elle ne change pas sous une même clé : le
+/// navigateur peut la garder.
+pub(crate) async fn media_cover(
+    State(state): State<Arc<ApiState>>,
+    _auth: Authenticated,
+    Path(key): Path<String>,
+) -> Result<Response, ApiError> {
+    use axum::http::{HeaderValue, header};
+    if !ha_core::covers::is_key(&key) {
+        return Err(ApiError::NotFound);
+    }
+    let image = state.core.covers.get(&key).ok_or(ApiError::NotFound)?;
+    Ok((
+        [
+            (
+                header::CONTENT_TYPE,
+                HeaderValue::from_static(image.content_type),
+            ),
+            (
+                header::CACHE_CONTROL,
+                HeaderValue::from_static("private, max-age=86400, immutable"),
+            ),
+        ],
+        Bytes::from_owner(image.bytes),
+    )
+        .into_response())
+}
+
 /// `POST /api/states/{entity_id}` : `{"state": "on", "attributes": {…}}`.
 /// Répond 201 si l'entité vient d'être créée, 200 sinon.
 pub(crate) async fn set_state(

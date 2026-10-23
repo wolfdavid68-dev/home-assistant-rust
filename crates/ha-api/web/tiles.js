@@ -578,6 +578,7 @@ function mediaTile(state) {
     "div",
     { id: tileId(state.entity_id), class: classes.join(" ") },
     tileHead(state, ICONS.speaker, text),
+    ...(typeof mediaNowPlaying === "function" ? [mediaNowPlaying(state)] : []),
     el("div", { class: "cover-buttons" },
       commandButton(state, "media_previous_track", "Morceau précédent", { icon: ICONS.previous }),
       playing

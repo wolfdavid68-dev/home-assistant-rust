@@ -6,6 +6,7 @@
 
 pub mod checks;
 pub mod commands;
+pub mod covers;
 mod entity_id;
 mod error;
 mod event;
@@ -75,6 +76,8 @@ pub struct Core {
     pub latencies: latency::Latencies,
     /// La dernière image de chaque caméra (voir [`images`]).
     pub images: std::sync::Arc<images::Images>,
+    /// Les pochettes de la musique (voir [`covers`]).
+    pub covers: std::sync::Arc<covers::Covers>,
 }
 
 impl Core {
@@ -90,6 +93,7 @@ impl Core {
             guard: Guard::default(),
             latencies: latency::Latencies::default(),
             images: std::sync::Arc::default(),
+            covers: std::sync::Arc::default(),
         }
     }
 }

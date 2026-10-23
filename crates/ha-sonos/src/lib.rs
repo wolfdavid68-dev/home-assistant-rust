@@ -6,12 +6,14 @@
 //! - [`discovery`] : les trouver sans réglage ;
 //! - [`player`] : une enceinte ⇄ une entité ;
 //! - [`favorites`] : les favoris Sonos, lancés d'un toucher ;
+//! - [`art`] : les pochettes, montrées par le lecteur du tableau de bord ;
 //! - [`announce`] : annoncer sans perdre la musique ;
 //! - [`clips`] : le petit serveur où les enceintes téléchargent l'annonce ;
 //! - [`Sonos`] : la boucle principale.
 
 pub mod announce;
 pub mod api;
+pub mod art;
 pub mod clips;
 pub mod discovery;
 pub mod favorites;
@@ -250,6 +252,8 @@ struct Shared {
     refresh: Notify,
     /// Les favoris Sonos, communs à toute la maison (étape 91).
     favorites: Mutex<Vec<Favorite>>,
+    /// Les pochettes en cours de téléchargement (étape 92).
+    art: Mutex<art::Wanted>,
 }
 
 impl Shared {
@@ -315,6 +319,7 @@ impl Sonos {
             locks: Mutex::new(HashMap::new()),
             refresh: Notify::new(),
             favorites: Mutex::new(Vec::new()),
+            art: Mutex::new(art::Wanted::default()),
         });
         publish_tts(&shared, &core, None);
         core.answers_commands(ID);
@@ -508,6 +513,12 @@ async fn poll_all(shared: &Arc<Shared>, core: &Core) -> bool {
         .map(|group| poll_group(&shared.api, group, &names));
     let results = futures_util::future::join_all(polls).await;
     let favorites = shared.favorites();
+    let mut hosts: Vec<String> = names.values().map(|s| s.host.clone()).collect();
+    hosts.sort();
+    let now = jiff::Timestamp::now();
+    // Les pochettes à aller chercher : celles qui jouent d'abord.
+    let mut wanted: Vec<(String, String)> = Vec::new();
+    let favorite_pictures = favorite_pictures(&favorites, &hosts, &core.covers, &mut wanted);
     let mut answered = false;
     for (uid, reading) in results.into_iter().flatten() {
         let Some(speaker) = names.get(&uid) else {
@@ -517,6 +528,26 @@ async fn poll_all(shared: &Arc<Shared>, core: &Core) -> bool {
             answered = true;
             let (state, mut attributes) = player::entity(&reading);
             favorites::describe(&favorites, &reading.media, &mut attributes);
+            if !favorite_pictures.is_empty() {
+                attributes.insert("source_pictures".into(), json!(favorite_pictures));
+            }
+            if state != "idle"
+                && let Some((key, url)) = playing_art(&reading, &favorites, &hosts)
+            {
+                if core.covers.contains(&key) {
+                    attributes.insert("entity_picture".into(), json!(art::picture(&key)));
+                } else {
+                    wanted.insert(0, (key, url));
+                }
+            }
+            let previous = core.states.get(&speaker.entity_id);
+            player::track_position(
+                &mut attributes,
+                state,
+                &reading,
+                previous.as_ref().map(|p| (p.state(), p.attributes())),
+                now,
+            );
             (state, attributes)
         } else {
             let mut attributes = Attributes::new();
@@ -531,7 +562,107 @@ async fn poll_all(shared: &Arc<Shared>, core: &Core) -> bool {
             warn!("Sonos : état refusé pour {} : {error}", speaker.entity_id);
         }
     }
+    fetch_covers(shared, core, wanted);
     answered
+}
+
+/// Au plus autant de pochettes de favoris.
+const MAX_FAVORITE_PICTURES: usize = 48;
+/// Au plus autant de pochettes téléchargées à la suite.
+const COVERS_PER_BATCH: usize = 8;
+
+/// Les pochettes des favoris déjà là (nom → adresse) ; les autres sont
+/// ajoutées à `wanted`.
+fn favorite_pictures(
+    favorites: &[Favorite],
+    hosts: &[String],
+    covers: &ha_core::covers::Covers,
+    wanted: &mut Vec<(String, String)>,
+) -> serde_json::Map<String, Value> {
+    let mut pictures = serde_json::Map::new();
+    let Some(first) = hosts.first() else {
+        return pictures;
+    };
+    for favorite in favorites.iter().take(MAX_FAVORITE_PICTURES) {
+        let Some(url) = favorite
+            .art
+            .as_deref()
+            .and_then(|a| art::resolve(a, first, hosts))
+        else {
+            continue;
+        };
+        let key = art::key(&url);
+        if covers.contains(&key) {
+            pictures.insert(favorite.title.clone(), json!(art::picture(&key)));
+        } else {
+            wanted.push((key, url));
+        }
+    }
+    pictures
+}
+
+/// La pochette de ce qui joue : celle du morceau, sinon celle de la radio,
+/// sinon celle du favori lancé. Rend (clé, adresse).
+fn playing_art(
+    reading: &Reading,
+    favorites: &[Favorite],
+    hosts: &[String],
+) -> Option<(String, String)> {
+    let found = art::in_metadata(&reading.position.metadata)
+        .or_else(|| art::in_metadata(&reading.media.metadata))
+        .or_else(|| {
+            favorites
+                .iter()
+                .find(|f| f.uri == reading.media.uri)
+                .and_then(|f| f.art.clone())
+        })?;
+    let url = art::resolve(&found, &reading.coordinator, hosts)?;
+    Some((art::key(&url), url))
+}
+
+/// Va chercher les pochettes manquantes, en arrière-plan, puis fait relire
+/// l'état pour qu'elles s'affichent.
+fn fetch_covers(shared: &Arc<Shared>, core: &Core, wanted: Vec<(String, String)>) {
+    let now = tokio::time::Instant::now();
+    let batch: Vec<(String, String)> = {
+        let mut state = shared.art.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut batch = Vec::new();
+        for (key, url) in wanted {
+            if batch.len() >= COVERS_PER_BATCH {
+                break;
+            }
+            if !batch.iter().any(|(k, _)| *k == key) && state.start(&key, now) {
+                batch.push((key, url));
+            }
+        }
+        batch
+    };
+    if batch.is_empty() {
+        return;
+    }
+    let shared = Arc::clone(shared);
+    let covers = Arc::clone(&core.covers);
+    tokio::spawn(async move {
+        let mut stored = false;
+        for (key, url) in batch {
+            let result = art::fetch(shared.api.http(), &url)
+                .await
+                .and_then(|bytes| covers.set(&key, &bytes).map(drop));
+            if let Err(error) = &result {
+                // Pas l'adresse dans le journal : elle peut contenir un jeton.
+                tracing::debug!("Sonos : pochette {key} : {error}");
+            }
+            stored |= result.is_ok();
+            shared
+                .art
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .finish(&key, result.is_ok(), tokio::time::Instant::now());
+        }
+        if stored {
+            shared.refresh.notify_one();
+        }
+    });
 }
 
 async fn poll_group(
@@ -543,11 +674,13 @@ async fn poll_group(
         return Vec::new();
     };
     let host = coordinator.host.as_str();
-    let (transport, position, media) = tokio::join!(
+    let (transport, position, media, play_mode) = tokio::join!(
         api.transport_state(host),
         api.position(host),
-        api.media(host)
+        api.media(host),
+        api.play_mode(host)
     );
+    let play_mode = play_mode.ok();
     let shared = match (transport, position, media) {
         (Ok(t), Ok(p), Ok(m)) => Some((t, p, m)),
         _ => None,
@@ -571,6 +704,8 @@ async fn poll_group(
                             .filter_map(|m| names.get(&m.uid))
                             .map(|s| s.entity_id.to_string())
                             .collect(),
+                        coordinator: host.to_owned(),
+                        play_mode: play_mode.clone(),
                     }),
                     _ => None,
                 }
@@ -691,6 +826,41 @@ async fn media_command(
             api.set_mute(&own, muted).await
         }
         "select_source" => return select_source(shared, entity_id, &coordinator, data).await,
+        "media_seek" => {
+            let seconds = data
+                .get("seek_position")
+                .and_then(Value::as_f64)
+                .filter(|p| p.is_finite() && (0.0..86_400.0).contains(p))
+                .ok_or_else(|| "seek_position : un nombre de secondes".to_owned())?;
+            api.seek(
+                &coordinator,
+                "REL_TIME",
+                &player::hms(whole_seconds(seconds)),
+            )
+            .await
+        }
+        "shuffle_set" | "repeat_set" => {
+            let current = api
+                .play_mode(&coordinator)
+                .await
+                .map_err(|error| error.to_string())?;
+            let (mut shuffle, mut repeat) = player::play_mode(&current).unwrap_or((false, "off"));
+            if service == "shuffle_set" {
+                shuffle = data
+                    .get("shuffle")
+                    .and_then(Value::as_bool)
+                    .ok_or_else(|| "shuffle : true ou false".to_owned())?;
+            } else {
+                let wanted = data.get("repeat").and_then(Value::as_str);
+                repeat = ["off", "all", "one"]
+                    .into_iter()
+                    .find(|r| Some(*r) == wanted)
+                    .ok_or_else(|| "repeat : off, all ou one".to_owned())?;
+            }
+            let mode = player::mode_name(shuffle, repeat)
+                .ok_or_else(|| "mode de lecture inconnu".to_owned())?;
+            api.set_play_mode(&coordinator, mode).await
+        }
         other => return Err(format!("media_player.{other} non pris en charge par Sonos")),
     };
     result.map_err(|error| error.to_string())
@@ -754,6 +924,17 @@ async fn pause(api: &Api, host: &str) -> Result<(), SonosError> {
         Err(SonosError::Refused(701)) => api.stop(host).await,
         other => other,
     }
+}
+
+/// Des secondes (déjà bornées entre 0 et un jour) en nombre entier.
+fn whole_seconds(value: f64) -> u64 {
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "borné"
+    )]
+    let value = value.round().clamp(0.0, 86_399.0) as u64;
+    value
 }
 
 fn percent(value: f64) -> u8 {

@@ -73,6 +73,9 @@ pub struct Position {
     pub metadata: String,
     /// Où on en est dans le morceau : `0:01:23`.
     pub rel_time: String,
+    /// La durée du morceau : `0:03:45` (vide ou `NOT_IMPLEMENTED` pour
+    /// une radio).
+    pub duration: String,
 }
 
 /// Ce qui est chargé (`GetMediaInfo`) : la file d'attente, une radio, la TV…
@@ -94,6 +97,13 @@ impl Api {
         Ok(Self {
             http: ha_tls::web_client(false)?,
         })
+    }
+
+    /// Le client HTTP, pour aller chercher les pochettes (voir
+    /// [`crate::art`]).
+    #[must_use]
+    pub fn http(&self) -> &reqwest::Client {
+        &self.http
     }
 
     /// Une action SOAP : les arguments, puis la réponse XML.
@@ -200,6 +210,7 @@ impl Api {
             track_uri: field("TrackURI"),
             metadata: field("TrackMetaData"),
             rel_time: field("RelTime"),
+            duration: field("TrackDuration"),
         })
     }
 
@@ -274,6 +285,20 @@ impl Api {
     /// Va au morceau `TRACK_NR` ou au temps `REL_TIME` (`0:01:23`).
     pub async fn seek(&self, host: &str, unit: &str, target: &str) -> Result<(), SonosError> {
         self.av(host, "Seek", &[("Unit", unit), ("Target", target)])
+            .await
+            .map(drop)
+    }
+
+    /// Le mode de lecture : `NORMAL`, `SHUFFLE`, `REPEAT_ALL`… (étape 92).
+    pub async fn play_mode(&self, host: &str) -> Result<String, SonosError> {
+        let answer = self.av(host, "GetTransportSettings", &[]).await?;
+        xml::element_text(&answer, "PlayMode")
+            .map(|mode| mode.trim().to_owned())
+            .ok_or(SonosError::Unreadable("mode de lecture absent"))
+    }
+
+    pub async fn set_play_mode(&self, host: &str, mode: &str) -> Result<(), SonosError> {
+        self.av(host, "SetPlayMode", &[("NewPlayMode", mode)])
             .await
             .map(drop)
     }

@@ -619,6 +619,7 @@ async fn dashboard_files_are_served_with_security_headers() {
         ("/colis.js", "text/javascript; charset=utf-8"),
         ("/voix.js", "text/javascript; charset=utf-8"),
         ("/pretes.js", "text/javascript; charset=utf-8"),
+        ("/musique.js", "text/javascript; charset=utf-8"),
         ("/ecoute.js", "text/javascript; charset=utf-8"),
         ("/house.svg", "image/svg+xml"),
         ("/style.css", "text/css; charset=utf-8"),
@@ -728,6 +729,7 @@ fn dashboard_never_uses_inner_html() {
         ("colis.js", include_str!("../web/colis.js")),
         ("voix.js", include_str!("../web/voix.js")),
         ("pretes.js", include_str!("../web/pretes.js")),
+        ("musique.js", include_str!("../web/musique.js")),
         ("ecoute.js", include_str!("../web/ecoute.js")),
         ("sw.js", include_str!("../web/sw.js")),
     ];

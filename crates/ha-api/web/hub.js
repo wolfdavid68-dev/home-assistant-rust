@@ -82,10 +82,11 @@ function hideHub() {
 }
 
 /** Retour à l'accueil (account.js, 2 minutes sans contact) : la vue hub
- *  revient, agenda refermé. */
+ *  revient, agenda et musique refermés. */
 function hubBack() {
   hub.away = false;
   if (typeof agenda !== "undefined" && agenda.open) closeAgenda();
+  if (typeof music !== "undefined" && music.open) closeMusic();
   updateHub();
 }
 

@@ -171,6 +171,8 @@ const live = {
             refreshEntityList();
             // Un colis annoncé pendant que la tablette était déconnectée (colis.js).
             if (typeof parcelChanged === "function") parcelChanged("sensor.colis_amazon", null, entities.get("sensor.colis_amazon"));
+            // Les enceintes : le bouton « Musique », et la page si elle est ouverte.
+            if (typeof musicLoaded === "function") musicLoaded();
           }
           break;
         case "event":
@@ -207,6 +209,8 @@ function onStateChanged({ entity_id, old_state, new_state }) {
   if (typeof doorbellChanged === "function") doorbellChanged(entity_id, old_state, new_state);
   // Les colis Amazon (colis.js, étape 87) : « Plaid va arriver aujourd'hui ».
   if (typeof parcelChanged === "function") parcelChanged(entity_id, old_state, new_state);
+  // Le lecteur de musique (musique.js, étape 92) : la page suit l'enceinte.
+  if (typeof musicChanged === "function") musicChanged(entity_id, old_state, new_state);
   scheduleHome();
   // La tuile est dans les sections, et peut-être aussi dans la fenêtre d'une
   // pièce (house.js) : on remplace chacune.

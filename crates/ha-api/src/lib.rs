@@ -192,6 +192,7 @@ pub fn router(state: Arc<ApiState>) -> Router {
         )
         .route("/api/history/{entity_id}", get(rest::history))
         .route("/api/camera_proxy/{entity_id}", get(rest::camera_image))
+        .route("/api/media_cover/{key}", get(rest::media_cover))
         .route("/api/history/{entity_id}/series", get(rest::history_series))
         .route("/api/statistics/{entity_id}", get(rest::statistics))
         .route("/api/logbook", get(rest::logbook))

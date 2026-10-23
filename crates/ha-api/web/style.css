@@ -716,6 +716,11 @@ input[type="range"]::-moz-range-track { background: transparent; }
   border-radius: 14px;
 }
 .dock svg { width: 22px; height: 22px; }
+/* Jusqu'à 7 boutons (avec Musique) : un nom trop long est coupé, sans
+   déborder sur le voisin. */
+.dock :is(a, button) { min-width: 0; }
+.dock span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 420px) { .dock :is(a, button) { font-size: 0.64rem; } }
 .dock .active { color: var(--accent); font-weight: 600; }
 .dock :focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
 @media (min-width: 760px) { .dock { display: none; } }
@@ -3173,3 +3178,253 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 /* Une machine (lave-linge SmartThings, étape 86) : la progression du cycle. */
 .machine-progress { --progress: 0%; height: 6px; border-radius: 999px; background: var(--card-2); overflow: hidden; }
 .machine-progress span { display: block; height: 100%; width: var(--progress); background: var(--accent); border-radius: inherit; }
+
+/* ---------- Le lecteur de musique (étape 92, musique.js) ---------- */
+/* La pochette en grand, son reflet flou derrière toute la page (--art, posé
+   par le script), la barre de progression, les boutons et les favoris. */
+
+.music-view {
+  position: relative;
+  isolation: isolate;
+  max-width: 1760px;
+  margin: 0.6rem auto 0;
+  padding: 0 var(--gutter-r) 7rem var(--gutter);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.music-view[hidden] { display: none; }
+.music-backdrop {
+  position: fixed;
+  inset: -10%;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--art, none) center / cover no-repeat;
+  filter: blur(70px) saturate(1.5);
+  opacity: 0.38;
+  transition: background-image 0.6s ease;
+}
+:root[data-theme="dark"] .music-backdrop { opacity: 0.3; }
+
+.music-card {
+  background: color-mix(in srgb, var(--card) 84%, transparent);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px;
+  min-width: 0;
+}
+.music-card[hidden], .music-progress[hidden], .music-speakers[hidden] { display: none; }
+
+/* Les enceintes, à choisir. */
+.music-speakers { display: flex; flex-wrap: wrap; gap: 8px; }
+.music-speaker {
+  display: inline-flex; align-items: center; gap: 8px;
+  min-height: 44px; padding: 0 16px;
+  border: 0; border-radius: 999px;
+  background: color-mix(in srgb, var(--card) 84%, transparent);
+  box-shadow: var(--shadow);
+  font-weight: 500;
+}
+.music-speaker svg { width: 17px; height: 17px; }
+.music-speaker[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+
+/* Trois petites barres qui dansent : « en lecture ». */
+.music-eq { display: inline-flex; align-items: flex-end; gap: 2px; height: 12px; }
+.music-eq i { width: 3px; height: 100%; border-radius: 2px; background: currentColor; transform-origin: bottom; animation: music-eq 0.9s ease-in-out infinite; }
+.music-eq i:nth-child(2) { animation-delay: -0.3s; }
+.music-eq i:nth-child(3) { animation-delay: -0.6s; }
+@keyframes music-eq { 0%, 100% { transform: scaleY(0.3); } 50% { transform: scaleY(1); } }
+
+/* En cours : la pochette, le titre, la barre, les boutons, le volume. */
+.music-now { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 22px; }
+.music-art {
+  position: relative;
+  justify-self: center;
+  width: min(100%, 360px);
+  aspect-ratio: 1;
+  border-radius: 18px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: var(--card-2);
+  color: var(--muted);
+  box-shadow: var(--shadow-float);
+  transition: transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.music-now:not(.playing) .music-art { transform: scale(0.94); }
+.music-art > svg { width: 34%; height: 34%; stroke-width: 1.5; opacity: 0.6; }
+:is(.music-art, .music-fav-art, .media-now-art) img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+}
+.music-info { display: grid; gap: 4px; min-width: 0; text-align: center; }
+.music-where { margin: 0; font-size: 0.82rem; color: var(--muted); font-weight: 500; }
+.music-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.45rem, 2.3vw, 2.2rem);
+  line-height: 1.12;
+  letter-spacing: -0.01em;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.music-artist {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--text-2);
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+}
+.music-artist:empty { display: none; }
+
+/* La barre de progression : un trait fin, mais 28 px à toucher. */
+.music-progress { display: grid; gap: 4px; }
+.music-view input[type="range"] {
+  height: 28px;
+  border-radius: 0;
+  background: linear-gradient(90deg, var(--accent) 0 var(--fill, 0%), color-mix(in srgb, var(--text) 14%, transparent) var(--fill, 0%) 100%) center / 100% 6px no-repeat;
+}
+.music-view input[type="range"]::-webkit-slider-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--card); }
+.music-view input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--card); }
+.music-view input[type="range"]:disabled { cursor: default; }
+.music-view input[type="range"]:disabled::-webkit-slider-thumb { opacity: 0; }
+.music-view input[type="range"]:disabled::-moz-range-thumb { opacity: 0; }
+.music-progress.live input[type="range"] { opacity: 0.5; }
+.music-times { display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* Les boutons : aléatoire, précédent, lecture (en grand), suivant, répétition. */
+.music-transport { display: flex; align-items: center; justify-content: center; gap: clamp(6px, 2.2vw, 22px); }
+.music-transport button {
+  display: grid; place-items: center;
+  border: 0; border-radius: 50%;
+  background: transparent;
+  transition: transform 0.12s ease, background-color 0.2s ease;
+}
+.music-transport button:active:not(:disabled) { transform: scale(0.92); }
+.music-transport button:disabled { opacity: 0.35; cursor: default; }
+.music-skip { width: 56px; height: 56px; }
+.music-skip svg { width: 28px; height: 28px; }
+.music-skip svg path { fill: currentColor; }
+.music-transport .music-play { width: 76px; height: 76px; background: var(--accent); color: var(--accent-ink); box-shadow: var(--shadow-float); }
+.music-play svg { width: 32px; height: 32px; }
+.music-play svg path { fill: currentColor; }
+.music-mode { position: relative; width: 48px; height: 48px; color: var(--muted); }
+.music-mode svg { width: 21px; height: 21px; }
+.music-mode[aria-pressed="true"] { color: var(--accent); }
+.music-mode[aria-pressed="true"]::after {
+  content: ""; position: absolute; bottom: 5px; left: 50%;
+  width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: currentColor;
+}
+@media (hover: hover) {
+  .music-skip:hover:not(:disabled), .music-mode:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 8%, transparent); }
+}
+
+/* Le volume. */
+.music-volume { display: flex; align-items: center; gap: 10px; }
+.music-mute { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: var(--text-2); }
+.music-mute svg { width: 22px; height: 22px; }
+.music-mute[aria-pressed="true"] { color: var(--alert); }
+.music-mute:disabled { opacity: 0.35; cursor: default; }
+.music-volume input[type="range"] { flex: 1; min-width: 0; }
+.music-volume-value { flex: none; min-width: 3.2em; text-align: right; color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+
+/* Les favoris : des pochettes carrées, un toucher les lance. */
+.music-favorites h3 { margin: 0 0 12px; font-size: 1.05rem; font-weight: 600; }
+.music-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 16px 14px; }
+.music-fav {
+  position: relative;
+  display: grid; gap: 8px; align-content: start;
+  padding: 0; border: 0; background: transparent;
+  text-align: left; min-width: 0;
+}
+.music-fav-art {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 14px;
+  overflow: hidden;
+  display: grid; place-items: center;
+  background: var(--card-2);
+  color: var(--muted);
+  box-shadow: var(--shadow);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.music-fav-art > svg { width: 36%; height: 36%; stroke-width: 1.5; opacity: 0.6; }
+.music-fav-name {
+  font-size: 0.88rem; font-weight: 500; line-height: 1.25;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.music-fav[aria-pressed="true"] .music-fav-art { box-shadow: 0 0 0 3px var(--accent), var(--shadow-float); }
+.music-fav[aria-pressed="true"] .music-fav-name { color: var(--accent); font-weight: 600; }
+.music-fav .music-eq {
+  position: absolute; top: 8px; right: 8px;
+  height: 22px; padding: 5px 6px; box-sizing: border-box;
+  border-radius: 999px; background: var(--accent); color: var(--accent-ink);
+}
+.music-fav:active:not(:disabled) .music-fav-art { transform: scale(0.97); }
+.music-fav:disabled { opacity: 0.5; cursor: default; }
+@media (hover: hover) {
+  .music-fav:hover:not(:disabled) .music-fav-art { transform: translateY(-3px); box-shadow: var(--shadow-float); }
+}
+.music-empty { margin: 2rem auto; color: var(--muted); }
+.music-empty[hidden] { display: none; }
+
+/* Un grand écran : la pochette à gauche, le reste à droite ; les favoris à côté. */
+@media (min-width: 760px) {
+  .music-now { grid-template-columns: minmax(200px, 42%) minmax(0, 1fr); column-gap: 28px; align-items: center; }
+  .music-art { grid-row: 1 / span 4; width: 100%; max-width: 420px; }
+  .music-info { text-align: left; }
+  .music-transport { justify-content: flex-start; }
+}
+@media (min-width: 1000px) {
+  [data-layout="board"] .music-view { padding-left: calc(68px + var(--gutter)); padding-bottom: 16px; }
+  .music-view { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }
+  .music-speakers { grid-column: 1 / -1; }
+  .music-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+}
+
+/* Sur la tuile de l'enceinte : la pochette en petit, qui ouvre le lecteur. */
+.media-now {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; min-height: 56px; padding: 6px 10px 6px 6px;
+  border: 0; border-radius: 14px;
+  background: var(--card-2);
+  text-align: left;
+}
+.media-now-art {
+  position: relative; flex: none;
+  width: 44px; height: 44px; border-radius: 10px; overflow: hidden;
+  display: grid; place-items: center;
+  background: var(--card); color: var(--muted);
+}
+.media-now-art > svg { width: 20px; height: 20px; }
+.media-now-text { flex: 1; min-width: 0; display: grid; }
+.media-now-text > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.media-now-text b { font-weight: 600; font-size: 0.92rem; }
+.media-now-text span { font-size: 0.8rem; color: var(--muted); }
+.media-now-text span:empty { display: none; }
+.media-now > svg { flex: none; width: 18px; height: 18px; color: var(--muted); }
+
+/* Le thème plan : des angles nets, des traits à l'encre. */
+[data-theme|="plan"] :is(.music-card, .music-speaker) { border-radius: 4px; box-shadow: inset 0 0 0 1px var(--ink-line); background: var(--card); }
+[data-theme|="plan"] :is(.music-art, .music-fav-art, .media-now, .media-now-art) { border-radius: 4px; }
+[data-theme|="plan"] .music-backdrop { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .music-eq i { animation: none; transform: scaleY(0.7); }
+  .music-art, .music-fav-art, .music-backdrop { transition: none; }
+  .music-now:not(.playing) .music-art { transform: none; }
+}
+.music-hint { margin: 0; color: var(--muted); line-height: 1.45; max-width: 52ch; }
+.music-hint[hidden], .music-grid[hidden] { display: none; }
+/* Le grand écran du salon (1920 × 1080) : une pochette plus grande. */
+@media (min-width: 1400px) {
+  .music-view { grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); }
+  .music-now { grid-template-columns: minmax(260px, 46%) minmax(0, 1fr); padding: 28px; column-gap: 36px; }
+  .music-art { max-width: 540px; }
+  .music-title { font-size: 2.6rem; }
+  .music-artist { font-size: 1.15rem; }
+}

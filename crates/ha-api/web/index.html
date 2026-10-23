@@ -31,6 +31,7 @@
   <script src="/colis.js" defer></script>
   <script src="/voix.js" defer></script>
   <script src="/pretes.js" defer></script>
+  <script src="/musique.js" defer></script>
 </head>
 <body>
   <!-- Écran de connexion -->
@@ -139,6 +140,8 @@
     <!-- Une pièce dans son onglet (mise en page « tableau », étape 90) : le
          contenu de la fenêtre « room » y est déplacé (house.js). -->
     <section id="room-view" class="room-view" aria-label="Pièce" hidden></section>
+    <!-- Le lecteur de musique (musique.js, étape 92) : rempli par le script. -->
+    <section id="music-view" class="music-view" aria-label="Musique" hidden></section>
     <dialog id="agenda-event" class="history-dialog agenda-event" aria-labelledby="agenda-event-title"></dialog>
     <dialog id="agenda-new" class="history-dialog agenda-new" aria-labelledby="agenda-new-title">
       <form id="agenda-new-form" method="dialog">
@@ -160,6 +163,7 @@
     <nav class="dock" aria-label="Navigation">
       <a href="#" id="dock-home" class="active"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg><span>Maison</span></a>
       <button id="dock-agenda" type="button" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v15H4z"/><path d="M4 10h16"/><path d="M8 3v4"/><path d="M16 3v4"/></svg><span>Agenda</span></button>
+      <button id="dock-music" type="button" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l12-2v13"/><path d="M6 15a3 3 0 1 0 0 6 3 3 0 1 0 0-6z"/><path d="M18 13a3 3 0 1 0 0 6 3 3 0 1 0 0-6z"/></svg><span>Musique</span></button>
       <button id="dock-logbook" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg><span>Journal</span></button>
       <button id="dock-automations" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v3"/><path d="M12 18v3"/><path d="M3 12h3"/><path d="M18 12h3"/><path d="M8 12a4 4 0 1 0 8 0 4 4 0 1 0-8 0"/></svg><span>Automatismes</span></button>
       <button id="dock-energy" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg><span>Énergie</span></button>

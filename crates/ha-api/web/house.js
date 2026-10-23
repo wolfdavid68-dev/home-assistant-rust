@@ -1000,15 +1000,17 @@ function renderTabs() {
   const nav = $("#board-tabs");
   // L'agenda ou une pièce ouverts : aucun onglet de maison n'est l'onglet actif.
   const agendaOpen = typeof agenda !== "undefined" && agenda.open;
+  const musicOpen = typeof music !== "undefined" && music.open;
   const roomOpen = roomTab.open ? roomView.name : null;
   const specs = house.pages.map((page) => ({
     key: `page:${page.id}`,
     label: page.name,
-    current: !agendaOpen && roomOpen === null && page.id === house.config?.id,
+    current: !agendaOpen && !musicOpen && roomOpen === null && page.id === house.config?.id,
     open: () => {
       const wasRoom = roomTab.open;
       closeRoomTab(false);
       if (agendaOpen) closeAgenda();
+      else if (musicOpen) closeMusic();
       else if (wasRoom) renderAll();
       if (page.id !== house.config?.id) selectPage(page.id);
     },
@@ -1027,6 +1029,9 @@ function renderTabs() {
   // L'onglet Agenda, s'il y a un agenda (étape 75).
   const withAgenda = typeof agendaCalendars === "function" && agendaCalendars().length > 0;
   if (withAgenda) specs.push({ key: "agenda", label: "Agenda", icon: ICONS.calendar, current: agendaOpen, open: () => openAgenda() });
+  // L'onglet Musique, s'il y a une enceinte (étape 92, musique.js).
+  const withMusic = typeof musicPlayers === "function" && musicPlayers().length > 0;
+  if (withMusic) specs.push({ key: "music", label: "Musique", icon: ICONS.music, current: musicOpen, open: () => openMusic() });
 
   // Rien n'a changé : on garde les boutons (et le focus du clavier).
   const signature = specs.map((s) => `${s.key}|${s.label}|${s.current ? 1 : 0}|${s.lit ? 1 : 0}`).join("\n");
@@ -1390,6 +1395,7 @@ function roomShown() {
 
 function openRoomTab(name) {
   if (typeof agenda !== "undefined" && agenda.open) closeAgenda(false);
+  if (typeof music !== "undefined" && music.open) closeMusic(false);
   if ($("#room").open) $("#room").close();
   roomView.name = name;
   if (!roomArea()) {
