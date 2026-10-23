@@ -13,6 +13,13 @@
 #
 # Construire : docker build -t ha-server .
 # (Le plus simple est de passer par compose.yaml : docker compose up -d --build)
+#
+# L'image de test « main » (workflow image-main.yml) donne un programme
+# déjà compilé, en gardant les dépendances d'une fois sur l'autre :
+# docker build --build-arg SOURCE=fourni -f Dockerfile <dossier avec ha-server et vide/>
+
+# D'où vient le programme : « builder » (compilé ici) ou « fourni ».
+ARG SOURCE=builder
 
 FROM rust:1.99-slim-bookworm@sha256:2c3a22f0a5533ea2dd5a16627bc841228151faa2d4de2644ac9987e4a2f1f2fa AS builder
 
@@ -31,17 +38,26 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     && cp target/release/ha-server /usr/local/bin/ha-server \
     && mkdir /data-empty
 
+# Le programme déjà compilé (image de test « main ») : dans le dossier de
+# construction, `ha-server` et un dossier vide `vide/`.
+FROM scratch AS fourni
+COPY ha-server /usr/local/bin/ha-server
+COPY vide/ /data-empty/
+
+# Seule l'étape choisie est construite (BuildKit saute les autres).
+FROM ${SOURCE} AS binaire
+
 FROM gcr.io/distroless/cc-debian12:nonroot@sha256:9dac0a79194e45a7da0158a9c6da57b217585af0786db3845d1f0ec1a0dd182f
 
-COPY --from=builder /usr/local/bin/ha-server /usr/local/bin/ha-server
+COPY --from=binaire /usr/local/bin/ha-server /usr/local/bin/ha-server
 # Le dossier des données appartient à l'utilisateur sans privilège
 # « nonroot » (n° 65532) sous lequel tourne le programme.
-COPY --from=builder --chown=65532:65532 /data-empty /data
+COPY --from=binaire --chown=65532:65532 /data-empty /data
 # La clé qui chiffre les secrets de la base est rangée à part : une
 # sauvegarde de /data seule ne suffit pas à lire les jetons des appareils.
-COPY --from=builder --chown=65532:65532 /data-empty /cle
+COPY --from=binaire --chown=65532:65532 /data-empty /cle
 # Les sauvegardes automatiques de chaque nuit, dans leur propre volume.
-COPY --from=builder --chown=65532:65532 /data-empty /sauvegardes
+COPY --from=binaire --chown=65532:65532 /data-empty /sauvegardes
 
 ENV HA_DB_PATH=/data/ha.db \
     HA_KEY_PATH=/cle/ha.key \
