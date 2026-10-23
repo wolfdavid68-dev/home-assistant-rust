@@ -1731,7 +1731,7 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
    ====================================================================== */
 
 /* Ce qui n'existe que dans les styles « plan » et la mise en page « tableau ». */
-.house, .gauges, .title-block, .room-hum, .room-line, .board-covers, .house-actions, .board-people, .board-charts, .board-music { display: none; }
+.house, .gauges, .title-block, .room-hum, .room-line, .board-covers, .house-actions, .board-people, .board-charts, .board-music, .board-heating { display: none; }
 
 :root[data-theme="plan"] {
   --bar: #e4e8ef;
@@ -2107,6 +2107,9 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .person-chip.home .person-avatar { background: var(--accent); color: var(--accent-ink); box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--ok); }
 [data-theme|="plan"] .person-chip { border: 1px solid var(--ink-line); box-shadow: none; border-radius: 4px; }
 [data-layout="board"] .board-covers:not([hidden]) { display: grid; gap: 0.75rem; min-width: 0; }
+/* Le chauffage, sous la musique : une zone par ligne, dans la colonne. */
+[data-layout="board"] .board-heating:not([hidden]) { display: block; min-width: 0; }
+[data-layout="board"] .board-heating .cover-rows { grid-template-columns: minmax(0, 1fr); gap: 6px; }
 [data-layout="board"] .house-actions:not([hidden]) { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 8px; }
 /* Sous le dessin, seulement « Régler » (pour l'administrateur), discret. */
 [data-layout="board"] .house-caption { justify-content: flex-end; }
@@ -2252,7 +2255,8 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
      sont dans leurs onglets (étape 90), il ne reste que l'essentiel. */
   [data-layout="board"] .overview { align-self: stretch; min-height: 0; overflow: hidden; align-content: start; gap: 10px; }
   /* Si la colonne manque de hauteur, c'est la liste du jour qui cède la
-     place (elle défile) : la semaine et le lecteur de musique restent entiers. */
+     place (elle défile) : la semaine, le lecteur de musique et le chauffage
+     restent entiers. */
   [data-layout="board"] .overview { grid-auto-rows: minmax(0, auto); }
   [data-layout="board"] .board-agenda:not([hidden]) { min-height: 0; grid-template-rows: minmax(0, auto) auto; }
   [data-layout="board"] .agenda-home-today { min-height: 0; overflow: hidden auto; overscroll-behavior: contain; scrollbar-width: none; }

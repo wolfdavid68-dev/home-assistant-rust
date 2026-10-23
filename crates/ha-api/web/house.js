@@ -1273,7 +1273,7 @@ function coverRow(state) {
 }
 
 // ---------------------------------------------------------------- Chauffage en lignes
-// Au-dessus des volets : chaque zone (Etage, RdC…) et l'eau chaude, avec la
+// Dans la colonne de gauche, sous la musique : chaque zone (Etage, RdC…) et l'eau chaude, avec la
 // température mesurée, la consigne et ses boutons −/+.
 
 const degreesText = (value) => `${number.format(value)} °C`;
@@ -1334,8 +1334,18 @@ function heatingStates(inPage) {
       || nameOf(a).localeCompare(nameOf(b), "fr"));
 }
 
-/** Le chauffage, puis les volets (pas les portes de garage ni les portails,
- *  ni ceux déjà en boutons rapides), en lignes sous le dessin. */
+/** Le chauffage, sous le lecteur de musique. */
+function renderHeating() {
+  const box = $("#board-heating");
+  const inPage = pageAreas === null ? null
+    : new Set(areas.filter((a) => pageAreas.has(a.name)).flatMap((a) => a.entities.map((e) => e.entity_id)));
+  const heating = heatingStates(inPage);
+  box.hidden = heating.length === 0;
+  box.replaceChildren(...(heating.length === 0 ? [] : [el("div", { class: "cover-rows" }, ...heating.map(heatingRow))]));
+}
+
+/** Les volets (pas les portes de garage ni les portails, ni ceux déjà en
+ *  boutons rapides), en lignes sous le dessin. */
 function renderCovers() {
   const box = $("#board-covers");
   const inPage = pageAreas === null ? null
@@ -1344,11 +1354,8 @@ function renderCovers() {
     .filter((s) => domainOf(s) === "cover" && !ALERT_COVERS.includes(s.attributes.device_class)
       && !house.config.actions.includes(s.entity_id) && (inPage === null || inPage.has(s.entity_id)))
     .sort((a, b) => nameOf(a).localeCompare(nameOf(b), "fr"));
-  const heating = heatingStates(inPage);
-  box.hidden = covers.length === 0 && heating.length === 0;
-  const title = heating.length === 0 ? "Volets" : covers.length === 0 ? "Chauffage" : "Chauffage et volets";
-  box.setAttribute("aria-label", title);
-  box.replaceChildren(el("h2", { text: title }), el("div", { class: "cover-rows" }, ...heating.map(heatingRow), ...covers.map(coverRow)));
+  box.hidden = covers.length === 0;
+  box.replaceChildren(el("h2", { text: "Volets" }), el("div", { class: "cover-rows" }, ...covers.map(coverRow)));
 }
 
 // ---------------------------------------------------------------- Courbes
@@ -1471,6 +1478,7 @@ function renderHouse() {
     $("#board-charts").hidden = true;
     $("#board-agenda").hidden = true;
     $("#board-music").hidden = true;
+    $("#board-heating").hidden = true;
     return;
   }
   if (house.loading === null && token.get()) loadHouse();
@@ -1479,6 +1487,7 @@ function renderHouse() {
   renderGauges();
   renderActions();
   renderCovers();
+  renderHeating();
   renderPeople();
   renderCharts();
   if (typeof renderBoardAgenda === "function") renderBoardAgenda();
