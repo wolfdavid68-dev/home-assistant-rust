@@ -4,16 +4,21 @@
 //! Chaque enceinte a trois « services » qui nous servent :
 //! - `AVTransport` : lecture, pause, morceau suivant, ce qui est chargé ;
 //! - `RenderingControl` : volume et sourdine ;
-//! - `ZoneGroupTopology` : la liste de toutes les enceintes et leurs groupes.
+//! - `ZoneGroupTopology` : la liste de toutes les enceintes et leurs groupes ;
+//! - `ContentDirectory` : les favoris (étape 91).
 
 use std::time::Duration;
 
+use crate::favorites::{self, Favorite};
 use crate::xml;
 
 /// Port de l'API locale des Sonos.
 pub const PORT: u16 = 1400;
 /// Une enceinte qui ne répond pas en 3 s est considérée injoignable.
 const CALL_TIMEOUT: Duration = Duration::from_secs(3);
+/// Ajouter une playlist à la file d'attente : l'enceinte va la chercher
+/// chez le service de musique, c'est plus long.
+const QUEUE_TIMEOUT: Duration = Duration::from_secs(20);
 /// Taille maximale d'une réponse (la topologie d'une grande maison fait
 /// quelques dizaines de Ko).
 const MAX_RESPONSE: usize = 512 * 1024;
@@ -35,6 +40,7 @@ pub enum Service {
     AvTransport,
     RenderingControl,
     ZoneGroupTopology,
+    ContentDirectory,
 }
 
 impl Service {
@@ -43,6 +49,7 @@ impl Service {
             Self::AvTransport => "/MediaRenderer/AVTransport/Control",
             Self::RenderingControl => "/MediaRenderer/RenderingControl/Control",
             Self::ZoneGroupTopology => "/ZoneGroupTopology/Control",
+            Self::ContentDirectory => "/MediaServer/ContentDirectory/Control",
         }
     }
 
@@ -51,6 +58,7 @@ impl Service {
             Self::AvTransport => "urn:schemas-upnp-org:service:AVTransport:1",
             Self::RenderingControl => "urn:schemas-upnp-org:service:RenderingControl:1",
             Self::ZoneGroupTopology => "urn:schemas-upnp-org:service:ZoneGroupTopology:1",
+            Self::ContentDirectory => "urn:schemas-upnp-org:service:ContentDirectory:1",
         }
     }
 }
@@ -96,6 +104,18 @@ impl Api {
         action: &str,
         args: &[(&str, &str)],
     ) -> Result<String, SonosError> {
+        self.call_within(host, service, action, args, CALL_TIMEOUT)
+            .await
+    }
+
+    async fn call_within(
+        &self,
+        host: &str,
+        service: Service,
+        action: &str,
+        args: &[(&str, &str)],
+        timeout: Duration,
+    ) -> Result<String, SonosError> {
         let mut arguments = String::new();
         for (name, value) in args {
             arguments.push('<');
@@ -117,7 +137,7 @@ impl Api {
         let response = self
             .http
             .post(&url)
-            .timeout(CALL_TIMEOUT)
+            .timeout(timeout)
             .header("Content-Type", "text/xml; charset=\"utf-8\"")
             .header("SOAPACTION", format!("\"{}#{action}\"", service.urn()))
             .body(body)
@@ -256,6 +276,60 @@ impl Api {
         self.av(host, "Seek", &[("Unit", unit), ("Target", target)])
             .await
             .map(drop)
+    }
+
+    /// Les favoris de la maison (étape 91).
+    pub async fn favorites(&self, host: &str) -> Result<Vec<Favorite>, SonosError> {
+        let count = favorites::MAX.to_string();
+        let answer = self
+            .call(
+                host,
+                Service::ContentDirectory,
+                "Browse",
+                &[
+                    ("ObjectID", "FV:2"),
+                    ("BrowseFlag", "BrowseDirectChildren"),
+                    ("Filter", "*"),
+                    ("StartingIndex", "0"),
+                    ("RequestedCount", &count),
+                    ("SortCriteria", ""),
+                ],
+            )
+            .await?;
+        let didl = xml::element_text(&answer, "Result")
+            .ok_or(SonosError::Unreadable("favoris absents"))?;
+        Ok(favorites::parse(&didl))
+    }
+
+    /// Vide la file d'attente.
+    pub async fn clear_queue(&self, host: &str) -> Result<(), SonosError> {
+        self.av(host, "RemoveAllTracksFromQueue", &[])
+            .await
+            .map(drop)
+    }
+
+    /// Ajoute une playlist, un album ou un morceau à la fin de la file.
+    pub async fn add_to_queue(
+        &self,
+        host: &str,
+        uri: &str,
+        metadata: &str,
+    ) -> Result<(), SonosError> {
+        self.call_within(
+            host,
+            Service::AvTransport,
+            "AddURIToQueue",
+            &[
+                ("InstanceID", "0"),
+                ("EnqueuedURI", uri),
+                ("EnqueuedURIMetaData", metadata),
+                ("DesiredFirstTrackNumberEnqueued", "0"),
+                ("EnqueueAsNext", "0"),
+            ],
+            QUEUE_TIMEOUT,
+        )
+        .await
+        .map(drop)
     }
 
     /// La liste des groupes et de leurs enceintes (XML).

@@ -222,6 +222,10 @@ pub fn check(domain: &str, service: &str, data: &Attributes, state: &State) -> R
         ("media_player", "volume_set") => {
             in_range(data, "volume_level", "volume (0 à 1)", (0.0, 1.0), true)
         }
+        // Un favori Sonos (étape 91) parmi ceux de l'enceinte.
+        ("media_player", "select_source") => {
+            one_of(state, data, "source", "source_list", "favori", true)
+        }
         // Une annonce (étape 73) : le volume en %, un message court.
         ("tts", "speak") => {
             in_range(
@@ -477,6 +481,30 @@ mod tests {
         .unwrap_err();
         assert!(error.contains("entre 0 et 1"), "{error}");
         assert!(check("media_player", "volume_set", &data(json!({})), &speaker).is_err());
+        let favorites = device(
+            "media_player.salle_a_manger",
+            json!({"source_list": ["Ma playlist", "FIP"]}),
+        );
+        let select = |source: Value| {
+            check(
+                "media_player",
+                "select_source",
+                &data(json!({ "source": source })),
+                &favorites,
+            )
+        };
+        assert!(select(json!("FIP")).is_ok());
+        let error = select(json!("Absente")).unwrap_err();
+        assert!(error.contains("favori « Absente » inconnu"), "{error}");
+        assert!(
+            check(
+                "media_player",
+                "select_source",
+                &data(json!({})),
+                &favorites
+            )
+            .is_err()
+        );
         let tts = device("tts.annonces", json!({}));
         assert!(
             check(

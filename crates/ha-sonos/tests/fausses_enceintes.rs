@@ -140,6 +140,22 @@ async fn soap(State(fake): State<Fake>, headers: HeaderMap, body: String) -> Res
             me.transport = "PAUSED_PLAYBACK".into();
             vec![]
         }
+        // Les favoris (étape 91) : communs à toute la maison.
+        "Browse" => {
+            assert_eq!(arg("ObjectID"), "FV:2");
+            vec![("Result", favorites()), ("NumberReturned", "3".into())]
+        }
+        "RemoveAllTracksFromQueue" => {
+            me.log.push(action.clone());
+            vec![]
+        }
+        "AddURIToQueue" => {
+            let meta = arg("EnqueuedURIMetaData");
+            assert!(meta.contains("Ma playlist"), "{meta}");
+            let line = format!("AddURIToQueue {}", arg("EnqueuedURI"));
+            me.log.push(line);
+            vec![("FirstTrackNumberEnqueued", "1".into())]
+        }
         "Stop" | "Next" | "Previous" => {
             me.log.push(action.clone());
             if action == "Stop" {
@@ -202,6 +218,33 @@ async fn start_speaker(speaker: Speaker, topology: Arc<String>) -> Arc<Mutex<Spe
 
 fn didl(inner: &str) -> String {
     format!("<DIDL-Lite><item>{inner}</item></DIDL-Lite>")
+}
+
+/// Les favoris, comme une vraie enceinte les rend : une playlist YouTube
+/// Music, une radio, et un raccourci de l'appli sans adresse.
+fn favorites() -> String {
+    let item = |title: &str, uri: &str, class: &str| {
+        let meta = xml::escape(&format!(
+            "<DIDL-Lite><item id=\"x\"><dc:title>{title}</dc:title><upnp:class>{class}</upnp:class></item></DIDL-Lite>"
+        ));
+        format!(
+            "<item id=\"FV:2/{title}\"><dc:title>{title}</dc:title><res>{}</res><r:resMD>{meta}</r:resMD></item>",
+            xml::escape(uri)
+        )
+    };
+    format!(
+        "<DIDL-Lite>{}{}<item><dc:title>Sonos Radio</dc:title><res></res></item></DIDL-Lite>",
+        item(
+            "Ma playlist",
+            "x-rincon-cpcontainer:1006206cplaylist?sid=284&flags=8300&sn=7",
+            "object.container.playlistContainer"
+        ),
+        item(
+            "France Inter",
+            "x-sonosapi-stream:s24875?sid=254",
+            "object.item.audioItem.audioBroadcast"
+        ),
+    )
 }
 
 fn member(uid: &str, ip: &str, name: &str) -> String {
@@ -481,7 +524,65 @@ async fn speakers_play_announce_and_resume() {
     })
     .await;
 
-    // 4. Sans voix possible pour un mauvais texte : refusé avec la raison.
+    // 4. Les favoris (étape 91) : la liste, sans le raccourci sans adresse.
+    wait_until("les favoris", || {
+        state("media_player.cuisine").is_some_and(|s| {
+            s.attributes().get("source_list") == Some(&json!(["Ma playlist", "France Inter"]))
+        })
+    })
+    .await;
+    let select = |entity: &str, source: &str| {
+        core.call_service_tracked(
+            Origin::User("david".into()),
+            "media_player",
+            "select_source",
+            id(entity),
+            data(json!({ "source": source })),
+        )
+    };
+    // Une playlist sur la cuisine : la file d'attente du salon, qui
+    // coordonne, est remplacée puis lue.
+    let (_, reply) = select("media_player.cuisine", "Ma playlist").unwrap();
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(5), reply)
+            .await
+            .unwrap()
+            .unwrap(),
+        Ok(())
+    );
+    let log = salon.lock().unwrap().log.clone();
+    assert_eq!(
+        &log[log.len() - 4..],
+        [
+            "RemoveAllTracksFromQueue",
+            "AddURIToQueue x-rincon-cpcontainer:1006206cplaylist?sid=284&flags=8300&sn=7",
+            "SetAVTransportURI x-rincon-queue:RINCON_S#0",
+            "Play",
+        ]
+    );
+    // Une radio sur la chambre : chargée directement, puis reconnue.
+    let (_, reply) = select("media_player.chambre", "France Inter").unwrap();
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(5), reply)
+            .await
+            .unwrap()
+            .unwrap(),
+        Ok(())
+    );
+    assert_eq!(
+        &chambre.lock().unwrap().log[2..],
+        ["SetAVTransportURI x-sonosapi-stream:s24875?sid=254", "Play"]
+    );
+    wait_until("la chambre joue France Inter", || {
+        state("media_player.chambre")
+            .is_some_and(|s| s.attributes().get("source") == Some(&json!("France Inter")))
+    })
+    .await;
+    // Un favori inconnu : refusé avant l'envoi.
+    let refused = select("media_player.chambre", "Absent").unwrap_err();
+    assert!(refused.to_string().contains("inconnu"), "{refused}");
+
+    // 5. Sans voix possible pour un mauvais texte : refusé avec la raison.
     let (_, reply) = core
         .call_service_tracked(
             Origin::System,

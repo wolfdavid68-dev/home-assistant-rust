@@ -27,6 +27,39 @@ pub fn element_text(xml: &str, name: &str) -> Option<String> {
     None
 }
 
+/// Le contenu **brut** (entités non décodées) de chaque élément nommé
+/// `name`, dans l'ordre : de quoi relire ensuite chacun avec
+/// [`element_text`]. Les éléments du même nom imbriqués restent dans leur
+/// parent. Au plus `max` éléments.
+#[must_use]
+pub fn elements<'a>(xml: &'a str, name: &str, max: usize) -> Vec<&'a str> {
+    let mut found = Vec::new();
+    let mut from = 0;
+    while found.len() < max
+        && let Some(offset) = xml[from..].find('<')
+    {
+        let start = from + offset;
+        let Some(tag) = Tag::parse(&xml[start..]) else {
+            break;
+        };
+        from = start + tag.length;
+        if tag.closing || local(tag.name) != name {
+            continue;
+        }
+        if tag.self_closing {
+            found.push("");
+            continue;
+        }
+        let content = &xml[from..];
+        let Some(end) = find_closing(content, tag.name) else {
+            break;
+        };
+        found.push(&content[..end]);
+        from += end;
+    }
+    found
+}
+
 /// Les balises ouvrantes, dans l'ordre : leur nom (sans préfixe) et leurs
 /// attributs décodés.
 #[must_use]
@@ -245,6 +278,19 @@ mod tests {
     fn nested_elements_of_the_same_name() {
         let xml = "<a><b>1<b>2</b>3</b></a>";
         assert_eq!(element_text(xml, "b").as_deref(), Some("1<b>2</b>3"));
+    }
+
+    #[test]
+    fn several_elements() {
+        let xml = "<DIDL-Lite><item id=\"1\"><dc:title>A &amp; B</dc:title></item><container/><item><dc:title>C</dc:title><item>dedans</item></item><item/></DIDL-Lite>";
+        let items = elements(xml, "item", 10);
+        assert_eq!(items.len(), 3);
+        assert_eq!(items[0], "<dc:title>A &amp; B</dc:title>");
+        assert_eq!(element_text(items[0], "title").as_deref(), Some("A & B"));
+        assert_eq!(element_text(items[1], "title").as_deref(), Some("C"));
+        assert_eq!(items[2], "");
+        assert_eq!(elements(xml, "item", 1).len(), 1);
+        assert_eq!(elements("<item>pas fermé", "item", 10), [] as [&str; 0]);
     }
 
     #[test]

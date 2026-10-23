@@ -5,6 +5,7 @@
 //! - [`topology`] : les enceintes et leurs groupes ;
 //! - [`discovery`] : les trouver sans réglage ;
 //! - [`player`] : une enceinte ⇄ une entité ;
+//! - [`favorites`] : les favoris Sonos, lancés d'un toucher ;
 //! - [`announce`] : annoncer sans perdre la musique ;
 //! - [`clips`] : le petit serveur où les enceintes téléchargent l'annonce ;
 //! - [`Sonos`] : la boucle principale.
@@ -13,6 +14,7 @@ pub mod announce;
 pub mod api;
 pub mod clips;
 pub mod discovery;
+pub mod favorites;
 pub mod player;
 pub mod topology;
 pub mod xml;
@@ -32,6 +34,7 @@ use tracing::{info, warn};
 use crate::announce::{Target, Timing};
 use crate::api::{Api, SonosError};
 use crate::clips::Clips;
+use crate::favorites::{Favorite, Launch};
 use crate::player::Reading;
 use crate::topology::Group;
 
@@ -199,6 +202,16 @@ impl Speakers {
             .find(|g| g.members.iter().any(|m| m.uid == uid))
     }
 
+    /// L'identifiant (`RINCON_…`) du coordinateur du groupe de l'enceinte.
+    fn coordinator_uid(&self, entity_id: &EntityId) -> Option<String> {
+        let uid = self.by_entity.get(entity_id)?;
+        Some(
+            self.group_of(uid)
+                .and_then(Group::coordinator)
+                .map_or_else(|| uid.clone(), |m| m.uid.clone()),
+        )
+    }
+
     /// L'adresse de l'enceinte, et celle du coordinateur de son groupe.
     fn hosts_for(&self, entity_id: &EntityId) -> Option<(String, String)> {
         let uid = self.by_entity.get(entity_id)?;
@@ -235,11 +248,20 @@ struct Shared {
     locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
     /// Relire l'état tout de suite (après un ordre).
     refresh: Notify,
+    /// Les favoris Sonos, communs à toute la maison (étape 91).
+    favorites: Mutex<Vec<Favorite>>,
 }
 
 impl Shared {
     fn speakers(&self) -> std::sync::MutexGuard<'_, Speakers> {
         self.speakers.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    fn favorites(&self) -> Vec<Favorite> {
+        self.favorites
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
     }
 
     fn lock_for(&self, coordinator: &str) -> Arc<tokio::sync::Mutex<()>> {
@@ -292,6 +314,7 @@ impl Sonos {
             speakers: Mutex::new(Speakers::default()),
             locks: Mutex::new(HashMap::new()),
             refresh: Notify::new(),
+            favorites: Mutex::new(Vec::new()),
         });
         publish_tts(&shared, &core, None);
         core.answers_commands(ID);
@@ -334,6 +357,7 @@ async fn run(shared: Arc<Shared>, core: Arc<Core>, token: CancellationToken) {
                             }
                             next_topology = tokio::time::Instant::now() + TOPOLOGY_EVERY;
                             backoff = Duration::from_secs(1);
+                            refresh_favorites(&shared).await;
                         }
                         Err(error) => {
                             warn!("Sonos : {error}, nouvel essai dans {} s", backoff.as_secs());
@@ -414,6 +438,28 @@ async fn refresh_topology(shared: &Arc<Shared>, core: &Core) -> Result<usize, St
     Ok(count)
 }
 
+/// Relit les favoris (sur la première enceinte qui répond). En cas
+/// d'échec, on garde les précédents.
+async fn refresh_favorites(shared: &Shared) {
+    let hosts = shared.speakers().hosts();
+    for host in &hosts {
+        match shared.api.favorites(host).await {
+            Ok(list) => {
+                let mut favorites = shared
+                    .favorites
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner);
+                if *favorites != list {
+                    info!("Sonos : {} favori(s) à lancer", list.len());
+                    *favorites = list;
+                }
+                return;
+            }
+            Err(error) => tracing::debug!("Sonos : favoris de {host} : {error}"),
+        }
+    }
+}
+
 /// Pour `ha-server sonos` : les groupes et leurs enceintes, d'après les
 /// adresses données ou, à défaut, en les cherchant sur le réseau.
 pub async fn find(hosts: &[String]) -> Result<Vec<Group>, String> {
@@ -461,6 +507,7 @@ async fn poll_all(shared: &Arc<Shared>, core: &Core) -> bool {
         .iter()
         .map(|group| poll_group(&shared.api, group, &names));
     let results = futures_util::future::join_all(polls).await;
+    let favorites = shared.favorites();
     let mut answered = false;
     for (uid, reading) in results.into_iter().flatten() {
         let Some(speaker) = names.get(&uid) else {
@@ -468,7 +515,9 @@ async fn poll_all(shared: &Arc<Shared>, core: &Core) -> bool {
         };
         let (state, attributes) = if let Some(reading) = reading {
             answered = true;
-            player::entity(&reading)
+            let (state, mut attributes) = player::entity(&reading);
+            favorites::describe(&favorites, &reading.media, &mut attributes);
+            (state, attributes)
         } else {
             let mut attributes = Attributes::new();
             attributes.insert("friendly_name".into(), json!(speaker.name));
@@ -641,9 +690,62 @@ async fn media_command(
                 .ok_or_else(|| "is_volume_muted : true ou false".to_owned())?;
             api.set_mute(&own, muted).await
         }
+        "select_source" => return select_source(shared, entity_id, &coordinator, data).await,
         other => return Err(format!("media_player.{other} non pris en charge par Sonos")),
     };
     result.map_err(|error| error.to_string())
+}
+
+/// Lance un favori sur le groupe de l'enceinte, comme Home Assistant : une
+/// radio est chargée directement ; une playlist ou un album remplace la
+/// file d'attente, qui est ensuite lue.
+async fn select_source(
+    shared: &Shared,
+    entity_id: &EntityId,
+    coordinator: &str,
+    data: &Attributes,
+) -> Result<(), String> {
+    let name = data
+        .get("source")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "indique le favori (source)".to_owned())?;
+    let favorite = shared
+        .favorites()
+        .into_iter()
+        .find(|f| f.title == name)
+        .ok_or_else(|| format!("favori « {name} » inconnu"))?;
+    let api = &shared.api;
+    let result = match favorite.launch() {
+        Launch::Direct => {
+            api.set_uri(coordinator, &favorite.uri, &favorite.metadata)
+                .await
+        }
+        Launch::Queue => {
+            let uid = shared
+                .speakers()
+                .coordinator_uid(entity_id)
+                .ok_or_else(|| "enceinte inconnue".to_owned())?;
+            async {
+                api.clear_queue(coordinator).await?;
+                api.add_to_queue(coordinator, &favorite.uri, &favorite.metadata)
+                    .await?;
+                api.set_uri(coordinator, &format!("x-rincon-queue:{uid}#0"), "")
+                    .await
+            }
+            .await
+        }
+    };
+    result.map_err(|error| error.to_string())?;
+    api.play(coordinator)
+        .await
+        .map_err(|error| error.to_string())?;
+    info!(
+        "Sonos : favori « {} » lancé sur {entity_id}",
+        favorite.title
+    );
+    Ok(())
 }
 
 /// Une radio ne se met pas en pause (erreur 701) : on l'arrête.

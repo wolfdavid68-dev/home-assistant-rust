@@ -541,6 +541,10 @@ input[type="range"]::-moz-range-track { background: transparent; }
 .media-volume .round { flex: none; width: 44px; }
 .media-volume input[type="range"] { flex: 1; min-width: 0; }
 .media-volume-value { flex: none; min-width: 3.2em; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* Les favoris Sonos (étape 91). */
+.media-favorites { display: flex; flex-wrap: wrap; gap: 6px; }
+.media-favorite { flex: 1 1 8rem; min-width: 0; max-width: 100%; min-height: 36px; padding: 0.35rem 0.8rem; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.media-favorite[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
 .announce-options { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
 .announce-options select { flex: 1 1 9rem; min-width: 0; max-width: 100%; }
 
