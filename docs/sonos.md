@@ -76,7 +76,7 @@ D'autres voix françaises existent (`fr_FR-upmc-medium`, `fr_FR-tom-medium`…) 
 ### 3. La voix, avec Docker
 
 La voix tourne dans son propre conteneur, `wyoming-piper`. Dans `compose.yaml`, enlève les `#` devant le
-service `piper`, devant le port `8124` et devant les lignes Sonos :
+service `piper` (et du volume `piper-voix`), devant le port `8124` et devant les lignes Sonos :
 
 ```yaml
       HA_SONOS: 192.168.1.30        # une enceinte : la recherche ne sort pas d'un conteneur
@@ -85,7 +85,9 @@ service `piper`, devant le port `8124` et devant les lignes Sonos :
 ```
 
 Puis `docker compose up -d`. Au premier démarrage, `piper` télécharge la voix (une seule fois), puis
-tout reste sur le PC. Pour l'essayer : `docker compose run --rm ha-server voix "Bonjour"`.
+tout reste sur le PC. Pour l'essayer : `docker compose run --rm ha-server voix "Bonjour"`. Si le
+téléchargement échoue, ou pour parler aussi à la maison depuis la tablette, voir
+[Avec Docker](voix.md#avec-docker) dans l'étape 84.
 
 ## Dans le tableau de bord
 

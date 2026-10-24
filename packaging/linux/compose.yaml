@@ -70,6 +70,10 @@ services:
       # HA_SONOS: 192.168.1.30
       # HA_SONOS_AUDIO: 192.168.1.20
       # HA_PIPER: tcp://piper:10200
+      # Parler à la maison depuis la tablette (voir docs/voix.md) : la voix
+      # ci-dessus (HA_PIPER et le service « piper ») et l'écoute (service
+      # « ecoute » plus bas) :
+      # HA_ECOUTE: ws://127.0.0.1:10350
       # Compteur Linky (voir docs/energie.md) : module USB (avec « devices »
       # et « group_add » plus bas), ou module réseau :
       # HA_TELEINFO: /dev/ttyUSB0
@@ -117,16 +121,40 @@ services:
         max-size: 10m
         max-file: "3"
 
-  # La voix des annonces (Piper, voir docs/sonos.md) : enlève les « # » de ce
-  # service et de « piper-voix » plus bas. Il télécharge la voix une seule
-  # fois ; ensuite, tout reste sur cette machine. Pas de port publié : seul
-  # ha-server lui parle.
+  # La voix des annonces et des réponses à la tablette (Piper, voir
+  # docs/sonos.md) : enlève les « # » de ce service et de « piper-voix » plus
+  # bas. Il télécharge la voix une seule fois ; ensuite, tout reste sur cette
+  # machine. Pas de port publié : seul ha-server lui parle.
   # piper:
-  #   image: rhasspy/wyoming-piper
+  #   image: rhasspy/wyoming-piper:2.5.2@sha256:7d39aafac409c2b6b09d999ed04d84c311d632e558b35baa60fad6aac722af7a
   #   command: --voice fr_FR-siwis-medium
   #   restart: unless-stopped
   #   volumes:
   #     - piper-voix:/data
+  #   mem_limit: 512m
+
+  # L'écoute de la tablette (Parakeet, voir docs/voix.md) : enlève les « # »
+  # de ce service, et mets HA_ECOUTE plus haut. Construite sur cette machine
+  # (670 Mo téléchargés une fois, chaque fichier vérifié par son empreinte),
+  # avec « docker compose build ecoute ». Elle vit dans le réseau de
+  # ha-server, qui la joint sur 127.0.0.1 : aucun port publié. Pas avec
+  # « network_mode: host » (Alexa) : elle serait alors ouverte au réseau.
+  # ecoute:
+  #   build: https://github.com/wolfdavid68-dev/home-assistant-rust.git#main:packaging/docker/ecoute
+  #   image: ha-maison-ecoute:local
+  #   restart: unless-stopped
+  #   network_mode: "service:ha-server"
+  #   depends_on:
+  #     - ha-server
+  #   user: "65532:65532"
+  #   read_only: true
+  #   cap_drop:
+  #     - ALL
+  #   security_opt:
+  #     - no-new-privileges:true
+  #   mem_limit: 1500m
+  #   cpus: 4
+  #   pids_limit: 64
 
   # Outil de sauvegarde et de restauration de la base, lancé seulement à la
   # demande (voir le guide). Il ne démarre jamais avec « docker compose up ».
