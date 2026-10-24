@@ -184,8 +184,8 @@ function renderHubGreeting(now) {
   // Une machine en marche (lave-linge SmartThings, étape 86) : quand elle finit.
   const machines = [...entities.values()]
     .filter((s) => typeof s.attributes.appareil === "string")
-    // « a fini » pendant 2 heures, le temps de vider la machine.
-    .filter((s) => s.state === "En marche" || (s.state === "Terminé" && Date.now() - Date.parse(s.last_changed) < 2 * 3600_000))
+    // « a fini » pendant une heure, comme la carte sur le dessin (house.js).
+    .filter((s) => s.state === "En marche" || (s.state === "Terminé" && Date.now() - Date.parse(s.last_changed) < MACHINE_DONE_SHOWN))
     .map((s) => (s.state === "Terminé" ? `${nameOf(s)} a fini` : typeof s.attributes.fin_heure === "string" ? `${nameOf(s)} : fin vers ${s.attributes.fin_heure}` : `${nameOf(s)} en marche`));
   // Les colis Amazon (colis.js, étape 87).
   const parcels = typeof parcelGreeting === "function" ? parcelGreeting() : null;

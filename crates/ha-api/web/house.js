@@ -581,6 +581,8 @@ function updateHouse(view) {
   // si un texte a changé (sa largeur aussi). Un changement de taille du dessin
   // passe par l'observateur plus bas.
   if (moved) fitLabels(view);
+  // Le lave-linge en marche, en incrustation (plus bas).
+  if (view === house.view) renderMachineLive();
 }
 
 function placeZone(node, zone) {
@@ -1963,6 +1965,129 @@ function renderHouse() {
   if (typeof renderBoardAgenda === "function") renderBoardAgenda();
   if (typeof renderBoardMusic === "function") renderBoardMusic();
   if (isPlan()) renderTitleBlock();
+}
+
+// ---------------------------------------------------------------- Machines en marche
+// Une machine suivie par SmartThings (le lave-linge, étape 86) s'incruste sur
+// le dessin pendant qu'elle tourne : le temps restant, le programme, l'heure
+// de fin et un anneau de progression autour du hublot. Finie, elle reste une
+// heure (le temps de la vider), puis s'efface. La carte suit le dessin :
+// tableau, vue hub et écran de veille.
+
+const MACHINE_DONE_SHOWN = 3_600_000;
+const machineLive = { box: null, cards: new Map(), timer: null };
+
+/** À montrer : en marche, en pause, ou finie depuis moins d'une heure. */
+function machineShown(state) {
+  if (state.state === "En marche" || state.state === "En pause") return true;
+  if (state.state !== "Terminé") return false;
+  const since = Date.parse(state.last_changed);
+  return Number.isFinite(since) && Date.now() - since < MACHINE_DONE_SHOWN;
+}
+
+/** « 42 min », « 1 h 05 ». */
+function machineDuration(minutes) {
+  const m = Math.max(0, Math.round(minutes));
+  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}`;
+}
+
+function machineCard(entityId) {
+  // L'anneau de progression, et dedans le hublot : le linge tourne pendant
+  // le lavage, une coche se dessine à la fin.
+  const ring = svg("svg", { class: "ml-ring", viewBox: "0 0 48 48", "aria-hidden": "true" });
+  const fill = svg("circle", { class: "ml-fill", cx: 24, cy: 24, r: 21, pathLength: 100 });
+  const clothes = svg("g", { class: "ml-clothes" });
+  clothes.append(
+    svg("circle", { cx: 20.5, cy: 20.5, r: 2.2 }),
+    svg("circle", { cx: 28, cy: 22.5, r: 1.5 }),
+    svg("circle", { cx: 23, cy: 28.5, r: 1.2 }));
+  const porthole = svg("g", { class: "ml-porthole" });
+  porthole.append(
+    svg("circle", { class: "ml-glass", cx: 24, cy: 24, r: 12 }),
+    svg("path", { class: "ml-water", d: "M14 27c2.5-1.8 5-1.8 7.5 0s5 1.8 7.5 0 4-1.6 6.5 0" }),
+    clothes);
+  ring.append(
+    svg("circle", { class: "ml-track", cx: 24, cy: 24, r: 21 }),
+    fill,
+    porthole,
+    svg("path", { class: "ml-check", d: "M17.5 24.5l4.5 4.5 8.5-9", pathLength: 1 }));
+  const name = el("small", { class: "ml-name" });
+  const main = el("strong", { class: "ml-main" });
+  const sub = el("span", { class: "ml-sub" });
+  const node = el("button", { type: "button", class: "ml-card", tabindex: "-1", "aria-hidden": "true" },
+    el("span", { class: "ml-dial" }, ring), el("span", { class: "ml-text" }, name, main, sub));
+  node.addEventListener("click", () => {
+    if (account.permissions.history !== false && entities.has(entityId)) openHistory(entityId);
+  });
+  return { node, fill, name, main, sub };
+}
+
+function updateMachineCard(card, state) {
+  const a = state.attributes;
+  const phase = state.state === "Terminé" ? "done" : state.state === "En pause" ? "paused" : "running";
+  const cycle = typeof a.cycle === "string" && a.cycle ? a.cycle.charAt(0).toUpperCase() + a.cycle.slice(1) : "";
+  const left = Number.isFinite(a.reste_minutes) ? a.reste_minutes : null;
+  let main;
+  let sub;
+  if (phase === "done") {
+    const since = Date.parse(state.last_changed);
+    main = "Terminé";
+    sub = [Number.isFinite(since) ? `fini à ${hourMinute.format(new Date(since))}` : "",
+      Number.isFinite(a.dernier_cycle_minutes) ? `en ${machineDuration(a.dernier_cycle_minutes)}` : "", "à vider"];
+  } else if (phase === "paused") {
+    main = "En pause";
+    sub = [cycle, left !== null ? `encore ${machineDuration(left)}` : ""];
+  } else {
+    main = left !== null ? machineDuration(left) : "En marche";
+    sub = [cycle, typeof a.fin_heure === "string" ? `fin vers ${a.fin_heure}` : ""];
+  }
+  const said = sub.filter(Boolean).join(" · ");
+  setText(card.name, nameOf(state));
+  setText(card.main, main);
+  setText(card.sub, said);
+  setAttr(card.node, "aria-label", `${nameOf(state)} : ${main}${said ? `, ${said}` : ""}`);
+  card.node.dataset.phase = phase;
+  // Sans progression connue, l'anneau tourne en continu.
+  const progress = phase === "done" ? 100 : Number.isFinite(a.progression) ? Math.min(100, Math.max(0, a.progression)) : null;
+  card.node.classList.toggle("ml-unknown", progress === null);
+  card.node.style.setProperty("--ml-progress", String(progress ?? 25));
+}
+
+function renderMachineLive() {
+  const stage = $("#house-stage");
+  const host = stage?.parentElement;
+  if (!host) return;
+  if (!machineLive.box) machineLive.box = el("div", { class: "machine-live", role: "group", "aria-label": "Machines en marche" });
+  const box = machineLive.box;
+  if (box.parentElement !== host) host.append(box);
+  clearTimeout(machineLive.timer);
+  const machines = [...entities.values()].filter((s) => domainOf(s) === "sensor" && typeof s.attributes.appareil === "string");
+  for (const [id, card] of machineLive.cards) {
+    if (!machines.some((s) => s.entity_id === id)) {
+      card.node.remove();
+      machineLive.cards.delete(id);
+    }
+  }
+  let nextHide = Infinity;
+  for (const state of machines) {
+    const shown = machineShown(state);
+    let card = machineLive.cards.get(state.entity_id);
+    if (!card && !shown) continue;
+    if (!card) {
+      card = machineCard(state.entity_id);
+      machineLive.cards.set(state.entity_id, card);
+      box.append(card.node);
+      // Dessinée une fois cachée, pour que l'arrivée soit animée.
+      void card.node.offsetWidth;
+    }
+    if (shown) updateMachineCard(card, state);
+    card.node.classList.toggle("shown", shown);
+    setAttr(card.node, "aria-hidden", shown ? "false" : "true");
+    setAttr(card.node, "tabindex", shown ? "0" : "-1");
+    if (shown && state.state === "Terminé") nextHide = Math.min(nextHide, Date.parse(state.last_changed) + MACHINE_DONE_SHOWN);
+  }
+  // Une heure après la fin, sans autre changement : la carte s'efface seule.
+  if (Number.isFinite(nextHide)) machineLive.timer = setTimeout(renderMachineLive, Math.max(0, nextHide - Date.now()) + 500);
 }
 
 // ---------------------------------------------------------------- Une pièce, en fenêtre
