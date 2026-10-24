@@ -36,6 +36,30 @@ sauf le fond de jour.
   c'est de la neige. La température vient de la sonde extérieure de la pompe à chaleur
   (`sensor.temperature_exterieure`), sinon de la météo.
 
+### Les calques de saison et de gel
+
+Un fond d'ambiance remplace toute l'image. Pour un effet qui **s'ajoute** au temps qu'il fait
+(les feuilles d'automne sous la pluie, le givre un jour de soleil), on prend un **calque** : une
+image transparente, posée sur le fond, qui s'affiche selon l'état d'une entité.
+
+| Calque               | Entité                | États       | Moment       |
+| -------------------- | --------------------- | ----------- | ------------ |
+| Feuilles d'automne   | `sensor.saison`       | `automne`   | Le jour      |
+| Givre                | `binary_sensor.gel`   | `on`        | Le jour      |
+
+- **La saison** (`sensor.saison`) est calculée par le serveur avec le soleil : `printemps`, `ete`,
+  `automne`, `hiver`. Voir [le soleil](soleil.md).
+- **Le gel** vient de la sonde extérieure, par un seuil dans `config/derived.yaml` (l'exemple
+  `gel` de [derived.example.yaml](../derived.example.yaml)) : allumé sous 0 °C, éteint au-dessus de
+  1 °C, pour ne pas clignoter autour de zéro.
+- Le calque se règle comme les autres (Mon compte → Dessin de la maison… → Calques), avec le moment
+  « Le jour » si l'image a été faite de jour.
+
+**Faire le calque** : demander à l'IA la même image avec l'effet seul (« Only change: autumn leaves
+on the lawn »), puis la comparer à l'image de jour (mode « Différence » d'un logiciel de retouche) :
+ce qui a changé devient l'effet, le reste devient transparent. On l'enregistre en PNG ou en WebP
+avec transparence.
+
 ## Régler les fonds
 
 **Mon compte → Dessin de la maison… → Fonds et ambiances**, pour chaque onglet :

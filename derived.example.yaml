@@ -46,6 +46,13 @@ threshold:
     entity_id: sensor.humidite_salle_de_bain
     upper: 70
     hysteresis: 3
+  # Il gèle : allumé sous 0 °C, éteint au-dessus de 1 °C (pour le calque
+  # « givre » du dessin de la maison, voir docs/ambiances.md).
+  gel:
+    name: Gel
+    entity_id: sensor.temperature_exterieure
+    lower: 0.5
+    hysteresis: 0.5
 
 # La consommation depuis le début de l'heure, du jour, de la semaine, du mois
 # ou de l'année, d'après un compteur qui ne fait que monter (kWh, m³…).

@@ -5,7 +5,9 @@
 //! - [`Location`] : la position (latitude, longitude), vérifiée ;
 //! - [`sun_times`] : les heures d'une journée ;
 //! - [`position`] : hauteur et direction du soleil à un instant ;
-//! - [`SunTracker`] : publie l'entité `sun.sun` chaque minute.
+//! - [`season`] : la saison astronomique (printemps, été, automne, hiver) ;
+//! - [`SunTracker`] : publie les entités `sun.sun` et `sensor.saison` chaque
+//!   minute.
 //!
 //! Formules : l'« équation du lever du soleil » (algorithme de la NOAA,
 //! simplifié). Précision : une minute environ, largement assez pour fermer
@@ -157,6 +159,9 @@ fn julian_noon(date: Date) -> Option<f64> {
 struct SolarDay {
     transit: f64,
     declination: f64,
+    /// Position du soleil sur l'écliptique, en degrés : 0° à l'équinoxe de
+    /// mars, 90° au solstice de juin, 180° en septembre, 270° en décembre.
+    ecliptic_longitude: f64,
 }
 
 fn solar_day(date: Date, location: Location) -> Option<SolarDay> {
@@ -177,6 +182,7 @@ fn solar_day(date: Date, location: Location) -> Option<SolarDay> {
     Some(SolarDay {
         transit,
         declination,
+        ecliptic_longitude,
     })
 }
 
@@ -237,6 +243,55 @@ pub fn position(at: Timestamp, location: Location) -> Option<(f64, f64)> {
     Some((elevation, azimuth))
 }
 
+/// Une saison astronomique : elle change aux équinoxes et aux solstices
+/// (vers le 20 mars, le 21 juin, le 22 septembre et le 21 décembre).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Season {
+    Spring,
+    Summer,
+    Autumn,
+    Winter,
+}
+
+impl Season {
+    /// L'état de `sensor.saison` : `printemps`, `ete`, `automne`, `hiver`
+    /// (sans accent, comme les noms d'ambiance du dessin).
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Spring => "printemps",
+            Self::Summer => "ete",
+            Self::Autumn => "automne",
+            Self::Winter => "hiver",
+        }
+    }
+}
+
+/// La saison le jour `date` à la position `location`. Dans l'hémisphère sud,
+/// les saisons sont inversées : décembre y est l'été.
+#[must_use]
+pub fn season(date: Date, location: Location) -> Option<Season> {
+    let mut longitude = solar_day(date, location)?.ecliptic_longitude;
+    if location.latitude < 0.0 {
+        longitude = (longitude + 180.0).rem_euclid(360.0);
+    }
+    Some(match longitude {
+        l if l < 90.0 => Season::Spring,
+        l if l < 180.0 => Season::Summer,
+        l if l < 270.0 => Season::Autumn,
+        _ => Season::Winter,
+    })
+}
+
+/// L'état de `sensor.saison` à l'instant `now`.
+#[must_use]
+pub fn season_state(now: Timestamp, location: Location) -> Option<(&'static str, Attributes)> {
+    let season = season(now.to_zoned(TimeZone::UTC).date(), location)?;
+    let mut attributes = Attributes::new();
+    attributes.insert("friendly_name".into(), json!("Saison"));
+    Some((season.name(), attributes))
+}
+
 /// Le prochain `event` après `after` (aujourd'hui, demain…, jusqu'à un an :
 /// au-delà, c'est la nuit ou le jour polaire).
 #[must_use]
@@ -254,7 +309,8 @@ pub fn next_event(event: SunEvent, after: Timestamp, location: Location) -> Opti
 }
 
 /// Publie l'entité `sun.sun` (`above_horizon` / `below_horizon`), comme
-/// Home Assistant, et la met à jour chaque minute.
+/// Home Assistant, et la saison (`sensor.saison`), et les met à jour chaque
+/// minute.
 #[derive(Debug)]
 pub struct SunTracker(Background);
 
@@ -272,7 +328,10 @@ impl SunTracker {
 }
 
 async fn run(location: Location, core: Arc<Core>, token: CancellationToken) {
-    let Ok(entity_id) = "sun.sun".parse::<EntityId>() else {
+    let (Ok(entity_id), Ok(season_id)) = (
+        "sun.sun".parse::<EntityId>(),
+        "sensor.saison".parse::<EntityId>(),
+    ) else {
         return;
     };
     info!("soleil : suivi démarré");
@@ -281,9 +340,17 @@ async fn run(location: Location, core: Arc<Core>, token: CancellationToken) {
         tokio::select! {
             () = token.cancelled() => break,
             _ = ticker.tick() => {
-                let (state, attributes) = sun_state(Timestamp::now(), location);
+                let now = Timestamp::now();
+                let (state, attributes) = sun_state(now, location);
                 if let Err(error) = core.states.set(entity_id.clone(), state, attributes) {
                     warn!("soleil : état refusé ({error})");
+                }
+                // Inchangée, la saison ne publie rien : `set` ne prévient que
+                // d'un vrai changement.
+                if let Some((state, attributes)) = season_state(now, location)
+                    && let Err(error) = core.states.set(season_id.clone(), state, attributes)
+                {
+                    warn!("saison : état refusé ({error})");
                 }
             }
         }
@@ -407,6 +474,33 @@ mod tests {
             Err(LocationError::Longitude(-181.0))
         );
         assert!(Location::new(f64::NAN, 0.0).is_err());
+    }
+
+    #[test]
+    fn seasons_change_at_equinoxes_and_solstices() {
+        // 2024 : équinoxe le 20 mars, solstice le 20 juin, équinoxe le
+        // 22 septembre, solstice le 21 décembre (dates en temps universel).
+        let at = |m, d| season(date(2024, m, d), paris()).unwrap();
+        assert_eq!(at(1, 15), Season::Winter);
+        assert_eq!(at(3, 19), Season::Winter);
+        assert_eq!(at(3, 21), Season::Spring);
+        assert_eq!(at(6, 19), Season::Spring);
+        assert_eq!(at(6, 22), Season::Summer);
+        assert_eq!(at(9, 21), Season::Summer);
+        assert_eq!(at(9, 23), Season::Autumn);
+        assert_eq!(at(10, 24), Season::Autumn);
+        assert_eq!(at(12, 20), Season::Autumn);
+        assert_eq!(at(12, 22), Season::Winter);
+        // Hémisphère sud (Sydney) : saisons inversées.
+        let sydney = Location::new(-33.87, 151.21).unwrap();
+        assert_eq!(season(date(2024, 1, 15), sydney), Some(Season::Summer));
+        assert_eq!(season(date(2024, 10, 24), sydney), Some(Season::Spring));
+        // L'entité.
+        let now: Timestamp = "2024-10-24T12:00:00Z".parse().unwrap();
+        let (state, attributes) = season_state(now, paris()).unwrap();
+        assert_eq!(state, "automne");
+        assert_eq!(attributes["friendly_name"], "Saison");
+        assert_eq!(Season::Summer.name(), "ete");
     }
 
     #[test]

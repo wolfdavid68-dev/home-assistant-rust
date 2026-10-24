@@ -37,6 +37,23 @@ chaque minute, avec les attributs `next_rising`, `next_setting`, `next_dawn`, `n
 `elevation` (hauteur en degrés) et `azimuth` (direction, 0° = nord, 90° = est). Le tableau de
 bord affiche « Couché · lever à 08:10 ».
 
+## L'entité `sensor.saison`
+
+La **saison astronomique**, calculée elle aussi : `printemps`, `ete`, `automne` ou `hiver` (sans
+accent, comme les noms d'ambiance du dessin). Elle change aux équinoxes et aux solstices (vers le
+20 mars, le 21 juin, le 22 septembre et le 21 décembre), d'après la position de la Terre sur son
+orbite. Dans l'hémisphère sud, les saisons sont inversées.
+
+Elle sert surtout aux calques de saison du dessin de la maison (feuilles d'automne…, voir
+[les ambiances](ambiances.md)), et aux automatisations : « en hiver, chauffer plus tôt ».
+
+```yaml
+  conditions:
+    - condition: state
+      entity_id: sensor.saison
+      state: hiver
+```
+
 ## Dans les automatisations
 
 **Déclencheur** : `sunrise` (lever), `sunset` (coucher), `dawn` (aube : il commence à faire
@@ -96,7 +113,7 @@ démarrer avec un message clair, plutôt que d'ignorer l'automatisation en silen
 
 | Fichier | Contenu |
 |---------|---------|
-| [ha-sun/src/lib.rs](../crates/ha-sun/src/lib.rs) | Calcul des heures et de la position du soleil, entité `sun.sun` |
+| [ha-sun/src/lib.rs](../crates/ha-sun/src/lib.rs) | Calcul des heures et de la position du soleil, entités `sun.sun` et `sensor.saison` |
 | [config.rs](../crates/ha-automation/src/config.rs) | Lecture du déclencheur et de la condition `sun` |
 | [evaluator.rs](../crates/ha-automation/src/evaluator.rs) | Quand se déclencher, conditions remplies ou non |
 
@@ -128,6 +145,8 @@ Le calcul est l'« équation du lever du soleil » (méthode de la NOAA, simplif
   (publié : 05 h 47) et coucher à 21 h 57 min 49 (21 h 58). Le 21 décembre 2024 : 08 h 41 et
   16 h 56, comme publié. Le test exige moins de 2 minutes d'écart.
 - Hauteur du soleil à midi en été à Paris : environ 64,6°, plein sud.
+- Saisons : hiver le 19 mars 2024, printemps le 21, été le 22 juin, automne le 23 septembre, hiver
+  le 22 décembre ; à Sydney, l'été en janvier.
 - Tromsø (Norvège) : pas de coucher le 21 juin, pas de lever le 21 décembre, et le prochain
   coucher après le 21 juin est bien trouvé (fin juillet).
 - Déclencheur avec décalage : se déclenche une seule fois, au bon moment.
