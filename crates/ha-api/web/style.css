@@ -3341,6 +3341,120 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .machine-progress { --progress: 0%; height: 6px; border-radius: 999px; background: var(--card-2); overflow: hidden; }
 .machine-progress span { display: block; height: 100%; width: var(--progress); background: var(--accent); border-radius: inherit; }
 
+/* Une machine en marche, incrustée sur le dessin de la maison (house.js,
+   renderMachineLive) : une carte en verre dépoli, en bas à gauche, qui
+   arrive en glissant et repart en fondu. */
+.house-frame, .saver-house { position: relative; }
+.machine-live {
+  position: absolute;
+  z-index: 4;
+  left: clamp(10px, 2.2cqw, 22px);
+  bottom: clamp(10px, 2.2cqh, 22px);
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: calc(100% - 20px);
+  pointer-events: none;
+}
+.ml-card {
+  --ml-color: var(--accent);
+  --ml-progress: 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  padding: 10px 22px 10px 10px;
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--card) 74%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  backdrop-filter: blur(20px) saturate(1.5);
+  box-shadow: var(--shadow-float), inset 0 1px 0 color-mix(in srgb, #fff 14%, transparent);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  /* Cachée : un peu plus bas, un peu plus petite, transparente. */
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(14px) scale(0.94);
+  transform-origin: left bottom;
+  transition: opacity 0.4s ease, transform 0.55s cubic-bezier(0.2, 0.9, 0.25, 1.2), visibility 0s linear 0.55s;
+}
+.ml-card.shown { opacity: 1; visibility: visible; transform: none; pointer-events: auto; transition-delay: 0s; }
+.ml-card:focus-visible { outline: 2px solid var(--ml-color); outline-offset: 3px; }
+.ml-card[data-phase="paused"] { --ml-color: var(--glow-bar); }
+.ml-card[data-phase="done"] { --ml-color: var(--ok); }
+
+.ml-dial { position: relative; flex: none; width: 56px; height: 56px; display: grid; place-items: center; }
+/* Un halo de la couleur de l'état, qui respire pendant le lavage. */
+.ml-dial::before {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: var(--ml-color);
+  opacity: 0.16;
+  filter: blur(8px);
+}
+.ml-card[data-phase="running"] .ml-dial::before { animation: ml-breathe 2.8s ease-in-out infinite; }
+.ml-ring { position: relative; width: 100%; height: 100%; overflow: visible; fill: none; stroke-linecap: round; }
+.ml-track { stroke: color-mix(in srgb, var(--text) 12%, transparent); stroke-width: 3.5; }
+.ml-fill {
+  stroke: var(--ml-color);
+  stroke-width: 3.5;
+  stroke-dasharray: 100;
+  stroke-dashoffset: calc(100 - var(--ml-progress));
+  transform: rotate(-90deg);
+  transform-origin: 24px 24px;
+  transition: stroke-dashoffset 1s ease, stroke 0.4s ease;
+}
+/* Progression inconnue : un arc qui fait le tour. */
+.ml-card.ml-unknown[data-phase="running"] .ml-fill { animation: ml-orbit 1.8s linear infinite; }
+.ml-glass { fill: color-mix(in srgb, var(--ml-color) 14%, transparent); stroke: color-mix(in srgb, var(--text) 30%, transparent); stroke-width: 1.4; }
+.ml-water { stroke: var(--ml-color); stroke-width: 1.6; opacity: 0.85; }
+.ml-clothes { fill: var(--ml-color); opacity: 0.9; transform-origin: 24px 24px; }
+.ml-porthole { transform-origin: 24px 24px; transition: opacity 0.35s ease, transform 0.45s ease; }
+.ml-card[data-phase="running"] .ml-clothes { animation: ml-spin 1.6s linear infinite; }
+.ml-card[data-phase="running"] .ml-water { animation: ml-slosh 1.6s ease-in-out infinite alternate; }
+.ml-check { stroke: var(--ml-color); stroke-width: 3; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; opacity: 0; }
+/* Fini : le hublot s'efface, la coche se dessine. */
+.ml-card[data-phase="done"] .ml-porthole { opacity: 0; transform: scale(0.6); }
+.ml-card[data-phase="done"] .ml-check { opacity: 1; stroke-dashoffset: 0; transition: stroke-dashoffset 0.6s ease 0.25s, opacity 0.2s ease 0.2s; }
+.ml-card[data-phase="done"] .ml-dial::before { animation: ml-ping 1.6s ease-out 3; }
+
+.ml-text { display: grid; gap: 1px; min-width: 0; }
+.ml-name { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.ml-main { font: 650 1.45rem/1.1 var(--font-display); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.ml-card[data-phase="done"] .ml-main { color: var(--ml-color); }
+.ml-sub { font-size: 0.82rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ml-sub:empty { display: none; }
+
+/* Le style plan : les angles droits et l'encre du dessin. */
+[data-theme|="plan"] .ml-card { border-radius: 6px; border-color: color-mix(in srgb, var(--ink) 40%, transparent); }
+/* L'écran de veille se regarde de loin : un peu plus grand. */
+.saver-house .ml-card { zoom: 1.25; }
+/* Sur un petit écran, la carte se fait discrète. */
+@container (max-width: 520px) {
+  .ml-card { gap: 10px; padding: 6px 16px 6px 6px; }
+  .ml-dial { width: 44px; height: 44px; }
+  .ml-main { font-size: 1.15rem; }
+}
+
+@keyframes ml-spin { to { transform: rotate(360deg); } }
+@keyframes ml-slosh { from { transform: translateX(-1.5px); } to { transform: translateX(1.5px); } }
+@keyframes ml-orbit { from { transform: rotate(-90deg); } to { transform: rotate(270deg); } }
+@keyframes ml-breathe { 50% { opacity: 0.32; transform: scale(1.08); } }
+@keyframes ml-ping { 0% { opacity: 0.4; transform: scale(0.9); } 100% { opacity: 0; transform: scale(1.5); } }
+@media (prefers-reduced-motion: reduce) {
+  .ml-card { transition: opacity 0.3s ease, visibility 0s linear 0.3s; transform: none; }
+  .ml-card *, .ml-dial::before { animation: none !important; }
+}
+
 /* ---------- Le lecteur de musique (étape 92, musique.js) ---------- */
 /* La pochette en grand, son reflet flou derrière toute la page (--art, posé
    par le script), la barre de progression, les boutons et les favoris. */

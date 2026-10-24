@@ -41,6 +41,8 @@ function showSaver() {
   const stage = $("#house-stage");
   const hubOn = typeof hub !== "undefined" && hub.on;
   if ((!$("#house").hidden || hubOn) && stage.childElementCount > 0) $("#saver-house").append(stage);
+  // La carte du lave-linge en marche suit le dessin (house.js).
+  if (typeof renderMachineLive === "function") renderMachineLive();
   // La même image, floutée, remplit tout l'écran derrière : plus de grand
   // rectangle sur fond noir, ses couleurs débordent jusqu'aux bords.
   const photo = $("#saver-house .house-base");
@@ -62,6 +64,7 @@ function hideSaver() {
     const hubOn = typeof hub !== "undefined" && hub.on;
     (hubOn ? $("#hub-house") : $("#house .house-frame")).append(stage);
     if (typeof house !== "undefined" && house.view) fitLabels(house.view);
+    if (typeof renderMachineLive === "function") renderMachineLive();
   }
   saverLater();
 }
