@@ -116,8 +116,54 @@ donc le réseau de la machine (`network_mode: host`), ce qui ne fonctionne que s
    sudo sysctl --system
    ```
 
-Sous Windows ou macOS (Docker Desktop), lance plutôt le serveur directement, sans Docker, pour
-utiliser Alexa.
+### Avec Docker Desktop (Windows, macOS) : le relais
+
+Docker Desktop n'a pas de vrai « réseau de la machine » : la découverte de l'Echo n'atteint pas le
+conteneur. Le serveur reste donc dans Docker, et un petit **relais** tourne sur la machine
+elle-même :
+
+```
+Echo ──(découverte, port 1900)──> relais        (sur la machine)
+Echo ──(ordres, port 80)────────> relais ──> 127.0.0.1:8127 ──> pont (dans le conteneur)
+```
+
+Le relais répond à la découverte et recopie les ordres vers le pont, sans les lire. Il voit la
+vraie adresse de l'Echo : c'est lui qui applique `HA_ALEXA_ALLOWED`. Le pont, lui, n'est publié
+que sur `127.0.0.1` : seule la machine le joint.
+
+1. Dans `compose.override.yaml`, pour le service `ha-server` :
+
+   ```yaml
+   environment:
+     HA_ALEXA_IP: 192.168.1.20          # cette machine
+     HA_ALEXA_LISTEN: 0.0.0.0:8080      # le pont écoute ici, dans le conteneur
+   ports:
+     - "127.0.0.1:8127:8080"            # jamais 0.0.0.0 : seul le relais doit le joindre
+   ```
+
+   Avec `HA_ALEXA_LISTEN`, le pont ne fait pas la découverte (le relais s'en charge) et annonce
+   toujours `HA_ALEXA_IP` sur le port 80, l'adresse du relais. Ne mets pas `HA_ALEXA_ALLOWED`
+   dans le conteneur : il ne voit pas l'adresse de l'Echo, seulement celle de Docker.
+
+2. Sur la machine, compile le serveur une fois (`cargo build --release -p ha-server`) et lance le
+   relais :
+
+   ```powershell
+   $env:HA_ALEXA_IP = "192.168.1.20"          # cette machine
+   $env:HA_ALEXA_ALLOWED = "192.168.1.40"     # tes Echo
+   .\target\release\ha-server.exe alexa relay  # vers 127.0.0.1:8127 par défaut
+   ```
+
+   Windows demande d'autoriser `ha-server` : coche **uniquement « Réseaux privés »**. Le réseau
+   de la maison doit être en profil **privé** (Paramètres, Réseau et Internet, propriétés).
+
+3. Tu ne connais pas encore l'adresse de l'Echo ? Lance d'abord le relais sans
+   `HA_ALEXA_ALLOWED`, avec `$env:RUST_LOG = "ha_alexa=debug"`, et dis « Alexa, découvre mes
+   appareils » : le relais affiche « SSDP : recherche de 192.168.1.40:… ». Relance-le ensuite
+   avec `HA_ALEXA_ALLOWED`.
+
+Limite : derrière le relais, le journal d'activité note l'adresse de Docker, pas celle de l'Echo
+(l'acteur reste « alexa »).
 
 ## La sécurité
 
@@ -155,6 +201,7 @@ appareils sans danger, et qu'il vaut mieux indiquer l'adresse des Echo.
 | [server.rs](../crates/ha-alexa/src/server.rs) | Le faux pont : routes HTTP, filtre d'adresses, journal |
 | [ssdp.rs](../crates/ha-alexa/src/ssdp.rs) | La découverte (port UDP 1900) |
 | [numbers.rs](../crates/ha-alexa/src/numbers.rs) | Numéros de lampes stables, gardés dans la base |
+| [relay.rs](../crates/ha-alexa/src/relay.rs) | Le relais, pour Docker Desktop (Windows, macOS) |
 
 Deux détails qui comptent :
 

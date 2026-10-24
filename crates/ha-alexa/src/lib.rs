@@ -9,11 +9,13 @@
 //!
 //! - [`config`] : le fichier `alexa.yaml`, la liste **explicite** des appareils ;
 //! - [`hue`] : la traduction entre « lampe Hue » et nos appareils ;
-//! - [`numbers`] : les numéros de lampes, stables, gardés dans la base.
+//! - [`numbers`] : les numéros de lampes, stables, gardés dans la base ;
+//! - [`relay`] : le relais, pour un serveur dans Docker Desktop (Windows, macOS).
 
 pub mod config;
 pub mod hue;
 pub mod numbers;
+pub mod relay;
 pub mod server;
 pub mod ssdp;
 
@@ -52,6 +54,11 @@ pub struct Settings {
     /// Adresse de cette machine sur le réseau local (celle que l'Echo joindra).
     pub ip: Ipv4Addr,
     pub port: u16,
+    /// Où écouter, si ce n'est pas `ip:port`. Dans Docker Desktop, le pont
+    /// écoute sur un port interne (`0.0.0.0:8080`) et c'est le [`relay`],
+    /// lancé sur la machine, qui reçoit l'Echo et répond à la découverte. Le
+    /// pont continue d'annoncer `ip:port` : l'adresse du relais.
+    pub listen: Option<SocketAddr>,
     /// Port de découverte (1900 ; autre chose seulement pour les tests).
     pub discovery_port: u16,
     pub allowed: Allowed,
@@ -62,7 +69,8 @@ pub struct Settings {
 #[derive(Debug)]
 pub struct Alexa {
     http: Background,
-    discovery: Background,
+    /// Absente derrière le relais : c'est lui qui répond à la découverte.
+    discovery: Option<Background>,
     /// Numéro de lampe → appareil (pour les logs et les tests).
     pub lights: BTreeMap<u32, Device>,
     /// Adresse HTTP réellement utilisée.
@@ -77,21 +85,36 @@ impl Alexa {
         core: Arc<Core>,
     ) -> Result<Self, AlexaError> {
         let lights = numbers::assign(&store, &settings.devices).await?;
-        let address = SocketAddr::new(IpAddr::V4(settings.ip), settings.port);
+        let address = settings
+            .listen
+            .unwrap_or_else(|| SocketAddr::new(IpAddr::V4(settings.ip), settings.port));
         let listener = tokio::net::TcpListener::bind(address)
             .await
             .map_err(|source| AlexaError::Listen { address, source })?;
         let address = listener
             .local_addr()
             .map_err(|source| AlexaError::Listen { address, source })?;
-        let socket = ssdp::bind(settings.ip, settings.discovery_port).map_err(|source| {
-            AlexaError::Discovery {
-                port: settings.discovery_port,
-                source,
-            }
-        })?;
+        let behind_relay = settings.listen.is_some();
+        let socket = if behind_relay {
+            None
+        } else {
+            Some(
+                ssdp::bind(settings.ip, settings.discovery_port).map_err(|source| {
+                    AlexaError::Discovery {
+                        port: settings.discovery_port,
+                        source,
+                    }
+                })?,
+            )
+        };
 
-        let identity = Identity::new(settings.ip, address.port());
+        // Derrière le relais, on annonce son port à lui (80), pas le nôtre.
+        let advertised = if behind_relay {
+            settings.port
+        } else {
+            address.port()
+        };
+        let identity = Identity::new(settings.ip, advertised);
         let allowed = Arc::new(settings.allowed.clone());
         let bridge = Arc::new(Bridge::new(
             core,
@@ -109,16 +132,28 @@ impl Alexa {
                 tracing::error!("Alexa : le serveur s'est arrêté ({error})");
             }
         });
-        let discovery = Background::spawn("Alexa (découverte)", |token| async move {
-            tokio::select! {
-                () = token.cancelled() => {}
-                () = ssdp::serve(socket, identity, allowed) => {}
-            }
+        let discovery = socket.map(|socket| {
+            let identity = identity.clone();
+            Background::spawn("Alexa (découverte)", |token| async move {
+                tokio::select! {
+                    () = token.cancelled() => {}
+                    () = ssdp::serve(socket, identity, allowed) => {}
+                }
+            })
         });
-        tracing::info!(
-            "Alexa : pont Hue sur http://{address}/, {} appareil(s) exposé(s)",
-            lights.len()
-        );
+        if behind_relay {
+            tracing::info!(
+                "Alexa : pont Hue sur http://{address}/, derrière le relais {}:{}, {} appareil(s) exposé(s)",
+                identity.ip,
+                identity.port,
+                lights.len()
+            );
+        } else {
+            tracing::info!(
+                "Alexa : pont Hue sur http://{address}/, {} appareil(s) exposé(s)",
+                lights.len()
+            );
+        }
         Ok(Self {
             http,
             discovery,
@@ -128,7 +163,9 @@ impl Alexa {
     }
 
     pub async fn stop(self) {
-        self.discovery.stop().await;
+        if let Some(discovery) = self.discovery {
+            discovery.stop().await;
+        }
         self.http.stop().await;
     }
 }

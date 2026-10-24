@@ -15,6 +15,7 @@ use std::time::Duration;
 use axum::body::Body;
 use axum::extract::connect_info::MockConnectInfo;
 use axum::http::{Request, StatusCode};
+use ha_alexa::relay::{Relay, RelaySettings};
 use ha_alexa::{Alexa, Allowed, Bridge, Identity, Settings, numbers, parse, router};
 use ha_core::{Core, Event};
 use ha_storage::Store;
@@ -312,6 +313,7 @@ async fn the_bridge_runs_on_a_real_socket() {
     let settings = Settings {
         ip: Ipv4Addr::LOCALHOST,
         port: 0,
+        listen: None,
         discovery_port: 0,
         allowed: Allowed::LocalNetwork,
         devices: parse("- light.salon").unwrap(),
@@ -326,6 +328,70 @@ async fn the_bridge_runs_on_a_real_socket() {
     stream.read_to_string(&mut response).await.unwrap();
     assert!(response.starts_with("HTTP/1.1 200"), "{response}");
     assert!(response.contains("\"uniqueid\""), "{response}");
+    alexa.stop().await;
+}
+
+/// Envoie une requête HTTP brute et renvoie la réponse complète.
+async fn http_get(address: SocketAddr, path: &str) -> String {
+    let mut stream = tokio::net::TcpStream::connect(address).await.unwrap();
+    stream
+        .write_all(
+            format!(
+                "GET {path} HTTP/1.1
+Host: test
+Connection: close
+
+"
+            )
+            .as_bytes(),
+        )
+        .await
+        .unwrap();
+    let mut response = String::new();
+    tokio::time::timeout(Duration::from_secs(3), stream.read_to_string(&mut response))
+        .await
+        .unwrap()
+        .unwrap();
+    response
+}
+
+/// Docker Desktop : le pont écoute sur un port interne, derrière le relais.
+/// Il annonce l'adresse du relais (port 80), et l'Echo le joint à travers lui.
+#[tokio::test]
+async fn behind_the_relay_the_echo_reaches_the_bridge() {
+    let store = Store::open_in_memory().await.unwrap();
+    let core = Arc::new(Core::new());
+    let settings = Settings {
+        ip: Ipv4Addr::new(192, 168, 1, 20),
+        port: 80,
+        listen: Some("127.0.0.1:0".parse().unwrap()),
+        discovery_port: 0,
+        allowed: Allowed::LocalNetwork,
+        devices: parse("- light.salon").unwrap(),
+    };
+    let alexa = Alexa::start(settings, store, core).await.unwrap();
+    let relay = Relay::start(RelaySettings {
+        ip: Ipv4Addr::LOCALHOST,
+        port: 0,
+        discovery_port: 0,
+        target: alexa.address,
+        allowed: Allowed::LocalNetwork,
+    })
+    .await
+    .unwrap();
+
+    let description = http_get(relay.address, "/description.xml").await;
+    assert!(description.starts_with("HTTP/1.1 200"), "{description}");
+    // L'adresse annoncée est celle du relais, pas le port interne.
+    assert!(
+        description.contains("<URLBase>http://192.168.1.20:80/</URLBase>"),
+        "{description}"
+    );
+    let lights = http_get(relay.address, "/api/x/lights").await;
+    assert!(lights.starts_with("HTTP/1.1 200"), "{lights}");
+    assert!(lights.contains("\"uniqueid\""), "{lights}");
+
+    relay.stop().await;
     alexa.stop().await;
 }
 

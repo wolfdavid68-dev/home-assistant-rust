@@ -212,6 +212,10 @@ async fn main() -> ExitCode {
         ["protection-solaire", "check"] => cli::check_shade(&shade_path()),
         ["guard", "check"] => cli::check_guard(&areas_path(), &guard_path()),
         ["alexa", "check"] => cli::check_alexa(&alexa_path()),
+        ["alexa", "relay", rest @ ..] => match relay_settings(rest) {
+            Ok(settings) => cli::run_alexa_relay(settings, shutdown_signal()).await,
+            Err(error) => Err(error.into()),
+        },
         ["thermostats", "check"] => cli::check_thermostats(&thermostats_path()),
         ["persons", "check"] => cli::check_persons(&persons_path()),
         ["inputs", "check"] => cli::check_inputs(&inputs_path()),
@@ -1229,12 +1233,59 @@ pub(crate) fn alexa_path() -> std::path::PathBuf {
         .into()
 }
 
-/// Réglages d'Alexa (`HA_ALEXA_IP`, `HA_ALEXA_PORT`, `HA_ALEXA_ALLOWED`).
-/// `None` si `HA_ALEXA_IP` n'est pas indiquée : Alexa est désactivée.
+/// Réglages d'Alexa (`HA_ALEXA_IP`, `HA_ALEXA_PORT`, `HA_ALEXA_ALLOWED`,
+/// `HA_ALEXA_LISTEN`). `None` si `HA_ALEXA_IP` n'est pas indiquée : Alexa est
+/// désactivée.
 fn alexa_settings() -> Result<Option<ha_alexa::Settings>, String> {
     let Ok(ip) = std::env::var("HA_ALEXA_IP") else {
         return Ok(None);
     };
+    let (ip, port, allowed) = alexa_network(&ip)?;
+    let listen = match std::env::var("HA_ALEXA_LISTEN") {
+        Err(_) => None,
+        Ok(value) => Some(value.trim().parse().map_err(|_| {
+            format!("HA_ALEXA_LISTEN invalide : {value:?} (par exemple 0.0.0.0:8080)")
+        })?),
+    };
+    let devices = ha_alexa::load(&alexa_path())
+        .map_err(|error| format!("{} : {error}", alexa_path().display()))?;
+    Ok(Some(ha_alexa::Settings {
+        ip,
+        port,
+        listen,
+        discovery_port: ha_alexa::ssdp::PORT,
+        allowed,
+        devices,
+    }))
+}
+
+/// Réglages du relais (`ha-server alexa relay [pont]`) : les mêmes variables
+/// que le pont, et l'adresse du pont dans le conteneur.
+fn relay_settings(args: &[&str]) -> Result<ha_alexa::relay::RelaySettings, String> {
+    let target = match args {
+        [] => "127.0.0.1:8127",
+        [target] => target,
+        _ => return Err("usage : ha-server alexa relay [adresse du pont, 127.0.0.1:8127]".into()),
+    };
+    let target = target.parse().map_err(|_| {
+        format!("adresse du pont invalide : {target:?} (par exemple 127.0.0.1:8127)")
+    })?;
+    let ip = std::env::var("HA_ALEXA_IP").map_err(|_| {
+        "indique HA_ALEXA_IP, l'adresse de cette machine sur le réseau local : voir docs/alexa.md"
+            .to_owned()
+    })?;
+    let (ip, port, allowed) = alexa_network(&ip)?;
+    Ok(ha_alexa::relay::RelaySettings {
+        ip,
+        port,
+        discovery_port: ha_alexa::ssdp::PORT,
+        target,
+        allowed,
+    })
+}
+
+/// Adresse, port et Echo autorisés, communs au pont et au relais.
+fn alexa_network(ip: &str) -> Result<(std::net::Ipv4Addr, u16, ha_alexa::Allowed), String> {
     let ip: std::net::Ipv4Addr = ip.trim().parse().map_err(|_| {
         format!("HA_ALEXA_IP invalide : {ip:?} (l'adresse IPv4 de cette machine, par exemple 192.168.1.20)")
     })?;
@@ -1265,15 +1316,7 @@ fn alexa_settings() -> Result<Option<ha_alexa::Settings>, String> {
                 .collect::<Result<_, _>>()?,
         ),
     };
-    let devices = ha_alexa::load(&alexa_path())
-        .map_err(|error| format!("{} : {error}", alexa_path().display()))?;
-    Ok(Some(ha_alexa::Settings {
-        ip,
-        port,
-        discovery_port: ha_alexa::ssdp::PORT,
-        allowed,
-        devices,
-    }))
+    Ok((ip, port, allowed))
 }
 
 /// Lit la position de la maison (`HA_LATITUDE`, `HA_LONGITUDE`), pour le

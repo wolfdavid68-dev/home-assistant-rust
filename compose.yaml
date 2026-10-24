@@ -46,9 +46,9 @@ services:
       # HA_LONGITUDE: "2.35"
       # Météo locale avec Open-Meteo (voir docs/meteo.md), il faut la position :
       # HA_METEO: "on"
-      # Alexa en local (voir docs/alexa.md) : Linux uniquement, avec
-      # « network_mode: host » plus bas. Adresse de cette machine, et
-      # adresses de tes Echo :
+      # Alexa en local (voir docs/alexa.md). Linux : avec « network_mode:
+      # host » plus bas ; Windows, macOS : avec le relais (plus bas aussi).
+      # Adresse de cette machine, et adresses de tes Echo :
       # HA_ALEXA_IP: 192.168.1.20
       # HA_ALEXA_ALLOWED: 192.168.1.40,192.168.1.41
       # Vigilance Météo-France (voir docs/vigilance.md) : ton département, et la
@@ -89,6 +89,10 @@ services:
     # ligne « ports » ci-dessus ne sert alors plus : mets HA_BIND sur
     # l'adresse voulue (voir docs/alexa.md).
     # network_mode: host
+    # Docker Desktop (Windows, macOS) : pas de réseau de la machine. Garde ce
+    # réseau, ajoute HA_ALEXA_LISTEN: 0.0.0.0:8080 et le port
+    # "127.0.0.1:8127:8080", puis lance le relais sur la machine
+    # (« ha-server alexa relay », voir docs/alexa.md).
     # Compteur Linky sur un module USB : le conteneur ne voit que ce port, et
     # le groupe du port lui donne le droit de le lire. Ce groupe est un
     # numéro : celui que donne « ls -ln /dev/ttyUSB0 » (souvent 20, dialout).
