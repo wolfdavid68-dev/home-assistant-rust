@@ -964,7 +964,13 @@ body.tablet .clock {
 .saver.waking-calm { animation: wake-fade 0.3s ease forwards; }
 @keyframes wake-fade { to { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
-  .saver.waking { -webkit-mask-image: none; mask-image: none; animation: wake-fade 0.3s ease forwards; }
+  /* Un fondu ne bouge rien : il échappe à la règle qui coupe toutes les
+     animations en mouvement réduit (plus bas dans ce fichier). */
+  .saver:is(.waking, .waking-calm) {
+    -webkit-mask-image: none;
+    mask-image: none;
+    animation: wake-fade 0.3s ease forwards !important;
+  }
   .wake-ring { display: none; }
 }
 
