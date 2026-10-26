@@ -6,13 +6,17 @@
 # Le tableau de bord affiche une section par pièce, dans cet ordre. Les
 # appareils qui ne sont dans aucune pièce restent rangés par type en dessous.
 # `name` (facultatif) remplace le nom affiché d'un appareil.
+# `aliases` (facultatif, dix au plus) : ses autres noms, compris par Assist
+# comme le nom (« allume la lampe du canapé »). Voir docs/surnoms.md.
 
 - area: Salon
   entities:
     - entity: light.salon
       name: Lampe
+      aliases: [la lampe du canapé, la grande lumière]
     - entity: cover.volet_salon
       name: Volet
+      aliases: [le store]
     - sensor.temperature_salon
 
 - area: Cuisine

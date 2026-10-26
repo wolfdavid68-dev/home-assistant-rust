@@ -335,6 +335,7 @@ mod tests {
             state: CORE.states.get(&entity_id).unwrap(),
             name: name.into(),
             area: area.map(str::to_owned),
+            aliases: Vec::new(),
         }
     }
 

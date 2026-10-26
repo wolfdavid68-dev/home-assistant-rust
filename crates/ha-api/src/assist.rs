@@ -28,6 +28,7 @@ use serde_json::{Value, json};
 
 use crate::ApiState;
 use crate::auth::Authenticated;
+use crate::confirm;
 use crate::conversation;
 use crate::error::ApiError;
 use crate::rest::{Outcome, execute, parse_json};
@@ -83,18 +84,27 @@ pub(crate) fn devices(state: &ApiState, auth: &Authenticated) -> Vec<Device> {
                 area.entities
                     .iter()
                     .find(|member| member.entity_id == *entity.entity_id())
-                    .map(|member| (area.name.clone(), member.name.clone()))
+                    .map(|member| {
+                        (
+                            Some(area.name.clone()),
+                            member.name.clone(),
+                            member.aliases.clone(),
+                        )
+                    })
             });
+            // Les autres noms (étape 94) : seulement pour un appareil déjà
+            // visible, donc jamais plus de droits que le nom.
+            let (placed_area, label, aliases) = placed.unwrap_or_default();
             let name = entity
                 .attributes()
                 .get("friendly_name")
                 .and_then(Value::as_str)
                 .map(str::to_owned)
-                .or_else(|| placed.as_ref().and_then(|(_, name)| name.clone()))
+                .or(label)
                 .unwrap_or_else(|| entity.entity_id().to_string());
             // Sans pièce dans areas.yaml : celle que donne l'intégration
             // (la pièce SmartThings, étape 86).
-            let area = placed.map(|(area, _)| area).or_else(|| {
+            let area = placed_area.or_else(|| {
                 entity
                     .attributes()
                     .get("piece")
@@ -104,6 +114,7 @@ pub(crate) fn devices(state: &ApiState, auth: &Authenticated) -> Vec<Device> {
             Device {
                 state: entity,
                 name,
+                aliases,
                 area,
             }
         })
@@ -236,6 +247,9 @@ async fn run(
     orders: Vec<Order>,
     agent: bool,
 ) -> (&'static str, String) {
+    // Abonné avant l'envoi : aucun changement d'état n'échappe (étape 95).
+    let mut events = state.core.bus.subscribe();
+    let mut watches = Vec::new();
     let mut done = Vec::new();
     let mut held = Vec::new();
     let mut failed = Vec::new();
@@ -254,6 +268,16 @@ async fn run(
         {
             summary = format!("{item} ajouté à « {} »", order.name);
         }
+        // Avant l'envoi : « bascule » se lit sur l'état d'avant.
+        let watch = confirm::watch(
+            &state.core.states,
+            &order.domain,
+            &order.service,
+            &order.entity_id,
+            &order.data,
+            &order.name,
+        );
+        let entity_id = order.entity_id.clone();
         match execute(
             state,
             auth,
@@ -266,7 +290,10 @@ async fn run(
         )
         .await
         {
-            Ok(Outcome::Sent | Outcome::Done) => done.push(summary),
+            Ok(Outcome::Sent | Outcome::Done) => {
+                done.push((entity_id, summary));
+                watches.extend(watch);
+            }
             Ok(Outcome::Held(reason)) => held.push(format!("{summary} ({reason})")),
             Err(ApiError::ConfirmationRequired) => failed.push(format!(
                 "pour {summary}, redonne ton mot de passe : touche l'appareil dans le tableau de bord"
@@ -274,9 +301,32 @@ async fn run(
             Err(error) => failed.push(explain(error)),
         }
     }
+    // Envoyé n'est pas fait : on attend un peu que les appareils obéissent.
+    let unconfirmed = if watches.is_empty() {
+        Vec::new()
+    } else {
+        confirm::wait(
+            &mut events,
+            &state.core.states,
+            watches,
+            confirm::CONFIRM_WITHIN,
+        )
+        .await
+    };
+    let unavailable = unconfirmed
+        .iter()
+        .any(|item| matches!(item, confirm::Unconfirmed::Unavailable(..)));
+    let done: Vec<String> = done
+        .into_iter()
+        .filter(|(entity_id, _)| !unconfirmed.iter().any(|item| item.entity_id() == entity_id))
+        .map(|(_, summary)| summary)
+        .collect();
     let mut parts = Vec::new();
     if !done.is_empty() {
         parts.push(format!("C'est fait : {}.", done.join(", ")));
+    }
+    if let Some(sentence) = confirm::sentence(&unconfirmed) {
+        parts.push(sentence);
     }
     if !held.is_empty() {
         parts.push(format!("En attente de validation : {}.", held.join(", ")));
@@ -284,7 +334,7 @@ async fn run(
     if !failed.is_empty() {
         parts.push(format!("Pas fait : {}.", failed.join(" ; ")));
     }
-    let kind = if failed.is_empty() {
+    let kind = if failed.is_empty() && !unavailable {
         "action_done"
     } else {
         "error"

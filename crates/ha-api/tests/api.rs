@@ -38,15 +38,25 @@ impl TestApp {
 
     /// `editable` : l'éditeur d'automatisations accepte-t-il les modifications ?
     async fn with_editor(editable: bool) -> Self {
+        Self::build(
+            editable,
+            "- {area: Cuisine, entities: [{entity: switch.prise_cafe, name: Cafetière}]}",
+        )
+        .await
+    }
+
+    /// Avec ces pièces (le contenu d'un `areas.yaml`).
+    async fn with_areas(areas: &str) -> Self {
+        Self::build(true, areas).await
+    }
+
+    async fn build(editable: bool, areas: &str) -> Self {
         let store = Store::open_in_memory().await.unwrap();
         let auth = Auth::new(&store).await.unwrap();
         auth.create_user("david", PASSWORD).await.unwrap();
         let core = Arc::new(Core::new());
         let recorder = Recorder::start(store.clone(), Arc::clone(&core));
-        let areas = ha_areas::parse(
-            "- {area: Cuisine, entities: [{entity: switch.prise_cafe, name: Cafetière}]}",
-        )
-        .unwrap();
+        let areas = ha_areas::parse(areas).unwrap();
         let file = ha_automation::parse_configs(
             "- {id: matin, triggers: [{trigger: time, at: '07:30'}], \
                actions: [{action: cover.open_cover, target: {entity_id: cover.salon}}]}",
@@ -2410,6 +2420,151 @@ async fn assist_understands_french_and_obeys_the_same_rules() {
     assert_eq!(status, StatusCode::UNAUTHORIZED);
 }
 
+/// Les autres noms (étape 94) : compris par Assist comme le nom, servis par
+/// le WebSocket, sans jamais donner plus de droits que le nom.
+#[tokio::test]
+async fn other_names_work_like_names_and_never_give_more_rights() {
+    let app = TestApp::with_areas(
+        "
+- area: Salon
+  entities:
+    - {entity: light.salon, name: Lampe salon, aliases: [la lampe du canapé]}
+    - {entity: cover.salon, name: Volet salon, aliases: [le store]}
+- area: Entrée
+  entities:
+    - {entity: lock.entree, name: Serrure, aliases: [la grosse porte]}
+    - {entity: cover.garage, name: Porte du garage, aliases: [le store]}
+",
+    )
+    .await;
+    furnish(&app);
+    let core = &app.state.core;
+    core.guard.configure(
+        ha_core::Policy {
+            protected: [("light.salon".parse().unwrap(), "Salon".to_owned())].into(),
+            quiet_hours: None,
+        },
+        || 0,
+    );
+    let david = app.login().await;
+    let guest = app.login_as("visiteur", ha_auth::Role::Guest).await;
+    let say = |token: &String, text: &str| {
+        let token = token.clone();
+        let text = text.to_owned();
+        let app = &app;
+        async move {
+            let (_, body) = app
+                .request(
+                    "POST",
+                    "/api/conversation/process",
+                    Some(&token),
+                    Some(json!({"text": text})),
+                )
+                .await;
+            (
+                body["response"]["response_type"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_owned(),
+                body["response"]["speech"]["plain"]["speech"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_owned(),
+            )
+        }
+    };
+
+    // L'autre nom et la pièce : le store du salon, pas celui de l'entrée.
+    let mut events = core.bus.subscribe();
+    let (kind, _) = say(&david, "Ferme le store du salon").await;
+    assert_eq!(kind, "action_done");
+    let event = events.recv().await.unwrap();
+    let ha_core::Event::CallService { entity_id, .. } = event.as_ref() else {
+        panic!("un ordre est attendu");
+    };
+    assert_eq!(entity_id.as_str(), "cover.salon");
+    // Deux appareils portent ce nom : Assist demande lequel.
+    let (kind, speech) = say(&david, "ferme le store").await;
+    assert_eq!(kind, "error");
+    assert!(
+        speech.starts_with("Lequel ?")
+            && speech.contains("Volet salon")
+            && speech.contains("Porte du garage"),
+        "{speech}"
+    );
+
+    // L'invité : la pièce protégée reste protégée sous un autre nom…
+    let (kind, speech) = say(&guest, "allume la lampe du canapé").await;
+    assert_eq!(kind, "action_done");
+    assert!(
+        speech.starts_with("En attente de validation : allumer light.salon"),
+        "{speech}"
+    );
+    assert_eq!(core.held_orders().len(), 1);
+    // … et la serrure, invisible pour lui, ne se trouve pas par son autre nom.
+    let mut events = core.bus.subscribe();
+    let (kind, _) = say(&guest, "déverrouille la grosse porte").await;
+    assert_eq!(kind, "error");
+    assert!(events.try_recv().is_err(), "aucun ordre ne doit être parti");
+    assert_eq!(
+        core.states
+            .get(&"lock.entree".parse().unwrap())
+            .unwrap()
+            .state(),
+        "locked"
+    );
+
+    // Le WebSocket, comme le registre des appareils de Home Assistant.
+    let addr = spawn_server(&app).await;
+    let connect = |token: String| async move {
+        let (mut socket, _) =
+            tokio_tungstenite::connect_async(format!("ws://{addr}/api/websocket"))
+                .await
+                .unwrap();
+        assert_eq!(ws_recv(&mut socket).await["type"], "auth_required");
+        ws_send(&mut socket, json!({"type": "auth", "access_token": token})).await;
+        assert_eq!(ws_recv(&mut socket).await["type"], "auth_ok");
+        socket
+    };
+    let mut socket = connect(david.clone()).await;
+    ws_send(
+        &mut socket,
+        json!({"id": 1, "type": "config/entity_registry/get", "entity_id": "lock.entree"}),
+    )
+    .await;
+    let reply = ws_recv(&mut socket).await;
+    assert_eq!(reply["success"], true, "{reply}");
+    assert_eq!(reply["result"]["name"], "Serrure");
+    assert_eq!(reply["result"]["aliases"], json!(["la grosse porte"]));
+    assert_eq!(reply["result"]["area_id"], "entree");
+
+    let mut socket = connect(guest.clone()).await;
+    ws_send(
+        &mut socket,
+        json!({"id": 1, "type": "config/entity_registry/get", "entity_id": "lock.entree"}),
+    )
+    .await;
+    assert_eq!(ws_recv(&mut socket).await["error"]["code"], "not_found");
+    ws_send(
+        &mut socket,
+        json!({
+            "id": 2,
+            "type": "config/entity_registry/get_entries",
+            "entity_ids": ["light.salon", "lock.entree", "pas un appareil"],
+        }),
+    )
+    .await;
+    let reply = ws_recv(&mut socket).await;
+    assert_eq!(
+        reply["result"]["light.salon"]["aliases"],
+        json!(["la lampe du canapé"])
+    );
+    assert_eq!(reply["result"]["lock.entree"], Value::Null);
+    assert_eq!(reply["result"]["pas un appareil"], Value::Null);
+
+    app.state.shutdown();
+}
+
 /// Une pièce donnée par l'intégration (SmartThings, étape 86) compte pour
 /// Assist comme une pièce d'areas.yaml.
 #[tokio::test]
@@ -2717,6 +2872,109 @@ async fn the_tablet_follows_a_spoken_conversation() {
         )
         .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+/// La confirmation après un ordre (étape 95) : « C'est fait » seulement si
+/// l'appareil a changé d'état, sinon on le dit honnêtement.
+#[tokio::test]
+async fn assist_says_done_only_when_the_device_obeyed() {
+    let app = TestApp::new().await;
+    let core = Arc::clone(&app.state.core);
+    for (id, value, name) in [
+        ("light.salon", "off", "Lampe salon"),
+        ("cover.chambre", "open", "Volet chambre"),
+        ("light.cuisine", "unavailable", "Lampe cuisine"),
+    ] {
+        let mut attributes = Attributes::new();
+        attributes.insert("friendly_name".into(), name.into());
+        core.states
+            .set_by("mqtt", id.parse().unwrap(), value, attributes)
+            .unwrap();
+    }
+    // Une fausse lampe : elle s'allume 200 ms après l'ordre. Le volet, lui,
+    // ne répond jamais.
+    let mut events = core.bus.subscribe();
+    let lamp = Arc::clone(&core);
+    tokio::spawn(async move {
+        while let Ok(event) = events.recv().await {
+            if let ha_core::Event::CallService {
+                domain, service, ..
+            } = event.as_ref()
+                && (domain.as_str(), service.as_str()) == ("light", "turn_on")
+            {
+                tokio::time::sleep(Duration::from_millis(200)).await;
+                let id: ha_core::EntityId = "light.salon".parse().unwrap();
+                let attributes = lamp.states.get(&id).unwrap().attributes().clone();
+                lamp.states.set(id, "on", attributes).unwrap();
+            }
+        }
+    });
+    let david = app.login().await;
+    let say = |text: &str| {
+        let text = text.to_owned();
+        let app = &app;
+        let david = &david;
+        async move {
+            let started = std::time::Instant::now();
+            let (status, body) = app
+                .request(
+                    "POST",
+                    "/api/conversation/process",
+                    Some(david),
+                    Some(json!({ "text": text })),
+                )
+                .await;
+            assert_eq!(status, StatusCode::OK, "{body}");
+            (
+                body["response"]["response_type"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned(),
+                body["response"]["speech"]["plain"]["speech"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned(),
+                started.elapsed(),
+            )
+        }
+    };
+
+    // Confirmé après un moment : la réponse n'attend pas la fin du délai.
+    let (kind, speech, took) = say("allume la lampe du salon").await;
+    assert_eq!(
+        (kind.as_str(), speech.as_str()),
+        ("action_done", "C'est fait : allumer Lampe salon.")
+    );
+    assert!(took < Duration::from_secs(2), "{took:?}");
+
+    // Déjà dans le bon état : pas d'attente.
+    let (kind, speech, took) = say("allume la lampe du salon").await;
+    assert_eq!(
+        (kind.as_str(), speech.as_str()),
+        ("action_done", "C'est fait : allumer Lampe salon.")
+    );
+    assert!(took < Duration::from_secs(1), "{took:?}");
+
+    // Jamais confirmé : on le dit, au bout de 3 s au plus.
+    let (kind, speech, took) = say("ferme le volet de la chambre").await;
+    assert_eq!(kind, "action_done");
+    assert_eq!(
+        speech,
+        "J'ai envoyé l'ordre, mais Volet chambre n'a pas encore répondu."
+    );
+    assert!(took >= Duration::from_secs(3), "{took:?}");
+    assert!(took < Duration::from_secs(5), "{took:?}");
+
+    // Indisponible : dit tout de suite.
+    let (kind, speech, took) = say("allume la lampe de la cuisine").await;
+    assert_eq!(
+        (kind.as_str(), speech.as_str()),
+        (
+            "error",
+            "J'ai envoyé l'ordre, mais Lampe cuisine est indisponible."
+        )
+    );
+    assert!(took < Duration::from_secs(1), "{took:?}");
 }
 
 /// Un morceau envoyé au mot d'appel : (statut, réponse).

@@ -10,9 +10,9 @@
 //! 1. la phrase est mise en minuscules, sans accents ni ponctuation ;
 //! 2. un **verbe** dit quoi faire (allume, éteins, ouvre, ferme, mets à…),
 //!    ou c'est une **question** ;
-//! 3. l'**appareil** est trouvé par son nom (tous ses mots sont dans la
-//!    phrase), sinon par sa **pièce** et son **type** (« les lumières du
-//!    salon ») ;
+//! 3. l'**appareil** est trouvé par son nom ou l'un de ses autres noms
+//!    (étape 94 : tous ses mots sont dans la phrase), sinon par sa **pièce**
+//!    et son **type** (« les lumières du salon ») ;
 //! 4. une **valeur** facultative : « à 50 % », « à 21 degrés ».
 //!
 //! Ce module ne fait que comprendre : l'API exécute les ordres avec les
@@ -37,6 +37,9 @@ pub struct Device {
     pub state: State,
     /// Son nom lisible (« Volet chambre »).
     pub name: String,
+    /// Ses autres noms (« le store », « la lampe du canapé »), compris
+    /// exactement comme le nom (étape 94).
+    pub aliases: Vec<String>,
     /// Sa pièce (« Chambre »), si elle est rangée dans une pièce.
     pub area: Option<String>,
 }
@@ -528,26 +531,34 @@ fn find<'a>(
         .max_by_key(|area| keywords(&normalize(area)).len());
     let area_words: Vec<String> = area.map(|a| keywords(&normalize(a))).unwrap_or_default();
 
-    // 1. Par le nom, ou par l'identifiant (« salon » dans `cover.salon`) :
-    //    tous ses mots sont dans la phrase. Un nom qui n'est que celui de la
-    //    pièce (« Salon ») ne compte que si le type est dit.
+    // 1. Par le nom, un autre nom (étape 94) ou l'identifiant (« salon »
+    //    dans `cover.salon`) : tous ses mots sont dans la phrase. Un nom qui
+    //    n'est que celui de la pièce (« Salon ») ne compte que si le type est
+    //    dit. Un appareil rangé dans une autre pièce que celle dite n'est pas
+    //    retenu (« le store de la chambre » n'est pas celui du salon), sauf
+    //    si son nom dit lui-même cette pièce.
     let matched = |device: &Device| -> Option<Vec<String>> {
         let object = device.state.entity_id().object_id().replace('_', " ");
-        [
-            keywords(&normalize(&device.name)),
-            keywords(&normalize(&object)),
-        ]
-        .into_iter()
-        .filter(|wanted| {
-            !wanted.is_empty() && wanted.iter().all(|word| present.contains(word.as_str()))
-        })
-        .max_by_key(Vec::len)
+        names(device)
+            .map(|name| keywords(&normalize(name)))
+            .chain([keywords(&normalize(&object))])
+            .filter(|wanted| {
+                !wanted.is_empty() && wanted.iter().all(|word| present.contains(word.as_str()))
+            })
+            .max_by_key(Vec::len)
+    };
+    let elsewhere = |device: &Device, words: &[String]| match (area, device.area.as_deref()) {
+        (Some(said), Some(own)) => {
+            own != said && !area_words.iter().all(|word| words.contains(word))
+        }
+        _ => false,
     };
     let named: Vec<(&Device, usize)> = devices
         .iter()
         .filter(allowed)
         .filter_map(|device| matched(device).map(|words| (device, words)))
         .filter(|(_, words)| hint.is_some() || !words.iter().all(|word| area_words.contains(word)))
+        .filter(|(device, words)| !elsewhere(device, words))
         .map(|(device, words)| (device, words.len()))
         .collect();
     if let Some(longest) = named.iter().map(|(_, len)| *len).max() {
@@ -606,6 +617,11 @@ fn find<'a>(
         };
     }
     Err(NotUnderstood::NoDevice)
+}
+
+/// Le nom puis les autres noms d'un appareil.
+fn names(device: &Device) -> impl Iterator<Item = &String> {
+    std::iter::once(&device.name).chain(&device.aliases)
 }
 
 /// Comprend `text` parmi les appareils que la personne peut voir.
@@ -720,7 +736,9 @@ fn tokens(text: &str) -> Vec<String> {
 /// « course »).
 fn list_words(device: &Device) -> Vec<String> {
     let object = device.state.entity_id().object_id().replace('_', " ");
-    let mut words = keywords(&normalize(&device.name));
+    let mut words: Vec<String> = names(device)
+        .flat_map(|name| keywords(&normalize(name)))
+        .collect();
     words.extend(keywords(&normalize(&object)));
     words.retain(|word| word != "liste");
     words
@@ -1209,6 +1227,7 @@ mod tests {
         Device {
             state: core.states.get(&entity_id).unwrap(),
             name: name.into(),
+            aliases: Vec::new(),
             area: area.map(str::to_owned),
         }
     }
@@ -1598,6 +1617,125 @@ mod tests {
             panic!()
         };
         assert_eq!(orders.len(), 2);
+    }
+
+    /// La maison de `home()`, avec des autres noms (étape 94).
+    fn with_aliases() -> Vec<Device> {
+        let mut devices = home();
+        for device in &mut devices {
+            device.aliases = match device.state.entity_id().as_str() {
+                "light.lampe_salon" => {
+                    vec!["La Lampe du Canapé".into(), "la grande lumière".into()]
+                }
+                "cover.salon" | "cover.chambre" => vec!["le store".into()],
+                _ => Vec::new(),
+            };
+        }
+        devices
+    }
+
+    fn ids(text: &str, devices: &[Device]) -> Vec<String> {
+        match understand(text, devices).unwrap() {
+            Understood::Orders(orders) => orders.iter().map(|o| o.entity_id.to_string()).collect(),
+            Understood::Answer(answer) => panic!("réponse inattendue : {answer}"),
+        }
+    }
+
+    #[test]
+    fn a_device_is_found_by_another_name() {
+        let devices = with_aliases();
+        // Accents, majuscules et articles comptent comme pour le nom.
+        assert_eq!(
+            ids("allume la lampe du canape", &devices),
+            ["light.lampe_salon"]
+        );
+        assert_eq!(
+            ids("Éteins LA GRANDE LUMIÈRE !", &devices),
+            ["light.lampe_salon"]
+        );
+        let Understood::Orders(orders) =
+            understand("mets la grande lumière à 40 %", &devices).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(orders[0].service, "turn_on");
+        assert_eq!(orders[0].data["brightness_pct"], 40);
+        // La réponse garde le vrai nom.
+        assert_eq!(orders[0].name, "Lampe d'appoint");
+        // Une question aussi.
+        assert_eq!(
+            understand("la lampe du canapé est-elle allumée ?", &devices),
+            Ok(Understood::Answer(
+                "Lampe d'appoint (Salon) : allumé.".into()
+            ))
+        );
+        // Sans l'autre nom, « la lampe » seule : laquelle ?
+        assert!(matches!(
+            understand("allume la lampe du canapé", &home()),
+            Err(NotUnderstood::Ambiguous(_))
+        ));
+    }
+
+    #[test]
+    fn another_name_shared_by_two_devices_is_ambiguous() {
+        let devices = with_aliases();
+        // « le store » est aux deux volets : comme un nom en double.
+        assert_eq!(
+            understand("ferme le store", &devices),
+            Err(NotUnderstood::Ambiguous(vec![
+                "Volet chambre".into(),
+                "Volet salon".into()
+            ]))
+        );
+        // La pièce départage, au pluriel les deux.
+        assert_eq!(
+            ids("ferme le store de la chambre", &devices),
+            ["cover.chambre"]
+        );
+        assert_eq!(ids("ferme les stores", &devices).len(), 2);
+        // Un autre nom sans pièce n'emporte pas l'appareil d'une autre pièce
+        // que celle dite.
+        let core = Core::new();
+        let devices = vec![
+            Device {
+                aliases: vec!["le store".into()],
+                ..device(&core, "cover.a", "open", "Baie", Some("Salon"), json!({}))
+            },
+            device(
+                &core,
+                "cover.b",
+                "open",
+                "Fenêtre",
+                Some("Chambre"),
+                json!({}),
+            ),
+        ];
+        assert_eq!(ids("ferme le store de la chambre", &devices), ["cover.b"]);
+        assert_eq!(ids("ferme le store", &devices), ["cover.a"]);
+    }
+
+    #[test]
+    fn another_name_never_reaches_a_hidden_device() {
+        // Assist ne reçoit que les appareils visibles du compte : l'autre
+        // nom d'un appareil caché ne désigne rien.
+        let devices: Vec<Device> = with_aliases()
+            .into_iter()
+            .filter(|d| d.state.entity_id().as_str() != "light.lampe_salon")
+            .collect();
+        assert_eq!(
+            understand("allume la grande lumière", &devices),
+            Err(NotUnderstood::Ambiguous(vec![
+                "Plafonnier salon".into(),
+                "Lampe chambre".into()
+            ]))
+        );
+        assert_eq!(
+            understand("allume la lampe du canapé", &devices),
+            Err(NotUnderstood::Ambiguous(vec![
+                "Plafonnier salon".into(),
+                "Lampe chambre".into()
+            ]))
+        );
     }
 
     #[test]
