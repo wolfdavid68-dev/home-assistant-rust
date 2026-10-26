@@ -22,6 +22,7 @@ use serde_json::{Value, json};
 
 use crate::ApiState;
 use crate::auth::Authenticated;
+use crate::confirm;
 use crate::error::ApiError;
 use crate::rest::{Outcome, execute, parse_json};
 use crate::roles;
@@ -150,6 +151,9 @@ pub(crate) async fn converse(
         Understood::Answer(answer) => return ("query_answer", capitalized(&answer)),
         Understood::Orders(orders) => orders,
     };
+    // Abonné avant l'envoi : aucun changement d'état n'échappe (étape 95).
+    let mut events = state.core.bus.subscribe();
+    let mut watches = Vec::new();
     let mut done = Vec::new();
     let mut held = Vec::new();
     let mut failed = Vec::new();
@@ -168,6 +172,16 @@ pub(crate) async fn converse(
         {
             summary = format!("{item} ajouté à « {} »", order.name);
         }
+        // Avant l'envoi : « bascule » se lit sur l'état d'avant.
+        let watch = confirm::watch(
+            &state.core.states,
+            &order.domain,
+            &order.service,
+            &order.entity_id,
+            &order.data,
+            &order.name,
+        );
+        let entity_id = order.entity_id.clone();
         match execute(
             state,
             auth,
@@ -180,7 +194,10 @@ pub(crate) async fn converse(
         )
         .await
         {
-            Ok(Outcome::Sent | Outcome::Done) => done.push(summary),
+            Ok(Outcome::Sent | Outcome::Done) => {
+                done.push((entity_id, summary));
+                watches.extend(watch);
+            }
             Ok(Outcome::Held(reason)) => held.push(format!("{summary} ({reason})")),
             Err(ApiError::ConfirmationRequired) => failed.push(format!(
                 "pour {summary}, redonne ton mot de passe : touche l'appareil dans le tableau de bord"
@@ -188,9 +205,32 @@ pub(crate) async fn converse(
             Err(error) => failed.push(explain(error)),
         }
     }
+    // Envoyé n'est pas fait : on attend un peu que les appareils obéissent.
+    let unconfirmed = if watches.is_empty() {
+        Vec::new()
+    } else {
+        confirm::wait(
+            &mut events,
+            &state.core.states,
+            watches,
+            confirm::CONFIRM_WITHIN,
+        )
+        .await
+    };
+    let unavailable = unconfirmed
+        .iter()
+        .any(|item| matches!(item, confirm::Unconfirmed::Unavailable(..)));
+    let done: Vec<String> = done
+        .into_iter()
+        .filter(|(entity_id, _)| !unconfirmed.iter().any(|item| item.entity_id() == entity_id))
+        .map(|(_, summary)| summary)
+        .collect();
     let mut parts = Vec::new();
     if !done.is_empty() {
         parts.push(format!("C'est fait : {}.", done.join(", ")));
+    }
+    if let Some(sentence) = confirm::sentence(&unconfirmed) {
+        parts.push(sentence);
     }
     if !held.is_empty() {
         parts.push(format!("En attente de validation : {}.", held.join(", ")));
@@ -198,7 +238,7 @@ pub(crate) async fn converse(
     if !failed.is_empty() {
         parts.push(format!("Pas fait : {}.", failed.join(" ; ")));
     }
-    let kind = if failed.is_empty() {
+    let kind = if failed.is_empty() && !unavailable {
         "action_done"
     } else {
         "error"

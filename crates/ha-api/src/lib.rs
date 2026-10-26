@@ -39,6 +39,7 @@
 mod assist;
 mod auth;
 mod automations;
+mod confirm;
 mod drawing;
 mod error;
 mod json;
