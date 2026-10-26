@@ -2642,6 +2642,229 @@ async fn assist_adds_to_the_shopping_list() {
     assert_eq!(data["item"], "Pain de mie");
 }
 
+/// Une phrase dans une conversation (étape 96) : `(type, réponse,
+/// conversation_id, continuer)`.
+async fn say_in(
+    app: &TestApp,
+    token: &str,
+    text: &str,
+    conversation_id: Option<&str>,
+) -> (String, String, Option<String>, bool) {
+    let mut body = json!({"text": text, "language": "fr"});
+    if let Some(id) = conversation_id {
+        body["conversation_id"] = json!(id);
+    }
+    let (status, body) = app
+        .request("POST", "/api/conversation/process", Some(token), Some(body))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    (
+        body["response"]["response_type"]
+            .as_str()
+            .unwrap()
+            .to_owned(),
+        body["response"]["speech"]["plain"]["speech"]
+            .as_str()
+            .unwrap()
+            .to_owned(),
+        body["conversation_id"].as_str().map(str::to_owned),
+        body["continue_conversation"].as_bool().unwrap(),
+    )
+}
+
+/// Deux lampes rangées dans deux pièces.
+fn two_rooms(app: &TestApp) {
+    for (id, name, room) in [
+        ("light.lampe_salon", "Lampe", "Salon"),
+        ("light.plafonnier_cuisine", "Plafonnier", "Cuisine"),
+    ] {
+        let mut attributes = Attributes::new();
+        attributes.insert("friendly_name".into(), name.into());
+        attributes.insert("piece".into(), room.into());
+        app.state
+            .core
+            .states
+            .set(id.parse().unwrap(), "off", attributes)
+            .unwrap();
+    }
+}
+
+/// L'ordre suivant sur le bus : `(service, entité)`.
+async fn next_order(
+    events: &mut tokio::sync::broadcast::Receiver<Arc<ha_core::Event>>,
+) -> (String, String) {
+    loop {
+        let event = tokio::time::timeout(Duration::from_secs(5), events.recv())
+            .await
+            .expect("un ordre est attendu")
+            .unwrap();
+        if let ha_core::Event::CallService {
+            service, entity_id, ..
+        } = event.as_ref()
+        {
+            return (service.clone(), entity_id.to_string());
+        }
+    }
+}
+
+/// Enchaîner les phrases (étape 96) : « et la cuisine aussi »,
+/// « éteins-la », puis « merci » qui termine la conversation.
+#[tokio::test]
+async fn assist_follows_the_conversation() {
+    let app = TestApp::new().await;
+    two_rooms(&app);
+    let david = app.login().await;
+    let mut events = app.state.core.bus.subscribe();
+
+    let (kind, _, id, more) = say_in(&app, &david, "allume la lumière du salon", None).await;
+    assert_eq!(kind, "action_done");
+    assert!(more, "la tablette peut écouter la suite");
+    let id = id.expect("un conversation_id");
+    assert_eq!(id.len(), 32);
+    assert_eq!(
+        next_order(&mut events).await,
+        ("turn_on".into(), "light.lampe_salon".into())
+    );
+
+    let (kind, speech, same, _) = say_in(&app, &david, "et la cuisine aussi", Some(&id)).await;
+    assert_eq!(kind, "action_done", "{speech}");
+    assert_eq!(same.as_deref(), Some(id.as_str()));
+    assert_eq!(
+        next_order(&mut events).await,
+        ("turn_on".into(), "light.plafonnier_cuisine".into())
+    );
+
+    let (kind, speech, _, _) = say_in(&app, &david, "Éteins-la.", Some(&id)).await;
+    assert_eq!(kind, "action_done", "{speech}");
+    assert_eq!(
+        next_order(&mut events).await,
+        ("turn_off".into(), "light.plafonnier_cuisine".into())
+    );
+
+    // « Merci » : une réponse courte, et c'est fini.
+    let (kind, speech, _, more) = say_in(&app, &david, "Merci !", Some(&id)).await;
+    assert_eq!(
+        (kind.as_str(), speech.as_str()),
+        ("action_done", "Avec plaisir.")
+    );
+    assert!(!more);
+    // Le contexte est oublié.
+    let (kind, _, _, _) = say_in(&app, &david, "éteins-la", Some(&id)).await;
+    assert_eq!(kind, "error");
+
+    // Sans conversation_id : pas de suite possible.
+    let (kind, _, _, _) = say_in(&app, &david, "et la cuisine aussi", None).await;
+    assert_eq!(kind, "error");
+}
+
+/// Une conversation appartient à son compte, et une suite passe par les
+/// mêmes droits qu'une phrase complète.
+#[tokio::test]
+async fn a_conversation_keeps_the_rights_of_its_account() {
+    let app = TestApp::new().await;
+    two_rooms(&app);
+    furnish(&app);
+    let david = app.login().await;
+    let guest = app.login_as("visiteur", ha_auth::Role::Guest).await;
+
+    let (_, _, id, _) = say_in(&app, &david, "allume la lumière du salon", None).await;
+    let id = id.unwrap();
+    // Un autre compte qui présente l'identifiant : une nouvelle conversation,
+    // sans le contexte de David.
+    let (kind, _, other, _) = say_in(&app, &guest, "éteins-la", Some(&id)).await;
+    assert_eq!(kind, "error");
+    assert_ne!(other.as_deref(), Some(id.as_str()));
+
+    // L'invité ferme le volet du salon, puis « et le garage » : refusé,
+    // comme s'il l'avait demandé en entier.
+    let (kind, speech, id, _) = say_in(&app, &guest, "ferme le volet du salon", None).await;
+    assert_eq!(kind, "action_done", "{speech}");
+    let (kind, speech, _, _) = say_in(&app, &guest, "et le garage", id.as_deref()).await;
+    assert_eq!(kind, "error", "{speech}");
+    assert!(speech.starts_with("Pas fait"), "{speech}");
+
+    // Un identifiant mal formé est ignoré.
+    let (kind, _, fresh, _) = say_in(&app, &david, "éteins-la", Some("../../etc")).await;
+    assert_eq!(kind, "error");
+    assert_eq!(fresh.map(|id| id.len()), Some(32));
+}
+
+/// Un faux service d'écoute (comme sherpa-onnx, par WebSocket) : il répond
+/// les phrases données, une par son reçu, et compte les sons.
+async fn fake_listener(
+    sentences: Vec<&'static str>,
+) -> (String, Arc<std::sync::atomic::AtomicUsize>) {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let heard = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let count = Arc::clone(&heard);
+    tokio::spawn(async move {
+        for sentence in sentences {
+            let Ok((stream, _)) = listener.accept().await else {
+                return;
+            };
+            let mut socket = tokio_tungstenite::accept_async(stream).await.unwrap();
+            let Some(Ok(Message::Binary(_))) = socket.next().await else {
+                panic!("un son est attendu");
+            };
+            count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            socket
+                .send(Message::Text(json!({"text": sentence}).to_string().into()))
+                .await
+                .unwrap();
+            let _ = socket.next().await;
+        }
+    });
+    (format!("ws://{address}"), heard)
+}
+
+/// Enchaîner à la voix (étape 96) : `?conversation_id=` sur
+/// `/api/conversation/audio`.
+#[tokio::test]
+async fn the_tablet_follows_a_spoken_conversation() {
+    let app = TestApp::new().await;
+    two_rooms(&app);
+    let david = app.login().await;
+    let (url, _) = fake_listener(vec!["Allume la lumière du salon.", "Et la cuisine."]).await;
+    app.state
+        .set_voice(Some(ha_stt::Stt::from_settings(&url).unwrap()), None);
+    let mut events = app.state.core.bus.subscribe();
+
+    let (status, bytes, _) = app
+        .send_bytes("POST", "/api/conversation/audio", &david, spoken_wav())
+        .await;
+    let body: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["continue_conversation"], true);
+    let id = body["conversation_id"].as_str().unwrap().to_owned();
+    assert_eq!(next_order(&mut events).await.1, "light.lampe_salon");
+
+    let (status, bytes, _) = app
+        .send_bytes(
+            "POST",
+            &format!("/api/conversation/audio?conversation_id={id}"),
+            &david,
+            spoken_wav(),
+        )
+        .await;
+    let body: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["text"], "Et la cuisine.");
+    assert_eq!(body["conversation_id"], id.as_str());
+    assert_eq!(next_order(&mut events).await.1, "light.plafonnier_cuisine");
+
+    // Un paramètre inconnu : refusé.
+    let (status, _, _) = app
+        .send_bytes(
+            "POST",
+            "/api/conversation/audio?autre=1",
+            &david,
+            spoken_wav(),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
 /// La confirmation après un ordre (étape 95) : « C'est fait » seulement si
 /// l'appareil a changé d'état, sinon on le dit honnêtement.
 #[tokio::test]
@@ -2746,7 +2969,6 @@ async fn assist_says_done_only_when_the_device_obeyed() {
 }
 
 /// Un WAV d'une seconde (16 bits, mono, 16 000 Hz) : une note.
-#[cfg(unix)]
 fn spoken_wav() -> Vec<u8> {
     let samples: Vec<i16> = (0..16_000u32)
         .map(|i| if i % 40 < 20 { 6000 } else { -6000 })

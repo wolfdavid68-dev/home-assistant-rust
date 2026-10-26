@@ -87,6 +87,13 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
   joignable que depuis le mini-PC (`IPAddressAllow=localhost`, et le serveur refuse une autre adresse que la boucle
   locale), sous un compte jetable sans droit d'écriture ; ses fichiers sont vérifiés par leur empreinte SHA-256 ; chaque
   ordre suit le chemin d'un toucher (Assist).
+- Enchaîner les phrases (étape 96) : le contexte d'une conversation (verbe, valeur, appareils visés, jamais le texte
+  dit) est gardé en mémoire seulement, une minute, 64 conversations au plus, rien sur le disque ni dans les journaux ;
+  le `conversation_id` est tiré du générateur aléatoire du système (128 bits), un identifiant mal formé est ignoré et
+  une conversation appartient à son compte (un autre compte en commence une nouvelle) ; une suite est reconstruite en
+  ordres complets qui passent par les mêmes droits, la même garde et le même audit qu'une phrase entière ; un lieu
+  inconnu n'est jamais rabattu sur l'appareil d'avant ; le micro rouvert se voit, s'arrête d'un toucher et pas
+  plus de 5 fois de suite.
 - Automatisations toutes prêtes (étape 85) : fabriquées par le serveur d'après les appareils, puis vérifiées et
   enregistrées comme une automatisation écrite à la main (droit de modifier, mot de passe redemandé, audit, notification) ;
   réglages contrôlés (heures, consignes de 5 à 30 °C, délais bornés, champs inconnus refusés) ; jamais de serrure ni

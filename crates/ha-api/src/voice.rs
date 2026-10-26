@@ -6,7 +6,10 @@
 //!   ce qui est installé ;
 //! - `POST /api/conversation/audio` : le son en WAV (16 bits, mono,
 //!   16 000 Hz, 15 s au plus). La réponse : `{"text": "ferme le volet",
-//!   "response": {…}}`, comme `/api/conversation/process` ;
+//!   "response": {…}, "conversation_id": "…", "continue_conversation":
+//!   true}`, comme `/api/conversation/process`. Avec
+//!   `?conversation_id=…`, la phrase continue la conversation (étape 96 :
+//!   « et la cuisine aussi ») ;
 //! - `POST /api/conversation/speech` avec `{"text": "…"}` : la phrase dite
 //!   par la voix, en WAV.
 //!
@@ -19,7 +22,7 @@ use std::time::Duration;
 
 use axum::Json;
 use axum::body::Bytes;
-use axum::extract::{ConnectInfo, State};
+use axum::extract::{ConnectInfo, Query, State};
 use axum::http::header;
 use axum::response::{IntoResponse, Response};
 use ha_stt::SttError;
@@ -27,7 +30,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::ApiState;
-use crate::assist::{converse, response};
+use crate::assist::{Turn, converse_in};
 use crate::auth::Authenticated;
 use crate::error::ApiError;
 use crate::rest::parse_json;
@@ -46,24 +49,39 @@ pub(crate) async fn overview(
     }))
 }
 
+/// Les paramètres de `POST /api/conversation/audio`.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct AudioQuery {
+    /// La conversation à continuer (étape 96).
+    conversation_id: Option<String>,
+}
+
 /// `POST /api/conversation/audio`
 pub(crate) async fn listen(
     State(state): State<Arc<ApiState>>,
     ConnectInfo(client): ConnectInfo<SocketAddr>,
     auth: Authenticated,
+    Query(query): Query<AudioQuery>,
     body: Bytes,
 ) -> Result<Json<Value>, ApiError> {
+    let conversation_id = query.conversation_id.as_deref();
     let stt = state.listening.get().ok_or_else(|| {
         ApiError::Unavailable("l'écoute n'est pas installée (voir docs/voix.md)".into())
     })?;
     let text = match stt.transcribe(&body).await {
         Ok(text) => text,
         Err(SttError::Silence) => {
-            return Ok(heard(
-                "",
-                "error",
-                "Je n'ai rien entendu. Réessaie, un peu plus près de la tablette.",
-            ));
+            // Rien entendu : la tablette n'écoute pas encore une fois.
+            let turn = Turn {
+                kind: "error",
+                speech: "Je n'ai rien entendu. Réessaie, un peu plus près de la tablette.".into(),
+                conversation_id: conversation_id
+                    .filter(|id| crate::conversation::valid(id))
+                    .map(str::to_owned),
+                more: false,
+            };
+            return Ok(heard("", &turn));
         }
         Err(SttError::BadAudio(why)) => {
             return Err(ApiError::BadRequest(format!("son refusé : {why}")));
@@ -78,12 +96,14 @@ pub(crate) async fn listen(
             return Err(ApiError::Unavailable("l'écoute a échoué".into()));
         }
     };
-    let (kind, speech) = converse(&state, &auth, client, &text, false).await;
-    Ok(heard(&text, kind, &speech))
+    let turn = converse_in(&state, &auth, client, &text, conversation_id).await;
+    Ok(heard(&text, &turn))
 }
 
-fn heard(text: &str, kind: &str, speech: &str) -> Json<Value> {
-    Json(json!({ "text": text, "response": response(kind, speech) }))
+fn heard(text: &str, turn: &Turn) -> Json<Value> {
+    let mut reply = turn.json();
+    reply["text"] = json!(text);
+    Json(reply)
 }
 
 #[derive(Deserialize)]

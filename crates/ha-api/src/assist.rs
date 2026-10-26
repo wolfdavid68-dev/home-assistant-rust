@@ -9,6 +9,11 @@
 //! chaque ordre passe par le même chemin qu'un toucher (`rest::execute`) :
 //! droits, mot de passe redemandé, garde, valeurs vérifiées, journal d'audit.
 //! Le texte de la phrase n'est pas écrit dans les logs.
+//!
+//! Enchaîner les phrases (étape 96) : la réponse donne aussi un
+//! `conversation_id` et `continue_conversation`, comme Home Assistant. Le
+//! `conversation_id` renvoyé avec la phrase suivante permet « et la cuisine
+//! aussi » ou « éteins-la » (voir `conversation.rs`).
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -16,13 +21,15 @@ use std::sync::Arc;
 use axum::Json;
 use axum::body::Bytes;
 use axum::extract::{ConnectInfo, State};
-use ha_assist::{Device, Understood};
+use ha_assist::suite::{goodbye_reply, is_goodbye, understand_with};
+use ha_assist::{Device, Order, Understood};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::ApiState;
 use crate::auth::Authenticated;
 use crate::confirm;
+use crate::conversation;
 use crate::error::ApiError;
 use crate::rest::{Outcome, execute, parse_json};
 use crate::roles;
@@ -58,6 +65,9 @@ pub(crate) struct ProcessBody {
     /// Accepté pour ressembler à Home Assistant ; seul le français est compris.
     #[serde(default, rename = "language")]
     _language: Option<String>,
+    /// La conversation à continuer (étape 96).
+    #[serde(default)]
+    conversation_id: Option<String>,
 }
 
 /// Les appareils visibles par ce compte, avec leur nom et leur pièce.
@@ -111,8 +121,24 @@ pub(crate) fn devices(state: &ApiState, auth: &Authenticated) -> Vec<Device> {
         .collect()
 }
 
-fn reply(kind: &str, speech: &str) -> Json<Value> {
-    Json(json!({ "response": response(kind, speech) }))
+/// Une phrase dans une conversation (étape 96) : ce qu'il faut répondre.
+pub(crate) struct Turn {
+    pub(crate) kind: &'static str,
+    pub(crate) speech: String,
+    pub(crate) conversation_id: Option<String>,
+    /// La tablette peut-elle écouter une phrase de suite ?
+    pub(crate) more: bool,
+}
+
+impl Turn {
+    /// Les champs de la réponse, comme Home Assistant.
+    pub(crate) fn json(&self) -> Value {
+        json!({
+            "response": response(self.kind, &self.speech),
+            "conversation_id": self.conversation_id,
+            "continue_conversation": self.more,
+        })
+    }
 }
 
 /// La réponse d'Assist, comme celle de Home Assistant.
@@ -131,9 +157,59 @@ pub(crate) async fn process(
     auth: Authenticated,
     body: Bytes,
 ) -> Result<Json<Value>, ApiError> {
-    let ProcessBody { text, .. } = parse_json(&body)?;
-    let (kind, speech) = converse(&state, &auth, client, &text, false).await;
-    Ok(reply(kind, &speech))
+    let ProcessBody {
+        text,
+        conversation_id,
+        ..
+    } = parse_json(&body)?;
+    let turn = converse_in(&state, &auth, client, &text, conversation_id.as_deref()).await;
+    Ok(Json(turn.json()))
+}
+
+/// Comme [`converse`], dans une conversation (étape 96) : le contexte de la
+/// phrase d'avant sert à comprendre celle-ci, et « merci » la termine.
+pub(crate) async fn converse_in(
+    state: &ApiState,
+    auth: &Authenticated,
+    client: SocketAddr,
+    text: &str,
+    conversation_id: Option<&str>,
+) -> Turn {
+    let user_id = auth.user.id;
+    if is_goodbye(text) {
+        state.conversations.end(conversation_id, user_id);
+        return Turn {
+            kind: "action_done",
+            speech: goodbye_reply(text).to_owned(),
+            conversation_id: conversation_id
+                .filter(|id| conversation::valid(id))
+                .map(str::to_owned),
+            more: false,
+        };
+    }
+    let context = state.conversations.context(conversation_id, user_id);
+    let devices = devices(state, auth);
+    let (kind, speech, next) = match understand_with(text, &devices, context.as_ref()) {
+        Ok((Understood::Answer(answer), next)) => ("query_answer", capitalized(&answer), next),
+        Ok((Understood::Orders(orders), next)) => {
+            let (kind, speech) = run(state, auth, client, orders, false).await;
+            (kind, speech, next)
+        }
+        Err(not_understood) => {
+            tracing::info!(
+                "assist : phrase de {} non comprise ({not_understood:?})",
+                auth.user.username
+            );
+            ("error", not_understood.message(), None)
+        }
+    };
+    let kept = state.conversations.keep(conversation_id, user_id, next);
+    Turn {
+        kind,
+        speech,
+        conversation_id: kept.id,
+        more: kept.more,
+    }
 }
 
 /// Comprend `text` et donne les ordres. Renvoie le type de réponse
@@ -157,10 +233,20 @@ pub(crate) async fn converse(
             return ("error", not_understood.message());
         }
     };
-    let orders = match understood {
-        Understood::Answer(answer) => return ("query_answer", capitalized(&answer)),
-        Understood::Orders(orders) => orders,
-    };
+    match understood {
+        Understood::Answer(answer) => ("query_answer", capitalized(&answer)),
+        Understood::Orders(orders) => run(state, auth, client, orders, agent).await,
+    }
+}
+
+/// Donne les ordres compris, chacun avec les vérifications d'un toucher.
+async fn run(
+    state: &ApiState,
+    auth: &Authenticated,
+    client: SocketAddr,
+    orders: Vec<Order>,
+    agent: bool,
+) -> (&'static str, String) {
     // Abonné avant l'envoi : aucun changement d'état n'échappe (étape 95).
     let mut events = state.core.bus.subscribe();
     let mut watches = Vec::new();

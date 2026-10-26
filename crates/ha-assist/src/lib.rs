@@ -19,6 +19,8 @@
 //! mêmes vérifications qu'un toucher dans le tableau de bord (droits du
 //! compte, mot de passe redemandé, garde, valeurs dans la plage).
 
+pub mod suite;
+
 use std::collections::HashSet;
 
 use ha_core::{Attributes, EntityId, State};

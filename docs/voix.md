@@ -34,6 +34,10 @@ la phrase entendue s'affiche, la maison obéit, et **répond à voix haute** sur
 **Rien ne sort de la maison** : ni le son, ni le texte. Ni le son ni la phrase ne sont gardés ou
 écrits dans les journaux.
 
+Depuis l'[étape 96](enchainer.md), après la réponse, le micro se rouvre quelques secondes pour une
+phrase de suite (« et la cuisine aussi », « éteins-la ») ; « merci » ou un toucher de l'écran
+l'arrête.
+
 ## Ce qu'Assist comprend de plus
 
 **Les nombres dits en lettres** : « vingt et un degrés », « dix-neuf et demi », « cinquante pour
