@@ -737,6 +737,7 @@ fn dashboard_never_uses_inner_html() {
         ("hub.js", include_str!("../web/hub.js")),
         ("sonnette.js", include_str!("../web/sonnette.js")),
         ("colis.js", include_str!("../web/colis.js")),
+        ("orbe.js", include_str!("../web/orbe.js")),
         ("voix.js", include_str!("../web/voix.js")),
         ("pretes.js", include_str!("../web/pretes.js")),
         ("musique.js", include_str!("../web/musique.js")),

@@ -2853,6 +2853,118 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 }
 .assist-form input { min-width: 0; }
 .assist-dialog .account { margin: 0; font-size: 0.82rem; }
+/* L'orbe de la voix (étape 98, orbe.js) : une boule lumineuse en haut
+   d'Assist. Sa couleur dit ce que fait la voix : bleu-gris au repos,
+   turquoise à l'écoute (une ligne suit le micro), violet quand elle
+   réfléchit, orange quand elle répond, rouge un instant en cas d'erreur.
+   Les mêmes couleurs teintent le petit point du bouton « Parler » du hub. */
+@property --orb-turn { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+:is(.voice-orb, .hub-talk-button) { --orb-a: #9fb3d1; --orb-b: #4f6b96; --orb-speed: 5s; }
+:is(.voice-orb, .hub-talk-button)[data-state="listening"], :is(.voice-orb, .hub-talk-button)[data-state="starting"] { --orb-a: #5ff0dc; --orb-b: #0f9c9a; }
+:is(.voice-orb, .hub-talk-button)[data-state="thinking"] { --orb-a: #c3a1ff; --orb-b: #6b3fd6; --orb-speed: 1.6s; }
+:is(.voice-orb, .hub-talk-button)[data-state="speaking"] { --orb-a: #ffc56b; --orb-b: #ff6a3d; --orb-speed: 2.2s; }
+.voice-orb[data-state="error"] { --orb-a: #ff8a80; --orb-b: #c62828; }
+.voice-orb {
+  --voice-level: 0;
+  position: relative;
+  justify-self: center;
+  display: grid;
+  place-items: center;
+  width: 112px;
+  height: 112px;
+  margin: 0.25rem 0 0.1rem;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.voice-orb[hidden] { display: none; }
+/* Le halo : grossit avec la voix entendue. */
+.orb-glow {
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  background: var(--orb-a);
+  filter: blur(22px);
+  opacity: 0.5;
+  transform: scale(calc(0.92 + var(--voice-level) * 0.45));
+  transition: background 0.6s ease, transform 0.12s ease-out;
+  animation: orb-breathe var(--orb-speed) ease-in-out infinite;
+}
+.orb-core {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  overflow: hidden;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 28%, rgb(255 255 255 / 0.75), transparent 34%),
+    radial-gradient(circle at 50% 55%, var(--orb-a), var(--orb-b) 72%, color-mix(in srgb, var(--orb-b) 60%, #000) 100%);
+  box-shadow: inset 0 -8px 18px rgb(0 0 0 / 0.25), inset 0 2px 6px rgb(255 255 255 / 0.35), 0 6px 22px color-mix(in srgb, var(--orb-b) 45%, transparent);
+  transition: box-shadow 0.6s ease;
+}
+/* Les reflets qui tournent : lents au repos, vifs quand elle réfléchit. */
+.orb-swirl {
+  position: absolute;
+  inset: -20%;
+  background: conic-gradient(from var(--orb-turn), transparent 0 18%, rgb(255 255 255 / 0.32) 26%, transparent 36% 62%, color-mix(in srgb, var(--orb-a) 70%, #fff) 72%, transparent 82%);
+  mix-blend-mode: soft-light;
+  animation: orb-turn var(--orb-speed) linear infinite;
+}
+/* Quand elle répond : des éclats de lumière qui passent. */
+.orb-shine {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 70% 30%, rgb(255 244 214 / 0.85), transparent 22%),
+    radial-gradient(circle at 30% 72%, rgb(255 225 180 / 0.6), transparent 20%);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.voice-orb[data-state="speaking"] .orb-shine { opacity: 1; animation: orb-shine 2.2s ease-in-out infinite; }
+.voice-orb[data-state="speaking"] .orb-core { animation: orb-talk 0.9s ease-in-out infinite; }
+/* La ligne du micro, par-dessus la boule. */
+.orb-wave {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 50%;
+  width: calc(100% - 8px);
+  height: 40px;
+  transform: translateY(-50%);
+  overflow: visible;
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 4px var(--orb-a));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+.voice-orb[data-state="listening"] .orb-wave { opacity: 0.95; }
+.voice-orb[data-state="error"] .orb-core { animation: orb-shake 0.4s ease-in-out 2; }
+@keyframes orb-breathe { 50% { opacity: 0.72; } }
+@keyframes orb-turn { to { --orb-turn: 360deg; } }
+@keyframes orb-shine { 0%, 100% { transform: rotate(0deg) scale(1); } 50% { transform: rotate(40deg) scale(1.08); } }
+@keyframes orb-talk { 50% { transform: scale(1.05); } }
+@keyframes orb-shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+/* Le bouton « Parler » du hub : un petit point aux couleurs de l'orbe. */
+.hub-dock .hub-talk-button::before {
+  content: "";
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, rgb(255 255 255 / 0.8), var(--orb-a) 40%, var(--orb-b));
+  box-shadow: 0 0 10px var(--orb-a);
+  transition: background 0.4s ease, box-shadow 0.4s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .orb-glow, .orb-swirl, .orb-shine, .voice-orb .orb-core { animation: none !important; }
+  .orb-glow { transform: none; transition: background 0.3s ease; }
+}
 /* Le mot d'appel (étape 97) : un signe toujours visible, au-dessus de
    l'écran de veille, tant que la tablette peut écouter « Maison ». */
 .wake-sign { position: fixed; left: max(12px, env(safe-area-inset-left)); bottom: max(12px, env(safe-area-inset-bottom)); z-index: 60; display: flex; align-items: center; gap: 0.4rem; max-width: calc(100vw - 24px); margin: 0; padding: 0.35rem 0.75rem 0.35rem 0.5rem; border: 1px solid var(--line); border-radius: 999px; background: var(--card); color: var(--muted); font-size: 0.85rem; box-shadow: 0 2px 8px rgb(0 0 0 / 0.15); pointer-events: none; }

@@ -111,6 +111,7 @@ static ASSETS: [Asset; 30] = [
     asset!("/hub.js", "hub.js", JS, REVALIDATE),
     asset!("/sonnette.js", "sonnette.js", JS, REVALIDATE),
     asset!("/colis.js", "colis.js", JS, REVALIDATE),
+    asset!("/orbe.js", "orbe.js", JS, REVALIDATE),
     asset!("/voix.js", "voix.js", JS, REVALIDATE),
     asset!("/pretes.js", "pretes.js", JS, REVALIDATE),
     asset!("/musique.js", "musique.js", JS, REVALIDATE),

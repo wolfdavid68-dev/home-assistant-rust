@@ -29,6 +29,7 @@
   <script src="/hub.js" defer></script>
   <script src="/sonnette.js" defer></script>
   <script src="/colis.js" defer></script>
+  <script src="/orbe.js" defer></script>
   <script src="/voix.js" defer></script>
   <script src="/pretes.js" defer></script>
   <script src="/musique.js" defer></script>
@@ -333,6 +334,8 @@
         <h2 id="assist-title">Assist</h2>
         <button id="assist-close" class="ghost" type="button">Fermer</button>
       </div>
+      <!-- L'orbe de la voix (étape 98, orbe.js) : seulement avec le micro. -->
+      <div id="voice-orb" class="voice-orb" data-state="idle" aria-hidden="true" hidden></div>
       <ol id="assist-log" class="assist-log" aria-live="polite"></ol>
       <div id="assist-examples" class="assist-examples" aria-label="Exemples">
         <button type="button" class="ghost small">Ferme les volets du salon</button>
