@@ -38,15 +38,25 @@ impl TestApp {
 
     /// `editable` : l'éditeur d'automatisations accepte-t-il les modifications ?
     async fn with_editor(editable: bool) -> Self {
+        Self::build(
+            editable,
+            "- {area: Cuisine, entities: [{entity: switch.prise_cafe, name: Cafetière}]}",
+        )
+        .await
+    }
+
+    /// Avec ces pièces (le contenu d'un `areas.yaml`).
+    async fn with_areas(areas: &str) -> Self {
+        Self::build(true, areas).await
+    }
+
+    async fn build(editable: bool, areas: &str) -> Self {
         let store = Store::open_in_memory().await.unwrap();
         let auth = Auth::new(&store).await.unwrap();
         auth.create_user("david", PASSWORD).await.unwrap();
         let core = Arc::new(Core::new());
         let recorder = Recorder::start(store.clone(), Arc::clone(&core));
-        let areas = ha_areas::parse(
-            "- {area: Cuisine, entities: [{entity: switch.prise_cafe, name: Cafetière}]}",
-        )
-        .unwrap();
+        let areas = ha_areas::parse(areas).unwrap();
         let file = ha_automation::parse_configs(
             "- {id: matin, triggers: [{trigger: time, at: '07:30'}], \
                actions: [{action: cover.open_cover, target: {entity_id: cover.salon}}]}",
@@ -2408,6 +2418,151 @@ async fn assist_understands_french_and_obeys_the_same_rules() {
         )
         .await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+/// Les autres noms (étape 94) : compris par Assist comme le nom, servis par
+/// le WebSocket, sans jamais donner plus de droits que le nom.
+#[tokio::test]
+async fn other_names_work_like_names_and_never_give_more_rights() {
+    let app = TestApp::with_areas(
+        "
+- area: Salon
+  entities:
+    - {entity: light.salon, name: Lampe salon, aliases: [la lampe du canapé]}
+    - {entity: cover.salon, name: Volet salon, aliases: [le store]}
+- area: Entrée
+  entities:
+    - {entity: lock.entree, name: Serrure, aliases: [la grosse porte]}
+    - {entity: cover.garage, name: Porte du garage, aliases: [le store]}
+",
+    )
+    .await;
+    furnish(&app);
+    let core = &app.state.core;
+    core.guard.configure(
+        ha_core::Policy {
+            protected: [("light.salon".parse().unwrap(), "Salon".to_owned())].into(),
+            quiet_hours: None,
+        },
+        || 0,
+    );
+    let david = app.login().await;
+    let guest = app.login_as("visiteur", ha_auth::Role::Guest).await;
+    let say = |token: &String, text: &str| {
+        let token = token.clone();
+        let text = text.to_owned();
+        let app = &app;
+        async move {
+            let (_, body) = app
+                .request(
+                    "POST",
+                    "/api/conversation/process",
+                    Some(&token),
+                    Some(json!({"text": text})),
+                )
+                .await;
+            (
+                body["response"]["response_type"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_owned(),
+                body["response"]["speech"]["plain"]["speech"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_owned(),
+            )
+        }
+    };
+
+    // L'autre nom et la pièce : le store du salon, pas celui de l'entrée.
+    let mut events = core.bus.subscribe();
+    let (kind, _) = say(&david, "Ferme le store du salon").await;
+    assert_eq!(kind, "action_done");
+    let event = events.recv().await.unwrap();
+    let ha_core::Event::CallService { entity_id, .. } = event.as_ref() else {
+        panic!("un ordre est attendu");
+    };
+    assert_eq!(entity_id.as_str(), "cover.salon");
+    // Deux appareils portent ce nom : Assist demande lequel.
+    let (kind, speech) = say(&david, "ferme le store").await;
+    assert_eq!(kind, "error");
+    assert!(
+        speech.starts_with("Lequel ?")
+            && speech.contains("Volet salon")
+            && speech.contains("Porte du garage"),
+        "{speech}"
+    );
+
+    // L'invité : la pièce protégée reste protégée sous un autre nom…
+    let (kind, speech) = say(&guest, "allume la lampe du canapé").await;
+    assert_eq!(kind, "action_done");
+    assert!(
+        speech.starts_with("En attente de validation : allumer light.salon"),
+        "{speech}"
+    );
+    assert_eq!(core.held_orders().len(), 1);
+    // … et la serrure, invisible pour lui, ne se trouve pas par son autre nom.
+    let mut events = core.bus.subscribe();
+    let (kind, _) = say(&guest, "déverrouille la grosse porte").await;
+    assert_eq!(kind, "error");
+    assert!(events.try_recv().is_err(), "aucun ordre ne doit être parti");
+    assert_eq!(
+        core.states
+            .get(&"lock.entree".parse().unwrap())
+            .unwrap()
+            .state(),
+        "locked"
+    );
+
+    // Le WebSocket, comme le registre des appareils de Home Assistant.
+    let addr = spawn_server(&app).await;
+    let connect = |token: String| async move {
+        let (mut socket, _) =
+            tokio_tungstenite::connect_async(format!("ws://{addr}/api/websocket"))
+                .await
+                .unwrap();
+        assert_eq!(ws_recv(&mut socket).await["type"], "auth_required");
+        ws_send(&mut socket, json!({"type": "auth", "access_token": token})).await;
+        assert_eq!(ws_recv(&mut socket).await["type"], "auth_ok");
+        socket
+    };
+    let mut socket = connect(david.clone()).await;
+    ws_send(
+        &mut socket,
+        json!({"id": 1, "type": "config/entity_registry/get", "entity_id": "lock.entree"}),
+    )
+    .await;
+    let reply = ws_recv(&mut socket).await;
+    assert_eq!(reply["success"], true, "{reply}");
+    assert_eq!(reply["result"]["name"], "Serrure");
+    assert_eq!(reply["result"]["aliases"], json!(["la grosse porte"]));
+    assert_eq!(reply["result"]["area_id"], "entree");
+
+    let mut socket = connect(guest.clone()).await;
+    ws_send(
+        &mut socket,
+        json!({"id": 1, "type": "config/entity_registry/get", "entity_id": "lock.entree"}),
+    )
+    .await;
+    assert_eq!(ws_recv(&mut socket).await["error"]["code"], "not_found");
+    ws_send(
+        &mut socket,
+        json!({
+            "id": 2,
+            "type": "config/entity_registry/get_entries",
+            "entity_ids": ["light.salon", "lock.entree", "pas un appareil"],
+        }),
+    )
+    .await;
+    let reply = ws_recv(&mut socket).await;
+    assert_eq!(
+        reply["result"]["light.salon"]["aliases"],
+        json!(["la lampe du canapé"])
+    );
+    assert_eq!(reply["result"]["lock.entree"], Value::Null);
+    assert_eq!(reply["result"]["pas un appareil"], Value::Null);
+
+    app.state.shutdown();
 }
 
 /// Une pièce donnée par l'intégration (SmartThings, étape 86) compte pour

@@ -8,6 +8,10 @@
 //! 4. le client envoie des commandes `{"id": 1, "type": "…"}` :
 //!    - `get_states` : tous les états ;
 //!    - `subscribe_events` : reçoit ensuite chaque changement d'état ;
+//!    - `config/entity_registry/get` (`entity_id`) et
+//!      `config/entity_registry/get_entries` (`entity_ids`) : le nom, la
+//!      pièce et les **autres noms** (`aliases`, étape 94) d'appareils
+//!      visibles par ce compte ;
 //!    - `ping` : répond `pong`.
 //!
 //! Le jeton passe dans le premier message, et non dans l'adresse
@@ -21,7 +25,7 @@ use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::response::Response;
 use ha_auth::User;
-use ha_core::Event;
+use ha_core::{EntityId, Event};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::sync::broadcast;
@@ -39,6 +43,8 @@ const AUTH_TIMEOUT: Duration = Duration::from_secs(10);
 /// Fréquence à laquelle on revérifie le jeton d'une connexion ouverte : un
 /// jeton révoqué (déconnexion, changement de mot de passe) coupe la connexion.
 const RECHECK_INTERVAL: Duration = Duration::from_mins(1);
+/// `config/entity_registry/get_entries` : appareils demandés, au plus.
+const MAX_REGISTRY_IDS: usize = 500;
 
 /// Pas de `Debug` : le jeton ne doit jamais être affiché.
 #[derive(Deserialize)]
@@ -55,6 +61,12 @@ struct Command {
     id: u64,
     #[serde(rename = "type")]
     kind: String,
+    /// Pour `config/entity_registry/get`.
+    #[serde(default)]
+    entity_id: Option<String>,
+    /// Pour `config/entity_registry/get_entries`.
+    #[serde(default)]
+    entity_ids: Option<Vec<String>>,
 }
 
 /// `GET /api/websocket`
@@ -224,8 +236,76 @@ fn handle_command(
             json!({"id": id, "type": "result", "success": true, "result": null})
         }
         "subscribe_events" => error_result(id, "already_subscribed", "déjà abonné"),
+        "config/entity_registry/get" => {
+            match command
+                .entity_id
+                .as_deref()
+                .and_then(|entity_id| registry_entry(state, user, entity_id))
+            {
+                Some(entry) => {
+                    json!({"id": id, "type": "result", "success": true, "result": entry})
+                }
+                // Inconnu ou invisible pour ce compte : même réponse.
+                None => error_result(id, "not_found", "appareil introuvable"),
+            }
+        }
+        "config/entity_registry/get_entries" => {
+            let Some(entity_ids) = &command.entity_ids else {
+                return error_result(id, "invalid_format", "entity_ids attendu");
+            };
+            if entity_ids.len() > MAX_REGISTRY_IDS {
+                return error_result(id, "invalid_format", "trop d'appareils demandés");
+            }
+            let entries: serde_json::Map<String, Value> = entity_ids
+                .iter()
+                .map(|entity_id| {
+                    let entry = registry_entry(state, user, entity_id).unwrap_or(Value::Null);
+                    (entity_id.clone(), entry)
+                })
+                .collect();
+            json!({"id": id, "type": "result", "success": true, "result": entries})
+        }
         _ => error_result(id, "unknown_command", "commande inconnue"),
     }
+}
+
+/// L'entrée « registre » d'un appareil, comme Home Assistant la donne :
+/// son nom et sa pièce d'`areas.yaml`, et ses autres noms (étape 94).
+/// `None` si l'appareil est inconnu ou invisible pour ce compte : un invité
+/// n'apprend rien de plus par ses autres noms.
+fn registry_entry(state: &ApiState, user: &User, entity_id: &str) -> Option<Value> {
+    let entity_id: EntityId = entity_id.parse().ok()?;
+    let current = state.core.states.get(&entity_id);
+    let placed = state.areas.iter().find_map(|area| {
+        area.entities
+            .iter()
+            .find(|member| member.entity_id == entity_id)
+            .map(|member| (area, member))
+    });
+    if current.is_none() && placed.is_none() {
+        return None;
+    }
+    if !roles::can_see(user, &entity_id, current.as_ref()) {
+        return None;
+    }
+    let attribute = |key: &str| {
+        current
+            .as_ref()
+            .and_then(|s| s.attributes().get(key))
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+    };
+    let area = placed
+        .map(|(area, _)| area.name.clone())
+        .or_else(|| attribute("piece"));
+    Some(json!({
+        "entity_id": entity_id.as_str(),
+        "name": placed.and_then(|(_, member)| member.name.clone()),
+        "original_name": attribute("friendly_name"),
+        "aliases": placed.map(|(_, member)| member.aliases.clone()).unwrap_or_default(),
+        "area_id": area.as_deref().map(ha_core::slugify),
+        "platform": state.core.states.owner_of(&entity_id),
+    }))
 }
 
 fn error_result(id: u64, code: &str, message: &str) -> Value {
