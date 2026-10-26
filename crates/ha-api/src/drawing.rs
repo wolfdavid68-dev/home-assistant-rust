@@ -224,11 +224,16 @@ impl Page {
 
 /// Un calque : visible quand l'appareil est dans l'un des états (ou dans
 /// aucun, avec `not`), et seulement le jour ou la nuit si on le demande.
+/// Ou bien relié à une pièce (`area`, un nom de `areas.yaml`) : visible dès
+/// qu'une lampe de la pièce est allumée (étape 104).
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Layer {
     image: String,
-    entity_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    entity_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    area: Option<String>,
     #[serde(default)]
     states: Vec<String>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -348,7 +353,8 @@ fn check_drawing(
         }
         check_text("nom d'onglet", &page.name)?;
         let zone_areas = page.zones.iter().filter_map(|zone| zone.area.as_ref());
-        for area in page.areas.iter().chain(zone_areas) {
+        let layer_areas = page.layers.iter().filter_map(|layer| layer.area.as_ref());
+        for area in page.areas.iter().chain(zone_areas).chain(layer_areas) {
             if !areas.contains(area.as_str()) {
                 return Err(ApiError::BadRequest(format!(
                     "onglet « {} » : pièce « {area} » introuvable dans areas.yaml",
@@ -432,7 +438,23 @@ fn check_page(config: &Page, images: &HashSet<String>) -> Result<(), ApiError> {
     for (index, layer) in config.layers.iter().enumerate() {
         let n = index + 1;
         known(&layer.image)?;
-        let entity_id = check_entity(&layer.entity_id)?;
+        let entity_id = match (&layer.entity_id, &layer.area) {
+            (Some(entity_id), None) => check_entity(entity_id)?,
+            // Une pièce : ni états, ni position, ni « sauf ».
+            (None, Some(_)) => {
+                if !layer.states.is_empty() || layer.not || layer.position {
+                    return Err(ApiError::BadRequest(format!(
+                        "calque {n} : une pièce s'allume avec ses lampes, sans états ni position"
+                    )));
+                }
+                continue;
+            }
+            _ => {
+                return Err(ApiError::BadRequest(format!(
+                    "calque {n} : un appareil ou une pièce (l'un des deux)"
+                )));
+            }
+        };
         if layer.position && entity_id.domain() != "cover" {
             return Err(ApiError::BadRequest(format!(
                 "calque {n} : « suit la position » seulement pour un volet (cover.…)"
@@ -582,7 +604,10 @@ fn visible_to(state: &ApiState, user: &User, mut drawing: Drawing) -> Drawing {
         })
     };
     for page in &mut drawing.pages {
-        page.layers.retain(|layer| can_see(&layer.entity_id));
+        // Un calque de pièce reste, comme une zone de pièce : il ne s'allume
+        // qu'avec les lampes que le compte peut voir.
+        page.layers
+            .retain(|layer| layer.entity_id.as_deref().is_none_or(can_see));
         page.labels.retain(|label| can_see(&label.entity_id));
         page.actions.retain(|entity_id| can_see(entity_id));
         page.charts.retain(|chart| can_see(&chart.entity_id));
@@ -850,6 +875,9 @@ mod tests {
             config(r#"{"layers":[{"image":"garage","entity_id":"light.salon","position":true}]}"#);
         let error = format!("{:?}", check_page(&not_a_cover, &images).unwrap_err());
         assert!(error.contains("volet"), "{error}");
+        // Une fenêtre qui s'allume avec les lampes de sa pièce (étape 104).
+        let room = config(r#"{"layers":[{"image":"garage","area":"Salon","when":"night"}]}"#);
+        assert!(check_page(&room, &images).is_ok());
         let tidied = tidy(Drawing { pages: vec![good] });
         assert!((tidied.pages[0].labels[0].y - 8.3).abs() < 1e-9);
 
@@ -858,6 +886,10 @@ mod tests {
             r#"{"night":"jour"}"#,
             r#"{"layers":[{"image":"garage","entity_id":"cover.garage","states":[]}]}"#,
             r#"{"layers":[{"image":"garage","entity_id":"pas un appareil","states":["on"]}]}"#,
+            r#"{"layers":[{"image":"garage","states":["on"]}]}"#,
+            r#"{"layers":[{"image":"garage","entity_id":"light.a","area":"Salon","states":["on"]}]}"#,
+            r#"{"layers":[{"image":"garage","area":"Salon","states":["on"]}]}"#,
+            r#"{"layers":[{"image":"garage","area":"Salon","position":true}]}"#,
             r#"{"labels":[{"entity_id":"sensor.a","x":101,"y":0}]}"#,
             r#"{"labels":[{"entity_id":"sensor.a","x":1,"y":1,"name":"a\nb"}]}"#,
             r#"{"actions":["light.porche","light.porche"]}"#,
