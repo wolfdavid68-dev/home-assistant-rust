@@ -257,9 +257,15 @@ fn house_state(state: &ApiState, auth: &Authenticated) -> String {
             let _ = writeln!(out, "\n## {}", area.unwrap_or("Sans pièce"));
             current = Some(area);
         }
+        // Les autres noms (étape 94), pour que l'assistant les reconnaisse.
+        let aliases = if device.aliases.is_empty() {
+            String::new()
+        } else {
+            format!(" [autres noms : {}]", device.aliases.join(", "))
+        };
         let _ = writeln!(
             out,
-            "- {} ({}) : {}",
+            "- {} ({}){aliases} : {}",
             device.name,
             device.state.entity_id(),
             ha_assist::describe(device)
