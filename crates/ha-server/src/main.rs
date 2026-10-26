@@ -525,6 +525,15 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         tokio::spawn(async move { tts.warm_up().await });
     }
     api_state.set_voice(listening, speaking);
+    // Les notifications du téléphone (étape 103) : sans clé, pas de relais.
+    match relay_key() {
+        Ok(Some(key)) => match api_state.set_relay_key(&key) {
+            Ok(()) => info!("relais des notifications du téléphone : ouvert"),
+            Err(error) => warn!("relais des notifications du téléphone : {error}"),
+        },
+        Ok(None) => {}
+        Err(error) => warn!("relais des notifications du téléphone : {error}"),
+    }
     let api = tokio::spawn({
         let state = Arc::clone(&api_state);
         async move {
@@ -1407,6 +1416,19 @@ fn somfy_account() -> Result<Option<CloudAccount>, String> {
         return Err("mot de passe Somfy vide (HA_SOMFY_PASSWORD_FILE)".into());
     }
     Ok(Some(CloudAccount::new(email, password)))
+}
+
+/// La clé du relais des notifications du téléphone (étape 103), lue dans
+/// le fichier `HA_RELAIS_KEY_FILE`. Absente : le relais reste fermé.
+fn relay_key() -> Result<Option<Zeroizing<String>>, String> {
+    let Ok(path) = std::env::var("HA_RELAIS_KEY_FILE") else {
+        return Ok(None);
+    };
+    let content = Zeroizing::new(
+        std::fs::read_to_string(&path)
+            .map_err(|error| format!("lecture de HA_RELAIS_KEY_FILE ({path}) : {error}"))?,
+    );
+    Ok(Some(Zeroizing::new(content.trim().to_owned())))
 }
 
 fn mqtt_config() -> Result<Option<MqttConfig>, String> {

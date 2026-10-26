@@ -34,6 +34,7 @@
 //! | POST | `/api/conversation/wake` | Un morceau de parole (WAV, 6 s au plus) : commence-t-il par le mot d'appel « Maison » ? (étape 97) |
 //! | POST | `/api/mcp` | Un assistant IA branché par MCP (étape 55) |
 //! | POST | `/api/push/action` | Un bouton touché sur une notification (sans connexion : le ticket en tient lieu) |
+//! | POST | `/api/relais` | Une notification du téléphone, relayée (étape 103 ; la clé du relais en tient lieu) |
 //! | GET | `/api/websocket` | API WebSocket (authentification dans le 1er message) |
 //! | GET | `/` | Tableau de bord web (page publique ; les données demandent un jeton) |
 
@@ -48,6 +49,7 @@ mod json;
 mod mcp;
 mod presets;
 mod push;
+mod relais;
 mod rest;
 mod roles;
 mod system;
@@ -115,6 +117,9 @@ pub struct ApiState {
     conversations: conversation::Conversations,
     /// Le mot d'appel « Maison » (étape 97) et la limite de ses morceaux.
     wake: wake::Wake,
+    /// Le relais des notifications du téléphone (étape 103), si sa clé est
+    /// configurée.
+    relay: OnceLock<relais::Relay>,
     shutdown: CancellationToken,
 }
 
@@ -144,6 +149,7 @@ impl ApiState {
             speech_turn: tokio::sync::Semaphore::new(2),
             conversations: conversation::Conversations::default(),
             wake: wake::Wake::default(),
+            relay: OnceLock::new(),
             shutdown,
         })
     }
@@ -163,6 +169,15 @@ impl ApiState {
     /// sinon. À appeler au démarrage, avant de servir.
     pub fn set_wake_word(&self, word: &str) -> Result<(), String> {
         self.wake.set_word(word)
+    }
+
+    /// Ouvre le relais des notifications du téléphone (étape 103) avec sa
+    /// clé (`HA_RELAIS_KEY_FILE`). Sans elle, `/api/relais` répond 404.
+    pub fn set_relay_key(&self, key: &str) -> Result<(), String> {
+        let relay = relais::Relay::new(key)?;
+        self.relay
+            .set(relay)
+            .map_err(|_| "la clé du relais est déjà réglée".to_owned())
     }
 
     /// Demande l'arrêt du serveur : plus de nouvelles connexions, et les
@@ -227,6 +242,7 @@ pub fn router(state: Arc<ApiState>) -> Router {
         )
         .route("/api/push/test", post(push::test))
         .route("/api/push/action", post(push::action))
+        .route("/api/relais", post(relais::receive))
         .route("/api/conversation/process", post(assist::process))
         .route("/api/conversation/voice", get(voice::overview))
         .route("/api/mcp", post(mcp::handle).get(mcp::no_stream))
