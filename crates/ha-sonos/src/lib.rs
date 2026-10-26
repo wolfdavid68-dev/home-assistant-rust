@@ -1157,6 +1157,17 @@ fn local_address_toward(host: &str) -> Option<IpAddr> {
     (!ip.is_unspecified()).then_some(ip)
 }
 
+/// L'état de `tts.annonces` hors annonce : l'heure de la dernière annonce.
+/// Un « unavailable » laissé par une coupure (et restauré au redémarrage)
+/// n'est pas une heure : on repart de « unknown », sinon l'entité resterait
+/// injoignable jusqu'à la prochaine annonce.
+fn idle_state(previous: Option<&str>) -> String {
+    match previous {
+        Some(state) if state != "unavailable" => state.to_owned(),
+        _ => "unknown".to_owned(),
+    }
+}
+
 /// L'entité `tts.annonces` : la voix, les enceintes, la dernière annonce.
 fn publish_tts(shared: &Shared, core: &Core, message: Option<&str>) {
     let Ok(entity_id) = EntityId::new(TTS_ENTITY) else {
@@ -1166,9 +1177,7 @@ fn publish_tts(shared: &Shared, core: &Core, message: Option<&str>) {
     let state = if message.is_some() {
         jiff::Timestamp::now().to_string()
     } else {
-        previous
-            .as_ref()
-            .map_or_else(|| "unknown".to_owned(), |s| s.state().to_owned())
+        idle_state(previous.as_ref().map(ha_core::State::state))
     };
     let last = message.map(str::to_owned).or_else(|| {
         previous.as_ref().and_then(|s| {
@@ -1216,6 +1225,15 @@ mod tests {
             Value::Object(map) => map,
             _ => Attributes::new(),
         }
+    }
+
+    #[test]
+    fn announcements_leave_a_stale_unavailable() {
+        assert_eq!(idle_state(None), "unknown");
+        assert_eq!(idle_state(Some("unavailable")), "unknown");
+        assert_eq!(idle_state(Some("unknown")), "unknown");
+        let last = "2026-10-22T18:01:00Z";
+        assert_eq!(idle_state(Some(last)), last);
     }
 
     #[test]
