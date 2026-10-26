@@ -8,6 +8,10 @@
 //
 // Étape 96 : après la réponse dite, le micro se rouvre quelques secondes pour
 // une phrase de suite, dans la même conversation (conversation_id).
+//
+// Étape 97 : le mot d'appel « Maison ». Si on le coche, la tablette écoute en
+// continu (ecoute.js ne garde que les morceaux de parole), envoie chaque
+// morceau au mini-PC, et se réveille quand la phrase commence par « Maison ».
 
 const VOICE_RATE = 16000;
 /** Une phrase dure au plus 12 s (le serveur en accepte 15). */
@@ -27,6 +31,14 @@ const VOICE_FOLLOW_TURNS = 5;
 const VOICE_FOLLOW_KEY = "ha-voice-follow";
 /** Un toucher qui arrête l'enchaînement ne rouvre pas le micro aussitôt. */
 const VOICE_CANCEL_MS = 600;
+/** Le mot d'appel (étape 97) : « 1 », écouté sur cet appareil (non par
+ *  défaut). */
+const VOICE_WAKE_KEY = "ha-voice-wake";
+/** Après une conversation, l'écoute du mot reprend après ce temps : le
+ *  micro de suite a pu se rouvrir entre-temps. */
+const WAKE_RESUME_MS = 1_500;
+/** Le service d'écoute a échoué : on réessaie après ce temps. */
+const WAKE_RETRY_MS = 30_000;
 
 const voice = {
   listen: false,
@@ -56,7 +68,39 @@ const voice = {
    *  rouvre pas le micro. */
   run: 0,
   cancelledAt: -Infinity,
+  /** Le micro ouvert par le mot d'appel (et non par un toucher). */
+  woken: false,
 };
+
+/** L'écoute du mot d'appel : son propre micro et son propre module, fermés
+ *  dès que la tablette écoute une phrase ou parle. */
+const wake = {
+  /** Le serveur sait l'écouter (le service d'écoute est installé). */
+  available: false,
+  word: "Maison",
+  stream: null,
+  context: null,
+  ready: false,
+  source: null,
+  node: null,
+  opening: false,
+  /** Un morceau est parti : les suivants sont abandonnés en attendant. */
+  sending: false,
+  /** Pas avant ce moment (trop de morceaux, ou écoute en panne). */
+  pausedUntil: 0,
+  timer: 0,
+  /** « refused » : micro refusé ; « failed » : pas pu s'ouvrir. */
+  trouble: "",
+};
+
+/** Le mot d'appel est-il voulu sur cet appareil ? (non par défaut) */
+function voiceWakeWanted() {
+  try {
+    return localStorage.getItem(VOICE_WAKE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
 
 /** L'enchaînement est-il voulu sur cet appareil ? (oui par défaut) */
 function voiceFollowWanted() {
@@ -74,6 +118,11 @@ async function loadVoice() {
   $("#assist-mic").hidden = !voice.listen;
   $("#hub-talk").hidden = !voice.listen;
   $("#voice-options").hidden = !voice.listen;
+  wake.available = voice.listen && data?.wake === true;
+  if (typeof data?.wake_word === "string" && data.wake_word) wake.word = data.wake_word;
+  $("#voice-wake-option").hidden = !wake.available;
+  $("#voice-wake-word").textContent = wake.word;
+  wakeUpdate();
 }
 
 const VOICE_LABELS = {
@@ -81,14 +130,21 @@ const VOICE_LABELS = {
   starting: "Le micro s'ouvre…",
   listening: "J'écoute… (touche pour finir)",
   following: "Je t'écoute encore… (touche l'écran pour arrêter)",
+  woken: "Oui ? Je t'écoute… (touche l'écran pour arrêter)",
   thinking: "Je réfléchis…",
   speaking: "Je réponds…",
 };
 
 function setVoiceState(state) {
   voice.state = state;
-  if (state === "idle") voice.following = false;
-  const label = VOICE_LABELS[state === "listening" && voice.following ? "following" : state];
+  if (state === "idle") {
+    voice.following = false;
+    voice.woken = false;
+  }
+  let shown = state;
+  if (state === "listening" && voice.woken) shown = "woken";
+  else if (state === "listening" && voice.following) shown = "following";
+  const label = VOICE_LABELS[shown];
   for (const button of [$("#assist-mic"), $("#hub-talk")]) {
     button.dataset.state = state;
     button.setAttribute("aria-pressed", String(state === "listening"));
@@ -100,12 +156,18 @@ function setVoiceState(state) {
   status.hidden = state === "idle";
   status.textContent = label;
   if (state !== "listening") $("#assist-mic").style.setProperty("--voice-level", "0");
+  // Le mot d'appel se tait dès que la tablette écoute une phrase ou parle,
+  // et reprend un peu après.
+  clearTimeout(wake.timer);
+  if (state === "idle") wake.timer = setTimeout(wakeUpdate, WAKE_RESUME_MS);
+  else wakeUpdate();
 }
 
 /** Ouvre le micro, ou termine la phrase s'il est déjà ouvert. `follow` :
- *  rouvert tout seul après une réponse, pour une phrase de suite. */
-async function voiceStart({ follow = false } = {}) {
-  if (!follow && performance.now() - voice.cancelledAt < VOICE_CANCEL_MS) return;
+ *  rouvert tout seul après une réponse, pour une phrase de suite ; `woken` :
+ *  ouvert par le mot d'appel. */
+async function voiceStart({ follow = false, woken = false } = {}) {
+  if (!follow && !woken && performance.now() - voice.cancelledAt < VOICE_CANCEL_MS) return;
   if (voice.state === "listening") {
     voiceStop();
     return;
@@ -113,7 +175,9 @@ async function voiceStart({ follow = false } = {}) {
   if (voice.state !== "idle") return;
   // Un toucher du bouton commence un nouvel enchaînement.
   if (!follow) voice.turns = 0;
-  voice.following = follow;
+  // Ouvert sans toucher : sans voix, il se referme sans rien dire.
+  voice.following = follow || woken;
+  voice.woken = woken;
   if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia || !window.AudioWorkletNode) {
     assistSay(
       "home",
@@ -226,8 +290,7 @@ async function voiceStop() {
   voiceClose();
   setVoiceState("thinking");
   const wav = wavFile(downsample(chunks, rate, VOICE_RATE), VOICE_RATE);
-  let speech = "";
-  let more = false;
+  let answer = null;
   try {
     const conversation = assistConversationId();
     const url = conversation
@@ -239,25 +302,32 @@ async function voiceStop() {
       body: wav,
     });
     const data = await response.json().catch(() => ({}));
-    if (response.ok) {
-      assistRemember(data);
-      more = data.continue_conversation === true;
-      if (typeof data.text === "string" && data.text) assistSay("me", data.text);
-      const said = data.response?.speech?.plain?.speech;
-      if (typeof said === "string") {
-        speech = said;
-        assistSay("home", said, data.response.response_type === "error" ? "is-error" : "");
-      }
-    } else {
-      assistSay("home", typeof data?.error === "string" ? `${data.error}.` : "La maison n'a pas répondu.", "is-error");
-    }
+    if (response.ok) answer = data;
+    else assistSay("home", typeof data?.error === "string" ? `${data.error}.` : "La maison n'a pas répondu.", "is-error");
   } catch {
     assistSay("home", "La maison n'a pas répondu.", "is-error");
+  }
+  if (answer) await voiceAnswer(answer, run);
+  else if (run === voice.run) setVoiceState("idle");
+}
+
+/** La réponse de la maison : affichée, dite, puis peut-être une phrase de
+ *  suite (étape 96). */
+async function voiceAnswer(data, run) {
+  assistRemember(data);
+  const more = data.continue_conversation === true;
+  if (typeof data.text === "string" && data.text) assistSay("me", data.text);
+  let speech = "";
+  const said = data.response?.speech?.plain?.speech;
+  if (typeof said === "string") {
+    speech = said;
+    assistSay("home", said, data.response.response_type === "error" ? "is-error" : "");
   }
   // Arrêté pendant l'attente (Assist fermé, page cachée) : la réponse
   // s'affiche, sans plus.
   if (run !== voice.run) return;
-  if (speech && voice.speak && voice.player) {
+  // (Un son que le navigateur n'a pas encore permis ne finirait jamais.)
+  if (speech && voice.speak && voice.player?.state === "running") {
     setVoiceState("speaking");
     await voiceSay(speech).catch(() => {});
     if (run !== voice.run) return;
@@ -282,7 +352,7 @@ async function voiceStop() {
 /** Un petit son doux, sur la tablette seulement : le micro se rouvre. */
 async function voiceBeep() {
   const player = voice.player;
-  if (!player) return;
+  if (player?.state !== "running") return;
   try {
     const tone = player.createOscillator();
     const gain = player.createGain();
@@ -384,6 +454,164 @@ function wavFile(samples, rate) {
   return new Blob([buffer], { type: "audio/wav" });
 }
 
+// ---------------------------------------------------------------- Le mot d'appel
+// Étape 97. Ce qui est dit près de la tablette part en morceaux vers le
+// mini-PC (jamais sur Internet), qui ne garde rien : sans le mot, la réponse
+// est seulement « non ». Un signe reste affiché tant que c'est coché.
+
+/** Écouter le mot maintenant ? Coché, connecté, page visible, et la tablette
+ *  ni n'écoute une phrase ni ne parle. */
+function wakeShouldListen() {
+  return (
+    wake.available &&
+    voiceWakeWanted() &&
+    Boolean(token.get()) &&
+    document.visibilityState === "visible" &&
+    voice.state === "idle" &&
+    performance.now() >= wake.pausedUntil
+  );
+}
+
+/** Ouvre ou ferme l'écoute du mot selon le moment, puis met le signe à jour. */
+function wakeUpdate() {
+  if (wakeShouldListen()) wakeOpen();
+  else wakeClose();
+  wakeShow();
+}
+
+async function wakeOpen() {
+  if (wake.stream || wake.opening) return;
+  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia || !window.AudioWorkletNode) {
+    wake.trouble = "failed";
+    return;
+  }
+  wake.opening = true;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    });
+    if (!wake.context) {
+      wake.context = new AudioContext();
+      wake.context.onstatechange = wakeShow;
+    }
+    const context = wake.context;
+    if (!wake.ready) {
+      await context.audioWorklet.addModule("/ecoute.js");
+      wake.ready = true;
+    }
+    // Sans toucher depuis l'ouverture de la page, le navigateur peut garder
+    // le son en pause : le signe demande alors un toucher.
+    context.resume().catch(() => {});
+    if (!wakeShouldListen()) {
+      for (const track of stream.getTracks()) track.stop();
+      return;
+    }
+    const source = context.createMediaStreamSource(stream);
+    const node = new AudioWorkletNode(context, "mot-appel", { numberOfOutputs: 0 });
+    node.port.onmessage = (event) => wakeHeard(event.data);
+    source.connect(node);
+    Object.assign(wake, { stream, source, node, trouble: "" });
+  } catch (error) {
+    wake.trouble = error?.name === "NotAllowedError" ? "refused" : "failed";
+  } finally {
+    wake.opening = false;
+    wakeShow();
+  }
+}
+
+/** Ferme le micro du mot d'appel (le voyant du navigateur s'éteint). */
+function wakeClose() {
+  if (!wake.stream) return;
+  for (const track of wake.stream.getTracks()) track.stop();
+  wake.source?.disconnect();
+  wake.node?.port.close();
+  Object.assign(wake, { stream: null, source: null, node: null });
+  wake.context?.suspend().catch(() => {});
+}
+
+/** Le signe visible : à l'écoute, en pause, ou ce qui manque. */
+function wakeShow() {
+  const sign = $("#wake-sign");
+  const wanted = wake.available && voiceWakeWanted() && Boolean(token.get());
+  sign.hidden = !wanted;
+  if (!wanted) return;
+  let state = "paused";
+  let text = `« ${wake.word} » en pause`;
+  if (wake.trouble === "refused") {
+    state = "trouble";
+    text = `Micro refusé : « ${wake.word} » n'est pas écouté`;
+  } else if (wake.trouble === "failed") {
+    state = "trouble";
+    text = `« ${wake.word} » ne peut pas être écouté ici`;
+  } else if (wake.stream && wake.context?.state !== "running") {
+    state = "touch";
+    text = `Touche l'écran pour écouter « ${wake.word} »`;
+  } else if (wake.stream) {
+    state = "on";
+    text = `À l'écoute de « ${wake.word} »`;
+  }
+  sign.dataset.state = state;
+  $("#wake-sign-text").textContent = text;
+}
+
+/** Un morceau de parole : il part au mini-PC, qui dit si c'était le mot. */
+async function wakeHeard(samples) {
+  // Un seul envoi à la fois : les morceaux d'ici là sont abandonnés.
+  if (wake.sending || !wake.stream || !wakeShouldListen()) return;
+  wake.sending = true;
+  const run = voice.run;
+  try {
+    const wav = wavFile(downsample([samples], wake.context.sampleRate, VOICE_RATE), VOICE_RATE);
+    const response = await fetch("/api/conversation/wake", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token.get()}`, "Content-Type": "audio/wav" },
+      body: wav,
+    });
+    if (response.status === 429 || response.status >= 500) {
+      // Trop de morceaux, ou l'écoute en panne : une pause, puis on reprend.
+      const wait = Number(response.headers.get("Retry-After")) * 1000 || WAKE_RETRY_MS;
+      wake.pausedUntil = performance.now() + wait;
+      wakeUpdate();
+      setTimeout(wakeUpdate, wait + 100);
+      return;
+    }
+    if (!response.ok) return;
+    const data = await response.json().catch(() => ({}));
+    if (data.wake !== true || run !== voice.run || !wakeShouldListen()) return;
+    // C'est le mot : la tablette se réveille, Assist s'ouvre.
+    if (typeof saver !== "undefined" && saver.on) hideSaver();
+    if (!$("#assist").open) $("#assist").showModal();
+    if (data.response) {
+      // « Maison, allume la cuisine » : déjà obéi, on dit la réponse.
+      voice.turns = 0;
+      await voiceAnswer(data, run);
+    } else {
+      // « Maison » seul : un petit son, et le micro s'ouvre.
+      await voiceBeep();
+      if (run === voice.run && voice.state === "idle") voiceStart({ woken: true });
+    }
+  } catch {
+    // Le réseau a manqué : ce morceau est perdu, le suivant passera.
+  } finally {
+    wake.sending = false;
+  }
+}
+
+/** Le premier toucher permet le son : l'écoute du mot et la voix démarrent. */
+function wakeUnlock() {
+  if (wake.context && wake.context.state !== "running" && wake.stream) {
+    wake.context.resume().then(wakeShow, () => {});
+  }
+  if (wake.available && voiceWakeWanted() && !voice.player) {
+    try {
+      voice.player = new AudioContext();
+    } catch {
+      voice.player = null;
+    }
+  }
+  if (voice.player?.state === "suspended") voice.player.resume().catch(() => {});
+}
+
 $("#assist-mic").replaceChildren(svgIcon(ICONS.mic));
 hubButton("#hub-talk", ICONS.mic, "Parler à la maison");
 $("#assist-mic").addEventListener("click", () => voiceStart());
@@ -400,12 +628,15 @@ document.addEventListener(
   "pointerdown",
   () => {
     if ((voice.state === "listening" && voice.following) || voice.state === "speaking") voiceCancel();
+    wakeUnlock();
   },
   { capture: true },
 );
-// Page cachée (autre application, écran éteint) : tout s'arrête.
+// Page cachée (autre application, écran éteint) : tout s'arrête, le mot
+// d'appel aussi ; il reprend quand la page revient.
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden" && voice.state !== "idle") voiceCancel();
+  wakeUpdate();
 });
 // Le réglage de cet appareil, à côté des autres réglages de la tablette.
 $("#voice-follow").checked = voiceFollowWanted();
@@ -417,5 +648,20 @@ $("#voice-follow").addEventListener("change", (event) => {
     // Stockage refusé : le réglage vaut pour cette visite.
   }
 });
+$("#voice-wake").checked = voiceWakeWanted();
+$("#voice-wake").addEventListener("change", (event) => {
+  try {
+    if (event.target.checked) localStorage.setItem(VOICE_WAKE_KEY, "1");
+    else localStorage.removeItem(VOICE_WAKE_KEY);
+  } catch {
+    // Stockage refusé : le mot d'appel reste coupé.
+  }
+  wake.trouble = "";
+  wake.pausedUntil = 0;
+  // Le toucher de la case permet aussi le son.
+  wakeUpdate();
+  wakeUnlock();
+});
+$("#wake-sign-icon").replaceChildren(svgIcon(ICONS.mic));
 setVoiceState("idle");
 if (token.get()) loadVoice().catch(() => {});

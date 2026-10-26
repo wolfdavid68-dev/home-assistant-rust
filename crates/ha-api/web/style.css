@@ -2853,6 +2853,16 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 }
 .assist-form input { min-width: 0; }
 .assist-dialog .account { margin: 0; font-size: 0.82rem; }
+/* Le mot d'appel (étape 97) : un signe toujours visible, au-dessus de
+   l'écran de veille, tant que la tablette peut écouter « Maison ». */
+.wake-sign { position: fixed; left: max(12px, env(safe-area-inset-left)); bottom: max(12px, env(safe-area-inset-bottom)); z-index: 60; display: flex; align-items: center; gap: 0.4rem; max-width: calc(100vw - 24px); margin: 0; padding: 0.35rem 0.75rem 0.35rem 0.5rem; border: 1px solid var(--line); border-radius: 999px; background: var(--card); color: var(--muted); font-size: 0.85rem; box-shadow: 0 2px 8px rgb(0 0 0 / 0.15); pointer-events: none; }
+.wake-sign[hidden] { display: none; }
+.wake-sign-icon { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--card-2); }
+.wake-sign-icon svg { width: 14px; height: 14px; }
+.wake-sign[data-state="on"] { color: var(--text); }
+.wake-sign[data-state="on"] .wake-sign-icon { background: var(--accent); color: var(--accent-ink, #fff); }
+.wake-sign[data-state="touch"] { color: var(--text); border-color: var(--accent); }
+.wake-sign[data-state="trouble"] { color: var(--alert); }
 
 /* Notifications du navigateur (étape 50) */
 .push-option { display: grid; gap: 0.5rem; padding: 0.8rem 0; border-bottom: 1px solid var(--line); }

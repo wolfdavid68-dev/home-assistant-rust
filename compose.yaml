@@ -69,6 +69,9 @@ services:
       # ci-dessus (HA_PIPER et le service « piper ») et l'écoute (service
       # « ecoute » plus bas) :
       # HA_ECOUTE: ws://127.0.0.1:10350
+      # Le mot d'appel des tablettes (voir docs/mot-appel.md), « Maison » si
+      # rien n'est dit :
+      # HA_MOT_APPEL: Maison
       # Compteur Linky (voir docs/energie.md) : module USB (avec « devices »
       # et « group_add » plus bas), ou module réseau :
       # HA_TELEINFO: /dev/ttyUSB0

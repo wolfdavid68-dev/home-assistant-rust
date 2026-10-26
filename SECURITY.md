@@ -94,6 +94,14 @@ des conséquences réelles, donc ces règles ne sont pas optionnelles.
   ordres complets qui passent par les mêmes droits, la même garde et le même audit qu'une phrase entière ; un lieu
   inconnu n'est jamais rabattu sur l'appareil d'avant ; le micro rouvert se voit, s'arrête d'un toucher et pas
   plus de 5 fois de suite.
+- Le mot d'appel (étape 97) : décoché par défaut, par appareil, avec un signe toujours visible tant qu'il est coché ;
+  la tablette n'envoie que des morceaux de parole, au mini-PC seulement, écoutés par Parakeet sur la même machine ;
+  ni le son ni le texte ne sont gardés ni journalisés (sans le mot, la réponse est seulement `{"wake": false}`) ;
+  il faut un compte de la maison (jetons d'assistant IA refusés) et une commande après le mot suit le chemin d'une
+  phrase au micro (droits, garde, audit) ; morceaux de 6,5 s au plus, taille bornée avant lecture, 30 par minute et
+  par appareil (429, compté sous l'empreinte du jeton, en mémoire une minute) ; un morceau n'attend jamais l'écoute
+  (abandonné si une phrase est en cours) ; seulement avec le service d'écoute, jamais en lançant un programme par
+  morceau.
 - Automatisations toutes prêtes (étape 85) : fabriquées par le serveur d'après les appareils, puis vérifiées et
   enregistrées comme une automatisation écrite à la main (droit de modifier, mot de passe redemandé, audit, notification) ;
   réglages contrôlés (heures, consignes de 5 à 30 °C, délais bornés, champs inconnus refusés) ; jamais de serrure ni

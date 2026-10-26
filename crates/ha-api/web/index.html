@@ -211,6 +211,11 @@
       <div id="voice-options" class="tablet-option" hidden>
         <label class="check"><input id="voice-follow" type="checkbox" checked> Enchaîner les phrases à la voix</label>
         <p class="account">Sur cet appareil seulement : après la réponse, le micro se rouvre 6 secondes pour une phrase de suite (« et la cuisine aussi »). « Merci » ou un toucher de l'écran l'arrête.</p>
+        <!-- Le mot d'appel (étape 97) : montré quand le service d'écoute est là. -->
+        <div id="voice-wake-option" hidden>
+          <label class="check"><input id="voice-wake" type="checkbox"> Écouter le mot « <span id="voice-wake-word">Maison</span> »</label>
+          <p class="account">Sur cet appareil seulement : la tablette écoute en continu et se réveille quand une phrase commence par ce mot (« Maison, allume la cuisine »). Ce qui est dit près d'elle part vers le mini-PC de la maison, jamais sur Internet, et rien n'est gardé. Un signe reste affiché tant que c'est coché.</p>
+        </div>
       </div>
       <!-- Les notifications du navigateur (étape 50) : famille et administrateur. -->
       <section id="push" class="push-option" aria-labelledby="push-title" hidden>
@@ -588,6 +593,8 @@
         </div>
       </form>
     </dialog>
+    <!-- Le mot d'appel (étape 97) : le signe visible tant qu'il est coché. -->
+    <p id="wake-sign" class="wake-sign" role="status" hidden><span id="wake-sign-icon" class="wake-sign-icon" aria-hidden="true"></span><span id="wake-sign-text"></span></p>
     <div id="saver" class="saver" hidden>
       <div id="saver-inner" class="saver-inner">
         <div id="saver-house" class="saver-house"></div>
