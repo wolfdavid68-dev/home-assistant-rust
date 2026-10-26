@@ -69,6 +69,11 @@
   --series-4: #eda100;
   --series-5: #e87ba4;
   --series-6: #6250d6;
+  /* Une teinte par famille (étape 100) : météo, énergie, machines, alertes. */
+  --tint-meteo: #2a78d6;
+  --tint-energie: #d9a00d;
+  --tint-machines: #1d9f6c;
+  --tint-alertes: #e07b00;
   /* Vigilance Météo-France : les couleurs officielles, assez sombres ou
      claires pour que le texte posé dessus reste lisible. */
   --vig-green: #3fae5a;
@@ -125,6 +130,10 @@
   --series-4: #c98500;
   --series-5: #d55181;
   --series-6: #9085e9;
+  --tint-meteo: #5aa2f2;
+  --tint-energie: #ffc93d;
+  --tint-machines: #4fd39a;
+  --tint-alertes: #ffa53d;
   --vig-green: #46b864;
   --vig-yellow: #ecd23a;
   --vig-orange: #f29a2e;
@@ -867,7 +876,7 @@ body.tablet .clock {
 .saver-house { container-type: size; height: 100%; min-height: 0; display: grid; place-items: center; }
 .saver-house:empty { display: none; }
 .saver-house:empty + .saver-side { grid-column: 1 / -1; justify-items: center; text-align: center; }
-.saver-house #house-stage {
+.saver-house :is(#house-stage, #house-stage-ghost) {
   width: min(100cqw, calc(100cqh * var(--ratio, 1.35)));
   pointer-events: none;
   /* Les bords de l'image s'effacent dans le fond flouté. */
@@ -876,7 +885,7 @@ body.tablet .clock {
 }
 /* Une maquette détourée (house.js, makeCutout) flotte avec son ombre : pas
    besoin du fondu, qui rognerait les coins du socle. */
-.saver-house #house-stage.cutout { -webkit-mask-image: none; mask-image: none; isolation: isolate; overflow: visible; }
+.saver-house :is(#house-stage, #house-stage-ghost).cutout { -webkit-mask-image: none; mask-image: none; isolation: isolate; overflow: visible; }
 .saver-house .house-stage.cutout img {
   -webkit-mask-image: var(--house-cut);
   mask-image: var(--house-cut);
@@ -923,6 +932,40 @@ body.tablet .clock {
 }
 @media (prefers-reduced-motion: reduce) {
   .saver, .saver-inner { transition: none; }
+}
+/* Le réveil (étape 102, start.js) : l'écran de veille s'ouvre en cercle
+   depuis le doigt ; le bord du trou est flou, une onde de lumière le suit.
+   Sans @property, le cercle saute à mi-course : il s'ouvre quand même. */
+@property --wake-r { syntax: "<length>"; inherits: false; initial-value: 0px; }
+.saver.waking {
+  -webkit-mask-image: radial-gradient(circle at var(--wake-x, 50%) var(--wake-y, 50%), transparent var(--wake-r), #000 calc(var(--wake-r) + 56px));
+  mask-image: radial-gradient(circle at var(--wake-x, 50%) var(--wake-y, 50%), transparent var(--wake-r), #000 calc(var(--wake-r) + 56px));
+  animation: wake-open 0.7s cubic-bezier(0.55, 0, 0.25, 1) forwards;
+}
+@keyframes wake-open { to { --wake-r: var(--wake-end, 150vmax); } }
+.wake-ring {
+  position: fixed;
+  left: var(--wake-x, 50%);
+  top: var(--wake-y, 50%);
+  z-index: 51;
+  width: calc(var(--wake-end, 150vmax) * 2);
+  height: calc(var(--wake-end, 150vmax) * 2);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, transparent 86%, rgb(170 205 255 / 0.18) 93%, rgb(220 236 255 / 0.6) 97%, transparent 100%);
+  transform: translate(-50%, -50%) scale(0);
+  pointer-events: none;
+  animation: wake-ring 0.7s cubic-bezier(0.55, 0, 0.25, 1) forwards;
+}
+@keyframes wake-ring {
+  70% { opacity: 1; }
+  to { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+}
+/* Mouvement réduit : un fondu, sans cercle ni onde. */
+.saver.waking-calm { animation: wake-fade 0.3s ease forwards; }
+@keyframes wake-fade { to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .saver.waking { -webkit-mask-image: none; mask-image: none; animation: wake-fade 0.3s ease forwards; }
+  .wake-ring { display: none; }
 }
 
 /* Journal de bord */
@@ -2853,6 +2896,204 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 }
 .assist-form input { min-width: 0; }
 .assist-dialog .account { margin: 0; font-size: 0.82rem; }
+/* L'orbe de la voix (étape 98, orbe.js) : une boule lumineuse en haut
+   d'Assist. Sa couleur dit ce que fait la voix : bleu-gris au repos,
+   turquoise à l'écoute (une ligne suit le micro), violet quand elle
+   réfléchit, orange quand elle répond, rouge un instant en cas d'erreur.
+   Les mêmes couleurs teintent le petit point du bouton « Parler » du hub. */
+@property --orb-turn { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+:is(.voice-orb, .hub-talk-button) { --orb-a: #9fb3d1; --orb-b: #4f6b96; --orb-speed: 5s; }
+:is(.voice-orb, .hub-talk-button)[data-state="listening"], :is(.voice-orb, .hub-talk-button)[data-state="starting"] { --orb-a: #5ff0dc; --orb-b: #0f9c9a; }
+:is(.voice-orb, .hub-talk-button)[data-state="thinking"] { --orb-a: #c3a1ff; --orb-b: #6b3fd6; --orb-speed: 1.6s; }
+:is(.voice-orb, .hub-talk-button)[data-state="speaking"] { --orb-a: #ffc56b; --orb-b: #ff6a3d; --orb-speed: 2.2s; }
+.voice-orb[data-state="error"] { --orb-a: #ff8a80; --orb-b: #c62828; }
+.voice-orb {
+  --voice-level: 0;
+  position: relative;
+  justify-self: center;
+  display: grid;
+  place-items: center;
+  width: 112px;
+  height: 112px;
+  margin: 0.25rem 0 0.1rem;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.voice-orb[hidden] { display: none; }
+/* Le halo : grossit avec la voix entendue. */
+.orb-glow {
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  background: var(--orb-a);
+  filter: blur(22px);
+  opacity: 0.5;
+  transform: scale(calc(0.92 + var(--voice-level) * 0.45));
+  transition: background 0.6s ease, transform 0.12s ease-out;
+  animation: orb-breathe var(--orb-speed) ease-in-out infinite;
+}
+.orb-core {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  overflow: hidden;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 28%, rgb(255 255 255 / 0.75), transparent 34%),
+    radial-gradient(circle at 50% 55%, var(--orb-a), var(--orb-b) 72%, color-mix(in srgb, var(--orb-b) 60%, #000) 100%);
+  box-shadow: inset 0 -8px 18px rgb(0 0 0 / 0.25), inset 0 2px 6px rgb(255 255 255 / 0.35), 0 6px 22px color-mix(in srgb, var(--orb-b) 45%, transparent);
+  transition: box-shadow 0.6s ease;
+}
+/* Les reflets qui tournent : lents au repos, vifs quand elle réfléchit. */
+.orb-swirl {
+  position: absolute;
+  inset: -20%;
+  background: conic-gradient(from var(--orb-turn), transparent 0 18%, rgb(255 255 255 / 0.32) 26%, transparent 36% 62%, color-mix(in srgb, var(--orb-a) 70%, #fff) 72%, transparent 82%);
+  mix-blend-mode: soft-light;
+  animation: orb-turn var(--orb-speed) linear infinite;
+}
+/* Quand elle répond : des éclats de lumière qui passent. */
+.orb-shine {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 70% 30%, rgb(255 244 214 / 0.85), transparent 22%),
+    radial-gradient(circle at 30% 72%, rgb(255 225 180 / 0.6), transparent 20%);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.voice-orb[data-state="speaking"] .orb-shine { opacity: 1; animation: orb-shine 2.2s ease-in-out infinite; }
+.voice-orb[data-state="speaking"] .orb-core { animation: orb-talk 0.9s ease-in-out infinite; }
+/* La ligne du micro, par-dessus la boule. */
+.orb-wave {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 50%;
+  width: calc(100% - 8px);
+  height: 40px;
+  transform: translateY(-50%);
+  overflow: visible;
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 4px var(--orb-a));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+.voice-orb[data-state="listening"] .orb-wave { opacity: 0.95; }
+.voice-orb[data-state="error"] .orb-core { animation: orb-shake 0.4s ease-in-out 2; }
+@keyframes orb-breathe { 50% { opacity: 0.72; } }
+@keyframes orb-turn { to { --orb-turn: 360deg; } }
+@keyframes orb-shine { 0%, 100% { transform: rotate(0deg) scale(1); } 50% { transform: rotate(40deg) scale(1.08); } }
+@keyframes orb-talk { 50% { transform: scale(1.05); } }
+@keyframes orb-shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+/* Le bouton « Parler » du hub : un petit point aux couleurs de l'orbe. */
+.hub-dock .hub-talk-button::before {
+  content: "";
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, rgb(255 255 255 / 0.8), var(--orb-a) 40%, var(--orb-b));
+  box-shadow: 0 0 10px var(--orb-a);
+  transition: background 0.4s ease, box-shadow 0.4s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .orb-glow, .orb-swirl, .orb-shine, .voice-orb .orb-core { animation: none !important; }
+  .orb-glow { transform: none; transition: background 0.3s ease; }
+}
+/* Les cartes en verre (étape 99, cartes.js) : une réponse chiffrée sort de
+   l'orbe en grand. La plus récente prend toute la largeur, les deux d'avant
+   se partagent la ligne dessous. La teinte (--tint) vient de la famille
+   (étape 100) ; sans famille, c'est l'accent du thème. */
+.glass-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; }
+.glass-cards:empty { display: none; }
+.glass-card {
+  --tint: var(--accent);
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 0.15rem;
+  min-width: 0;
+  padding: 0.65rem 0.85rem 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--tint) 32%, rgb(255 255 255 / 0.45));
+  border-radius: 18px;
+  background:
+    radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--tint) 24%, transparent), transparent 70%),
+    linear-gradient(160deg, color-mix(in srgb, var(--card) 78%, transparent), color-mix(in srgb, var(--card-2) 55%, transparent));
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.4), 0 8px 24px color-mix(in srgb, var(--tint) 16%, rgb(0 0 0 / 0.08));
+  overflow: hidden;
+  transform-origin: 50% 0;
+  animation: glass-in 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  transition: opacity 0.4s ease, transform 0.4s ease, filter 0.4s ease;
+}
+/* Un reflet en biais, comme sur une vitre. */
+.glass-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 30%, rgb(255 255 255 / 0.22) 45%, transparent 60%);
+  pointer-events: none;
+}
+.glass-card:first-child { grid-column: 1 / -1; padding: 0.8rem 1rem 0.85rem; }
+.glass-card.is-leaving { opacity: 0; transform: translateY(-6px) scale(0.96); filter: blur(4px); }
+.glass-source { margin: 0; color: var(--muted); font-size: 0.78rem; font-weight: 600; letter-spacing: 0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.glass-source::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 0.4em; border-radius: 50%; background: var(--tint); vertical-align: 0.08em; box-shadow: 0 0 6px var(--tint); }
+.glass-value { display: flex; align-items: baseline; gap: 0.2rem; margin: 0; color: var(--text); font-family: var(--font-display); line-height: 1.05; font-variant-numeric: tabular-nums; }
+.glass-number { font-size: 1.7rem; font-weight: 650; letter-spacing: -0.02em; }
+.glass-card:first-child .glass-number { font-size: 2.6rem; }
+.glass-unit { color: var(--text-2); font-size: 0.95rem; font-weight: 500; }
+.glass-card:first-child .glass-unit { font-size: 1.15rem; }
+.glass-sub { margin: 0; color: var(--text-2); font-size: 0.85rem; line-height: 1.3; overflow-wrap: anywhere; }
+.glass-when { margin: 0.1rem 0 0; color: var(--muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.glass-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.25rem 0 0; padding: 0; list-style: none; }
+.glass-chips li { padding: 0.2rem 0.6rem; border: 1px solid color-mix(in srgb, var(--tint) 30%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--tint) 14%, transparent); color: var(--text); font-size: 0.9rem; }
+.glass-card:first-child .glass-chips li { font-size: 1rem; }
+@keyframes glass-in {
+  from { opacity: 0; transform: translateY(-18px) scale(0.85); filter: blur(6px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .glass-card { animation: glass-fade 0.3s ease both; transition: opacity 0.3s ease; }
+  .glass-card.is-leaving { transform: none; filter: none; }
+}
+@keyframes glass-fade { from { opacity: 0; } }
+/* Une teinte par famille (étape 100, familyOf dans utils.js) : on reconnaît
+   le sujet avant de lire. Les cartes en verre portent data-family, les tuiles
+   de capteurs une classe fam-… ; la teinte passe par --tint. */
+:is([data-family="meteo"], .fam-meteo) { --tint: var(--tint-meteo); }
+:is([data-family="energie"], .fam-energie) { --tint: var(--tint-energie); }
+:is([data-family="machines"], .fam-machines) { --tint: var(--tint-machines); }
+:is([data-family="alertes"], .fam-alertes) { --tint: var(--tint-alertes); }
+.tile:is(.fam-meteo, .fam-energie, .fam-machines, .fam-alertes) .icon {
+  background: color-mix(in srgb, var(--tint) 16%, var(--card-2));
+  color: color-mix(in srgb, var(--tint) 72%, var(--text));
+}
+/* Une alerte en cours (fumée, fuite…) : l'icône pleine, en ambre. */
+.tile.fam-alertes.on .icon { background: var(--tint); color: #2b1800; }
+/* Le thème « plan » garde ses traits à l'encre. */
+[data-theme|="plan"] .tile:is(.fam-meteo, .fam-energie, .fam-machines, .fam-alertes) .icon { background: transparent; color: var(--ink); }
+/* L'âge des données (étape 101) : une valeur trop vieille passe en ambre,
+   avec un petit point devant ; le texte dit depuis quand. */
+.sub.is-stale, .glass-when.is-stale { color: color-mix(in srgb, var(--tint-alertes) 70%, var(--text)); }
+.sub.is-stale::before, .glass-when.is-stale::before { content: ""; display: inline-block; width: 0.45em; height: 0.45em; margin-right: 0.35em; border-radius: 50%; background: var(--tint-alertes); vertical-align: 0.1em; }
+/* La ligne d'état : la maison ne répond plus. Une seule pastille ambre en
+   haut, au-dessus de l'écran de veille, sans bouton ni fenêtre. */
+.link-line { position: fixed; top: max(8px, env(safe-area-inset-top)); left: 50%; z-index: 55; display: flex; align-items: center; gap: 0.45rem; max-width: calc(100vw - 32px); margin: 0; padding: 0.35rem 0.85rem; border-radius: 999px; background: var(--tint-alertes); color: #2b1800; font-size: 0.85rem; font-weight: 600; box-shadow: 0 2px 10px rgb(0 0 0 / 0.2); transform: translateX(-50%); pointer-events: none; animation: link-in 0.3s ease-out; }
+.link-line[hidden] { display: none; }
+.link-line::before { content: ""; flex: none; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: currentColor; animation: link-blink 1.6s ease-in-out infinite; }
+@keyframes link-in { from { opacity: 0; transform: translate(-50%, -10px); } }
+@keyframes link-blink { 50% { opacity: 0.3; } }
+@media (prefers-reduced-motion: reduce) {
+  .link-line, .link-line::before { animation: none; }
+}
 /* Le mot d'appel (étape 97) : un signe toujours visible, au-dessus de
    l'écran de veille, tant que la tablette peut écouter « Maison ». */
 .wake-sign { position: fixed; left: max(12px, env(safe-area-inset-left)); bottom: max(12px, env(safe-area-inset-bottom)); z-index: 60; display: flex; align-items: center; gap: 0.4rem; max-width: calc(100vw - 24px); margin: 0; padding: 0.35rem 0.75rem 0.35rem 0.5rem; border: 1px solid var(--line); border-radius: 999px; background: var(--card); color: var(--muted); font-size: 0.85rem; box-shadow: 0 2px 8px rgb(0 0 0 / 0.15); pointer-events: none; }
@@ -3375,7 +3616,7 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
   pointer-events: none;
 }
 .ml-card {
-  --ml-color: var(--accent);
+  --ml-color: var(--tint-machines);
   --ml-progress: 0;
   position: relative;
   display: flex;

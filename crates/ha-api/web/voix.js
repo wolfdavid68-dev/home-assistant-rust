@@ -117,6 +117,7 @@ async function loadVoice() {
   voice.speak = status === 200 && data?.speak === true;
   $("#assist-mic").hidden = !voice.listen;
   $("#hub-talk").hidden = !voice.listen;
+  $("#voice-orb").hidden = !voice.listen;
   $("#voice-options").hidden = !voice.listen;
   wake.available = voice.listen && data?.wake === true;
   if (typeof data?.wake_word === "string" && data.wake_word) wake.word = data.wake_word;
@@ -156,6 +157,8 @@ function setVoiceState(state) {
   status.hidden = state === "idle";
   status.textContent = label;
   if (state !== "listening") $("#assist-mic").style.setProperty("--voice-level", "0");
+  // L'orbe en haut d'Assist prend la couleur de l'état (orbe.js, étape 98).
+  if (typeof orbState === "function") orbState(state);
   // Le mot d'appel se tait dès que la tablette écoute une phrase ou parle,
   // et reprend un peu après.
   clearTimeout(wake.timer);
@@ -257,6 +260,7 @@ function voiceChunk(samples) {
     voice.spoke = true;
   }
   $("#assist-mic").style.setProperty("--voice-level", Math.min(1, level * 10).toFixed(2));
+  if (typeof orbLevel === "function") orbLevel(level);
   if (now - voice.startedAt > VOICE_MAX_MS) voiceStop();
   else if (voice.spoke && now - voice.heardAt > VOICE_SILENCE_MS) voiceStop();
   else if (!voice.spoke && voice.following && now - voice.startedAt > VOICE_FOLLOW_MS) {

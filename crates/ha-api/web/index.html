@@ -29,11 +29,15 @@
   <script src="/hub.js" defer></script>
   <script src="/sonnette.js" defer></script>
   <script src="/colis.js" defer></script>
+  <script src="/orbe.js" defer></script>
+  <script src="/cartes.js" defer></script>
   <script src="/voix.js" defer></script>
   <script src="/pretes.js" defer></script>
   <script src="/musique.js" defer></script>
 </head>
 <body>
+  <!-- La ligne d'état (étape 101, app.js) : la maison ne répond plus. -->
+  <p id="link-line" class="link-line" role="status" hidden></p>
   <!-- Écran de connexion -->
   <main id="login-view" class="login" hidden>
     <form id="login-form" class="login-card" autocomplete="on">
@@ -333,6 +337,10 @@
         <h2 id="assist-title">Assist</h2>
         <button id="assist-close" class="ghost" type="button">Fermer</button>
       </div>
+      <!-- L'orbe de la voix (étape 98, orbe.js) : seulement avec le micro. -->
+      <div id="voice-orb" class="voice-orb" data-state="idle" aria-hidden="true" hidden></div>
+      <!-- Les cartes en verre (étape 99, cartes.js) : la réponse en grand. -->
+      <div id="assist-cards" class="glass-cards" aria-hidden="true"></div>
       <ol id="assist-log" class="assist-log" aria-live="polite"></ol>
       <div id="assist-examples" class="assist-examples" aria-label="Exemples">
         <button type="button" class="ghost small">Ferme les volets du salon</button>

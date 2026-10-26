@@ -102,6 +102,10 @@ function assistSay(from, text, kind = "") {
   log.append(el("li", { class: `assist-line from-${from}${kind ? ` ${kind}` : ""}` }, el("p", { text })));
   while (log.children.length > ASSIST_KEEP) log.firstElementChild.remove();
   log.lastElementChild.scrollIntoView({ block: "end" });
+  // Une réponse en erreur : l'orbe de la voix rougit un instant (orbe.js).
+  if (from === "home" && kind === "is-error" && typeof orbError === "function") orbError();
+  // Un chiffre, une heure ou une liste : une carte en verre la montre en grand (cartes.js).
+  if (from === "home" && !kind && typeof cardsShow === "function") cardsShow(text);
 }
 
 async function assistAsk(text) {
