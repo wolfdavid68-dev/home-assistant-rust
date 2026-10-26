@@ -188,6 +188,14 @@ impl Stt {
         }
     }
 
+    /// Le modèle reste-t-il en mémoire (le service d'écoute) ? Le mot
+    /// d'appel (étape 97) l'exige : le programme relirait le modèle pour
+    /// chaque morceau de son.
+    #[must_use]
+    pub fn keeps_model(&self) -> bool {
+        matches!(self.engine, Engine::Server(_))
+    }
+
     /// Le texte dit dans `wav`. Une seule phrase à la fois : les suivantes
     /// attendent leur tour ([`WAIT_TURN`] au plus).
     pub async fn transcribe(&self, wav: &[u8]) -> Result<String, SttError> {
@@ -199,6 +207,25 @@ impl Stt {
             .await
             .map_err(|_| SttError::Busy)?
             .map_err(|_| SttError::Busy)?;
+        self.recognize(wav, samples).await
+    }
+
+    /// Comme [`Stt::transcribe`], mais **seulement si l'écoute est libre**,
+    /// sans attendre : sinon [`SttError::Busy`] aussitôt. Pour le mot
+    /// d'appel (étape 97) : une vraie phrase qui attend son tour passe
+    /// toujours avant (le sémaphore de tokio sert les attentes dans l'ordre,
+    /// un essai sans attente ne leur prend jamais leur tour).
+    pub async fn transcribe_if_free(&self, wav: &[u8]) -> Result<String, SttError> {
+        let samples = check_wav(wav)?;
+        if wav::is_silent(samples) {
+            return Err(SttError::Silence);
+        }
+        let _turn = self.turn.try_acquire().map_err(|_| SttError::Busy)?;
+        self.recognize(wav, samples).await
+    }
+
+    /// Fait écouter `wav` (déjà vérifié, `samples` son contenu) au moteur.
+    async fn recognize(&self, wav: &[u8], samples: &[u8]) -> Result<String, SttError> {
         let output = match &self.engine {
             Engine::Program(program) => {
                 let file = TempWav::write(wav).await?;
@@ -366,6 +393,29 @@ mod tests {
             None
         );
         assert_eq!(clean(&"a".repeat(400)).unwrap().len(), MAX_TEXT);
+    }
+
+    /// Le mot d'appel (étape 97) n'attend jamais son tour : l'écoute
+    /// occupée, il est abandonné aussitôt.
+    #[tokio::test]
+    async fn a_busy_listener_is_not_waited_for() {
+        let stt = Stt::from_settings("ws://127.0.0.1:9").unwrap();
+        assert!(stt.keeps_model());
+        let wav = wav::tests::tone(16_000, 1.0);
+        let held = stt.turn.try_acquire().unwrap();
+        let started = std::time::Instant::now();
+        assert!(matches!(
+            stt.transcribe_if_free(&wav).await,
+            Err(SttError::Busy)
+        ));
+        assert!(started.elapsed() < Duration::from_secs(1));
+        drop(held);
+        // Un silence n'est pas écouté, libre ou non.
+        let quiet = wav::tests::tone(16_000, 0.0);
+        assert!(matches!(
+            stt.transcribe_if_free(&quiet).await,
+            Err(SttError::Silence)
+        ));
     }
 
     #[test]

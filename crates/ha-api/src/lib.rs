@@ -31,6 +31,7 @@
 //! | GET | `/api/conversation/voice` | L'écoute et la voix de la tablette sont-elles installées ? |
 //! | POST | `/api/conversation/audio` | Une phrase dite à la tablette (WAV), écoutée puis comprise (étape 84) ; `?conversation_id=…` pour enchaîner |
 //! | POST | `/api/conversation/speech` | La réponse lue par la voix de la maison (WAV) |
+//! | POST | `/api/conversation/wake` | Un morceau de parole (WAV, 6 s au plus) : commence-t-il par le mot d'appel « Maison » ? (étape 97) |
 //! | POST | `/api/mcp` | Un assistant IA branché par MCP (étape 55) |
 //! | POST | `/api/push/action` | Un bouton touché sur une notification (sans connexion : le ticket en tient lieu) |
 //! | GET | `/api/websocket` | API WebSocket (authentification dans le 1er message) |
@@ -51,6 +52,7 @@ mod roles;
 mod system;
 mod tls;
 mod voice;
+mod wake;
 mod web;
 mod ws;
 
@@ -110,6 +112,8 @@ pub struct ApiState {
     speech_turn: tokio::sync::Semaphore,
     /// Les conversations d'Assist en cours (étape 96), en mémoire.
     conversations: conversation::Conversations,
+    /// Le mot d'appel « Maison » (étape 97) et la limite de ses morceaux.
+    wake: wake::Wake,
     shutdown: CancellationToken,
 }
 
@@ -138,6 +142,7 @@ impl ApiState {
             speaking: OnceLock::new(),
             speech_turn: tokio::sync::Semaphore::new(2),
             conversations: conversation::Conversations::default(),
+            wake: wake::Wake::default(),
             shutdown,
         })
     }
@@ -151,6 +156,12 @@ impl ApiState {
         if let Some(tts) = speaking {
             let _ = self.speaking.set(tts);
         }
+    }
+
+    /// Règle le mot d'appel (étape 97, réglage `HA_MOT_APPEL`) : « Maison »
+    /// sinon. À appeler au démarrage, avant de servir.
+    pub fn set_wake_word(&self, word: &str) -> Result<(), String> {
+        self.wake.set_word(word)
     }
 
     /// Demande l'arrêt du serveur : plus de nouvelles connexions, et les
@@ -243,6 +254,16 @@ pub fn router(state: Arc<ApiState>) -> Router {
             "/api/conversation/audio",
             post(voice::listen)
                 .layer::<_, std::convert::Infallible>(DefaultBodyLimit::max(ha_stt::MAX_WAV_BYTES))
+                .layer(TimeoutLayer::with_status_code(
+                    StatusCode::REQUEST_TIMEOUT,
+                    VOICE_TIMEOUT,
+                )),
+        )
+        // Le mot d'appel (étape 97) : des morceaux de 6 s au plus.
+        .route(
+            "/api/conversation/wake",
+            post(wake::wake)
+                .layer::<_, std::convert::Infallible>(DefaultBodyLimit::max(wake::MAX_BYTES))
                 .layer(TimeoutLayer::with_status_code(
                     StatusCode::REQUEST_TIMEOUT,
                     VOICE_TIMEOUT,

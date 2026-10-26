@@ -81,6 +81,13 @@ de la maison installé. En `http://`, Assist l'explique au lieu d'ouvrir le micr
 100 Mo pour Piper. Une phrase occupe les processeurs moins d'une seconde ; le serveur de la maison
 passe avant.
 
+### Le mot d'appel « Maison »
+
+Avec le service d'écoute, la tablette peut aussi **se réveiller à la voix**, sans être touchée :
+« Maison, allume la cuisine ». C'est un réglage par appareil, décoché par défaut, avec un signe
+toujours visible tant qu'il est coché ; ce qui est dit près de la tablette part vers le mini-PC,
+jamais sur Internet, et rien n'est gardé. Voir l'[étape 97](mot-appel.md).
+
 ### Essayer, et vérifier
 
 ```bash

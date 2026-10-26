@@ -508,6 +508,14 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     if let Some(stt) = &listening {
         info!("écoute de la tablette : {}", stt.describe());
     }
+    // Le mot d'appel des tablettes (étape 97), « Maison » si rien n'est dit.
+    if let Some(word) = std::env::var("HA_MOT_APPEL")
+        .ok()
+        .filter(|word| !word.trim().is_empty())
+        && let Err(error) = api_state.set_wake_word(&word)
+    {
+        warn!("mot d'appel : {error}");
+    }
     let speaking = tts_config().unwrap_or_else(|error| {
         warn!("voix de la tablette : {error}");
         None

@@ -2,8 +2,9 @@
 //! serveur l'écoute (Whisper, sur place), la comprend avec Assist, et la
 //! réponse est lue par la voix de la maison (Piper, sur place).
 //!
-//! - `GET /api/conversation/voice` : `{"listen": true, "speak": true}`,
-//!   ce qui est installé ;
+//! - `GET /api/conversation/voice` : `{"listen": true, "speak": true,
+//!   "wake": true, "wake_word": "Maison"}`, ce qui est installé (`wake` :
+//!   le mot d'appel de l'étape 97, possible avec le service d'écoute) ;
 //! - `POST /api/conversation/audio` : le son en WAV (16 bits, mono,
 //!   16 000 Hz, 15 s au plus). La réponse : `{"text": "ferme le volet",
 //!   "response": {…}, "conversation_id": "…", "continue_conversation":
@@ -46,6 +47,8 @@ pub(crate) async fn overview(
     Json(json!({
         "listen": state.listening.get().is_some(),
         "speak": state.speaking.get().is_some(),
+        "wake": state.listening.get().is_some_and(ha_stt::Stt::keeps_model),
+        "wake_word": state.wake.word().shown(),
     }))
 }
 

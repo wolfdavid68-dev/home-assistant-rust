@@ -2639,6 +2639,14 @@ async fn a_conversation_keeps_the_rights_of_its_account() {
 async fn fake_listener(
     sentences: Vec<&'static str>,
 ) -> (String, Arc<std::sync::atomic::AtomicUsize>) {
+    slow_listener(sentences, Duration::ZERO).await
+}
+
+/// Le même, qui prend `delay` pour écouter chaque son.
+async fn slow_listener(
+    sentences: Vec<&'static str>,
+    delay: Duration,
+) -> (String, Arc<std::sync::atomic::AtomicUsize>) {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     let heard = Arc::new(std::sync::atomic::AtomicUsize::new(0));
@@ -2653,6 +2661,7 @@ async fn fake_listener(
                 panic!("un son est attendu");
             };
             count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            tokio::time::sleep(delay).await;
             socket
                 .send(Message::Text(json!({"text": sentence}).to_string().into()))
                 .await
@@ -2710,11 +2719,194 @@ async fn the_tablet_follows_a_spoken_conversation() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
 
+/// Un morceau envoyé au mot d'appel : (statut, réponse).
+async fn wake(app: &TestApp, token: &str, wav: Vec<u8>) -> (StatusCode, Value) {
+    let (status, bytes, _) = app
+        .send_bytes("POST", "/api/conversation/wake", token, wav)
+        .await;
+    (
+        status,
+        serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+    )
+}
+
+/// Le mot d'appel (étape 97) : « Maison, allume la lumière du salon » obéit,
+/// « Maison » seul ouvre le micro, une autre phrase ne fait rien.
+#[tokio::test]
+async fn the_wake_word_wakes_the_tablet() {
+    let app = TestApp::new().await;
+    two_rooms(&app);
+    let david = app.login().await;
+
+    // Sans écoute : le mot d'appel n'existe pas.
+    let (status, _) = wake(&app, &david, spoken_wav()).await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+
+    let (url, heard) = fake_listener(vec![
+        "Maison, allume la lumière du salon.",
+        "Maison.",
+        "Il fait beau aujourd'hui.",
+    ])
+    .await;
+    app.state
+        .set_voice(Some(ha_stt::Stt::from_settings(&url).unwrap()), None);
+    let (_, body) = app
+        .request("GET", "/api/conversation/voice", Some(&david), None)
+        .await;
+    assert_eq!(body["wake"], true);
+    assert_eq!(body["wake_word"], "Maison");
+    let mut events = app.state.core.bus.subscribe();
+
+    // Le mot puis une commande : obéie, comme à la voix.
+    let (status, body) = wake(&app, &david, spoken_wav()).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["wake"], true);
+    assert_eq!(body["text"], "allume la lumière du salon.");
+    assert_eq!(body["response"]["response_type"], "action_done");
+    assert_eq!(body["continue_conversation"], true);
+    assert_eq!(
+        next_order(&mut events).await,
+        ("turn_on".into(), "light.lampe_salon".into())
+    );
+
+    // Le mot seul : la tablette ouvrira le micro, aucun ordre.
+    let (status, body) = wake(&app, &david, spoken_wav()).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, json!({"wake": true}));
+
+    // Pas de mot : rien d'autre que « non », ni le texte entendu.
+    let (status, body) = wake(&app, &david, spoken_wav()).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, json!({"wake": false}));
+    assert_eq!(heard.load(std::sync::atomic::Ordering::SeqCst), 3);
+    assert!(
+        tokio::time::timeout(Duration::from_millis(200), events.recv())
+            .await
+            .is_err(),
+        "aucun ordre"
+    );
+
+    // Un silence : pas même écouté.
+    let (status, body) = wake(&app, &david, silent_wav(1000)).await;
+    assert_eq!((status, body), (StatusCode::OK, json!({"wake": false})));
+    assert_eq!(heard.load(std::sync::atomic::Ordering::SeqCst), 3);
+
+    // Sans connexion : refusé.
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/conversation/wake")
+        .body(Body::from(spoken_wav()))
+        .unwrap();
+    let response = app.router().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+/// Les garde-fous du mot d'appel : morceaux courts, débit limité par
+/// appareil, jeton d'assistant refusé.
+#[tokio::test]
+async fn the_wake_word_has_limits() {
+    let app = TestApp::new().await;
+    let david = app.login().await;
+    let (url, heard) = fake_listener(vec!["Maison."]).await;
+    app.state
+        .set_voice(Some(ha_stt::Stt::from_settings(&url).unwrap()), None);
+
+    // Trop long : refusé dès la lecture (7 s), ou après l'en-tête (6,6 s),
+    // sans être écouté.
+    let (status, _) = wake(&app, &david, tone_wav(7000)).await;
+    assert_eq!(status, StatusCode::PAYLOAD_TOO_LARGE);
+    let (status, body) = wake(&app, &david, tone_wav(6600)).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+    // Pas un WAV : refusé.
+    let (status, _) = wake(&app, &david, b"bonjour".to_vec()).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(heard.load(std::sync::atomic::Ordering::SeqCst), 0);
+
+    // Le débit : 30 morceaux par minute et par appareil (les 2 refusés
+    // après lecture comptent déjà).
+    for _ in 2..30 {
+        let (status, _) = wake(&app, &david, silent_wav(1000)).await;
+        assert_eq!(status, StatusCode::OK);
+    }
+    let (status, body) = wake(&app, &david, silent_wav(1000)).await;
+    assert_eq!(status, StatusCode::TOO_MANY_REQUESTS, "{body}");
+    // Un autre appareil (un autre jeton) n'est pas gêné.
+    let tablet = app.login_as("cuisine", ha_auth::Role::Family).await;
+    let (status, body) = wake(&app, &tablet, silent_wav(1000)).await;
+    assert_eq!((status, body), (StatusCode::OK, json!({"wake": false})));
+
+    // Un jeton d'assistant IA n'est pas une personne.
+    let issued = app
+        .state
+        .auth
+        .issue_program_token("david", Duration::from_hours(24))
+        .await
+        .unwrap()
+        .unwrap();
+    let (status, _) = wake(&app, issued.token.as_str(), spoken_wav()).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+/// Une vraie phrase passe avant : pendant qu'elle est écoutée, un morceau
+/// du mot d'appel est abandonné tout de suite.
+#[tokio::test]
+async fn a_spoken_sentence_goes_before_the_wake_word() {
+    let app = TestApp::new().await;
+    two_rooms(&app);
+    let david = app.login().await;
+    let (url, heard) = slow_listener(
+        vec!["Allume la lumière du salon."],
+        Duration::from_millis(800),
+    )
+    .await;
+    app.state
+        .set_voice(Some(ha_stt::Stt::from_settings(&url).unwrap()), None);
+
+    let sentence = app.send_bytes("POST", "/api/conversation/audio", &david, spoken_wav());
+    let chunk = async {
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        let started = std::time::Instant::now();
+        let answer = wake(&app, &david, spoken_wav()).await;
+        (answer, started.elapsed())
+    };
+    let ((status, bytes, _), ((wake_status, body), waited)) = tokio::join!(sentence, chunk);
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&bytes)
+    );
+    assert_eq!(wake_status, StatusCode::OK);
+    assert_eq!(body, json!({"wake": false, "busy": true}));
+    assert!(waited < Duration::from_millis(500), "{waited:?}");
+    assert_eq!(heard.load(std::sync::atomic::Ordering::SeqCst), 1);
+}
+
 /// Un WAV d'une seconde (16 bits, mono, 16 000 Hz) : une note.
 fn spoken_wav() -> Vec<u8> {
-    let samples: Vec<i16> = (0..16_000u32)
-        .map(|i| if i % 40 < 20 { 6000 } else { -6000 })
-        .collect();
+    tone_wav(1000)
+}
+
+/// Une note de `millis` millisecondes.
+fn tone_wav(millis: u32) -> Vec<u8> {
+    wav_of(
+        (0..16 * millis)
+            .map(|i| if i % 40 < 20 { 6000 } else { -6000 })
+            .collect(),
+    )
+}
+
+/// Un silence de `millis` millisecondes (un léger souffle).
+fn silent_wav(millis: u32) -> Vec<u8> {
+    wav_of(
+        (0..16 * millis)
+            .map(|i| if i % 2 == 0 { 30 } else { -30 })
+            .collect(),
+    )
+}
+
+/// Un WAV 16 bits, mono, 16 000 Hz.
+fn wav_of(samples: Vec<i16>) -> Vec<u8> {
     let data = u32::try_from(samples.len() * 2).unwrap();
     let mut out = Vec::new();
     out.extend_from_slice(b"RIFF");
@@ -2755,7 +2947,10 @@ async fn the_tablet_can_talk_to_the_house() {
     let (_, body) = app
         .request("GET", "/api/conversation/voice", Some(&david), None)
         .await;
-    assert_eq!(body, json!({"listen": false, "speak": false}));
+    assert_eq!(
+        body,
+        json!({"listen": false, "speak": false, "wake": false, "wake_word": "Maison"})
+    );
     let (status, _, _) = app
         .send_bytes("POST", "/api/conversation/audio", &david, spoken_wav())
         .await;
@@ -2795,7 +2990,15 @@ async fn the_tablet_can_talk_to_the_house() {
     let (_, body) = app
         .request("GET", "/api/conversation/voice", Some(&david), None)
         .await;
-    assert_eq!(body, json!({"listen": true, "speak": true}));
+    // Le mot d'appel demande le service d'écoute, pas le programme.
+    assert_eq!(
+        body,
+        json!({"listen": true, "speak": true, "wake": false, "wake_word": "Maison"})
+    );
+    let (status, _, _) = app
+        .send_bytes("POST", "/api/conversation/wake", &david, spoken_wav())
+        .await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
 
     let mut events = app.state.core.bus.subscribe();
     let (status, bytes, _) = app
