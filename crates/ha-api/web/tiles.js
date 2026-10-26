@@ -1741,6 +1741,11 @@ function tileClass(state, kind) {
   const classes = ["tile", kind];
   if (state.state === "on" || (kind === "cover" && state.state === "open")) classes.push("on");
   if (state.state === "unavailable" || state.state === "unknown") classes.push("unavailable");
+  // Seuls les capteurs ont une famille : une lampe reste une lampe.
+  if (kind === "sensor" || kind === "binary") {
+    const family = familyOfState(state);
+    if (family) classes.push(`fam-${family}`);
+  }
   return classes.join(" ");
 }
 

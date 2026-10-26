@@ -112,11 +112,9 @@ function cardElement(card) {
   const state = cardEntity(card.label);
   const when = state && typeof shortWhen === "function" ? shortWhen(state.last_updated) : "";
   if (when) node.append(el("p", { class: "glass-when", text: `relevé à ${when}` }));
-  // Teinte par famille (étape 100), si elle est chargée.
-  if (typeof cardFamily === "function") {
-    const family = cardFamily(card, state);
-    if (family) node.dataset.family = family;
-  }
+  // Teinte par famille (étape 100) : l'appareil s'il est connu, sinon la phrase.
+  const family = state ? familyOfState(state) : familyOf({ text: `${card.label} ${card.value}`, unit: card.unit ?? "" });
+  if (family) node.dataset.family = family;
   return node;
 }
 

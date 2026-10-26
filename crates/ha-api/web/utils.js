@@ -21,6 +21,33 @@ const nameOf = (state) =>
   customNames.get(state.entity_id) || state.attributes.friendly_name || state.entity_id.split(".")[1].replaceAll("_", " ");
 const tileId = (entityId) => `tile-${entityId}`;
 
+// Une teinte par famille (étape 100) : la météo en bleu, l'énergie en jaune,
+// les machines en vert, les alertes en ambre. Le type de capteur et l'unité
+// décident d'abord ; le nom ou la phrase, ensuite.
+const FAMILY_CLASSES = {
+  alertes: ["smoke", "moisture", "gas", "carbon_monoxide", "problem", "safety", "tamper"],
+  energie: ["power", "energy", "apparent_power", "monetary", "current", "voltage", "power_factor"],
+  meteo: ["temperature", "humidity", "pressure", "atmospheric_pressure", "precipitation", "precipitation_intensity", "wind_speed", "illuminance"],
+};
+
+/** « meteo », « energie », « machines », « alertes », ou "" quand rien ne va. */
+function familyOf({ text = "", unit = "", deviceClass = "", machine = false } = {}) {
+  if (FAMILY_CLASSES.alertes.includes(deviceClass) || /injoignable|ratée|fuite|fumée|alarme|alerte|intrusion/i.test(text)) return "alertes";
+  if (machine || /\blave-|\bsèche-|\bseche-|\bmachine|fini vers|fin vers|\bcycle\b/i.test(text)) return "machines";
+  if (FAMILY_CLASSES.energie.includes(deviceClass) || /^(W|kW|Wh|kWh|VA|€|A|V)$/.test(unit) || /\bconso|puissance|énergie|électricité|linky|\btempo\b/i.test(text)) return "energie";
+  if (FAMILY_CLASSES.meteo.includes(deviceClass) || /^(°C|°|mm|km\/h|hPa|lx)$/.test(unit) || /temp[ée]rature|humidit|pluie|\bvent\b|météo|il fait/i.test(text)) return "meteo";
+  return "";
+}
+
+/** La famille d'un capteur de la maison. */
+const familyOfState = (state) =>
+  familyOf({
+    text: nameOf(state),
+    unit: state.attributes.unit_of_measurement ?? "",
+    deviceClass: state.attributes.device_class ?? "",
+    machine: typeof state.attributes.appareil === "string",
+  });
+
 const relative = new Intl.RelativeTimeFormat("fr", { numeric: "auto" });
 function ago(iso) {
   const seconds = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);

@@ -69,6 +69,11 @@
   --series-4: #eda100;
   --series-5: #e87ba4;
   --series-6: #6250d6;
+  /* Une teinte par famille (étape 100) : météo, énergie, machines, alertes. */
+  --tint-meteo: #2a78d6;
+  --tint-energie: #d9a00d;
+  --tint-machines: #1d9f6c;
+  --tint-alertes: #e07b00;
   /* Vigilance Météo-France : les couleurs officielles, assez sombres ou
      claires pour que le texte posé dessus reste lisible. */
   --vig-green: #3fae5a;
@@ -125,6 +130,10 @@
   --series-4: #c98500;
   --series-5: #d55181;
   --series-6: #9085e9;
+  --tint-meteo: #5aa2f2;
+  --tint-energie: #ffc93d;
+  --tint-machines: #4fd39a;
+  --tint-alertes: #ffa53d;
   --vig-green: #46b864;
   --vig-yellow: #ecd23a;
   --vig-orange: #f29a2e;
@@ -3022,6 +3031,21 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
   .glass-card.is-leaving { transform: none; filter: none; }
 }
 @keyframes glass-fade { from { opacity: 0; } }
+/* Une teinte par famille (étape 100, familyOf dans utils.js) : on reconnaît
+   le sujet avant de lire. Les cartes en verre portent data-family, les tuiles
+   de capteurs une classe fam-… ; la teinte passe par --tint. */
+:is([data-family="meteo"], .fam-meteo) { --tint: var(--tint-meteo); }
+:is([data-family="energie"], .fam-energie) { --tint: var(--tint-energie); }
+:is([data-family="machines"], .fam-machines) { --tint: var(--tint-machines); }
+:is([data-family="alertes"], .fam-alertes) { --tint: var(--tint-alertes); }
+.tile:is(.fam-meteo, .fam-energie, .fam-machines, .fam-alertes) .icon {
+  background: color-mix(in srgb, var(--tint) 16%, var(--card-2));
+  color: color-mix(in srgb, var(--tint) 72%, var(--text));
+}
+/* Une alerte en cours (fumée, fuite…) : l'icône pleine, en ambre. */
+.tile.fam-alertes.on .icon { background: var(--tint); color: #2b1800; }
+/* Le thème « plan » garde ses traits à l'encre. */
+[data-theme|="plan"] .tile:is(.fam-meteo, .fam-energie, .fam-machines, .fam-alertes) .icon { background: transparent; color: var(--ink); }
 /* Le mot d'appel (étape 97) : un signe toujours visible, au-dessus de
    l'écran de veille, tant que la tablette peut écouter « Maison ». */
 .wake-sign { position: fixed; left: max(12px, env(safe-area-inset-left)); bottom: max(12px, env(safe-area-inset-bottom)); z-index: 60; display: flex; align-items: center; gap: 0.4rem; max-width: calc(100vw - 24px); margin: 0; padding: 0.35rem 0.75rem 0.35rem 0.5rem; border: 1px solid var(--line); border-radius: 999px; background: var(--card); color: var(--muted); font-size: 0.85rem; box-shadow: 0 2px 8px rgb(0 0 0 / 0.15); pointer-events: none; }
@@ -3544,7 +3568,7 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
   pointer-events: none;
 }
 .ml-card {
-  --ml-color: var(--accent);
+  --ml-color: var(--tint-machines);
   --ml-progress: 0;
   position: relative;
   display: flex;
