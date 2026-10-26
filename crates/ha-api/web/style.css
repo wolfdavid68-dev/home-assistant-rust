@@ -2965,6 +2965,63 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
   .orb-glow, .orb-swirl, .orb-shine, .voice-orb .orb-core { animation: none !important; }
   .orb-glow { transform: none; transition: background 0.3s ease; }
 }
+/* Les cartes en verre (étape 99, cartes.js) : une réponse chiffrée sort de
+   l'orbe en grand. La plus récente prend toute la largeur, les deux d'avant
+   se partagent la ligne dessous. La teinte (--tint) vient de la famille
+   (étape 100) ; sans famille, c'est l'accent du thème. */
+.glass-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; }
+.glass-cards:empty { display: none; }
+.glass-card {
+  --tint: var(--accent);
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 0.15rem;
+  min-width: 0;
+  padding: 0.65rem 0.85rem 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--tint) 32%, rgb(255 255 255 / 0.45));
+  border-radius: 18px;
+  background:
+    radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--tint) 24%, transparent), transparent 70%),
+    linear-gradient(160deg, color-mix(in srgb, var(--card) 78%, transparent), color-mix(in srgb, var(--card-2) 55%, transparent));
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.4), 0 8px 24px color-mix(in srgb, var(--tint) 16%, rgb(0 0 0 / 0.08));
+  overflow: hidden;
+  transform-origin: 50% 0;
+  animation: glass-in 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  transition: opacity 0.4s ease, transform 0.4s ease, filter 0.4s ease;
+}
+/* Un reflet en biais, comme sur une vitre. */
+.glass-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 30%, rgb(255 255 255 / 0.22) 45%, transparent 60%);
+  pointer-events: none;
+}
+.glass-card:first-child { grid-column: 1 / -1; padding: 0.8rem 1rem 0.85rem; }
+.glass-card.is-leaving { opacity: 0; transform: translateY(-6px) scale(0.96); filter: blur(4px); }
+.glass-source { margin: 0; color: var(--muted); font-size: 0.78rem; font-weight: 600; letter-spacing: 0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.glass-source::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 0.4em; border-radius: 50%; background: var(--tint); vertical-align: 0.08em; box-shadow: 0 0 6px var(--tint); }
+.glass-value { display: flex; align-items: baseline; gap: 0.2rem; margin: 0; color: var(--text); font-family: var(--font-display); line-height: 1.05; font-variant-numeric: tabular-nums; }
+.glass-number { font-size: 1.7rem; font-weight: 650; letter-spacing: -0.02em; }
+.glass-card:first-child .glass-number { font-size: 2.6rem; }
+.glass-unit { color: var(--text-2); font-size: 0.95rem; font-weight: 500; }
+.glass-card:first-child .glass-unit { font-size: 1.15rem; }
+.glass-sub { margin: 0; color: var(--text-2); font-size: 0.85rem; line-height: 1.3; overflow-wrap: anywhere; }
+.glass-when { margin: 0.1rem 0 0; color: var(--muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.glass-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.25rem 0 0; padding: 0; list-style: none; }
+.glass-chips li { padding: 0.2rem 0.6rem; border: 1px solid color-mix(in srgb, var(--tint) 30%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--tint) 14%, transparent); color: var(--text); font-size: 0.9rem; }
+.glass-card:first-child .glass-chips li { font-size: 1rem; }
+@keyframes glass-in {
+  from { opacity: 0; transform: translateY(-18px) scale(0.85); filter: blur(6px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .glass-card { animation: glass-fade 0.3s ease both; transition: opacity 0.3s ease; }
+  .glass-card.is-leaving { transform: none; filter: none; }
+}
+@keyframes glass-fade { from { opacity: 0; } }
 /* Le mot d'appel (étape 97) : un signe toujours visible, au-dessus de
    l'écran de veille, tant que la tablette peut écouter « Maison ». */
 .wake-sign { position: fixed; left: max(12px, env(safe-area-inset-left)); bottom: max(12px, env(safe-area-inset-bottom)); z-index: 60; display: flex; align-items: center; gap: 0.4rem; max-width: calc(100vw - 24px); margin: 0; padding: 0.35rem 0.75rem 0.35rem 0.5rem; border: 1px solid var(--line); border-radius: 999px; background: var(--card); color: var(--muted); font-size: 0.85rem; box-shadow: 0 2px 8px rgb(0 0 0 / 0.15); pointer-events: none; }
