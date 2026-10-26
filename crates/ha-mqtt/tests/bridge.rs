@@ -289,6 +289,17 @@ fn optimistic_switch_without_state_topic() {
     );
 
     assert_eq!(state(&core, "switch.relais").as_deref(), Some("on"));
+    // L'état est supposé, pas confirmé : on le dit (étape 95).
+    let relais = core.states.get(&id("switch.relais")).unwrap();
+    assert_eq!(relais.attributes()["assumed_state"], true);
+    // Avec un sujet d'état, l'appareil dit lui-même ce qu'il en est.
+    bridge.handle_message(
+        "homeassistant/switch/suivi/config",
+        br#"{"name": "Suivi", "cmd_t": "maison/suivi/set", "stat_t": "maison/suivi"}"#,
+        &core.states,
+    );
+    let suivi = core.states.get(&id("switch.suivi")).unwrap();
+    assert!(!suivi.attributes().contains_key("assumed_state"));
 }
 
 #[test]

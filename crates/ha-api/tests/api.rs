@@ -2642,6 +2642,109 @@ async fn assist_adds_to_the_shopping_list() {
     assert_eq!(data["item"], "Pain de mie");
 }
 
+/// La confirmation après un ordre (étape 95) : « C'est fait » seulement si
+/// l'appareil a changé d'état, sinon on le dit honnêtement.
+#[tokio::test]
+async fn assist_says_done_only_when_the_device_obeyed() {
+    let app = TestApp::new().await;
+    let core = Arc::clone(&app.state.core);
+    for (id, value, name) in [
+        ("light.salon", "off", "Lampe salon"),
+        ("cover.chambre", "open", "Volet chambre"),
+        ("light.cuisine", "unavailable", "Lampe cuisine"),
+    ] {
+        let mut attributes = Attributes::new();
+        attributes.insert("friendly_name".into(), name.into());
+        core.states
+            .set_by("mqtt", id.parse().unwrap(), value, attributes)
+            .unwrap();
+    }
+    // Une fausse lampe : elle s'allume 200 ms après l'ordre. Le volet, lui,
+    // ne répond jamais.
+    let mut events = core.bus.subscribe();
+    let lamp = Arc::clone(&core);
+    tokio::spawn(async move {
+        while let Ok(event) = events.recv().await {
+            if let ha_core::Event::CallService {
+                domain, service, ..
+            } = event.as_ref()
+                && (domain.as_str(), service.as_str()) == ("light", "turn_on")
+            {
+                tokio::time::sleep(Duration::from_millis(200)).await;
+                let id: ha_core::EntityId = "light.salon".parse().unwrap();
+                let attributes = lamp.states.get(&id).unwrap().attributes().clone();
+                lamp.states.set(id, "on", attributes).unwrap();
+            }
+        }
+    });
+    let david = app.login().await;
+    let say = |text: &str| {
+        let text = text.to_owned();
+        let app = &app;
+        let david = &david;
+        async move {
+            let started = std::time::Instant::now();
+            let (status, body) = app
+                .request(
+                    "POST",
+                    "/api/conversation/process",
+                    Some(david),
+                    Some(json!({ "text": text })),
+                )
+                .await;
+            assert_eq!(status, StatusCode::OK, "{body}");
+            (
+                body["response"]["response_type"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned(),
+                body["response"]["speech"]["plain"]["speech"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned(),
+                started.elapsed(),
+            )
+        }
+    };
+
+    // Confirmé après un moment : la réponse n'attend pas la fin du délai.
+    let (kind, speech, took) = say("allume la lampe du salon").await;
+    assert_eq!(
+        (kind.as_str(), speech.as_str()),
+        ("action_done", "C'est fait : allumer Lampe salon.")
+    );
+    assert!(took < Duration::from_secs(2), "{took:?}");
+
+    // Déjà dans le bon état : pas d'attente.
+    let (kind, speech, took) = say("allume la lampe du salon").await;
+    assert_eq!(
+        (kind.as_str(), speech.as_str()),
+        ("action_done", "C'est fait : allumer Lampe salon.")
+    );
+    assert!(took < Duration::from_secs(1), "{took:?}");
+
+    // Jamais confirmé : on le dit, au bout de 3 s au plus.
+    let (kind, speech, took) = say("ferme le volet de la chambre").await;
+    assert_eq!(kind, "action_done");
+    assert_eq!(
+        speech,
+        "J'ai envoyé l'ordre, mais Volet chambre n'a pas encore répondu."
+    );
+    assert!(took >= Duration::from_secs(3), "{took:?}");
+    assert!(took < Duration::from_secs(5), "{took:?}");
+
+    // Indisponible : dit tout de suite.
+    let (kind, speech, took) = say("allume la lampe de la cuisine").await;
+    assert_eq!(
+        (kind.as_str(), speech.as_str()),
+        (
+            "error",
+            "J'ai envoyé l'ordre, mais Lampe cuisine est indisponible."
+        )
+    );
+    assert!(took < Duration::from_secs(1), "{took:?}");
+}
+
 /// Un WAV d'une seconde (16 bits, mono, 16 000 Hz) : une note.
 #[cfg(unix)]
 fn spoken_wav() -> Vec<u8> {

@@ -64,6 +64,10 @@ bord.
 - **Le journal** : chaque ordre est écrit dans le journal d'audit et le journal de bord, au nom du
   compte. La phrase elle-même n'est écrite nulle part.
 
+**« C'est fait » veut dire que l'appareil a obéi** ([étape 95](confirmation.md)) : Assist attend
+au plus 3 secondes qu'il change d'état. Sinon : « J'ai envoyé l'ordre, mais Volet chambre n'a pas
+encore répondu », ou « … est indisponible ».
+
 ## Pour les développeurs
 
 `POST /api/conversation/process` avec `{"text": "ferme le volet de la chambre"}`, comme dans Home
