@@ -34,6 +34,8 @@ function showSaver() {
   if (saver.on || $("#dashboard-view").hidden) return;
   // Un travail en cours (éditeur, mot de passe) n'est jamais caché.
   if ($("#automations").open || $("#confirm").open) return saverLater();
+  // Une vague de réveil encore en cours s'arrête net.
+  wakeStop();
   saver.on = true;
   // Le dessin lui-même (avec ses effets : pluie, neige…) passe dans l'écran
   // de veille ; il retrouve sa place au réveil.
@@ -54,12 +56,14 @@ function showSaver() {
   saver.refresh = setInterval(renderSaver, 20_000);
 }
 
-function hideSaver() {
+function hideSaver(event) {
   if (!saver.on) return;
   saver.on = false;
   clearInterval(saver.refresh);
-  $("#saver").hidden = true;
   const stage = $("#saver-house #house-stage");
+  // Une copie du dessin garde l'écran de veille entier pendant la vague.
+  if (stage) $("#saver-house").append(wakeGhost(stage));
+  wakeWave(event);
   if (stage) {
     const hubOn = typeof hub !== "undefined" && hub.on;
     (hubOn ? $("#hub-house") : $("#house .house-frame")).append(stage);
@@ -67,6 +71,62 @@ function hideSaver() {
     if (typeof renderMachineLive === "function") renderMachineLive();
   }
   saverLater();
+}
+
+// ---------------------------------------------------------------- Le réveil
+// Étape 102 : au lieu de disparaître d'un coup, l'écran de veille s'ouvre en
+// cercle depuis le doigt (ou depuis le centre, au clavier), avec une onde de
+// lumière ; la maison apparaît dans le trou qui grandit. Mouvement réduit :
+// un simple fondu. Pendant la vague, l'écran de veille avale encore les
+// touches : rien ne s'allume sous le doigt.
+const WAKE_MS = 700;
+const WAKE_FADE_MS = 300;
+const wake = { timer: 0, ring: null };
+
+/** Une copie muette du dessin, sans id en double, pour la durée de la vague. */
+function wakeGhost(stage) {
+  const ghost = stage.cloneNode(true);
+  ghost.id = "house-stage-ghost";
+  ghost.setAttribute("aria-hidden", "true");
+  for (const node of ghost.querySelectorAll("[id]")) node.removeAttribute("id");
+  return ghost;
+}
+
+function wakeWave(event) {
+  const screen = $("#saver");
+  wakeStop();
+  const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const width = innerWidth;
+  const height = innerHeight;
+  const x = Number.isFinite(event?.clientX) ? event.clientX : width / 2;
+  const y = Number.isFinite(event?.clientY) ? event.clientY : height / 2;
+  // Le cercle doit couvrir le coin le plus loin du doigt.
+  const reach = Math.ceil(Math.hypot(Math.max(x, width - x), Math.max(y, height - y))) + 60;
+  screen.style.setProperty("--wake-x", `${x}px`);
+  screen.style.setProperty("--wake-y", `${y}px`);
+  screen.style.setProperty("--wake-end", `${reach}px`);
+  screen.classList.add(calm ? "waking-calm" : "waking");
+  if (!calm) {
+    wake.ring = el("span", { class: "wake-ring", "aria-hidden": "true" });
+    wake.ring.style.setProperty("--wake-x", `${x}px`);
+    wake.ring.style.setProperty("--wake-y", `${y}px`);
+    wake.ring.style.setProperty("--wake-end", `${reach}px`);
+    document.body.append(wake.ring);
+  }
+  wake.timer = setTimeout(() => {
+    screen.hidden = true;
+    wakeStop();
+  }, calm ? WAKE_FADE_MS : WAKE_MS);
+}
+
+/** Fin (ou abandon) de la vague : plus de copie, plus d'onde. */
+function wakeStop() {
+  clearTimeout(wake.timer);
+  wake.timer = 0;
+  $("#saver").classList.remove("waking", "waking-calm");
+  $("#house-stage-ghost")?.remove();
+  wake.ring?.remove();
+  wake.ring = null;
 }
 
 function renderSaver() {
@@ -105,10 +165,10 @@ for (const type of ["pointerdown", "pointerup", "click"]) {
   $("#saver").addEventListener(type, (event) => {
     event.preventDefault();
     event.stopPropagation();
-    if (type === "pointerdown") hideSaver();
+    if (type === "pointerdown") hideSaver(event);
   }, { capture: true });
 }
-addEventListener("keydown", hideSaver);
+addEventListener("keydown", () => hideSaver());
 $("#saver-mode").checked = saverWanted();
 $("#saver-mode").addEventListener("change", (event) => {
   try {

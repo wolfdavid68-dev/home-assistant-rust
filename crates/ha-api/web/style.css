@@ -876,7 +876,7 @@ body.tablet .clock {
 .saver-house { container-type: size; height: 100%; min-height: 0; display: grid; place-items: center; }
 .saver-house:empty { display: none; }
 .saver-house:empty + .saver-side { grid-column: 1 / -1; justify-items: center; text-align: center; }
-.saver-house #house-stage {
+.saver-house :is(#house-stage, #house-stage-ghost) {
   width: min(100cqw, calc(100cqh * var(--ratio, 1.35)));
   pointer-events: none;
   /* Les bords de l'image s'effacent dans le fond flouté. */
@@ -885,7 +885,7 @@ body.tablet .clock {
 }
 /* Une maquette détourée (house.js, makeCutout) flotte avec son ombre : pas
    besoin du fondu, qui rognerait les coins du socle. */
-.saver-house #house-stage.cutout { -webkit-mask-image: none; mask-image: none; isolation: isolate; overflow: visible; }
+.saver-house :is(#house-stage, #house-stage-ghost).cutout { -webkit-mask-image: none; mask-image: none; isolation: isolate; overflow: visible; }
 .saver-house .house-stage.cutout img {
   -webkit-mask-image: var(--house-cut);
   mask-image: var(--house-cut);
@@ -932,6 +932,40 @@ body.tablet .clock {
 }
 @media (prefers-reduced-motion: reduce) {
   .saver, .saver-inner { transition: none; }
+}
+/* Le réveil (étape 102, start.js) : l'écran de veille s'ouvre en cercle
+   depuis le doigt ; le bord du trou est flou, une onde de lumière le suit.
+   Sans @property, le cercle saute à mi-course : il s'ouvre quand même. */
+@property --wake-r { syntax: "<length>"; inherits: false; initial-value: 0px; }
+.saver.waking {
+  -webkit-mask-image: radial-gradient(circle at var(--wake-x, 50%) var(--wake-y, 50%), transparent var(--wake-r), #000 calc(var(--wake-r) + 56px));
+  mask-image: radial-gradient(circle at var(--wake-x, 50%) var(--wake-y, 50%), transparent var(--wake-r), #000 calc(var(--wake-r) + 56px));
+  animation: wake-open 0.7s cubic-bezier(0.55, 0, 0.25, 1) forwards;
+}
+@keyframes wake-open { to { --wake-r: var(--wake-end, 150vmax); } }
+.wake-ring {
+  position: fixed;
+  left: var(--wake-x, 50%);
+  top: var(--wake-y, 50%);
+  z-index: 51;
+  width: calc(var(--wake-end, 150vmax) * 2);
+  height: calc(var(--wake-end, 150vmax) * 2);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, transparent 86%, rgb(170 205 255 / 0.18) 93%, rgb(220 236 255 / 0.6) 97%, transparent 100%);
+  transform: translate(-50%, -50%) scale(0);
+  pointer-events: none;
+  animation: wake-ring 0.7s cubic-bezier(0.55, 0, 0.25, 1) forwards;
+}
+@keyframes wake-ring {
+  70% { opacity: 1; }
+  to { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+}
+/* Mouvement réduit : un fondu, sans cercle ni onde. */
+.saver.waking-calm { animation: wake-fade 0.3s ease forwards; }
+@keyframes wake-fade { to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .saver.waking { -webkit-mask-image: none; mask-image: none; animation: wake-fade 0.3s ease forwards; }
+  .wake-ring { display: none; }
 }
 
 /* Journal de bord */
