@@ -1640,6 +1640,48 @@ function alarmTile(state) {
   );
 }
 
+// L'âge des données (étape 101) : sous une valeur, l'heure du relevé ; quand
+// un capteur qui change souvent se tait trop longtemps, « dernière donnée il y
+// a 40 minutes », en ambre. Un capteur dont la valeur ne bouge pas ne renvoie
+// rien : les délais sont donc larges, pour ne pas crier au loup la nuit.
+const STALE_FAST_MS = 15 * 60_000;
+const STALE_SLOW_MS = 4 * 3_600_000;
+
+/** Au-delà de ce délai sans nouvelle, la valeur est vieille ; 0 : jamais. */
+function staleAfter(state) {
+  const unit = state.attributes.unit_of_measurement ?? "";
+  const kind = state.attributes.device_class ?? "";
+  if (["power", "apparent_power", "current", "voltage"].includes(kind) || /^(W|kW|VA|A|V)$/.test(unit)) return STALE_FAST_MS;
+  if (["temperature", "humidity"].includes(kind) || unit === "°C") return STALE_SLOW_MS;
+  return 0;
+}
+
+/** « à 08:15 » aujourd'hui, « le 15/10 à 08:15 » un autre jour. */
+function readingTime(iso) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  if (new Date().toDateString() === date.toDateString()) return `à ${hourMinute.format(date)}`;
+  return `le ${date.toLocaleDateString("fr", { day: "2-digit", month: "2-digit" })} à ${hourMinute.format(date)}`;
+}
+
+/** La ligne sous la valeur, et si elle est vieille. */
+function freshness(iso, limit) {
+  if (limit > 0 && Date.now() - Date.parse(iso) > limit) return { text: `dernière donnée il y a ${ago(iso)}`, stale: true };
+  const when = readingTime(iso);
+  return { text: when ? `relevé ${when}` : "", stale: false };
+}
+
+/** Les tuiles ne sont redessinées qu'à un changement : la minute qui passe
+ *  fait vieillir celles qui se taisent. */
+function refreshFreshness() {
+  for (const sub of document.querySelectorAll(".sub[data-reading]")) {
+    const { text, stale } = freshness(sub.dataset.reading, Number(sub.dataset.staleAfter));
+    setText(sub, text);
+    sub.classList.toggle("is-stale", stale);
+  }
+}
+setInterval(refreshFreshness, 60_000);
+
 function sensorTile(state) {
   if (typeof state.attributes.appareil === "string") return machineTile(state);
   if (state.attributes.device_class === "timestamp") return timestampTile(state);
@@ -1649,12 +1691,15 @@ function sensorTile(state) {
   const numeric = /^-?\d+(\.\d+)?$/.test(state.state) ? number.format(Number(state.state)) : state.state;
   const value = el("div", { class: "value", text: numeric });
   if (unit) value.append(el("small", { text: unit }));
-  return el(
-    "div",
-    { id: tileId(state.entity_id), class: tileClass(state, "sensor") },
-    tileHead(state, lookup(ICONS, state.attributes.device_class) ?? ICONS.gauge, `il y a ${ago(state.last_changed)}`),
-    value,
-  );
+  const reading = state.last_updated ?? state.last_changed;
+  const limit = staleAfter(state);
+  const fresh = freshness(reading, limit);
+  const head = tileHead(state, lookup(ICONS, state.attributes.device_class) ?? ICONS.gauge, fresh.text);
+  const sub = head.querySelector(".sub");
+  sub.dataset.reading = reading;
+  sub.dataset.staleAfter = String(limit);
+  sub.classList.toggle("is-stale", fresh.stale);
+  return el("div", { id: tileId(state.entity_id), class: tileClass(state, "sensor") }, head, value);
 }
 
 // Une machine suivie par SmartThings (étape 86) : « En marche », le programme,

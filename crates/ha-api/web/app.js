@@ -147,6 +147,7 @@ const live = {
 
     socket.addEventListener("message", (event) => {
       const message = JSON.parse(event.data);
+      if (message.type === "result" || message.type === "event") link.lastData = Date.now();
       switch (message.type) {
         case "auth_required":
           // Le jeton passe dans le premier message, jamais dans l'adresse.
@@ -193,6 +194,7 @@ const live = {
   close() {
     this.stopped = true;
     this.socket?.close();
+    linkLine(true);
   },
 };
 
@@ -200,6 +202,34 @@ function setStatus(text, isLive) {
   const status = $("#connection");
   status.textContent = text;
   status.classList.toggle("live", isLive);
+  linkLine(isLive);
+}
+
+// La ligne d'état (étape 101) : quand la tablette perd la maison plus de
+// quelques secondes, une seule ligne ambre, en haut, dit depuis quand les
+// valeurs n'ont plus bougé ; elle part d'elle-même au retour. Pas de fenêtre
+// qui s'ouvre : on continue de voir la maison (avec ses dernières valeurs).
+const LINK_GRACE_MS = 3_000;
+const link = { lastData: 0, timer: 0 };
+
+function linkLine(isLive) {
+  const line = document.getElementById("link-line");
+  if (!line) return;
+  if (isLive) {
+    clearTimeout(link.timer);
+    link.timer = 0;
+    line.hidden = true;
+    return;
+  }
+  // Déjà prévue ou affichée : on garde l'heure de la première coupure.
+  if (link.timer || !line.hidden) return;
+  link.timer = setTimeout(() => {
+    link.timer = 0;
+    if (live.stopped) return;
+    const since = link.lastData ? ` · dernière donnée à ${hourMinute.format(new Date(link.lastData))}` : "";
+    line.textContent = `Connexion perdue avec la maison, nouvel essai…${since}`;
+    line.hidden = false;
+  }, LINK_GRACE_MS);
 }
 
 function onStateChanged({ entity_id, old_state, new_state }) {

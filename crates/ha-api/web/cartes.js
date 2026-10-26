@@ -110,8 +110,11 @@ function cardElement(card) {
     if (card.rest) node.append(el("p", { class: "glass-sub", text: card.rest }));
   }
   const state = cardEntity(card.label);
-  const when = state && typeof shortWhen === "function" ? shortWhen(state.last_updated) : "";
-  if (when) node.append(el("p", { class: "glass-when", text: `relevé à ${when}` }));
+  // L'âge de la donnée (étape 101) : « relevé à 08:15 », ou en ambre si elle est vieille.
+  if (state && typeof freshness === "function") {
+    const { text, stale } = freshness(state.last_updated ?? state.last_changed, staleAfter(state));
+    if (text) node.append(el("p", { class: `glass-when${stale ? " is-stale" : ""}`, text }));
+  }
   // Teinte par famille (étape 100) : l'appareil s'il est connu, sinon la phrase.
   const family = state ? familyOfState(state) : familyOf({ text: `${card.label} ${card.value}`, unit: card.unit ?? "" });
   if (family) node.dataset.family = family;
