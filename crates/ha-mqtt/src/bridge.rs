@@ -635,5 +635,13 @@ fn base_attributes(config: &EntityConfig) -> Attributes {
         }
     }
     config.profile.add_fixed(&mut attributes);
+    // Sans sujet d'état, l'état d'un appareil qu'on commande est supposé
+    // après chaque ordre (mode « optimiste ») : on le dit, comme Home
+    // Assistant, pour que personne n'y voie une confirmation (étape 95).
+    if config.state_topic.is_none()
+        && (config.command_topic.is_some() || !config.profile.services.is_empty())
+    {
+        attributes.insert("assumed_state".into(), json!(true));
+    }
     attributes
 }
