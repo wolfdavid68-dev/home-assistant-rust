@@ -4349,6 +4349,7 @@ async fn the_house_drawing_is_assembled_from_checked_images() {
         "layers": [
             {"image": "garage_ouvert", "entity_id": "cover.garage", "states": ["open", "opening"]},
             {"image": "jour", "entity_id": "person.alice", "states": ["home"], "when": "night"},
+            {"image": "garage_ouvert", "area": "Cuisine", "when": "night"},
         ],
         "labels": [
             {"entity_id": "sensor.dehors", "x": 90.04, "y": 8, "name": "Dehors"},
@@ -4400,6 +4401,7 @@ async fn the_house_drawing_is_assembled_from_checked_images() {
         page(json!({"areas": ["Grenier"]})),
         page(json!({"zones": [{"entity_id": "light.porche", "x": 95, "y": 0, "w": 10, "h": 10}]})),
         page(json!({"zones": [{"area": "Grenier", "x": 0, "y": 0, "w": 10, "h": 10}]})),
+        page(json!({"layers": [{"image": "jour", "area": "Grenier"}]})),
         page(json!({"effects": "tornade"})),
         page(json!({"background": "jour", "ambiances": {"jour-tempete": "jour"}})),
         json!({"pages": []}),
@@ -4447,8 +4449,9 @@ async fn the_house_drawing_is_assembled_from_checked_images() {
         .await;
     let home = &body["config"]["pages"][0];
     let layers = home["layers"].as_array().unwrap();
-    assert_eq!(layers.len(), 1);
+    assert_eq!(layers.len(), 2);
     assert_eq!(layers[0]["entity_id"], "cover.garage");
+    assert_eq!(layers[1]["area"], "Cuisine");
     assert_eq!(home["labels"].as_array().unwrap().len(), 1);
     assert_eq!(home["labels"][0]["entity_id"], "sensor.dehors");
     assert_eq!(home["actions"], json!(["light.porche"]));

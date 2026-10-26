@@ -107,6 +107,7 @@ Un noyau domotique en Rust, inspiré de Home Assistant.
 - [Étape 92 : le lecteur de musique, expliqué](docs/lecteur-musique.md)
 - [Étape 96 : enchaîner les phrases à la voix, expliqué](docs/enchainer.md)
 - [Étape 97 : le mot d'appel « Maison », expliqué](docs/mot-appel.md)
+- [Étape 104 : une fenêtre qui s'allume avec sa pièce, expliqué](docs/calques-pieces.md)
 - [Étape 5 : les automatisations, expliqué](docs/etape-5-automatisations.md)
 - [Modernisation du code, expliquée](docs/modernisation.md)
 - [Étape 6 : l'interface web, expliquée](docs/etape-6-interface-web.md)

@@ -85,13 +85,19 @@ function cleanDrawing(config) {
   if (config?.effects === "off" || EFFECTS.some(([key]) => key === config?.effects)) out.effects = config.effects;
   if (["discret", "fort"].includes(config?.effects_level)) out.effects_level = config.effects_level;
   for (const layer of Array.isArray(config?.layers) ? config.layers : []) {
+    const when = ["day", "night"].includes(layer.when) ? layer.when : "always";
+    // Une pièce : le calque s'allume avec ses lampes (étape 104).
+    if (text(layer.area)) {
+      out.layers.push({ image: text(layer.image) ?? "", area: layer.area, states: [], not: false, position: false, when });
+      continue;
+    }
     out.layers.push({
       image: text(layer.image) ?? "",
       entity_id: text(layer.entity_id) ?? "",
       states: Array.isArray(layer.states) ? layer.states.filter((s) => typeof s === "string") : [],
       not: layer.not === true,
       position: layer.position === true,
-      when: ["day", "night"].includes(layer.when) ? layer.when : "always",
+      when,
     });
   }
   for (const label of Array.isArray(config?.labels) ? config.labels : []) {
@@ -238,6 +244,10 @@ function backgroundFor(page, ambiance) {
 }
 
 function layerShown(layer, night) {
+  if (layer.area !== undefined) {
+    if (!roomLit(layer.area)) return false;
+    return layer.when === "always" || (layer.when === "night") === night;
+  }
   const state = entities.get(layer.entity_id);
   if (!state) return false;
   if (layer.position) {
@@ -246,6 +256,15 @@ function layerShown(layer, night) {
     if (open === null || open >= 98) return false;
   } else if (layer.states.includes(state.state) === layer.not) return false;
   return layer.when === "always" || (layer.when === "night") === night;
+}
+
+/** Une lampe de la pièce est-elle allumée ? (une fenêtre éclairée, étape 104) */
+function roomLit(name) {
+  const area = areas.find((a) => a.name === name);
+  return area !== undefined && area.entities.some((e) => {
+    const state = entities.get(e.entity_id);
+    return state !== undefined && isLight(state) && state.state === "on";
+  });
 }
 
 /** L'ouverture d'un volet, de 0 (fermé) à 100 (ouvert) ; `null` si on ne
@@ -2830,6 +2849,36 @@ function renderDrawingEditor() {
   const layerRows = draft.layers.map((layer, index) => {
     const image = imageOptions(layer.image, null);
     image.addEventListener("change", () => { layer.image = image.value; renderDrawingPreview(); });
+    // Le calque suit un appareil, ou s'allume avec les lampes d'une pièce.
+    const kind = el("select", {}, el("option", { value: "entity", text: "Un appareil" }), el("option", { value: "area", text: "Une pièce (dès qu'une lampe y est allumée)" }));
+    kind.value = layer.area !== undefined ? "area" : "entity";
+    kind.disabled = areas.length === 0 && layer.area === undefined;
+    kind.addEventListener("change", () => {
+      if (kind.value === "area") {
+        delete layer.entity_id;
+        Object.assign(layer, { area: areas[0]?.name ?? "", states: [], not: false, position: false });
+      } else {
+        delete layer.area;
+        Object.assign(layer, { entity_id: "", states: ["on"] });
+      }
+      refresh();
+    });
+    const when = el("select", {}, ...WHEN_LABELS.map(([value, text]) => el("option", { value, text })));
+    when.value = layer.when;
+    when.addEventListener("change", () => { layer.when = when.value; renderDrawingPreview(); });
+    const remove = el("button", { type: "button", class: "ghost small danger", text: "Retirer" });
+    remove.addEventListener("click", () => { draft.layers.splice(index, 1); refresh(); });
+    const shown = layerShown(layer, houseNight());
+    const head = el("div", { class: "drawing-item-head" }, el("b", { text: `Calque ${index + 1}` }),
+      el("span", { class: shown ? "badge ok" : "badge", text: shown ? "visible maintenant" : "caché maintenant" }), remove);
+    if (layer.area !== undefined) {
+      const room = el("select", {}, ...areas.map((area) => el("option", { value: area.name, text: area.name })));
+      room.value = layer.area;
+      room.addEventListener("change", () => { layer.area = room.value; renderDrawingPreview(); });
+      return el("li", { class: "drawing-item" }, head,
+        el("div", { class: "drawing-grid" },
+          field("Image", image), field("Suit", kind), field("Pièce", room), field("Moment", when)));
+    }
     const entity = el("input", { type: "text", list: "entity-list", value: layer.entity_id, placeholder: "cover.garage", autocapitalize: "none", spellcheck: "false" });
     entity.addEventListener("change", () => { layer.entity_id = entity.value.trim(); renderDrawingPreview(); });
     const states = el("input", { type: "text", value: layer.states.join(", "), placeholder: "open, opening" });
@@ -2851,17 +2900,9 @@ function renderDrawingEditor() {
       not.disabled = position.checked;
       renderDrawingPreview();
     });
-    const when = el("select", {}, ...WHEN_LABELS.map(([value, text]) => el("option", { value, text })));
-    when.value = layer.when;
-    when.addEventListener("change", () => { layer.when = when.value; renderDrawingPreview(); });
-    const remove = el("button", { type: "button", class: "ghost small danger", text: "Retirer" });
-    remove.addEventListener("click", () => { draft.layers.splice(index, 1); refresh(); });
-    const shown = layerShown(layer, houseNight());
-    return el("li", { class: "drawing-item" },
-      el("div", { class: "drawing-item-head" }, el("b", { text: `Calque ${index + 1}` }),
-        el("span", { class: shown ? "badge ok" : "badge", text: shown ? "visible maintenant" : "caché maintenant" }), remove),
+    return el("li", { class: "drawing-item" }, head,
       el("div", { class: "drawing-grid" },
-        field("Image", image), field("Appareil", entity),
+        field("Image", image), field("Suit", kind), field("Appareil", entity),
         field("Quand son état est (séparés par des virgules)", states), field("Moment", when)),
       el("label", { class: "check" }, not, " Sauf ces états (visible pour tous les autres)"),
       el("label", { class: "check" }, position, " Suit la position du volet (l'image est le volet fermé ; à 25 %, il est dessiné aux trois quarts)"));
@@ -2874,7 +2915,7 @@ function renderDrawingEditor() {
   });
   const layers = drawingFieldset(
     "Calques",
-    "Ex. : l'image garage_ouvert quand cover.garage est open ou opening ; porche_allume quand light.porche est on, la nuit.",
+    "Ex. : l'image garage_ouvert quand cover.garage est open ou opening ; porche_allume quand light.porche est on, la nuit ; fenetre_cuisine quand une lampe de la Cuisine est allumée.",
     el("ol", { class: "drawing-items" }, ...layerRows),
     addLayer,
   );
