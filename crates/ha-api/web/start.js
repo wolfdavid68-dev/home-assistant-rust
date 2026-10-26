@@ -61,9 +61,7 @@ function hideSaver(event) {
   saver.on = false;
   clearInterval(saver.refresh);
   const stage = $("#saver-house #house-stage");
-  // Une copie du dessin garde l'écran de veille entier pendant la vague.
-  if (stage) $("#saver-house").append(wakeGhost(stage));
-  wakeWave(event);
+  wakeWave(event, stage);
   if (stage) {
     const hubOn = typeof hub !== "undefined" && hub.on;
     (hubOn ? $("#hub-house") : $("#house .house-frame")).append(stage);
@@ -92,9 +90,11 @@ function wakeGhost(stage) {
   return ghost;
 }
 
-function wakeWave(event) {
+function wakeWave(event, stage) {
   const screen = $("#saver");
   wakeStop();
+  // Une copie du dessin garde l'écran de veille entier pendant la vague.
+  if (stage) $("#saver-house").append(wakeGhost(stage));
   const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const width = innerWidth;
   const height = innerHeight;
