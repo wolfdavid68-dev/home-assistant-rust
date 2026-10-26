@@ -27,9 +27,9 @@
 //! | POST | `/api/push/subscriptions` | Abonne ce navigateur aux notifications |
 //! | PATCH / DELETE | `/api/push/subscriptions/{id}` | Change ce qu'il reçoit / le retire |
 //! | POST | `/api/push/test` | Envoie un essai à ses appareils |
-//! | POST | `/api/conversation/process` | Assist : une phrase en français (« ferme le volet de la chambre ») |
+//! | POST | `/api/conversation/process` | Assist : une phrase en français (« ferme le volet de la chambre »), `conversation_id` pour enchaîner (étape 96) |
 //! | GET | `/api/conversation/voice` | L'écoute et la voix de la tablette sont-elles installées ? |
-//! | POST | `/api/conversation/audio` | Une phrase dite à la tablette (WAV), écoutée puis comprise (étape 84) |
+//! | POST | `/api/conversation/audio` | Une phrase dite à la tablette (WAV), écoutée puis comprise (étape 84) ; `?conversation_id=…` pour enchaîner |
 //! | POST | `/api/conversation/speech` | La réponse lue par la voix de la maison (WAV) |
 //! | POST | `/api/mcp` | Un assistant IA branché par MCP (étape 55) |
 //! | POST | `/api/push/action` | Un bouton touché sur une notification (sans connexion : le ticket en tient lieu) |
@@ -39,6 +39,7 @@
 mod assist;
 mod auth;
 mod automations;
+mod conversation;
 mod drawing;
 mod error;
 mod json;
@@ -107,6 +108,8 @@ pub struct ApiState {
     speaking: OnceLock<ha_tts::Tts>,
     /// Deux réponses lues à la fois au plus.
     speech_turn: tokio::sync::Semaphore,
+    /// Les conversations d'Assist en cours (étape 96), en mémoire.
+    conversations: conversation::Conversations,
     shutdown: CancellationToken,
 }
 
@@ -134,6 +137,7 @@ impl ApiState {
             listening: OnceLock::new(),
             speaking: OnceLock::new(),
             speech_turn: tokio::sync::Semaphore::new(2),
+            conversations: conversation::Conversations::default(),
             shutdown,
         })
     }

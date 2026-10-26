@@ -11,6 +11,8 @@ repository.workspace = true
 [dependencies]
 axum.workspace = true
 flate2.workspace = true
+# L'identifiant des conversations d'Assist (étape 96).
+getrandom.workspace = true
 ha-areas = { path = "../ha-areas" }
 ha-assist = { path = "../ha-assist" }
 ha-auth = { path = "../ha-auth" }

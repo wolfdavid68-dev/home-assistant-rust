@@ -73,6 +73,30 @@ $("#account-close").addEventListener("click", () => $("#account-dialog").close()
 
 const ASSIST_KEEP = 20;
 
+// Enchaîner les phrases (étape 96) : le conversation_id de la dernière
+// réponse est renvoyé avec la phrase suivante (« et la cuisine aussi »),
+// tapée ou dite, tant qu'il est récent. Le serveur l'oublie une minute après.
+const ASSIST_CONVERSATION_MS = 50_000;
+const assistConversation = { id: null, at: 0 };
+
+/** La conversation en cours, si elle est encore fraîche. */
+function assistConversationId() {
+  const { id, at } = assistConversation;
+  return id && performance.now() - at < ASSIST_CONVERSATION_MS ? id : null;
+}
+
+/** Retient la conversation de la réponse ; « merci » la termine. */
+function assistRemember(data) {
+  const id = data?.conversation_id;
+  const more = data?.continue_conversation === true;
+  if (more && typeof id === "string" && /^[0-9a-f]{32}$/.test(id)) {
+    assistConversation.id = id;
+    assistConversation.at = performance.now();
+  } else {
+    assistConversation.id = null;
+  }
+}
+
 function assistSay(from, text, kind = "") {
   const log = $("#assist-log");
   log.append(el("li", { class: `assist-line from-${from}${kind ? ` ${kind}` : ""}` }, el("p", { text })));
@@ -88,7 +112,13 @@ async function assistAsk(text) {
   const submit = $("#assist-form button[type=submit]");
   submit.disabled = true;
   try {
-    const { status, data } = await api("POST", "/api/conversation/process", { text: asked, language: "fr" });
+    const conversation = assistConversationId();
+    const { status, data } = await api("POST", "/api/conversation/process", {
+      text: asked,
+      language: "fr",
+      ...(conversation ? { conversation_id: conversation } : {}),
+    });
+    if (status === 200) assistRemember(data);
     const response = data?.response;
     const speech = response?.speech?.plain?.speech;
     if (status === 200 && typeof speech === "string") {

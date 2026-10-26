@@ -797,6 +797,8 @@ input[type="range"]::-moz-range-track { background: transparent; }
 .account { margin: 0; color: var(--muted); }
 .tablet-option { display: grid; gap: 0.35rem; padding: 0.8rem 0; border-block: 1px solid var(--line); }
 .tablet-option .account { font-size: 0.85rem; }
+.tablet-option[hidden] { display: none; }
+.tablet-option + .tablet-option { border-top: 0; }
 
 /* Mode tablette murale : la grande horloge, toujours visible. */
 body.tablet .clock {
@@ -2841,8 +2843,13 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
 .assist-voice[hidden] { display: none; }
 .hub-dock .hub-talk-button { background: var(--accent); color: var(--accent-ink, #fff); }
 .hub-dock .hub-talk-button[data-state="listening"] { background: var(--alert); }
+/* Enchaîner les phrases (étape 96) : le micro rouvert tout seul bat
+   doucement, pour qu'on voie qu'il écoute encore. */
+@keyframes voice-follow { 50% { box-shadow: 0 0 0 10px rgb(229 57 53 / 0.12); } }
+.mic-button[data-follow], .hub-dock .hub-talk-button[data-follow] { box-shadow: 0 0 0 4px rgb(229 57 53 / 0.3); animation: voice-follow 1.4s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) {
   .mic-button { transition: none; }
+  .mic-button[data-follow], .hub-dock .hub-talk-button[data-follow] { animation: none; box-shadow: 0 0 0 6px rgb(229 57 53 / 0.3); }
 }
 .assist-form input { min-width: 0; }
 .assist-dialog .account { margin: 0; font-size: 0.82rem; }

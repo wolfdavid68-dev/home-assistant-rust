@@ -5,6 +5,9 @@
 // réponse est lue par la voix de la maison. Rien ne part sur Internet.
 //
 // Le micro n'est permis par le navigateur qu'en HTTPS (étape 79).
+//
+// Étape 96 : après la réponse dite, le micro se rouvre quelques secondes pour
+// une phrase de suite, dans la même conversation (conversation_id).
 
 const VOICE_RATE = 16000;
 /** Une phrase dure au plus 12 s (le serveur en accepte 15). */
@@ -14,6 +17,16 @@ const VOICE_MAX_MS = 12_000;
 const VOICE_SILENCE_MS = 900;
 /** Sans rien entendre pendant ce temps, on abandonne. */
 const VOICE_WAIT_MS = 6_000;
+/** Enchaîner les phrases (étape 96) : après la réponse dite, le micro se
+ *  rouvre ce temps-là pour une phrase de suite ; sans voix, il se referme
+ *  sans rien envoyer. */
+const VOICE_FOLLOW_MS = 6_000;
+/** Phrases de suite au plus, après la première (le serveur en compte 6). */
+const VOICE_FOLLOW_TURNS = 5;
+/** Le réglage de cet appareil : « 0 », pas d'enchaînement. */
+const VOICE_FOLLOW_KEY = "ha-voice-follow";
+/** Un toucher qui arrête l'enchaînement ne rouvre pas le micro aussitôt. */
+const VOICE_CANCEL_MS = 600;
 
 const voice = {
   listen: false,
@@ -33,7 +46,26 @@ const voice = {
   heardAt: 0,
   spoke: false,
   floor: 1,
+  /** Le micro rouvert tout seul pour une phrase de suite. */
+  following: false,
+  /** Phrases de suite déjà dites dans cet enchaînement. */
+  turns: 0,
+  /** La réponse en train d'être dite (pour l'arrêter d'un toucher). */
+  playing: null,
+  /** Augmente à chaque arrêt : une réponse attendue d'avant l'arrêt ne
+   *  rouvre pas le micro. */
+  run: 0,
+  cancelledAt: -Infinity,
 };
+
+/** L'enchaînement est-il voulu sur cet appareil ? (oui par défaut) */
+function voiceFollowWanted() {
+  try {
+    return localStorage.getItem(VOICE_FOLLOW_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
 
 async function loadVoice() {
   const { status, data } = await api("GET", "/api/conversation/voice");
@@ -41,36 +73,47 @@ async function loadVoice() {
   voice.speak = status === 200 && data?.speak === true;
   $("#assist-mic").hidden = !voice.listen;
   $("#hub-talk").hidden = !voice.listen;
+  $("#voice-options").hidden = !voice.listen;
 }
 
 const VOICE_LABELS = {
   idle: "Parler",
   starting: "Le micro s'ouvre…",
   listening: "J'écoute… (touche pour finir)",
+  following: "Je t'écoute encore… (touche l'écran pour arrêter)",
   thinking: "Je réfléchis…",
   speaking: "Je réponds…",
 };
 
 function setVoiceState(state) {
   voice.state = state;
+  if (state === "idle") voice.following = false;
+  const label = VOICE_LABELS[state === "listening" && voice.following ? "following" : state];
   for (const button of [$("#assist-mic"), $("#hub-talk")]) {
     button.dataset.state = state;
     button.setAttribute("aria-pressed", String(state === "listening"));
+    // Le signe visible de l'écoute de suite : un anneau qui bat.
+    button.toggleAttribute("data-follow", state === "listening" && voice.following);
   }
-  $("#assist-mic").setAttribute("aria-label", VOICE_LABELS[state]);
+  $("#assist-mic").setAttribute("aria-label", label);
   const status = $("#assist-voice");
   status.hidden = state === "idle";
-  status.textContent = VOICE_LABELS[state];
+  status.textContent = label;
   if (state !== "listening") $("#assist-mic").style.setProperty("--voice-level", "0");
 }
 
-/** Ouvre le micro, ou termine la phrase s'il est déjà ouvert. */
-async function voiceStart() {
+/** Ouvre le micro, ou termine la phrase s'il est déjà ouvert. `follow` :
+ *  rouvert tout seul après une réponse, pour une phrase de suite. */
+async function voiceStart({ follow = false } = {}) {
+  if (!follow && performance.now() - voice.cancelledAt < VOICE_CANCEL_MS) return;
   if (voice.state === "listening") {
     voiceStop();
     return;
   }
   if (voice.state !== "idle") return;
+  // Un toucher du bouton commence un nouvel enchaînement.
+  if (!follow) voice.turns = 0;
+  voice.following = follow;
   if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia || !window.AudioWorkletNode) {
     assistSay(
       "home",
@@ -152,7 +195,11 @@ function voiceChunk(samples) {
   $("#assist-mic").style.setProperty("--voice-level", Math.min(1, level * 10).toFixed(2));
   if (now - voice.startedAt > VOICE_MAX_MS) voiceStop();
   else if (voice.spoke && now - voice.heardAt > VOICE_SILENCE_MS) voiceStop();
-  else if (!voice.spoke && now - voice.startedAt > VOICE_WAIT_MS) {
+  else if (!voice.spoke && voice.following && now - voice.startedAt > VOICE_FOLLOW_MS) {
+    // Personne n'a enchaîné : on referme, sans rien envoyer ni rien dire.
+    voiceClose();
+    setVoiceState("idle");
+  } else if (!voice.spoke && now - voice.startedAt > VOICE_WAIT_MS) {
     voiceClose();
     setVoiceState("idle");
     assistSay("home", "Je n'ai rien entendu. Touche le micro, puis parle.", "is-error");
@@ -175,18 +222,26 @@ function voiceClose() {
 async function voiceStop() {
   if (voice.state !== "listening") return;
   const { chunks, rate } = voice;
+  const run = voice.run;
   voiceClose();
   setVoiceState("thinking");
   const wav = wavFile(downsample(chunks, rate, VOICE_RATE), VOICE_RATE);
   let speech = "";
+  let more = false;
   try {
-    const response = await fetch("/api/conversation/audio", {
+    const conversation = assistConversationId();
+    const url = conversation
+      ? `/api/conversation/audio?conversation_id=${encodeURIComponent(conversation)}`
+      : "/api/conversation/audio";
+    const response = await fetch(url, {
       method: "POST",
       headers: { Authorization: `Bearer ${token.get()}`, "Content-Type": "audio/wav" },
       body: wav,
     });
     const data = await response.json().catch(() => ({}));
     if (response.ok) {
+      assistRemember(data);
+      more = data.continue_conversation === true;
       if (typeof data.text === "string" && data.text) assistSay("me", data.text);
       const said = data.response?.speech?.plain?.speech;
       if (typeof said === "string") {
@@ -199,10 +254,64 @@ async function voiceStop() {
   } catch {
     assistSay("home", "La maison n'a pas répondu.", "is-error");
   }
+  // Arrêté pendant l'attente (Assist fermé, page cachée) : la réponse
+  // s'affiche, sans plus.
+  if (run !== voice.run) return;
   if (speech && voice.speak && voice.player) {
     setVoiceState("speaking");
     await voiceSay(speech).catch(() => {});
+    if (run !== voice.run) return;
   }
+  setVoiceState("idle");
+  // Enchaîner : jamais pendant que la tablette parle (la réponse est finie),
+  // seulement Assist ouvert et la page visible, et au plus quelques phrases.
+  if (
+    more &&
+    voiceFollowWanted() &&
+    voice.turns < VOICE_FOLLOW_TURNS &&
+    $("#assist").open &&
+    document.visibilityState === "visible"
+  ) {
+    voice.turns += 1;
+    await voiceBeep();
+    if (run !== voice.run || voice.state !== "idle" || !$("#assist").open) return;
+    voiceStart({ follow: true });
+  }
+}
+
+/** Un petit son doux, sur la tablette seulement : le micro se rouvre. */
+async function voiceBeep() {
+  const player = voice.player;
+  if (!player) return;
+  try {
+    const tone = player.createOscillator();
+    const gain = player.createGain();
+    tone.frequency.value = 880;
+    gain.gain.setValueAtTime(0.0001, player.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.08, player.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, player.currentTime + 0.15);
+    tone.connect(gain).connect(player.destination);
+    await new Promise((done) => {
+      tone.onended = done;
+      tone.start();
+      tone.stop(player.currentTime + 0.16);
+    });
+  } catch {
+    // Pas de son : le signe visible suffit.
+  }
+}
+
+/** Arrête tout : la réponse dite, le micro, l'enchaînement. */
+function voiceCancel() {
+  voice.run += 1;
+  voice.cancelledAt = performance.now();
+  try {
+    voice.playing?.stop();
+  } catch {
+    // Déjà finie.
+  }
+  voice.playing = null;
+  voiceClose();
   setVoiceState("idle");
 }
 
@@ -215,13 +324,16 @@ async function voiceSay(text) {
   });
   if (!response.ok) return;
   const sound = await voice.player.decodeAudioData(await response.arrayBuffer());
+  if (voice.state !== "speaking") return;
   const play = voice.player.createBufferSource();
   play.buffer = sound;
   play.connect(voice.player.destination);
+  voice.playing = play;
   await new Promise((done) => {
     play.onended = done;
     play.start();
   });
+  if (voice.playing === play) voice.playing = null;
 }
 
 /** Le son du micro, ramené à 16 000 Hz (la moyenne de chaque tranche). */
@@ -279,11 +391,30 @@ $("#hub-talk").addEventListener("click", () => {
   if (!$("#assist").open) $("#assist").showModal();
   voiceStart();
 });
-// Fermer Assist ferme aussi le micro.
+// Fermer Assist ferme aussi le micro, et arrête la réponse et l'enchaînement.
 $("#assist").addEventListener("close", () => {
-  if (voice.state === "listening" || voice.state === "starting") {
-    voiceClose();
-    setVoiceState("idle");
+  if (["listening", "starting", "speaking"].includes(voice.state)) voiceCancel();
+});
+// Toucher l'écran, ou le bouton, arrête l'écoute de suite et la réponse dite.
+document.addEventListener(
+  "pointerdown",
+  () => {
+    if ((voice.state === "listening" && voice.following) || voice.state === "speaking") voiceCancel();
+  },
+  { capture: true },
+);
+// Page cachée (autre application, écran éteint) : tout s'arrête.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden" && voice.state !== "idle") voiceCancel();
+});
+// Le réglage de cet appareil, à côté des autres réglages de la tablette.
+$("#voice-follow").checked = voiceFollowWanted();
+$("#voice-follow").addEventListener("change", (event) => {
+  try {
+    if (event.target.checked) localStorage.removeItem(VOICE_FOLLOW_KEY);
+    else localStorage.setItem(VOICE_FOLLOW_KEY, "0");
+  } catch {
+    // Stockage refusé : le réglage vaut pour cette visite.
   }
 });
 setVoiceState("idle");
