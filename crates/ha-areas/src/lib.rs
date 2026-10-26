@@ -2,7 +2,8 @@
 //! Assistant : quels appareils sont dans le salon, dans la chambre…
 //!
 //! Elles se décrivent dans un fichier `areas.yaml`, et on peut aussi y
-//! donner un nom lisible à chaque appareil :
+//! donner un nom lisible à chaque appareil, et d'**autres noms** (étape 94,
+//! les « alias » de Home Assistant) qu'Assist comprend comme le nom :
 //!
 //! ```yaml
 //! - area: Salon
@@ -10,6 +11,7 @@
 //!     - light.salon
 //!     - entity: cover.volet_salon
 //!       name: Volet
+//!       aliases: [le store, la baie]
 //! - area: Chambre
 //!   entities: [cover.volet_chambre, sensor.temperature_chambre]
 //! ```
@@ -31,6 +33,8 @@ const MAX_FILE_SIZE: u64 = 256 * 1024;
 const MAX_AREAS: usize = 50;
 const MAX_ENTITIES_PER_AREA: usize = 100;
 const MAX_NAME_CHARS: usize = 60;
+/// Autres noms d'un appareil, au plus.
+pub const MAX_ALIASES: usize = 10;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AreaError {
@@ -59,6 +63,9 @@ pub struct Area {
 pub struct AreaEntity {
     pub entity_id: EntityId,
     pub name: Option<String>,
+    /// Ses autres noms (« la lampe du canapé », « le store »), compris par
+    /// Assist comme le nom (étape 94). Vide le plus souvent.
+    pub aliases: Vec<String>,
 }
 
 // Ce qu'on lit dans le fichier, avant vérification.
@@ -86,6 +93,8 @@ struct NamedEntity {
     entity: String,
     #[serde(default)]
     name: Option<String>,
+    #[serde(default)]
+    aliases: Vec<String>,
 }
 
 /// Lit le fichier des pièces. Un fichier absent donne une liste vide.
@@ -127,9 +136,13 @@ pub fn parse(yaml: &str) -> Result<Vec<Area>, AreaError> {
         }
         let mut entities = Vec::with_capacity(config.entities.len());
         for entity in config.entities {
-            let (id, label) = match entity {
-                EntityConfig::Id(id) => (id, None),
-                EntityConfig::Named(NamedEntity { entity, name }) => (entity, name),
+            let (id, label, aliases) = match entity {
+                EntityConfig::Id(id) => (id, None, Vec::new()),
+                EntityConfig::Named(NamedEntity {
+                    entity,
+                    name,
+                    aliases,
+                }) => (entity, name, aliases),
             };
             let entity_id: EntityId = id.parse().map_err(|_| {
                 AreaError::Invalid(format!(
@@ -147,14 +160,58 @@ pub fn parse(yaml: &str) -> Result<Vec<Area>, AreaError> {
                 .map(|label| check_name(&label))
                 .transpose()
                 .map_err(|reason| AreaError::Invalid(format!("nom de {entity_id} : {reason}")))?;
+            let aliases = check_aliases(&aliases).map_err(|reason| {
+                AreaError::Invalid(format!("autres noms de {entity_id} : {reason}"))
+            })?;
             entities.push(AreaEntity {
                 entity_id,
                 name: label,
+                aliases,
             });
         }
         areas.push(Area { name, entities });
     }
     Ok(areas)
+}
+
+/// Les autres noms d'un appareil : chacun vérifié comme un nom, sans
+/// doublon (majuscules comprises), dix au plus.
+fn check_aliases(aliases: &[String]) -> Result<Vec<String>, String> {
+    if aliases.len() > MAX_ALIASES {
+        return Err(format!("{MAX_ALIASES} au plus"));
+    }
+    let mut seen = HashSet::new();
+    let mut checked = Vec::with_capacity(aliases.len());
+    for alias in aliases {
+        let alias = check_name(alias).map_err(|reason| format!("{alias:?} : {reason}"))?;
+        if !seen.insert(alias.to_lowercase()) {
+            return Err(format!("« {alias} » en double"));
+        }
+        checked.push(alias);
+    }
+    Ok(checked)
+}
+
+/// Les autres noms portés par plusieurs appareils (« le store » pour deux
+/// volets) : permis, mais Assist demandera alors « Lequel ? ». Pour
+/// prévenir à la vérification du fichier (`ha-server areas check`).
+#[must_use]
+pub fn shared_aliases(areas: &[Area]) -> Vec<(String, Vec<EntityId>)> {
+    let mut owners: Vec<(String, String, Vec<EntityId>)> = Vec::new();
+    for entity in areas.iter().flat_map(|area| &area.entities) {
+        for alias in &entity.aliases {
+            let key = alias.to_lowercase();
+            match owners.iter_mut().find(|(known, _, _)| *known == key) {
+                Some((_, _, ids)) => ids.push(entity.entity_id.clone()),
+                None => owners.push((key, alias.clone(), vec![entity.entity_id.clone()])),
+            }
+        }
+    }
+    owners
+        .into_iter()
+        .filter(|(_, _, ids)| ids.len() > 1)
+        .map(|(_, alias, ids)| (alias, ids))
+        .collect()
 }
 
 /// Un nom affiché : non vide, pas trop long, sans caractère de contrôle.
@@ -200,6 +257,48 @@ mod tests {
         );
         assert_eq!(areas[2].entities, Vec::new());
         assert_eq!(parse("").unwrap(), Vec::new());
+    }
+
+    #[test]
+    fn aliases_are_read_and_checked() {
+        let areas = parse(
+            "
+- area: Salon
+  entities:
+    - entity: light.salon
+      name: Lampe
+      aliases: [' la lampe du canapé ', La grande lumière]
+    - entity: cover.volet_salon
+      aliases: [le store]
+- area: Chambre
+  entities:
+    - {entity: cover.volet_chambre, aliases: [Le Store]}
+",
+        )
+        .unwrap();
+        let lamp = &areas[0].entities[0];
+        assert_eq!(lamp.aliases, ["la lampe du canapé", "La grande lumière"]);
+        assert_eq!(areas[0].entities[1].name, None);
+        // « le store » est à deux volets : permis, mais signalé.
+        let shared = shared_aliases(&areas);
+        assert_eq!(shared.len(), 1);
+        assert_eq!(shared[0].0, "le store");
+        assert_eq!(shared[0].1.len(), 2);
+
+        for yaml in [
+            "- {area: Salon, entities: [{entity: light.a, aliases: ['']}]}",
+            "- {area: Salon, entities: [{entity: light.a, aliases: [lampe, Lampe]}]}",
+            "- {area: Salon, entities: [{entity: light.a, aliases: [\"a\\u001b\"]}]}",
+            "- {area: Salon, entities: [{entity: light.a, alias: [lampe]}]}",
+        ] {
+            assert!(parse(yaml).is_err(), "aurait dû être refusé : {yaml}");
+        }
+        let many: Vec<String> = (0..=MAX_ALIASES).map(|i| format!("nom {i}")).collect();
+        let yaml = format!(
+            "- {{area: Salon, entities: [{{entity: light.a, aliases: [{}]}}]}}",
+            many.join(", ")
+        );
+        assert!(parse(&yaml).is_err());
     }
 
     #[test]

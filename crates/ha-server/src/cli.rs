@@ -834,6 +834,15 @@ pub fn check_areas(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
     for area in &areas {
         println!("  - {} ({} appareil(s))", area.name, area.entities.len());
     }
+    // Un autre nom porté par deux appareils : permis, mais Assist demandera
+    // « Lequel ? » (étape 94).
+    for (alias, owners) in ha_areas::shared_aliases(&areas) {
+        let owners: Vec<&str> = owners.iter().map(ha_core::EntityId::as_str).collect();
+        println!(
+            "  attention : « {alias} » est l'autre nom de {} ; Assist demandera lequel",
+            owners.join(", ")
+        );
+    }
     Ok(())
 }
 

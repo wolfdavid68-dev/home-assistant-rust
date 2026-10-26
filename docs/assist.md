@@ -34,8 +34,8 @@ lettres et « ajoute du pain à la liste de courses ».
 
 **Trouver l'appareil**, dans cet ordre :
 
-1. **par son nom** : tous ses mots sont dans la phrase (« volet chambre » dans « ferme le volet
-   de la chambre ») ;
+1. **par son nom** ou l'un de ses **autres noms** ([étape 94](surnoms.md)) : tous ses mots sont
+   dans la phrase (« volet chambre » dans « ferme le volet de la chambre ») ;
 2. **par sa pièce et son type** : « les lumières du salon », « le chauffage de la chambre ». La
    pièce seule désigne les lumières (« éteins le salon »), ou les volets avec « ouvre » et
    « ferme » ;

@@ -74,18 +74,27 @@ pub(crate) fn devices(state: &ApiState, auth: &Authenticated) -> Vec<Device> {
                 area.entities
                     .iter()
                     .find(|member| member.entity_id == *entity.entity_id())
-                    .map(|member| (area.name.clone(), member.name.clone()))
+                    .map(|member| {
+                        (
+                            Some(area.name.clone()),
+                            member.name.clone(),
+                            member.aliases.clone(),
+                        )
+                    })
             });
+            // Les autres noms (étape 94) : seulement pour un appareil déjà
+            // visible, donc jamais plus de droits que le nom.
+            let (placed_area, label, aliases) = placed.unwrap_or_default();
             let name = entity
                 .attributes()
                 .get("friendly_name")
                 .and_then(Value::as_str)
                 .map(str::to_owned)
-                .or_else(|| placed.as_ref().and_then(|(_, name)| name.clone()))
+                .or(label)
                 .unwrap_or_else(|| entity.entity_id().to_string());
             // Sans pièce dans areas.yaml : celle que donne l'intégration
             // (la pièce SmartThings, étape 86).
-            let area = placed.map(|(area, _)| area).or_else(|| {
+            let area = placed_area.or_else(|| {
                 entity
                     .attributes()
                     .get("piece")
@@ -95,6 +104,7 @@ pub(crate) fn devices(state: &ApiState, auth: &Authenticated) -> Vec<Device> {
             Device {
                 state: entity,
                 name,
+                aliases,
                 area,
             }
         })
