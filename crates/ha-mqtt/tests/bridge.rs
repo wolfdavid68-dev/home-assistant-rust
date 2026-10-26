@@ -431,3 +431,19 @@ fn a_base64_camera() {
     );
     assert!(core.states.get(&id("camera.autre")).is_none());
 }
+
+#[test]
+fn birth_message_asks_bridges_to_resend_their_descriptions() {
+    // ring-mqtt n'envoie ses descriptions qu'à son démarrage : si le hub
+    // redémarre après lui, il ne voit plus rien sans ce message.
+    let bridge = Bridge::new("homeassistant");
+    assert_eq!(
+        bridge.birth(),
+        Action::Publish {
+            topic: "homeassistant/status".into(),
+            payload: "online".into()
+        }
+    );
+    let custom = Bridge::new("maison");
+    assert!(matches!(custom.birth(), Action::Publish { topic, .. } if topic == "maison/status"));
+}

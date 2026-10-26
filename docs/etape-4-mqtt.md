@@ -70,6 +70,12 @@ ne trouve rien (champ absent, JSON invalide), la fonction renvoie `None` sans pl
 **Reconnexion avec attente croissante.** En cas de coupure, on réessaie après 1 s, puis 2 s, 4 s…
 jusqu'à 60 s : un broker redémarré est retrouvé vite, sans le bombarder de connexions.
 
+**« En ligne » à chaque connexion.** Comme Home Assistant, le serveur publie `online` sur
+`homeassistant/status` juste après s'être abonné. Les ponts comme ring-mqtt n'envoient leurs
+descriptions qu'à leur propre démarrage, et le broker ne les garde pas : sans ce message, un
+serveur redémarré après eux ne voyait plus rien de la sonnette (ni sonnerie, ni batterie) avant le
+prochain redémarrage de ring-mqtt. ring-mqtt répond en renvoyant tout, 15 s plus tard.
+
 **`std::future::pending()`.** Sans MQTT, la simulation tourne ; avec MQTT, il n'y a pas de
 simulation et la branche correspondante du `select!` attend indéfiniment. Seul Ctrl+C arrête alors
 le serveur.

@@ -82,6 +82,9 @@ async fn run(config: MqttConfig, core: Arc<Core>, token: CancellationToken) {
                     for topic in topics {
                         apply(&client, &Action::Subscribe(topic));
                     }
+                    // Après les abonnements, pour recevoir les descriptions
+                    // que les ponts renvoient en réponse.
+                    apply(&client, &bridge.birth());
                 }
                 Ok(MqttEvent::Incoming(Packet::Publish(message))) => {
                     // Un Shelly d'abord ; le pont de découverte voit quand

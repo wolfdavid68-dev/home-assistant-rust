@@ -89,6 +89,18 @@ impl Bridge {
         ]
     }
 
+    /// Le message « en ligne », envoyé à chaque connexion comme le fait Home
+    /// Assistant. Les ponts (ring-mqtt, Zigbee2MQTT…) n'envoient leurs
+    /// descriptions qu'à leur propre démarrage, sans les garder sur le
+    /// broker : ce message leur demande de les renvoyer.
+    #[must_use]
+    pub fn birth(&self) -> Action {
+        Action::Publish {
+            topic: format!("{}/status", self.prefix),
+            payload: "online".to_owned(),
+        }
+    }
+
     /// Tous les sujets d'état à écouter (après une reconnexion).
     pub fn state_topics(&self) -> impl Iterator<Item = &String> {
         self.subscriptions.keys()
