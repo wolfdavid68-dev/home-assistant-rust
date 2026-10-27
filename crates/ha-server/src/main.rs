@@ -731,26 +731,27 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         info!("sauvegardes automatiques désactivées (indique HA_BACKUP_DIR pour les activer)");
         None
     };
-    let weather = match weather_config {
-        Some(config) => Some(ha_weather::Weather::start(config, Arc::clone(&core))?),
-        None => None,
-    };
-    let vigilance = match vigilance_config {
-        Some(config) => Some(ha_weather::vigilance::Vigilance::start(
-            config,
-            Arc::clone(&core),
-        )?),
-        None => None,
-    };
-    let notifier = match ntfy {
-        Some(config) => {
-            for warning in config.warnings() {
-                warn!("notifications : {warning}");
-            }
-            Some(ha_notify::Notifier::start(config, Arc::clone(&core))?)
+    // Comme les autres services : un échec au démarrage (client HTTPS
+    // impossible à créer) se signale, et le reste de la maison démarre.
+    // Un `?` ici quitterait sans arrêter ce qui tourne déjà.
+    let weather = weather_config.and_then(|config| {
+        ha_weather::Weather::start(config, Arc::clone(&core))
+            .inspect_err(|error| warn!("météo : {error}"))
+            .ok()
+    });
+    let vigilance = vigilance_config.and_then(|config| {
+        ha_weather::vigilance::Vigilance::start(config, Arc::clone(&core))
+            .inspect_err(|error| warn!("vigilance météo : {error}"))
+            .ok()
+    });
+    let notifier = ntfy.and_then(|config| {
+        for warning in config.warnings() {
+            warn!("notifications : {warning}");
         }
-        None => None,
-    };
+        ha_notify::Notifier::start(config, Arc::clone(&core))
+            .inspect_err(|error| warn!("notifications : {error}"))
+            .ok()
+    });
     // Une association illisible (clé de chiffrement perdue, par exemple)
     // ne doit pas empêcher le reste de la maison de fonctionner.
     let hue = match ha_hue::pairing::load(&store).await {
