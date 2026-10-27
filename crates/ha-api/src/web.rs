@@ -194,12 +194,7 @@ impl Asset {
             } else {
                 Cow::Borrowed(self.body)
             };
-            // L'empreinte : le début du SHA-256 du fichier, en hexadécimal.
-            let digest = Sha256::digest(&body);
-            let mut hex = String::with_capacity(32);
-            for byte in &digest[..16] {
-                let _ = write!(hex, "{byte:02x}");
-            }
+            let hex = fingerprint(&body);
             let gzip = compressible(self.content_type)
                 .then(|| gzip(&body))
                 .flatten()
@@ -238,7 +233,23 @@ fn versioned_index(index: &'static [u8]) -> Vec<u8> {
     text.into_bytes()
 }
 
-fn etag(value: &str) -> HeaderValue {
+/// L'empreinte d'un contenu : le début de son SHA-256 (16 octets), en
+/// hexadécimal. Sert aussi aux images du dessin (voir `drawing.rs`).
+pub(crate) fn fingerprint(body: &[u8]) -> String {
+    let digest = Sha256::digest(body);
+    let mut hex = String::with_capacity(32);
+    for byte in &digest[..16] {
+        let _ = write!(hex, "{byte:02x}");
+    }
+    hex
+}
+
+/// La version demandée dans l'adresse : `/app.js?v=9f40…` → `9f40…`.
+pub(crate) fn asked_version(uri: &Uri) -> Option<&str> {
+    uri.query().and_then(|query| query.strip_prefix("v="))
+}
+
+pub(crate) fn etag(value: &str) -> HeaderValue {
     // Que des chiffres hexadécimaux et des guillemets : toujours valide.
     HeaderValue::from_str(value).unwrap_or(HeaderValue::from_static("\"\""))
 }
@@ -282,7 +293,7 @@ fn accepts_gzip(headers: &HeaderMap) -> bool {
 }
 
 /// La copie du navigateur est-elle encore la bonne ? (`If-None-Match`)
-fn still_fresh(headers: &HeaderMap, etag: &HeaderValue) -> bool {
+pub(crate) fn still_fresh(headers: &HeaderMap, etag: &HeaderValue) -> bool {
     let Ok(etag) = etag.to_str() else {
         return false;
     };
@@ -306,11 +317,8 @@ fn serve(asset: &'static Asset, uri: &Uri, headers: &HeaderMap) -> Response {
         _ => (prepared.body.as_ref(), &prepared.etag, false),
     };
     // À l'adresse avec la bonne empreinte : gardé pour toujours.
-    let forever = asset.versioned()
-        && uri
-            .query()
-            .and_then(|query| query.strip_prefix("v="))
-            .is_some_and(|version| version == prepared.version);
+    let forever =
+        asset.versioned() && asked_version(uri).is_some_and(|version| version == prepared.version);
 
     let mut response = if still_fresh(headers, etag) {
         StatusCode::NOT_MODIFIED.into_response()
