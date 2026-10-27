@@ -809,3 +809,90 @@ async fn time_in_states_counts_without_limit() {
         .unwrap();
     assert_eq!((seconds, entries), (0.0, 0));
 }
+
+/// Les états d'une entité dans l'historique, du plus récent au plus ancien.
+async fn history_states(store: &Store, entity: &EntityId) -> Vec<Option<String>> {
+    store
+        .history(entity, ha_storage::MAX_HISTORY_LIMIT)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|entry| entry.state.map(|state| state.state))
+        .collect()
+}
+
+#[tokio::test]
+async fn the_daily_purge_keeps_each_journal_for_its_own_duration() {
+    let (core, store, recorder) = setup().await;
+    let light = id("light.salon");
+    core.states
+        .set(light.clone(), "on", Attributes::new())
+        .unwrap();
+    recorder.stop().await;
+    store
+        .add_logbook(ha_storage::NewLogbookEntry {
+            entity_id: Some(&light),
+            name: "Salon",
+            message: "s'est allumée",
+            cause: None,
+        })
+        .await
+        .unwrap();
+    store.audit(record("david", "login", None)).await.unwrap();
+
+    // Quinze jours plus tard, avec 10 jours d'historique et 30 d'audit.
+    let later = SystemTime::now() + Duration::from_hours(24 * 15);
+    let retention = ha_storage::Retention {
+        history_days: 10,
+        audit_days: 30,
+    };
+    // Une ligne d'il y a deux jours (à cette date-là) : elle reste.
+    let recent = later - Duration::from_hours(48);
+    let recent = recent
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    history_row(&store, "light.salon", Some("off"), recent).await;
+
+    let purged = store.purge_expired(retention, later).await.unwrap();
+    assert_eq!(
+        purged,
+        ha_storage::Purged {
+            history: 1,
+            logbook: 1,
+            audit: 0,
+        }
+    );
+    assert_eq!(
+        history_states(&store, &light).await,
+        [Some("off".to_owned())]
+    );
+    assert_eq!(store.audit_log(10).await.unwrap().len(), 1);
+    // Le dernier état connu n'est jamais purgé.
+    assert_eq!(store.load_states().await.unwrap().len(), 1);
+    store.optimize().await.unwrap();
+
+    // Recommencer ne supprime rien de plus.
+    let again = store.purge_expired(retention, later).await.unwrap();
+    assert_eq!(again, ha_storage::Purged::default());
+    // Quarante jours plus tard, l'audit part aussi.
+    let much_later = SystemTime::now() + Duration::from_hours(24 * 40);
+    let purged = store.purge_expired(retention, much_later).await.unwrap();
+    assert_eq!((purged.history, purged.audit), (1, 1));
+}
+
+#[tokio::test]
+async fn the_daily_purge_task_stops_at_once() {
+    let store = Store::open_in_memory().await.unwrap();
+    let purge = ha_storage::Purge::start(
+        store,
+        ha_storage::Retention {
+            history_days: 10,
+            audit_days: 365,
+        },
+    );
+    // La première purge n'arrive que dans 24 heures : l'arrêt n'attend pas.
+    tokio::time::timeout(Duration::from_secs(5), purge.stop())
+        .await
+        .unwrap();
+}
