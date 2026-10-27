@@ -25,8 +25,9 @@ FROM rust:1.99-slim-bookworm@sha256:2c3a22f0a5533ea2dd5a16627bc841228151faa2d4de
 
 WORKDIR /src
 COPY . .
-# On compile avec le Rust de l'image (version épinglée ci-dessus), sans
-# télécharger la version « stable » du moment demandée par ce fichier.
+# On compile avec le Rust de l'image (la même 1.99 que rust-toolchain.toml).
+# Ce fichier ferait télécharger à rustup une seconde copie de la 1.99, avec
+# rustfmt et clippy, inutiles ici.
 RUN rm rust-toolchain.toml
 
 # Les caches (« --mount=type=cache ») évitent de tout retélécharger et

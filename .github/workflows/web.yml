@@ -1,0 +1,52 @@
+name: Tableau de bord
+
+# Les scripts du navigateur (crates/ha-api/web) : cargo ne les compile pas.
+# Un `const wake` déclaré dans deux fichiers a cassé voix.js sans qu'aucun
+# test ne bronche. Ici, deux vérifications de quelques secondes, avec le
+# Node déjà installé sur les machines de GitHub (rien à télécharger) :
+#
+#   - check-scripts.mjs : les scripts de index.html compilent ensemble,
+#     dans l'ordre de la page (une seule portée partagée) ;
+#   - node --test : les fonctions sans écran (dessin reçu, volets, calques,
+#     familles, « il y a … »), chargées dans un bac à sable.
+#
+# Seulement quand ces fichiers bougent. Même règle que ci.yml : rien tant que
+# la PR est en brouillon.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "crates/ha-api/web/**"
+      - ".github/workflows/web.yml"
+  push:
+    branches: [main]
+    paths:
+      - "crates/ha-api/web/**"
+      - ".github/workflows/web.yml"
+  workflow_dispatch:
+
+# Le workflow ne peut que lire le dépôt : rien d'autre.
+permissions:
+  contents: read
+
+concurrency:
+  group: web-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: scripts du tableau de bord
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Les scripts compilent ensemble
+        run: node crates/ha-api/web/tests/check-scripts.mjs
+
+      # Le motif est déplié par le shell : marche avec toutes les versions de Node.
+      - name: Tests
+        run: node --test crates/ha-api/web/tests/*.test.mjs

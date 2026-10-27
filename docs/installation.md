@@ -143,13 +143,68 @@ dépendances compilées sont gardées d'une fois sur l'autre). Rien à compiler 
    docker compose pull && docker compose up -d
    ```
 
-C'est la même image que les versions (construite, démarrée et vérifiée avant d'être publiée),
-mais sans attendre la version : elle peut contenir une nouveauté pas encore essayée chez toi.
-Pour revenir aux versions, remets `:latest`. La base, la clé et tes réglages ne bougent pas.
+Elle est démarrée et vérifiée avant d'être publiée, comme celle des versions, mais ce n'est
+pas tout à fait la même : pour être prête vite, elle est compilée avec le profil `essai`
+(`Cargo.toml`), sans l'optimisation « tout le programme d'un coup » (LTO) des versions. Le
+programme fait la même chose, à peine moins vite, et l'image peut contenir une nouveauté pas
+encore essayée chez toi. Pour revenir aux versions, remets `:latest`. La base, la clé et tes
+réglages ne bougent pas.
 
 La première fois que l'image `main` est publiée, vérifie sur GitHub (ton profil, onglet
 **Packages**, `home-assistant-rust`, **Package settings**) qu'elle est **publique** : sinon
 `docker compose pull` demanderait un compte.
+
+### Garder une image `main` précise
+
+`main` change à chaque fusion. Pour rester sur une image que tu as essayée, et savoir
+exactement à laquelle revenir, mets son commit dans `compose.yaml` : chaque image `main` est
+aussi publiée sous `main-<commit>` (les 7 premiers caractères du commit, visibles sur la page
+du dépôt ou dans `git log --oneline`).
+
+1. dans `compose.yaml` :
+   ```yaml
+   image: ghcr.io/wolfdavid68-dev/home-assistant-rust:main-1a2b3c4
+   ```
+2. puis :
+   ```bash
+   docker compose pull && docker compose up -d
+   ```
+
+Pour revenir en arrière, remets dans `compose.yaml` l'étiquette d'avant (note-la avant de la
+changer) et relance les deux mêmes commandes. `docker compose ps` et `docker compose logs -f`
+montrent si le service est reparti (`healthy`).
+
+### Construire l'image sur sa machine
+
+Pour essayer une branche qui n'est pas encore sur `main`, construis l'image toi-même depuis le
+dépôt. Le `compose.yaml` du dépôt utilise déjà l'image `ha-server:local`. Sous Windows (Docker
+Desktop), `scripts/deployer.ps1` fait tout dans l'ordre :
+
+```powershell
+.\scripts\deployer.ps1 -Dossier <dossier du compose.yaml> -Image ha-server:local
+```
+
+(`-Dossier .` si tu utilises le `compose.yaml` du dépôt, depuis le dossier du dépôt.)
+
+1. l'image en service est gardée sous une étiquette de secours, `ha-server:local-avant-<date>` ;
+2. la nouvelle image est construite depuis le dépôt (`docker build`) ;
+3. le service `ha-server` redémarre avec elle (`docker compose up -d --no-build ha-server`) ;
+4. le script attend qu'il soit `healthy` (3 minutes au plus, `-Delai` pour changer) ;
+5. s'il ne l'est pas, l'image de secours reprend sa place et le service redémarre avec.
+
+À la fin, il affiche la commande pour revenir en arrière à la main et celle pour supprimer
+l'image de secours quand tu n'en as plus besoin (`docker image rm …-avant-<date>`). La base, la
+clé et tes réglages ne sont pas touchés. Si Windows refuse de lancer le script, autorise-le
+pour cette fenêtre seulement : `Set-ExecutionPolicy -Scope Process Bypass`.
+
+Sous Linux, la même chose à la main, dans le dossier du dépôt :
+
+```bash
+docker tag ha-server:local ha-server:local-avant
+docker compose up -d --build ha-server
+# si ça ne repart pas :
+docker tag ha-server:local-avant ha-server:local && docker compose up -d --no-build ha-server
+```
 
 ## Depuis le téléphone
 

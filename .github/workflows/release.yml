@@ -1,7 +1,7 @@
 name: Publication
 
 # Publier une version : pousser une étiquette `vX.Y.Z` égale à la version
-# de Cargo.toml. Quatre jobs :
+# de Cargo.toml, sur un commit de `main` (vérifié). Quatre jobs :
 #
 #   1. la version GitHub, avec ses notes ;
 #   2. Windows : `ha-server.exe` et ses fichiers, dans un zip joint à la
@@ -11,8 +11,9 @@ name: Publication
 #   4. Docker : l'image, testée comme dans docker.yml, publiée sur
 #      ghcr.io/wolfdavid68-dev/home-assistant-rust (`X.Y.Z` et `latest`).
 #
-# Aucune action tierce en dehors de checkout et rust-cache (épinglées) :
-# `gh` et `docker` sont déjà sur les machines de GitHub.
+# Peu d'actions tierces, toutes épinglées : checkout, rust-cache, et celles
+# de Docker pour le cache de l'image. `gh` et `docker` sont déjà sur les
+# machines de GitHub.
 
 on:
   push:
@@ -38,6 +39,20 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # Tout l'historique : il faut `main` pour l'étape suivante.
+          fetch-depth: 0
+
+      # `latest` est ce que télécharge toute nouvelle installation : seul un
+      # commit fusionné dans `main` (donc passé par une PR et sa CI) peut
+      # devenir une version. Une étiquette posée sur une branche de travail
+      # arrête tout ici, avant la version GitHub et les images.
+      - name: L'étiquette est sur main
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Le commit $GITHUB_SHA n'est pas dans main : pas de version."
+            exit 1
+          fi
 
       - name: L'étiquette suit Cargo.toml
         env:
@@ -124,7 +139,8 @@ jobs:
 
       # Compilé dans Debian 12 (la même image que le Dockerfile) : le
       # programme tourne sur Debian 12 et 13, et sur les Ubuntu récents. Garder
-      # la même empreinte que dans le Dockerfile, que Dependabot met à jour.
+      # la même empreinte que dans le Dockerfile, que Dependabot met à jour
+      # (et le même Rust que rust-toolchain.toml).
       - name: Build
         run: |
           docker run --rm -v "$PWD":/src -w /src \
@@ -176,15 +192,29 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Build
+      - name: Version de l'image
+        id: version
         env:
           TAG: ${{ github.ref_name }}
-        run: |
-          docker build \
-            --label org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY} \
-            --label org.opencontainers.image.version=${TAG#v} \
-            --label org.opencontainers.image.licenses=MIT \
-            -t ha-server:release .
+        run: echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      # Le même cache que docker.yml (voir là-bas) : relancer une
+      # publication qui a échoué après la construction ne recompile rien.
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          load: true
+          tags: ha-server:release
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.licenses=MIT
+          provenance: false
+          cache-from: type=gha,scope=image
+          cache-to: type=gha,scope=image,mode=max,ignore-error=true
 
       - name: Smoke test
         run: |
@@ -199,6 +229,9 @@ jobs:
           done
           docker logs ha
           test "$status" = healthy
+          # La politique de sécurité (CSP) part avec chaque page, comme dans
+          # docker.yml et image-main.yml.
+          curl -fsS -D - -o /dev/null http://127.0.0.1:8123/ | grep -i '^content-security-policy:'
           docker stop ha
 
       - name: Publier sur ghcr.io

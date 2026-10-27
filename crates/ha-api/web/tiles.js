@@ -631,9 +631,8 @@ function announceTile(state) {
   const speakers = (Array.isArray(a.enceintes) ? a.enceintes : []).filter((id) => entities.has(id));
   const voice = typeof a.voix === "string" ? a.voix : "";
   const hasVoice = voice !== "" && !voice.startsWith("aucune");
-  const last = typeof a.dernier_message === "string" && !Number.isNaN(Date.parse(state.state))
-    ? `Dernière il y a ${ago(state.state)} : « ${a.dernier_message} »`
-    : hasVoice ? `Voix : ${voice}` : "Pas de voix installée : carillon seulement";
+  const said = typeof a.dernier_message === "string" && !Number.isNaN(Date.parse(state.state));
+  const last = said ? "" : hasVoice ? `Voix : ${voice}` : "Pas de voix installée : carillon seulement";
   const input = el("input", {
     type: "text", maxlength: "500", autocomplete: "off", value: announceDraft.message,
     placeholder: hasVoice ? "Le repas est prêt" : "Installe Piper pour parler (docs/sonos.md)",
@@ -660,24 +659,29 @@ function announceTile(state) {
     if (withMessage) data.message = input.value;
     if (volume.value !== "") data.volume = Number(volume.value);
     markPending(state.entity_id);
-    callService("tts", "speak", data);
+    return callService("tts", "speak", data);
   };
   const form = el("form", { class: "add-form announce-form" }, input,
     el("button", { type: "submit", class: "action-button", text: "Annoncer" }));
   form.querySelector("button").disabled = !hasVoice;
-  form.addEventListener("submit", (event) => {
+  form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (input.value.trim() === "" || speakers.length === 0) return;
-    send(true);
-    input.value = "";
-    announceDraft.message = "";
+    const message = input.value;
+    // Le message reste en place si l'annonce n'est pas partie.
+    if (!(await send(true))) return;
+    const field = liveField(input);
+    if (field.value === message) field.value = "";
+    if (announceDraft.message === message) announceDraft.message = "";
   });
   const chime = el("button", { type: "button", class: "ghost small", text: "Carillon seul" });
   chime.addEventListener("click", () => { if (speakers.length > 0) send(false); });
+  const head = tileHead(state, ICONS.megaphone, last);
+  if (said) markAgo(head.querySelector(".sub"), state.state, "Dernière il y a ", ` : « ${a.dernier_message} »`);
   return el(
     "div",
     { id: tileId(state.entity_id), class: "tile sensor announce" },
-    tileHead(state, ICONS.megaphone, last),
+    head,
     form,
     el("div", { class: "announce-options" }, target, volume, chime),
   );
@@ -794,12 +798,9 @@ function textTile(state) {
 
 function eventTile(state) {
   const kind = typeof state.attributes.event_type === "string" ? state.attributes.event_type : null;
-  const when = Number.isNaN(Date.parse(state.state)) ? "" : ` · il y a ${ago(state.state)}`;
-  return el(
-    "div",
-    { id: tileId(state.entity_id), class: tileClass(state, "binary") },
-    tileHead(state, ICONS.button, kind ? `« ${kind} »${when}` : "Aucun appui reçu"),
-  );
+  const head = tileHead(state, ICONS.button, kind ? `« ${kind} »` : "Aucun appui reçu");
+  if (kind && !Number.isNaN(Date.parse(state.state))) markAgo(head.querySelector(".sub"), state.state, `« ${kind} » · il y a `);
+  return el("div", { id: tileId(state.entity_id), class: tileClass(state, "binary") }, head);
 }
 
 const ALARM_PANEL_LABELS = {
@@ -836,16 +837,20 @@ function alarmPanelTile(state) {
 
 // ----- Listes et agenda
 
-/** Un petit formulaire « texte + bouton » (ajouter un élément…). */
+/** Un petit formulaire « texte + bouton » (ajouter un élément…). Le texte
+ *  n'est effacé que si `onSubmit` ne renvoie pas false : un ordre qui n'est
+ *  pas parti laisse le texte en place, pour réessayer. */
 function addForm(placeholder, label, onSubmit, extra = []) {
   const input = el("input", { type: "text", maxlength: "200", placeholder, "aria-label": placeholder, required: "" });
   const form = el("form", { class: "add-form" }, input, ...extra, el("button", { type: "submit", class: "action-button", text: label }));
-  form.addEventListener("submit", (event) => {
+  form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const text = input.value.trim();
     if (!text) return;
-    onSubmit(text, form);
-    input.value = "";
+    const sent = await onSubmit(text, form);
+    // (Sauf si on a déjà retapé autre chose entre-temps.)
+    const field = liveField(input);
+    if (sent !== false && field.value.trim() === text) field.value = "";
   });
   return form;
 }
@@ -986,13 +991,14 @@ function calendarTile(state) {
   const day = el("input", { type: "date", "aria-label": "Jour", required: "" });
   day.value = new Date(now - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
   const time = el("input", { type: "time", "aria-label": "Heure (vide : toute la journée)" });
-  const form = addForm("Nouveau rendez-vous…", "Ajouter", (summary) => {
-    if (!day.value) return;
+  const form = addForm("Nouveau rendez-vous…", "Ajouter", async (summary) => {
+    if (!day.value) return false;
     const data = time.value
       ? { start_date_time: `${day.value} ${time.value}` }
       : { start_date: day.value };
-    callService("calendar", "create_event", { entity_id: state.entity_id, summary, ...data });
-    time.value = "";
+    const sent = await callService("calendar", "create_event", { entity_id: state.entity_id, summary, ...data });
+    if (sent) time.value = "";
+    return sent;
   }, [el("div", { class: "add-when" }, day, time)]);
   return el(
     "div",
@@ -1122,7 +1128,9 @@ function actionTile(state) {
   const running = isScript && state.state === "on";
   const subtitle = isScript
     ? running ? "En cours…" : "Prêt"
-    : Number.isNaN(Date.parse(state.state)) ? "Jamais activée" : `Activée il y a ${ago(state.state)}`;
+    : Number.isNaN(Date.parse(state.state)) ? "Jamais activée" : "";
+  const head = tileHead(state, isScript ? ICONS.play : ICONS.sparkle, subtitle);
+  if (!isScript && subtitle === "") markAgo(head.querySelector(".sub"), state.state, "Activée il y a ");
   const button = el("button", { type: "button", class: "action-button" });
   button.textContent = running ? "Arrêter" : isScript ? "Lancer" : "Activer";
   button.addEventListener("click", () => {
@@ -1134,16 +1142,16 @@ function actionTile(state) {
     // Pas de `tileClass` ici : une scène jamais activée (« unknown ») n'est pas
     // un appareil indisponible, elle ne doit pas être grisée.
     { id: tileId(state.entity_id), class: running ? "tile action on" : "tile action" },
-    tileHead(state, isScript ? ICONS.play : ICONS.sparkle, subtitle),
+    head,
     button,
   );
 }
 
 // Le téléphone : date de la dernière notification, et un bouton pour tester.
 function notifyTile(state) {
-  const subtitle = Number.isNaN(Date.parse(state.state))
-    ? "Aucune notification envoyée"
-    : `Dernière notification il y a ${ago(state.state)}`;
+  const sent = !Number.isNaN(Date.parse(state.state));
+  const head = tileHead(state, ICONS.bell, sent ? "" : "Aucune notification envoyée");
+  if (sent) markAgo(head.querySelector(".sub"), state.state, "Dernière notification il y a ");
   const button = el("button", { type: "button", class: "action-button", text: "Envoyer un test" });
   button.addEventListener("click", () => {
     markPending(state.entity_id);
@@ -1156,7 +1164,7 @@ function notifyTile(state) {
   return el(
     "div",
     { id: tileId(state.entity_id), class: "tile action" },
-    tileHead(state, ICONS.bell, subtitle),
+    head,
     button,
   );
 }
@@ -1425,10 +1433,12 @@ function inputSelectTile(state) {
 }
 
 function inputButtonTile(state) {
-  const subtitle = Number.isNaN(Date.parse(state.state)) ? "Jamais appuyé" : `Appuyé il y a ${ago(state.state)}`;
+  const pressed = !Number.isNaN(Date.parse(state.state));
+  const head = tileHead(state, ICONS.button, pressed ? "" : "Jamais appuyé");
+  if (pressed) markAgo(head.querySelector(".sub"), state.state, "Appuyé il y a ");
   const button = el("button", { type: "button", class: "action-button", text: "Appuyer" });
   button.addEventListener("click", () => inputCommand(state, "press"));
-  return el("div", { id: tileId(state.entity_id), class: "tile action" }, tileHead(state, ICONS.button, subtitle), button);
+  return el("div", { id: tileId(state.entity_id), class: "tile action" }, head, button);
 }
 
 /** Un rappel insistant (étape 69) : calme, en cours (avec « Compris »), ou
@@ -1711,11 +1721,12 @@ function machineTile(state) {
   if (running && typeof a.cycle === "string") parts.push(a.cycle);
   if (running && typeof a.fin_heure === "string") parts.push(`fin vers ${a.fin_heure}`);
   if (!running && Number.isFinite(a.dernier_cycle_minutes)) parts.push(`dernier cycle : ${a.dernier_cycle_minutes} min`);
-  if (!running && parts.length === 0) parts.push(`il y a ${ago(state.last_changed)}`);
+  const head = tileHead(state, ICONS.machine, parts.join(" · "));
+  if (!running && parts.length === 0) markAgo(head.querySelector(".sub"), state.last_changed, "il y a ");
   const tile = el(
     "div",
     { id: tileId(state.entity_id), class: `${tileClass(state, "sensor")}${running ? " on" : ""}` },
-    tileHead(state, ICONS.machine, parts.join(" · ")),
+    head,
     el("div", { class: "value small-value", text: running && Number.isFinite(a.reste_minutes) ? `${state.state} · ${a.reste_minutes} min` : state.state }),
   );
   if (running && Number.isFinite(a.progression)) {
@@ -1750,7 +1761,7 @@ function timestampTile(state) {
     "div",
     { id: tileId(state.entity_id), class: tileClass(state, "sensor") },
     tileHead(state, ICONS.archive, valid ? dateTime.format(new Date(state.state)) : "Jamais"),
-    el("div", { class: "value small-value", text: valid ? `il y a ${ago(state.state)}` : "—" }),
+    valid ? markAgo(el("div", { class: "value small-value" }), state.state, "il y a ") : el("div", { class: "value small-value", text: "—" }),
   );
   if (failure) tile.append(el("p", { class: "error climate-info", text: `Dernier essai échoué : ${failure}` }));
   return tile;
