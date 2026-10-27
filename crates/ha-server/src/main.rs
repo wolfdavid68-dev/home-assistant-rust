@@ -541,7 +541,7 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         Ok(None) => {}
         Err(error) => warn!("relais des notifications du téléphone : {error}"),
     }
-    let api = tokio::spawn({
+    let mut api = tokio::spawn({
         let state = Arc::clone(&api_state);
         async move {
             match https {
@@ -738,26 +738,27 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         info!("sauvegardes automatiques désactivées (indique HA_BACKUP_DIR pour les activer)");
         None
     };
-    let weather = match weather_config {
-        Some(config) => Some(ha_weather::Weather::start(config, Arc::clone(&core))?),
-        None => None,
-    };
-    let vigilance = match vigilance_config {
-        Some(config) => Some(ha_weather::vigilance::Vigilance::start(
-            config,
-            Arc::clone(&core),
-        )?),
-        None => None,
-    };
-    let notifier = match ntfy {
-        Some(config) => {
-            for warning in config.warnings() {
-                warn!("notifications : {warning}");
-            }
-            Some(ha_notify::Notifier::start(config, Arc::clone(&core))?)
+    // Comme les autres services : un échec au démarrage (client HTTPS
+    // impossible à créer) se signale, et le reste de la maison démarre.
+    // Un `?` ici quitterait sans arrêter ce qui tourne déjà.
+    let weather = weather_config.and_then(|config| {
+        ha_weather::Weather::start(config, Arc::clone(&core))
+            .inspect_err(|error| warn!("météo : {error}"))
+            .ok()
+    });
+    let vigilance = vigilance_config.and_then(|config| {
+        ha_weather::vigilance::Vigilance::start(config, Arc::clone(&core))
+            .inspect_err(|error| warn!("vigilance météo : {error}"))
+            .ok()
+    });
+    let notifier = ntfy.and_then(|config| {
+        for warning in config.warnings() {
+            warn!("notifications : {warning}");
         }
-        None => None,
-    };
+        ha_notify::Notifier::start(config, Arc::clone(&core))
+            .inspect_err(|error| warn!("notifications : {error}"))
+            .ok()
+    });
     // Une association illisible (clé de chiffrement perdue, par exemple)
     // ne doit pas empêcher le reste de la maison de fonctionner.
     let hue = match ha_hue::pairing::load(&store).await {
@@ -860,6 +861,10 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     // Concept Rust : `select!` attend la première de plusieurs opérations.
     // Sans simulation, la deuxième branche attend indéfiniment
     // (`std::future::pending`) : seul Ctrl+C peut alors arrêter le serveur.
+    // La troisième : l'API qui s'arrête seule (port pris, certificat
+    // illisible, panique). Plutôt qu'une maison sans tableau de bord, on
+    // arrête tout proprement, et le gestionnaire de services relance.
+    let mut api_ended = None;
     tokio::select! {
         result = shutdown_signal() => result?,
         result = async {
@@ -868,6 +873,10 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
                 None => std::future::pending().await,
             }
         } => result??,
+        result = &mut api => {
+            tracing::error!("l'API s'est arrêtée toute seule : arrêt du serveur");
+            api_ended = Some(result);
+        }
     }
     // Plus aucun changement d'état après ce point.
     if let Some(simulation) = simulation {
@@ -966,8 +975,17 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         mqtt.stop().await;
     }
     api_state.shutdown();
-    if let Err(error) = api.await? {
-        warn!("arrêt de l'API : {error}");
+    // Concept Rust : une tâche déjà attendue (dans `select!`) ne peut pas
+    // l'être une deuxième fois ; on garde donc son résultat.
+    let api_failed = api_ended.is_some();
+    let api_result = match api_ended {
+        Some(result) => result,
+        None => api.await,
+    };
+    match api_result {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => tracing::error!("API : {error}"),
+        Err(error) => tracing::error!("API : la tâche a échoué ({error})"),
     }
 
     info!("arrêt — états finaux :");
@@ -979,6 +997,10 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     recorder.stop().await;
     cli::audit_local(&store, "serveur", "server_stop", None).await;
     store.close().await;
+    if api_failed {
+        // Un code de sortie non nul : systemd ou Docker relancent le serveur.
+        return Err("l'API s'est arrêtée".into());
+    }
     Ok(())
 }
 

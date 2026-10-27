@@ -6,7 +6,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ha_core::{Attributes, Background, CancellationToken, Core, EntityId, Event, Origin};
+use jiff::Timestamp;
 use jiff::civil::DateTime;
+use jiff::tz::TimeZone;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::{Mutex, watch};
 use tokio::task::JoinHandle;
@@ -66,9 +68,9 @@ impl Engine {
     /// Démarre le moteur avec les automatisations, les scripts et les scènes.
     pub fn start_with(setup: Setup, core: Arc<Core>) -> Self {
         let events = core.bus.subscribe();
-        let mut evaluator = Evaluator::new(setup.automations);
+        let mut evaluator = Evaluator::new(setup.automations).with_zone(TimeZone::system());
         if let Some(location) = setup.location {
-            evaluator = evaluator.with_sun(location, jiff::tz::TimeZone::system());
+            evaluator = evaluator.with_sun(location, TimeZone::system());
         }
         let library = Library::publish(setup.scripts, setup.scenes, &core, evaluator.checker());
         let reloads = setup.reloads.map(|reloads| reloads.0);
@@ -333,7 +335,8 @@ async fn run(
     let mut ticker = tokio::time::interval(Duration::from_secs(1));
     // Si la machine était en veille, on ne rattrape pas toutes les secondes perdues.
     ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
-    let mut previous = local_now();
+    // Des moments réels, pas l'heure affichée : voir `fire_on_tick_at`.
+    let mut previous = Timestamp::now();
 
     loop {
         tokio::select! {
@@ -365,8 +368,8 @@ async fn run(
             automations = next_reload(&mut reloads) => runner.reload(automations.as_ref().clone()),
 
             _ = ticker.tick() => {
-                let now = local_now();
-                let fired = runner.evaluator.fire_on_tick(previous, now, Instant::now(), &runner.core.states);
+                let now = Timestamp::now();
+                let fired = runner.evaluator.fire_on_tick_at(previous, now, Instant::now(), &runner.core.states);
                 previous = now;
                 runner.launch_all(fired);
                 if Instant::now() >= runner.next_check {
@@ -689,11 +692,12 @@ async fn wait_for_trigger(
         actions: Vec::new(),
         mode: RunMode::Single,
         max: 1,
-    }]);
+    }])
+    .with_zone(TimeZone::system());
     let deadline = timeout.map(|timeout| Instant::now() + timeout);
     let mut ticker = tokio::time::interval(Duration::from_secs(1));
     ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
-    let mut previous = local_now();
+    let mut previous = Timestamp::now();
     loop {
         let fired = tokio::select! {
             () = async {
@@ -714,8 +718,8 @@ async fn wait_for_trigger(
                 Err(RecvError::Closed) => return false,
             },
             _ = ticker.tick() => {
-                let now = local_now();
-                let fired = evaluator.fire_on_tick(previous, now, Instant::now(), &context.core.states);
+                let now = Timestamp::now();
+                let fired = evaluator.fire_on_tick_at(previous, now, Instant::now(), &context.core.states);
                 previous = now;
                 fired
             }

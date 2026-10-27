@@ -34,7 +34,21 @@ impl Background {
         Fut: Future<Output = ()> + Send + 'static,
     {
         let token = CancellationToken::new();
-        let task = tokio::spawn(run(token.clone()));
+        let work = tokio::spawn(run(token.clone()));
+        // Une seconde petite tâche attend la première : si elle panique, on
+        // le dit tout de suite dans le journal, sans attendre `stop` (qui
+        // n'arrive qu'à l'arrêt du serveur, parfois des semaines plus tard).
+        // Concept : attendre un `JoinHandle` rend `Err(JoinError)` quand la
+        // tâche a paniqué ; `is_panic` le distingue d'une annulation.
+        let task = tokio::spawn(async move {
+            if let Err(error) = work.await {
+                if error.is_panic() {
+                    tracing::error!("{name} a planté : {error}");
+                } else {
+                    tracing::error!("{name} s'est arrêté anormalement : {error}");
+                }
+            }
+        });
         Self {
             name,
             guard: token.drop_guard(),
@@ -72,6 +86,63 @@ mod tests {
             finished.load(Ordering::SeqCst),
             "stop attend la fin de la tâche"
         );
+    }
+
+    /// Un journal en mémoire, pour lire ce que la tâche a écrit.
+    #[derive(Clone, Default)]
+    struct Journal(Arc<std::sync::Mutex<Vec<u8>>>);
+
+    impl std::io::Write for Journal {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.0
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .extend_from_slice(bytes);
+            Ok(bytes.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl Journal {
+        fn text(&self) -> String {
+            let bytes = self
+                .0
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            String::from_utf8_lossy(&bytes).into_owned()
+        }
+    }
+
+    #[tokio::test]
+    async fn a_panic_is_logged_right_away() {
+        let journal = Journal::default();
+        let writer = journal.clone();
+        // `tokio::test` fait tout tourner sur ce fil : le journal y reste actif.
+        let _journal = tracing::subscriber::set_default(
+            tracing_subscriber::fmt()
+                .with_ansi(false)
+                .with_writer(move || writer.clone())
+                .finish(),
+        );
+        let task = Background::spawn("essai", |_token| async move {
+            panic!("boum");
+        });
+        // Sans appeler `stop` : la panique doit déjà être dans le journal.
+        for _ in 0..100 {
+            if journal.text().contains("essai a planté") {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let text = journal.text();
+        assert!(text.contains("essai a planté"), "{text}");
+        assert!(text.contains("boum"), "{text}");
+        // `stop` se passe ensuite normalement, sans le redire.
+        task.stop().await;
+        assert_eq!(journal.text().matches("essai").count(), 1);
     }
 
     #[tokio::test]

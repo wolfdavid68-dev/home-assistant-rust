@@ -536,6 +536,34 @@ fn ask_secret(prompt: &str) -> Result<Zeroizing<String>, Box<dyn Error>> {
 /// Enregistre dans le journal d'audit les commandes qui changent quelque
 /// chose (pas celles qui ne font que lire).
 async fn audit_cli(store: &Store, domain: &str, args: &[&str]) {
+    let Some(entry) = audit_entry(domain, args) else {
+        return;
+    };
+    let record = ha_storage::AuditRecord {
+        actor: "ligne de commande",
+        action: &entry.action,
+        target: entry.target,
+        detail: entry.detail,
+        source: "local",
+    };
+    if let Err(error) = store.audit(record).await {
+        eprintln!("attention : journal d'audit non écrit ({error})");
+    }
+}
+
+/// Une ligne du journal d'audit pour une commande.
+#[derive(Debug, PartialEq, Eq)]
+struct Entry<'a> {
+    action: String,
+    target: Option<&'a str>,
+    detail: Option<&'a str>,
+}
+
+/// La ligne d'audit d'une commande, ou `None` si elle ne change rien.
+///
+/// Concept Rust : la durée de vie `'a` dit que `target` et `detail`
+/// empruntent les textes de `args`, sans les copier.
+fn audit_entry<'a>(domain: &str, args: &[&'a str]) -> Option<Entry<'a>> {
     let (action, target) = match (domain, args) {
         (
             "user",
@@ -545,6 +573,15 @@ async fn audit_cli(store: &Store, domain: &str, args: &[&str]) {
                 ..,
             ],
         ) => (format!("user_{}", command.replace('-', "_")), Some(*name)),
+        // Le rôle donné (`admin`…) va dans le détail : qui est devenu
+        // administrateur, et quand, doit se retrouver.
+        ("user", ["role", name, role]) => {
+            return Some(Entry {
+                action: "user_role".to_owned(),
+                target: Some(name),
+                detail: Some(role),
+            });
+        }
         ("hue" | "somfy", ["pair", host, ..]) => (format!("{domain}_pair"), Some(*host)),
         ("freebox", ["pair", rest @ ..]) => (
             "freebox_pair".to_owned(),
@@ -565,9 +602,13 @@ async fn audit_cli(store: &Store, domain: &str, args: &[&str]) {
         ("smartthings", ["pair"]) => ("smartthings_pair".to_owned(), None),
         ("colis", ["pair"]) => ("colis_pair".to_owned(), None),
         ("automations", ["delete", id]) => ("automation_delete".to_owned(), Some(*id)),
-        _ => return,
+        _ => return None,
     };
-    audit_local(store, "ligne de commande", &action, target).await;
+    Some(Entry {
+        action,
+        target,
+        detail: None,
+    })
 }
 
 /// Ajoute une ligne « locale » (faite sur la machine elle-même) au journal.
@@ -2002,7 +2043,29 @@ async fn iglou_inner(args: &[&str], store: &Store) -> Result<(), Box<dyn Error>>
 
 #[cfg(test)]
 mod tests {
-    use super::is_microsoft_mailbox;
+    use super::{Entry, audit_entry, is_microsoft_mailbox};
+
+    #[test]
+    fn role_changes_are_audited() {
+        assert_eq!(
+            audit_entry("user", &["role", "alice", "admin"]),
+            Some(Entry {
+                action: "user_role".to_owned(),
+                target: Some("alice"),
+                detail: Some("admin"),
+            })
+        );
+        assert_eq!(
+            audit_entry("user", &["totp-off", "alice"]),
+            Some(Entry {
+                action: "user_totp_off".to_owned(),
+                target: Some("alice"),
+                detail: None,
+            })
+        );
+        // Lire ne change rien : pas de ligne.
+        assert_eq!(audit_entry("user", &["list"]), None);
+    }
 
     #[test]
     fn microsoft_mailboxes_are_spotted() {
