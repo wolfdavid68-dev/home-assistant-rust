@@ -34,7 +34,7 @@
 | [ha-api/ws.rs](../crates/ha-api/src/ws.rs) | L'API WebSocket |
 | [ha-api/auth.rs](../crates/ha-api/src/auth.rs) | `Authenticated` : la vérification du jeton sur chaque route |
 | [ha-api/json.rs](../crates/ha-api/src/json.rs) | Conversion des états en JSON, format des dates |
-| [ha-server/cli.rs](../crates/ha-server/src/cli.rs) | Commandes `ha-server user …` |
+| [ha-server/cli/users.rs](../crates/ha-server/src/cli/users.rs) | Commandes `ha-server user …` |
 | [0002_users_and_tokens.sql](../crates/ha-storage/migrations/0002_users_and_tokens.sql) | Tables `users` et `access_tokens` |
 
 ## Les routes

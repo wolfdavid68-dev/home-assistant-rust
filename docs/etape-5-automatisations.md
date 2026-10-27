@@ -77,7 +77,7 @@ Mettre `enabled: false` désactive une automatisation sans l'effacer.
 
 | Fichier | Contenu |
 |---------|---------|
-| [config.rs](../crates/ha-automation/src/config.rs) | Lecture du YAML et vérification de chaque valeur |
+| [config/](../crates/ha-automation/src/config/) | Lecture du YAML et vérification de chaque valeur |
 | [evaluator.rs](../crates/ha-automation/src/evaluator.rs) | Quels déclencheurs se produisent, quelles conditions sont vraies |
 | [engine.rs](../crates/ha-automation/src/engine.rs) | La tâche qui écoute le bus et l'horloge, et exécute les actions |
 | [tests/automations.rs](../crates/ha-automation/tests/automations.rs) | Les tests, avec une horloge simulée |

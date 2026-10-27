@@ -167,7 +167,7 @@ Pour couper aussi l'accès côté Samsung : `smartthings apps:delete` sur l'appl
 | [crates/ha-smartthings/src/devices.rs](../crates/ha-smartthings/src/devices.rs) | Appareils ⇄ entités : le type d'après les capacités, les mesures à côté, les états, les ordres |
 | [crates/ha-smartthings/src/client.rs](../crates/ha-smartthings/src/client.rs) | La boucle : jetons renouvelés 6 heures avant leur fin, relevés toutes les 30 s, ordres |
 | [crates/ha-storage/src/smartthings.rs](../crates/ha-storage/src/smartthings.rs) | L'association, chiffrée (migration `0024_smartthings`) |
-| [crates/ha-server/src/cli.rs](../crates/ha-server/src/cli.rs) | `smartthings pair`, `status`, `devices`, `forget` |
+| [crates/ha-server/src/cli/accounts.rs](../crates/ha-server/src/cli/accounts.rs) | `smartthings pair`, `status`, `devices`, `forget` |
 | [crates/ha-api/src/rest.rs](../crates/ha-api/src/rest.rs) | `GET /api/areas` range aussi les appareils dans leur pièce SmartThings |
 | [web/smartthings.html](../crates/ha-api/web/smartthings.html) | La page de retour |
 

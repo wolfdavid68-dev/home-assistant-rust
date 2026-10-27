@@ -91,6 +91,65 @@ fn numeric_state_fires_when_entering_the_range() {
     );
 }
 
+/// L'évaluateur ne parcourt que les déclencheurs qui surveillent l'entité
+/// changée : les mêmes automatisations partent, dans le même ordre, avec
+/// le même (premier) déclencheur, qu'une entité soit citée une ou deux fois,
+/// et encore après un remplacement de la liste.
+#[test]
+fn state_changes_fire_in_list_order() {
+    let yaml = r#"
+- id: autre_entite
+  triggers: [{trigger: state, entity_id: light.couloir}]
+  actions: [{delay: 1s}]
+- id: deux_declencheurs
+  triggers:
+    - {trigger: time, at: "12:00"}
+    - {trigger: numeric_state, entity_id: sensor.t, above: 10}
+    - {trigger: state, entity_id: [sensor.t, sensor.t]}
+  actions: [{delay: 1s}]
+- id: evenement
+  triggers: [{trigger: event, event_type: essai}]
+  actions: [{delay: 1s}]
+- id: liste
+  triggers: [{trigger: state, entity_id: [light.couloir, sensor.t], to: "12"}]
+  actions: [{delay: 1s}]
+- id: simple
+  triggers: [{trigger: state, entity_id: sensor.t}]
+  actions: [{delay: 1s}]
+"#;
+    let automations = parse(yaml).unwrap();
+    let core = Core::new();
+    let mut evaluator = Evaluator::new(automations.clone());
+    let fired = |evaluator: &mut Evaluator, entity: &str, value: &str| {
+        let old = core.states.get(&id(entity));
+        core.states
+            .set(id(entity), value, Attributes::new())
+            .unwrap();
+        let new = core.states.get(&id(entity));
+        evaluator
+            .fire_on_state_changed(&id(entity), old.as_deref(), new.as_deref(), Instant::now())
+            .into_iter()
+            .map(|f| (f.automation, f.trigger))
+            .collect::<Vec<_>>()
+    };
+
+    // `deux_declencheurs` part par son premier déclencheur qui marche
+    // (numeric_state), pas par le suivant (state).
+    assert_eq!(
+        fired(&mut evaluator, "sensor.t", "12"),
+        [(1, 1), (3, 0), (4, 0)]
+    );
+    assert_eq!(fired(&mut evaluator, "sensor.t", "13"), [(1, 2), (4, 0)]);
+    assert_eq!(fired(&mut evaluator, "light.couloir", "on"), [(0, 0)]);
+    assert_eq!(fired(&mut evaluator, "light.salon", "on"), []);
+
+    // Après un remplacement, les positions suivent la nouvelle liste.
+    let reordered = vec![automations[4].clone(), automations[0].clone()];
+    evaluator.replace(reordered);
+    assert_eq!(fired(&mut evaluator, "sensor.t", "14"), [(0, 0)]);
+    assert_eq!(fired(&mut evaluator, "light.couloir", "off"), [(1, 0)]);
+}
+
 #[test]
 fn time_trigger_including_midnight() {
     let yaml = r#"

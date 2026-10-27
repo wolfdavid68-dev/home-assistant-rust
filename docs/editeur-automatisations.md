@@ -90,7 +90,7 @@ guillemets (`state: 3`) est accepté comme du texte.
 
 | Fichier | Contenu |
 |---------|---------|
-| [config.rs](../crates/ha-automation/src/config.rs) | `AutomationConfig` : la forme écrite, en YAML ou en JSON, et sa vérification |
+| [config/](../crates/ha-automation/src/config/) | `AutomationConfig` : la forme écrite, en YAML ou en JSON, et sa vérification |
 | [editor.rs](../crates/ha-automation/src/editor.rs) | Fichier + base, vérifications, enregistrement, versions |
 | [engine.rs](../crates/ha-automation/src/engine.rs) | Rechargement du moteur sans redémarrage |
 | [automations.rs (stockage)](../crates/ha-storage/src/automations.rs) | Tables `automations` et `automation_versions` |

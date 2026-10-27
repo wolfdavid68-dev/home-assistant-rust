@@ -147,7 +147,7 @@ use tracing::{debug, info, warn};
 use tracing_subscriber::EnvFilter;
 
 // Concept Rust : `pub(crate) use` remet ces fonctions à la racine du
-// programme : `crate::location()` (dans cli.rs) marche comme avant.
+// programme : `crate::location()` (dans le module `cli`) marche comme avant.
 pub(crate) use settings::{
     alexa_path, alexa_settings, automation_editor, bind_address, colis_mailbox, days_from_env,
     derived_path, energy_path, history_days, iglou_endpoints, inputs_path, location, mqtt_config,

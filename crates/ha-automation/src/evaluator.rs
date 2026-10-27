@@ -2,7 +2,7 @@
 //! sont remplies. Aucune attente, aucun réseau : l'heure est passée en
 //! paramètre, ce qui permet de tester « il est 18 h 59, puis 19 h 00 ».
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::time::SystemTime;
 
 use ha_core::{Attributes, EntityId, State, StateMachine};
@@ -37,6 +37,11 @@ struct Pending {
 #[derive(Debug)]
 pub struct Evaluator {
     automations: Vec<Automation>,
+    /// Pour chaque entité, les déclencheurs `state` et `numeric_state` qui
+    /// la surveillent (automatisation, déclencheur), dans l'ordre de la
+    /// liste : un changement d'état ne parcourt qu'eux. Refait à chaque
+    /// remplacement des automatisations.
+    by_entity: HashMap<EntityId, Vec<(usize, usize)>>,
     pending: Vec<Pending>,
     sun: Option<Sun>,
     /// Le fuseau horaire de la maison : il dit à quel moment réel sonne
@@ -51,6 +56,28 @@ pub struct Fired {
     pub automation: usize,
     pub trigger: usize,
     pub data: Option<TriggerData>,
+}
+
+/// Les déclencheurs `state` et `numeric_state` de chaque entité, dans
+/// l'ordre (automatisation, puis déclencheur), chacun une seule fois même si
+/// l'entité est citée deux fois.
+fn index_by_entity(automations: &[Automation]) -> HashMap<EntityId, Vec<(usize, usize)>> {
+    let mut index: HashMap<EntityId, Vec<(usize, usize)>> = HashMap::new();
+    for (a, automation) in automations.iter().enumerate() {
+        for (t, trigger) in automation.triggers.iter().enumerate() {
+            if let Trigger::State { entity_ids, .. } | Trigger::NumericState { entity_ids, .. } =
+                trigger
+            {
+                for entity_id in entity_ids {
+                    let watching = index.entry(entity_id.clone()).or_default();
+                    if watching.last() != Some(&(a, t)) {
+                        watching.push((a, t));
+                    }
+                }
+            }
+        }
+    }
+    index
 }
 
 /// Les automatisations déclenchées : pour chacune, le premier déclencheur.
@@ -124,6 +151,7 @@ impl Evaluator {
     #[must_use]
     pub fn new(automations: Vec<Automation>) -> Self {
         Self {
+            by_entity: index_by_entity(&automations),
             automations,
             pending: Vec::new(),
             sun: None,
@@ -178,6 +206,7 @@ impl Evaluator {
                 None => false,
             }
         });
+        self.by_entity = index_by_entity(&automations);
         self.automations = automations;
         previous
     }
@@ -213,80 +242,88 @@ impl Evaluator {
         // Concept Rust : `entry(a).or_insert(t)` garde le **premier**
         // déclencheur qui a fonctionné pour chaque automatisation.
         let mut fired = FiredMap::new();
-        for (a, automation) in self.automations.iter().enumerate() {
-            for (t, trigger) in automation.triggers.iter().enumerate() {
-                match trigger {
-                    Trigger::State {
-                        entity_ids,
-                        attribute,
-                        from,
-                        to,
-                        not_from,
-                        not_to,
-                        for_,
-                    } if entity_ids.contains(entity_id) => {
-                        let attribute = attribute.as_deref();
-                        let before = watched(old, attribute);
-                        let after = watched(new, attribute);
-                        // La valeur surveillée n'a pas bougé (un autre attribut
-                        // a changé) : rien ne se passe, une attente continue.
-                        if new.is_some() && before == after {
-                            continue;
-                        }
-                        // Sinon, un changement annule toujours l'attente en cours.
-                        self.pending.retain(|p| {
-                            !(p.automation == a && p.trigger == t && &p.entity_id == entity_id)
-                        });
-                        let Some(new) = new else { continue };
-                        let Some(after) = after else { continue };
-                        let matches = |list: &[String], value: Option<&String>| {
-                            value.is_some_and(|value| list.contains(value))
-                        };
-                        if (!from.is_empty() && !matches(from, before.as_ref()))
-                            || (!to.is_empty() && !to.contains(&after))
-                            || matches(not_from, before.as_ref())
-                            || not_to.contains(&after)
-                        {
-                            continue;
-                        }
-                        match for_ {
-                            None => {
-                                fired
-                                    .entry(a)
-                                    .or_insert((t, Some(change(entity_id, old, Some(new)))));
-                            }
-                            Some(duration) => self.pending.push(Pending {
-                                automation: a,
-                                trigger: t,
-                                entity_id: entity_id.clone(),
-                                attribute: attribute.map(str::to_owned),
-                                value: Some(after),
-                                since: attribute.is_none().then(|| new.last_changed()),
-                                from_state: old.cloned(),
-                                deadline: now + *duration,
-                            }),
-                        }
+        // Seuls les déclencheurs qui surveillent cette entité sont parcourus,
+        // dans l'ordre de la liste (comme un parcours complet).
+        let watching = self.by_entity.get(entity_id).map_or(&[][..], Vec::as_slice);
+        for &(a, t) in watching {
+            let Some(trigger) = self
+                .automations
+                .get(a)
+                .and_then(|automation| automation.triggers.get(t))
+            else {
+                continue;
+            };
+            match trigger {
+                Trigger::State {
+                    entity_ids,
+                    attribute,
+                    from,
+                    to,
+                    not_from,
+                    not_to,
+                    for_,
+                } if entity_ids.contains(entity_id) => {
+                    let attribute = attribute.as_deref();
+                    let before = watched(old, attribute);
+                    let after = watched(new, attribute);
+                    // La valeur surveillée n'a pas bougé (un autre attribut
+                    // a changé) : rien ne se passe, une attente continue.
+                    if new.is_some() && before == after {
+                        continue;
                     }
-                    Trigger::NumericState {
-                        entity_ids,
-                        above,
-                        below,
-                    } if entity_ids.contains(entity_id) => {
-                        let inside = |state: Option<&State>| {
-                            state
-                                .and_then(|s| s.state().parse::<f64>().ok())
-                                .is_some_and(|value| in_range(value, *above, *below))
-                        };
-                        // On déclenche en **entrant** dans l'intervalle, pas à
-                        // chaque nouvelle mesure tant qu'on y reste.
-                        if inside(new) && !inside(old) {
+                    // Sinon, un changement annule toujours l'attente en cours.
+                    self.pending.retain(|p| {
+                        !(p.automation == a && p.trigger == t && &p.entity_id == entity_id)
+                    });
+                    let Some(new) = new else { continue };
+                    let Some(after) = after else { continue };
+                    let matches = |list: &[String], value: Option<&String>| {
+                        value.is_some_and(|value| list.contains(value))
+                    };
+                    if (!from.is_empty() && !matches(from, before.as_ref()))
+                        || (!to.is_empty() && !to.contains(&after))
+                        || matches(not_from, before.as_ref())
+                        || not_to.contains(&after)
+                    {
+                        continue;
+                    }
+                    match for_ {
+                        None => {
                             fired
                                 .entry(a)
-                                .or_insert((t, Some(change(entity_id, old, new))));
+                                .or_insert((t, Some(change(entity_id, old, Some(new)))));
                         }
+                        Some(duration) => self.pending.push(Pending {
+                            automation: a,
+                            trigger: t,
+                            entity_id: entity_id.clone(),
+                            attribute: attribute.map(str::to_owned),
+                            value: Some(after),
+                            since: attribute.is_none().then(|| new.last_changed()),
+                            from_state: old.cloned(),
+                            deadline: now + *duration,
+                        }),
                     }
-                    _ => {}
                 }
+                Trigger::NumericState {
+                    entity_ids,
+                    above,
+                    below,
+                } if entity_ids.contains(entity_id) => {
+                    let inside = |state: Option<&State>| {
+                        state
+                            .and_then(|s| s.state().parse::<f64>().ok())
+                            .is_some_and(|value| in_range(value, *above, *below))
+                    };
+                    // On déclenche en **entrant** dans l'intervalle, pas à
+                    // chaque nouvelle mesure tant qu'on y reste.
+                    if inside(new) && !inside(old) {
+                        fired
+                            .entry(a)
+                            .or_insert((t, Some(change(entity_id, old, new))));
+                    }
+                }
+                _ => {}
             }
         }
         to_fired(fired)
