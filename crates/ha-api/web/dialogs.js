@@ -13,7 +13,8 @@
 // construit élément par élément : pas de bibliothèque, pas de HTML.
 const SVG_NS = "http://www.w3.org/2000/svg";
 const CHART = { width: 640, height: 220, left: 52, right: 12, top: 12, bottom: 28 };
-const historyView = { entityId: null, hours: 24 };
+// `request` numérote les demandes : seule la dernière a le droit de dessiner.
+const historyView = { entityId: null, hours: 24, request: 0 };
 const number = new Intl.NumberFormat("fr", { maximumFractionDigits: 1 });
 const shortTime = new Intl.DateTimeFormat("fr", { hour: "2-digit", minute: "2-digit" });
 const dayTime = new Intl.DateTimeFormat("fr", { weekday: "short", hour: "2-digit", minute: "2-digit" });
@@ -65,9 +66,13 @@ async function loadHistory() {
     button.setAttribute("aria-pressed", String(Number(button.dataset.hours) === historyView.hours));
   }
   $("#history-summary").textContent = "Chargement…";
-  if (historyView.hours > LONG_TERM_HOURS) return loadStatistics();
+  // Un clic sur « 7 j » puis « 24 h » : la réponse lente de 7 j, arrivée
+  // après, n'écrase pas la courbe de 24 h.
+  const request = ++historyView.request;
+  if (historyView.hours > LONG_TERM_HOURS) return loadStatistics(request);
   const url = `/api/history/${encodeURIComponent(historyView.entityId)}/series?hours=${historyView.hours}`;
   const response = await fetch(url, { headers: { Authorization: `Bearer ${token.get()}` } });
+  if (request !== historyView.request) return;
   if (response.status === 401) {
     $("#history").close();
     token.clear();
@@ -75,12 +80,14 @@ async function loadHistory() {
     return showLogin("Session expirée : reconnecte-toi.");
   }
   if (!response.ok) throw new Error("historique");
-  drawHistory(await response.json());
+  const data = await response.json();
+  if (request === historyView.request) drawHistory(data);
 }
 
-async function loadStatistics() {
+async function loadStatistics(request) {
   const days = Math.round(historyView.hours / 24);
   const { status, data } = await api("GET", `/api/statistics/${encodeURIComponent(historyView.entityId)}?period=day&days=${days}`);
+  if (request !== historyView.request) return;
   if (status !== 200) throw new Error("statistiques");
   const until = Date.now();
   const since = until - days * 86400000;
