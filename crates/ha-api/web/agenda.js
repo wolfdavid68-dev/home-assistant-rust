@@ -672,7 +672,7 @@ $("#agenda-add").addEventListener("click", () => {
   $("#agenda-new-summary").focus();
 });
 $("#agenda-new-close").addEventListener("click", () => $("#agenda-new").close());
-$("#agenda-new-form").addEventListener("submit", (event) => {
+$("#agenda-new-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const summary = $("#agenda-new-summary").value.trim();
   const day = $("#agenda-new-day").value;
@@ -686,8 +686,8 @@ $("#agenda-new-form").addEventListener("submit", (event) => {
   } else {
     data.start_date = day;
   }
-  callService("calendar", "create_event", data);
-  $("#agenda-new").close();
+  // Le rendez-vous n'est pas parti : la fenêtre reste ouverte, pour réessayer.
+  if (await callService("calendar", "create_event", data)) $("#agenda-new").close();
 });
 
 // ---------------------------------------------------------------- Page Maison

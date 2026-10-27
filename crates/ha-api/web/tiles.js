@@ -660,17 +660,19 @@ function announceTile(state) {
     if (withMessage) data.message = input.value;
     if (volume.value !== "") data.volume = Number(volume.value);
     markPending(state.entity_id);
-    callService("tts", "speak", data);
+    return callService("tts", "speak", data);
   };
   const form = el("form", { class: "add-form announce-form" }, input,
     el("button", { type: "submit", class: "action-button", text: "Annoncer" }));
   form.querySelector("button").disabled = !hasVoice;
-  form.addEventListener("submit", (event) => {
+  form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (input.value.trim() === "" || speakers.length === 0) return;
-    send(true);
-    input.value = "";
-    announceDraft.message = "";
+    const message = input.value;
+    // Le message reste en place si l'annonce n'est pas partie.
+    if (!(await send(true))) return;
+    if (input.value === message) input.value = "";
+    if (announceDraft.message === message) announceDraft.message = "";
   });
   const chime = el("button", { type: "button", class: "ghost small", text: "Carillon seul" });
   chime.addEventListener("click", () => { if (speakers.length > 0) send(false); });
@@ -836,16 +838,19 @@ function alarmPanelTile(state) {
 
 // ----- Listes et agenda
 
-/** Un petit formulaire « texte + bouton » (ajouter un élément…). */
+/** Un petit formulaire « texte + bouton » (ajouter un élément…). Le texte
+ *  n'est effacé que si `onSubmit` ne renvoie pas false : un ordre qui n'est
+ *  pas parti laisse le texte en place, pour réessayer. */
 function addForm(placeholder, label, onSubmit, extra = []) {
   const input = el("input", { type: "text", maxlength: "200", placeholder, "aria-label": placeholder, required: "" });
   const form = el("form", { class: "add-form" }, input, ...extra, el("button", { type: "submit", class: "action-button", text: label }));
-  form.addEventListener("submit", (event) => {
+  form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const text = input.value.trim();
     if (!text) return;
-    onSubmit(text, form);
-    input.value = "";
+    const sent = await onSubmit(text, form);
+    // (Sauf si on a déjà retapé autre chose entre-temps.)
+    if (sent !== false && input.value.trim() === text) input.value = "";
   });
   return form;
 }
@@ -986,13 +991,14 @@ function calendarTile(state) {
   const day = el("input", { type: "date", "aria-label": "Jour", required: "" });
   day.value = new Date(now - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
   const time = el("input", { type: "time", "aria-label": "Heure (vide : toute la journée)" });
-  const form = addForm("Nouveau rendez-vous…", "Ajouter", (summary) => {
-    if (!day.value) return;
+  const form = addForm("Nouveau rendez-vous…", "Ajouter", async (summary) => {
+    if (!day.value) return false;
     const data = time.value
       ? { start_date_time: `${day.value} ${time.value}` }
       : { start_date: day.value };
-    callService("calendar", "create_event", { entity_id: state.entity_id, summary, ...data });
-    time.value = "";
+    const sent = await callService("calendar", "create_event", { entity_id: state.entity_id, summary, ...data });
+    if (sent) time.value = "";
+    return sent;
   }, [el("div", { class: "add-when" }, day, time)]);
   return el(
     "div",

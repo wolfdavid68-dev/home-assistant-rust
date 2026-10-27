@@ -273,45 +273,54 @@ function onStateChanged({ entity_id, old_state, new_state }) {
 }
 
 // ---------------------------------------------------------------- Commandes
+/** Envoie un ordre. Renvoie true s'il est parti (ou attend sa validation),
+ *  false sinon : la raison est déjà dite à l'écran. */
 async function callService(domain, service, data) {
-  const response = await fetch(`/api/services/${domain}/${service}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token.get()}` },
-    body: JSON.stringify(data),
-  });
+  let response;
+  try {
+    response = await fetch(`/api/services/${domain}/${service}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token.get()}` },
+      body: JSON.stringify(data),
+    });
+  } catch {
+    flash("Serveur injoignable : l'ordre n'est pas parti.");
+    unmarkPending(data.entity_id);
+    return false;
+  }
+  if (response.ok && response.status !== 202) return true;
   if (response.status === 401) {
     token.clear();
     live.close();
     showLogin("Session expirée : reconnecte-toi.");
-  } else if (response.status === 403) {
-    const body = await response.json().catch(() => ({}));
+    return false;
+  }
+  const body = await response.json().catch(() => ({}));
+  unmarkPending(data.entity_id);
+  if (response.status === 403) {
     // Déverrouiller une porte : le serveur redemande le mot de passe.
     if (body.confirm === true) {
-      unmarkPending(data.entity_id);
       askConfirmation(() => callService(domain, service, data));
-      return;
+      return false;
     }
     flash(typeof body.error === "string" ? `${body.error}.` : "Ton compte ne permet pas cette commande.");
-    unmarkPending(data.entity_id);
   } else if (response.status === 202) {
     // Pièce protégée, heures calmes : l'ordre attend qu'un membre de la
     // famille le valide.
-    const body = await response.json().catch(() => ({}));
     flash(typeof body.message === "string" ? `${body.message}.` : "Ordre en attente de validation.");
-    unmarkPending(data.entity_id);
+    return true;
   } else if (response.status === 400) {
     // L'ordre ne convient pas à l'appareil (« consigne entre 7 et 30 ») :
     // le serveur l'a refusé avant de l'envoyer.
-    const body = await response.json().catch(() => ({}));
     flash(typeof body.error === "string" ? `${body.error}.` : "Commande refusée.");
-    unmarkPending(data.entity_id);
   } else if ([502, 503, 504].includes(response.status)) {
     // L'appareil a refusé, son intégration est en panne, ou il n'a pas
     // répondu : on le dit, plutôt que de laisser la tuile clignoter.
-    const body = await response.json().catch(() => ({}));
     flash(typeof body.error === "string" ? `${body.error}.` : "L'appareil n'a pas répondu.");
-    unmarkPending(data.entity_id);
+  } else {
+    flash(`La commande a échoué (erreur ${response.status}).`);
   }
+  return false;
 }
 
 // La tuile « clignote » jusqu'à ce que l'appareil confirme (ou 5 s au plus).
