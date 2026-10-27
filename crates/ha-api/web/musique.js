@@ -58,9 +58,9 @@ function loadCover(path) {
   if (music.covers.has(path)) return Promise.resolve(music.covers.get(path));
   if (music.loading.has(path)) return music.loading.get(path);
   if (Date.now() - (music.failed.get(path) ?? -Infinity) < MUSIC_COVER_RETRY) return Promise.resolve(null);
-  const promise = fetch(path, { headers: { Authorization: `Bearer ${token.get()}` } })
+  const promise = authFetch(path)
     .then(async (response) => {
-      if (!response.ok) throw new Error(String(response.status));
+      if (!response?.ok) throw new Error(String(response?.status ?? "réseau"));
       const url = URL.createObjectURL(await response.blob());
       music.covers.set(path, url);
       music.failed.delete(path);
