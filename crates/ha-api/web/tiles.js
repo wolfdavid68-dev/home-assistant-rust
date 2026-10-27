@@ -670,7 +670,8 @@ function announceTile(state) {
     const message = input.value;
     // Le message reste en place si l'annonce n'est pas partie.
     if (!(await send(true))) return;
-    if (input.value === message) input.value = "";
+    const field = liveField(input);
+    if (field.value === message) field.value = "";
     if (announceDraft.message === message) announceDraft.message = "";
   });
   const chime = el("button", { type: "button", class: "ghost small", text: "Carillon seul" });
@@ -848,7 +849,8 @@ function addForm(placeholder, label, onSubmit, extra = []) {
     if (!text) return;
     const sent = await onSubmit(text, form);
     // (Sauf si on a déjà retapé autre chose entre-temps.)
-    if (sent !== false && input.value.trim() === text) input.value = "";
+    const field = liveField(input);
+    if (sent !== false && field.value.trim() === text) field.value = "";
   });
   return form;
 }

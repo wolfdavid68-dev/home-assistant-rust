@@ -261,8 +261,8 @@ function onStateChanged({ entity_id, old_state, new_state }) {
   scheduleHome();
   // La tuile est dans les sections, et peut-être aussi dans la fenêtre d'une
   // pièce (house.js) : on remplace chacune.
-  const existing = document.querySelectorAll(`:is(.sections, .room-body) #${CSS.escape(tileId(entity_id))}`);
-  if (existing.length > 0 && new_state) for (const tile of existing) tile.replaceWith(renderTile(new_state));
+  const existing = shownTiles(entity_id);
+  if (existing.length > 0 && new_state) updateTiles(entity_id);
   else if (!old_state || !new_state) {
     // Entité ajoutée ou supprimée : on redessine tout. Une entité sans tuile
     // (rangée dans une pièce du tableau, une scène…) n'a rien à remplacer :
@@ -270,6 +270,78 @@ function onStateChanged({ entity_id, old_state, new_state }) {
     renderAll();
     refreshEntityList();
   }
+}
+
+// ---------------------------------------------------------------- Tuile en main
+// Un doigt posé sur une tuile (un curseur qu'on glisse) : elle n'est pas
+// remplacée sous lui, mais quand il se lève. Le champ où l'on écrit, lui,
+// passe dans la nouvelle tuile avec son texte : une liste de courses se
+// met à jour pendant qu'on tape l'article suivant.
+const tileHold = { pointer: null, waiting: new Set(), moved: new WeakMap() };
+const TILE_FIELDS = "button, input, select, textarea";
+const TYPED_INPUT = /^(text|search|number|email|url|tel|password|date|time|datetime-local)$/;
+
+function shownTiles(entityId) {
+  return document.querySelectorAll(`:is(.sections, .room-body) #${CSS.escape(tileId(entityId))}`);
+}
+
+function updateTiles(entityId) {
+  const state = entities.get(entityId);
+  if (!state) return;
+  for (const tile of shownTiles(entityId)) {
+    if (tileHold.pointer && tile.contains(tileHold.pointer)) tileHold.waiting.add(entityId);
+    else replaceTile(tile, state);
+  }
+}
+
+/** Remplace une tuile ; le focus (et le texte en cours) passe au même champ
+ *  de la nouvelle. */
+function replaceTile(tile, state) {
+  const next = renderTile(state);
+  const focused = tile.contains(document.activeElement) ? document.activeElement : null;
+  const index = focused ? [...tile.querySelectorAll(TILE_FIELDS)].indexOf(focused) : -1;
+  const twin = index < 0 ? null : next.querySelectorAll(TILE_FIELDS)[index];
+  const same = twin && twin.tagName === focused.tagName && twin.type === focused.type;
+  const typed = same && (focused.tagName === "TEXTAREA" || TYPED_INPUT.test(focused.type));
+  if (typed) {
+    twin.value = focused.value;
+    tileHold.moved.set(focused, twin);
+  }
+  tile.replaceWith(next);
+  if (!same) return;
+  twin.focus({ preventScroll: true });
+  if (typed) {
+    try {
+      twin.setSelectionRange(focused.selectionStart, focused.selectionEnd);
+    } catch {
+      // Champ sans curseur de texte (nombre, date) : le focus suffit.
+    }
+  }
+}
+
+/** Le champ qui a pris la place de `field` dans une tuile redessinée
+ *  (ou `field` lui-même) : c'est lui qu'on vide après un envoi. */
+function liveField(field) {
+  let node = field;
+  while (!node.isConnected && tileHold.moved.has(node)) node = tileHold.moved.get(node);
+  return node;
+}
+
+addEventListener("pointerdown", (event) => {
+  tileHold.pointer = event.target instanceof Element ? event.target : null;
+}, { capture: true, passive: true });
+for (const type of ["pointerup", "pointercancel"]) {
+  addEventListener(type, () => {
+    tileHold.pointer = null;
+    // Un peu plus tard : le clic et le `change` du même geste visent encore
+    // l'ancienne tuile.
+    setTimeout(() => {
+      if (tileHold.pointer) return;
+      const waiting = [...tileHold.waiting];
+      tileHold.waiting.clear();
+      for (const id of waiting) updateTiles(id);
+    }, 50);
+  }, { capture: true, passive: true });
 }
 
 // ---------------------------------------------------------------- Commandes
