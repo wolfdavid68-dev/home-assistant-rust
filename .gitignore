@@ -9,8 +9,24 @@ secrets.yaml
 *.db-*
 *.pem
 *.key
+# Le certificat de l'autorité locale (HTTPS), rangé à côté de la clé.
+*.crt
 
-# Automatisations locales (propres à ta maison)
+# Le dossier de configuration et les secrets de compose.yaml
+# (`./config:/config`, `./secrets/…`).
+/config/
+/secrets/
+
+# Les fichiers de ta maison. À la racine, tout YAML est privé, sauf ceux du
+# dépôt (compose.yaml et les exemples) : un nouveau fichier lu par ha-server,
+# ou compose.override.yaml, est ignoré d'office. Un nouvel exemple doit
+# s'appeler `*.example.yaml`.
+/*.yaml
+/*.yml
+!/compose.yaml
+!/*.example.yaml
+
+# Les mêmes noms, où qu'ils soient dans le dépôt.
 automations.yaml
 areas.yaml
 scripts.yaml
@@ -19,6 +35,23 @@ alexa.yaml
 thermostats.yaml
 persons.yaml
 inputs.yaml
+guard.yaml
+calendriers.yaml
+rappels.yaml
+delestage.yaml
+modeles.yaml
+simulation.yaml
+protection-solaire.yaml
+derived.yaml
+energy.yaml
+
+# Les images du dessin de la maison, si tu les prépares dans ce dossier (le
+# programme les range dans sa base, pas ici). Les captures de la
+# documentation vivent dans docs/images/.
+/*.png
+/*.jpg
+/*.jpeg
+/*.webp
 
 # Sauvegardes de la base (contiennent les jetons Hue et Somfy)
 sauvegardes/
