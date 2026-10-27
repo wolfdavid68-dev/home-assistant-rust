@@ -230,12 +230,14 @@ fn parse_url(name: &str, raw: &str) -> Result<url::Url, ConfigError> {
 
 /// Lit `calendriers.yaml` ; un fichier absent ne donne aucun agenda.
 pub fn load(path: &Path) -> Result<Vec<RemoteCalendar>, ConfigError> {
-    match std::fs::read_to_string(path) {
-        Ok(text) => parse_config(&text),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
-        Err(source) => Err(ConfigError::Read {
+    match ha_core::config_file::read(path, ha_core::config_file::DEFAULT_MAX) {
+        Ok(Some(text)) => parse_config(&text),
+        Ok(None) => Ok(Vec::new()),
+        Err(error) => Err(ConfigError::Read {
             path: path.display().to_string(),
-            source,
+            // Concept Rust : `.into()` range « fichier trop gros » dans une
+            // erreur d'entrée-sortie, avec son message.
+            source: error.into(),
         }),
     }
 }

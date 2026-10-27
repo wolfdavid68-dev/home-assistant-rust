@@ -114,15 +114,12 @@ fn default_tolerance() -> f64 {
 
 /// Lit le fichier. Un fichier absent donne une liste vide.
 pub fn load(path: &Path) -> Result<Vec<Thermostat>, ConfigError> {
-    let metadata = match std::fs::metadata(path) {
-        Ok(metadata) => metadata,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => return Err(error.into()),
+    let Some(text) = ha_core::config_file::read(path, MAX_FILE_SIZE)
+        .map_err(|error| error.into_error(ConfigError::TooLarge))?
+    else {
+        return Ok(Vec::new());
     };
-    if metadata.len() > MAX_FILE_SIZE {
-        return Err(ConfigError::TooLarge);
-    }
-    parse(&std::fs::read_to_string(path)?)
+    parse(&text)
 }
 
 /// Lit et vérifie le contenu du fichier.

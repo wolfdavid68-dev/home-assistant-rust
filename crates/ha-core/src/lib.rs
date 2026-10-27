@@ -7,6 +7,7 @@
 pub mod backoff;
 pub mod checks;
 pub mod commands;
+pub mod config_file;
 pub mod covers;
 mod entity_id;
 mod error;

@@ -357,9 +357,11 @@ pub fn parse_alerts(text: &str) -> Result<Vec<Alert>, String> {
 /// # Errors
 /// Le fichier existe mais ne peut pas être lu, ou il est faux.
 pub fn load(path: &Path) -> Result<Vec<Alert>, String> {
-    match std::fs::read_to_string(path) {
-        Ok(text) => parse_alerts(&text).map_err(|error| format!("{} : {error}", path.display())),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+    match ha_core::config_file::read(path, ha_core::config_file::DEFAULT_MAX) {
+        Ok(Some(text)) => {
+            parse_alerts(&text).map_err(|error| format!("{} : {error}", path.display()))
+        }
+        Ok(None) => Ok(Vec::new()),
         Err(error) => Err(format!(
             "lecture de {} impossible : {error}",
             path.display()
