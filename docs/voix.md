@@ -105,9 +105,9 @@ Dans [compose.yaml](../compose.yaml), enlève les « # » :
 
 1. du service **`piper`** et du volume **`piper-voix`** (la voix qui répond, aussi celle des
    [annonces Sonos](sonos.md)) ;
-2. du service **`ecoute`** (Parakeet et sherpa-onnx) ;
-3. des réglages **`HA_PIPER: tcp://piper:10200`** et **`HA_ECOUTE: ws://127.0.0.1:10350`** de
-   `ha-server`.
+2. du service **`ecoute`** (Parakeet et sherpa-onnx) et du réseau **`ecoute`** tout en bas ;
+3. des réglages **`HA_PIPER: tcp://piper:10200`** et **`HA_ECOUTE: ws://ecoute:10350`**, et des
+   **`networks`** (`default` et `ecoute`) de `ha-server`.
 
 Puis :
 
@@ -119,12 +119,18 @@ docker compose up -d
 L'écoute est construite sur ta machine par
 [packaging/docker/ecoute/Dockerfile](../packaging/docker/ecoute/Dockerfile), avec **les mêmes
 fichiers et les mêmes empreintes** que `installer.sh --voix` : un fichier modifié arrête la
-construction. Elle **partage le réseau de `ha-server`** (`network_mode: "service:ha-server"`) : lui
-seul la joint, sur `127.0.0.1`, et aucun port n'est ouvert. Elle tourne sans privilège, sans droit
-d'écrire, avec 1,5 Go de mémoire au plus. Elle en prend environ **820 Mo**, et Piper **130 Mo**.
+construction. Elle vit dans **un réseau interne à elle** (`internal: true`), que seul `ha-server`
+rejoint : lui seul la joint, par son nom (`ws://ecoute:10350`), aucun port n'est ouvert et elle n'a
+pas accès à Internet. Elle tourne sans privilège, sans droit d'écrire, avec 1,5 Go de mémoire au
+plus. Elle en prend environ **820 Mo**, et Piper **130 Mo**.
 
-**Pas avec `network_mode: host`** (le réglage d'[Alexa](alexa.md)) : l'écoute serait alors
-ouverte à tout le réseau de la maison, sans mot de passe. Garde l'une ou l'autre.
+Avant, l'écoute partageait le réseau de `ha-server` (`network_mode: "service:ha-server"`, joint
+sur `127.0.0.1`) : à chaque nouveau conteneur `ha-server` (nouvelle image, `docker compose up`),
+elle s'arrêtait et ne repartait pas toute seule. Si tu as encore cette forme, remplace-la par
+celle-ci.
+
+**Pas avec `network_mode: host`** (le réglage d'[Alexa](alexa.md)) : `ha-server` n'est alors plus
+dans les réseaux de Docker et ne joint pas l'écoute. Garde l'une ou l'autre.
 
 **Le micro veut toujours du HTTPS** : `HA_TLS: "on"` ([étape 79](https-maison.md)), ou un relais
 qui fournit le HTTPS, comme `tailscale serve` ([étape 7](etape-7-deploiement.md)), réservé à tes
@@ -165,7 +171,8 @@ pour chaque phrase : quelques secondes de plus, le temps de relire le modèle.
 
 | Réglage | Rôle |
 |---------|------|
-| `HA_ECOUTE=ws://127.0.0.1:10350` | Le service d'écoute (mis par `--voix`, ou le service `ecoute` avec Docker) ; seulement sur cette machine |
+| `HA_ECOUTE=ws://127.0.0.1:10350` | Le service d'écoute (mis par `--voix`) ; seulement sur cette machine |
+| `HA_ECOUTE=ws://ecoute:10350` | Le service `ecoute` avec Docker : un nom de service sans point, joint par le réseau interne de Docker |
 | `HA_ECOUTE=/chemin/du/dossier` | Ou le programme, lancé pour chaque phrase |
 | `HA_PIPER` | La voix qui répond ([étape 73](sonos.md)) ; sans elle, la réponse est seulement écrite |
 
@@ -174,7 +181,9 @@ pour chaque phrase : quelques secondes de plus, le temps de relire le modèle.
 - **La voix ne quitte pas la maison** : Parakeet et Piper tournent sur le mini-PC.
 - **Le service d'écoute n'a pas de mot de passe**, alors il est **fermé au réseau** : systemd ne
   laisse passer que le mini-PC lui-même (`IPAddressAllow=localhost`), et le serveur refuse une
-  autre adresse que `127.0.0.1`. Il tourne sous un compte jetable, sans droit d'écrire nulle part
+  autre adresse que `127.0.0.1` ou un nom de service Docker (sans point : jamais un nom de domaine
+  ni l'adresse IP d'une autre machine). Avec Docker, l'écoute est dans un réseau interne que seul
+  `ha-server` rejoint. Il tourne sous un compte jetable, sans droit d'écrire nulle part
   (note 1,1 de `systemd-analyze security`), avec 1,5 Go de mémoire au plus.
 - **Le son est vérifié avant d'être écouté** : un vrai WAV, 16 bits, mono, 16 000 Hz, 15 s au plus
   (refusé au-delà de 473 Kio). Un silence n'est même pas envoyé à l'écoute.

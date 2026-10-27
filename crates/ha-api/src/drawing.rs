@@ -17,15 +17,27 @@
 //! premiers octets ; un SVG (qui peut contenir du script) ou un HTML déguisé
 //! en image est refusé. Les images repartent avec `nosniff` et la politique
 //! de sécurité de toutes les réponses.
+//!
+//! Cache : comme les fichiers du tableau de bord (voir `web.rs`), la page
+//! demande chaque image à une adresse versionnée,
+//! `/api/home/images/jour?v=19a2b3c4d5e6f`. La version (donnée par
+//! `GET /api/home/drawing`) change à chaque enregistrement de l'image : à
+//! cette adresse, le contenu ne change jamais, la tablette le garde sans
+//! redemander (`immutable`). Toujours `private` : seul le navigateur garde
+//! l'image, jamais un relais partagé, et il faut le jeton pour la lire la
+//! première fois. Sans version (ou avec une ancienne), l'image est revérifiée
+//! à chaque fois, mais l'empreinte (`ETag`, le SHA-256 du contenu) permet de
+//! répondre `304` sans la renvoyer.
 
 use std::collections::{BTreeMap, HashSet};
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::Json;
 use axum::body::Bytes;
 use axum::extract::{ConnectInfo, Path, State};
-use axum::http::{HeaderValue, StatusCode, header};
+use axum::http::{HeaderMap, HeaderValue, StatusCode, Uri, header};
 use axum::response::{IntoResponse, Response};
 use ha_auth::{Permission, User};
 use ha_core::EntityId;
@@ -38,6 +50,7 @@ use crate::error::ApiError;
 use crate::json::format_timestamp;
 use crate::rest::{audit, parse_json};
 use crate::roles;
+use crate::web;
 
 /// Taille maximale d'une image : de quoi garder un beau dessin, pas une
 /// photo de 20 mégapixels.
@@ -47,6 +60,11 @@ pub(crate) const MAX_IMAGE_SIZE: usize = 3 * 1024 * 1024;
 /// demande vite une trentaine.
 const MAX_IMAGES: usize = 64;
 const MAX_NAME_CHARS: usize = 40;
+/// Une image demandée à l'adresse de sa version : gardée par le navigateur
+/// (et lui seul : `private`) sans jamais redemander.
+const KEEP_FOREVER: &str = "private, max-age=31536000, immutable";
+/// Sans la bonne version : revérifiée à chaque fois (avec l'empreinte).
+const REVALIDATE: &str = "private, no-cache";
 /// Les calques d'un onglet : une lumière éteinte, un volet fermé… chacun le
 /// sien.
 const MAX_LAYERS: usize = 40;
@@ -637,6 +655,17 @@ async fn stored_config(state: &ApiState) -> Result<Drawing, ApiError> {
     }))
 }
 
+/// La version d'une image, pour son adresse : le moment de son dernier
+/// enregistrement, en microsecondes (hexadécimal). Il change à chaque
+/// envoi, donc l'adresse aussi ; la lire ne demande pas de lire l'image.
+fn image_version(updated_at: SystemTime) -> String {
+    let micros = updated_at
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_micros();
+    format!("{micros:x}")
+}
+
 async fn image_names(state: &ApiState) -> Result<Vec<ha_storage::HomeImageInfo>, ApiError> {
     state
         .store
@@ -660,6 +689,8 @@ pub(crate) async fn get(
                 "content_type": image.content_type,
                 "size": image.size,
                 "updated_at": format_timestamp(image.updated_at),
+                // À ajouter à l'adresse : `?v=…` (voir l'en-tête du module).
+                "version": image_version(image.updated_at),
             })
         })
         .collect();
@@ -716,10 +747,14 @@ pub(crate) async fn put(
 }
 
 /// `GET /api/home/images/{name}` : une image, pour tout compte connecté.
+/// À l'adresse de sa version (`?v=…`), gardée pour toujours ; sinon
+/// revérifiée, avec un `304` si le navigateur a déjà la même.
 pub(crate) async fn get_image(
     State(state): State<Arc<ApiState>>,
     _auth: Authenticated,
     Path(name): Path<String>,
+    uri: Uri,
+    headers: HeaderMap,
 ) -> Result<Response, ApiError> {
     check_name(&name)?;
     let image = state
@@ -730,17 +765,28 @@ pub(crate) async fn get_image(
         .ok_or(ApiError::NotFound)?;
     // Relue dans la base : on revérifie quand même le type.
     let content_type = image_type(&image.data).ok_or(ApiError::NotFound)?;
-    Ok((
-        [
-            (header::CONTENT_TYPE, HeaderValue::from_static(content_type)),
-            (
-                header::CACHE_CONTROL,
-                HeaderValue::from_static("private, no-cache"),
-            ),
-        ],
-        image.data,
-    )
-        .into_response())
+    // Une ancienne version (une page restée ouverte) : revérifiée, pour ne
+    // pas garder pour toujours un contenu sous une adresse qui n'est pas la
+    // sienne.
+    let forever =
+        web::asked_version(&uri).is_some_and(|version| version == image_version(image.updated_at));
+    let etag = web::etag(&format!("\"{}\"", web::fingerprint(&image.data)));
+    let mut response = if web::still_fresh(&headers, &etag) {
+        StatusCode::NOT_MODIFIED.into_response()
+    } else {
+        (
+            [(header::CONTENT_TYPE, HeaderValue::from_static(content_type))],
+            image.data,
+        )
+            .into_response()
+    };
+    let out = response.headers_mut();
+    out.insert(header::ETAG, etag);
+    out.insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static(if forever { KEEP_FOREVER } else { REVALIDATE }),
+    );
+    Ok(response)
 }
 
 /// `PUT /api/home/images/{name}` : le corps est l'image elle-même.

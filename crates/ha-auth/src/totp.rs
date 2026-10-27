@@ -13,7 +13,7 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use hmac::{Hmac, KeyInit, Mac};
+use hmac::{Hmac, Mac};
 use sha1::Sha1;
 use zeroize::Zeroizing;
 
@@ -75,7 +75,7 @@ pub fn step_at(now: SystemTime) -> u64 {
 /// Le code d'un créneau (RFC 4226, « HOTP »).
 #[must_use]
 pub fn code_at(secret: &[u8], step: u64) -> u32 {
-    let Ok(mut mac) = <Hmac<Sha1> as KeyInit>::new_from_slice(secret) else {
+    let Ok(mut mac) = <Hmac<Sha1> as Mac>::new_from_slice(secret) else {
         // HMAC accepte des clés de toute taille : ce cas n'arrive pas.
         return u32::MAX;
     };

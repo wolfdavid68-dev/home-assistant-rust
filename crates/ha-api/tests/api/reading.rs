@@ -540,6 +540,139 @@ async fn the_house_drawing_is_assembled_from_checked_images() {
     assert!(actions.contains(&"drawing_image"), "{actions:?}");
 }
 
+/// Lit une image du dessin avec des en-têtes choisis ; renvoie la réponse.
+async fn get_image(
+    app: &TestApp,
+    uri: &str,
+    token: Option<&str>,
+    if_none_match: Option<&str>,
+) -> axum::response::Response {
+    let mut request = Request::builder().uri(uri);
+    if let Some(token) = token {
+        request = request.header(header::AUTHORIZATION, format!("Bearer {token}"));
+    }
+    if let Some(etag) = if_none_match {
+        request = request.header(header::IF_NONE_MATCH, etag);
+    }
+    app.router()
+        .oneshot(request.body(Body::empty()).unwrap())
+        .await
+        .unwrap()
+}
+
+fn header_of(response: &axum::response::Response, name: header::HeaderName) -> String {
+    response
+        .headers()
+        .get(name)
+        .map(|value| value.to_str().unwrap().to_owned())
+        .unwrap_or_default()
+}
+
+/// La version de l'image `name`, donnée par `GET /api/home/drawing`.
+async fn image_version(app: &TestApp, token: &str, name: &str) -> String {
+    let (status, body) = app
+        .request("GET", "/api/home/drawing", Some(token), None)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let image = body["images"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|image| image["name"] == name)
+        .unwrap();
+    image["version"].as_str().unwrap().to_owned()
+}
+
+/// Les images du dessin restent dans la tablette d'un rechargement à
+/// l'autre : adresse versionnée gardée pour toujours, empreinte et `304`
+/// sinon. Jamais sans jeton, et jamais dans un cache partagé.
+#[tokio::test]
+async fn drawing_images_are_kept_by_the_browser() {
+    const FOREVER: &str = "private, max-age=31536000, immutable";
+    const REVALIDATE: &str = "private, no-cache";
+    let app = TestApp::new().await;
+    let token = app.login().await;
+    let (status, _, _) = app
+        .send_bytes("PUT", "/api/home/images/jour", &token, png(b"un"))
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let first = image_version(&app, &token, "jour").await;
+    assert_ne!(first, "");
+    let versioned = format!("/api/home/images/jour?v={first}");
+
+    // À l'adresse de sa version : gardée pour toujours, par le navigateur seul.
+    let response = get_image(&app, &versioned, Some(&token), None).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(header_of(&response, header::CACHE_CONTROL), FOREVER);
+    let etag = header_of(&response, header::ETAG);
+    assert!(
+        etag.len() == 34 && etag.starts_with('"') && etag.ends_with('"'),
+        "{etag}"
+    );
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(body.as_ref(), png(b"un").as_slice());
+
+    // Sans version, ou avec une ancienne : revérifiée, même empreinte.
+    for uri in ["/api/home/images/jour", "/api/home/images/jour?v=0"] {
+        let response = get_image(&app, uri, Some(&token), None).await;
+        assert_eq!(response.status(), StatusCode::OK, "{uri}");
+        assert_eq!(header_of(&response, header::CACHE_CONTROL), REVALIDATE);
+        assert_eq!(header_of(&response, header::ETAG), etag);
+    }
+
+    // Le navigateur a déjà la même : `304`, sans l'image.
+    let again = get_image(&app, "/api/home/images/jour", Some(&token), Some(&etag)).await;
+    assert_eq!(again.status(), StatusCode::NOT_MODIFIED);
+    assert_eq!(header_of(&again, header::ETAG), etag);
+    assert_eq!(header_of(&again, header::CACHE_CONTROL), REVALIDATE);
+    let body = axum::body::to_bytes(again.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert!(body.is_empty());
+
+    // Sans jeton (ou avec un faux) : refusé, même avec la bonne empreinte.
+    let fake = format!("hat_{}", "a".repeat(64));
+    for token in [None, Some(fake.as_str())] {
+        let response = get_image(&app, &versioned, token, Some(&etag)).await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert!(response.headers().get(header::ETAG).is_none());
+    }
+
+    // L'image change : nouvelle version, nouvelle empreinte.
+    let (status, _, _) = app
+        .send_bytes("PUT", "/api/home/images/jour", &token, png(b"deux"))
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let second = image_version(&app, &token, "jour").await;
+    assert_ne!(second, first);
+    let response = get_image(&app, "/api/home/images/jour", Some(&token), Some(&etag)).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let new_etag = header_of(&response, header::ETAG);
+    assert_ne!(new_etag, etag);
+    // L'ancienne adresse n'est plus gardée pour toujours.
+    let response = get_image(&app, &versioned, Some(&token), None).await;
+    assert_eq!(header_of(&response, header::CACHE_CONTROL), REVALIDATE);
+    let response = get_image(
+        &app,
+        &format!("/api/home/images/jour?v={second}"),
+        Some(&token),
+        None,
+    )
+    .await;
+    assert_eq!(header_of(&response, header::CACHE_CONTROL), FOREVER);
+
+    // Renvoyée à l'identique : nouvelle version, mais même empreinte.
+    let (status, _, _) = app
+        .send_bytes("PUT", "/api/home/images/jour", &token, png(b"deux"))
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    assert_ne!(image_version(&app, &token, "jour").await, second);
+    let response = get_image(&app, "/api/home/images/jour", Some(&token), Some(&new_etag)).await;
+    assert_eq!(response.status(), StatusCode::NOT_MODIFIED);
+}
+
 /// La photo de la sonnette (étape 82) : servie à la famille, jamais gardée par
 /// le navigateur ; un invité ne la voit pas.
 #[tokio::test]
