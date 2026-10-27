@@ -15,6 +15,9 @@ use crate::store::{Store, from_micros, to_micros};
 pub struct HomeImage {
     pub content_type: String,
     pub data: Vec<u8>,
+    /// Change à chaque enregistrement : l'API en tire la version de
+    /// l'adresse de l'image, que le navigateur garde en cache.
+    pub updated_at: SystemTime,
 }
 
 /// Ce qu'on sait d'une image sans la lire.
@@ -48,12 +51,20 @@ impl Store {
 
     /// Une image.
     pub async fn home_image(&self, name: &str) -> Result<Option<HomeImage>, StorageError> {
-        let row: Option<(String, Vec<u8>)> =
-            sqlx::query_as("SELECT content_type, data FROM home_images WHERE name = ?1")
-                .bind(name)
-                .fetch_optional(self.pool())
-                .await?;
-        Ok(row.map(|(content_type, data)| HomeImage { content_type, data }))
+        let row: Option<(String, Vec<u8>, i64)> = sqlx::query_as(
+            "SELECT content_type, data, updated_at FROM home_images WHERE name = ?1",
+        )
+        .bind(name)
+        .fetch_optional(self.pool())
+        .await?;
+        row.map(|(content_type, data, updated_at)| {
+            Ok(HomeImage {
+                content_type,
+                data,
+                updated_at: from_micros(updated_at)?,
+            })
+        })
+        .transpose()
     }
 
     /// Ajoute ou remplace une image.
@@ -144,6 +155,7 @@ mod tests {
         let list = store.home_images().await.unwrap();
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].size, 6);
+        assert_eq!(list[0].updated_at, image.updated_at);
 
         assert!(store.delete_home_image("jour").await.unwrap());
         assert!(!store.delete_home_image("jour").await.unwrap());

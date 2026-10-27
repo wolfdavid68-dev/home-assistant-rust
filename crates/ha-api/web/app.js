@@ -463,6 +463,8 @@ function looseStates(states = [...entities.values()]) {
 const view = { room: null };
 
 function renderAll() {
+  // Tout redessiner : les panneaux du tableau aussi, même sans changement.
+  forgetPanels();
   renderHome();
   const container = $("#sections");
   // Par nom, sauf la météo, la maison et les personnes, en tête de leur section.

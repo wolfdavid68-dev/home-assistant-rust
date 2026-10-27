@@ -143,7 +143,7 @@ use ha_storage::{Recorder, Store};
 use ha_sun::SunTracker;
 use serde_json::json;
 use tokio::sync::broadcast::error::RecvError;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 use tracing_subscriber::EnvFilter;
 
 // Concept Rust : `pub(crate) use` remet ces fonctions à la racine du
@@ -408,13 +408,21 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     let store = open_store().await?;
     info!("base de données : {db_path}");
 
-    // On oublie l'historique et le journal d'audit trop anciens.
-    let purged = store.purge_history(days_ago(history_days)).await?;
-    info!("historique conservé : {history_days} jours ({purged} lignes anciennes supprimées)");
-    // Le journal de bord est gardé aussi longtemps que l'historique.
-    store.purge_logbook(days_ago(history_days)).await?;
-    let purged = store.purge_audit(days_ago(audit_days)).await?;
-    info!("journal d'audit conservé : {audit_days} jours ({purged} lignes anciennes supprimées)");
+    // On oublie l'historique et le journal d'audit trop anciens : maintenant,
+    // puis chaque jour (la tâche `purge`, plus bas).
+    let retention = ha_storage::Retention {
+        history_days,
+        audit_days,
+    };
+    let purged = store.purge_expired(retention, SystemTime::now()).await?;
+    info!(
+        "historique conservé : {history_days} jours ({} lignes anciennes supprimées)",
+        purged.history
+    );
+    info!(
+        "journal d'audit conservé : {audit_days} jours ({} lignes anciennes supprimées)",
+        purged.audit
+    );
     // Le journal a-t-il été modifié pendant que le serveur était arrêté ?
     match store.verify_audit().await? {
         ha_storage::AuditCheck::Intact { entries } => {
@@ -449,13 +457,18 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     core.guard.configure(guard, local_minute);
     let restored = store.restore_into(&core.states).await?;
     info!("{restored} états restaurés depuis la base");
+    // Le détail, seulement en mode debug (`RUST_LOG=debug`) : des centaines
+    // de lignes sinon, à chaque démarrage.
     for state in core.states.all() {
-        info!("  {} = {} (restauré)", state.entity_id(), state.state());
+        debug!("  {} = {} (restauré)", state.entity_id(), state.state());
     }
 
     let recorder = Recorder::start(store.clone(), Arc::clone(&core));
     // Les statistiques long terme : un résumé par heure, gardé des années.
     let statistics = ha_storage::Statistics::start(store.clone(), history_days);
+    // La purge quotidienne : même allumé des mois, le serveur garde une
+    // base de taille stable.
+    let purge = ha_storage::Purge::start(store.clone(), retention);
     // Le journal de bord, avant tout ce qui peut agir sur la maison.
     let logbook = ha_logbook::Logbook::start(store.clone(), Arc::clone(&core));
     if let Err(error) = store
@@ -914,6 +927,7 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     }
     logbook.stop().await;
     statistics.stop().await;
+    purge.stop().await;
     if let Some(teleinfo) = teleinfo {
         teleinfo.stop().await;
     }
@@ -1002,13 +1016,6 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         return Err("l'API s'est arrêtée".into());
     }
     Ok(())
-}
-
-/// Date d'il y a `days` jours.
-fn days_ago(days: u32) -> SystemTime {
-    SystemTime::now()
-        .checked_sub(Duration::from_secs(u64::from(days) * 24 * 3600))
-        .unwrap_or(SystemTime::UNIX_EPOCH)
 }
 
 /// Le client Iglou du compte : en HTTPS, sauf le faux Firebase des essais.

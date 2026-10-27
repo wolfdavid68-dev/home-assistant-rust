@@ -4,6 +4,7 @@
 //! - [`Store`] : la base de données elle-même.
 //! - [`Recorder`] : une tâche abonnée au bus d'événements qui écrit chaque
 //!   changement d'état dans la base.
+//! - [`Purge`] : une tâche qui supprime chaque jour les lignes trop anciennes.
 //! - [`AuditRecord`] : journal d'audit signé (qui a fait quoi, quand, d'où).
 //! - [`SecretKey`] : chiffrement des secrets rangés dans la base (jetons des
 //!   appareils), avec une clé gardée dans un fichier séparé.
@@ -19,6 +20,7 @@ mod logbook;
 mod mail;
 mod push;
 mod recorder;
+mod retention;
 mod secrets;
 mod smartthings;
 mod statistics;
@@ -35,6 +37,7 @@ pub use logbook::{LogbookEntry, MAX_LOGBOOK_LIMIT, NewLogbookEntry};
 pub use mail::MailAccount;
 pub use push::{NewPushSubscription, PushSubscriptionInfo, PushTarget, VapidKeys};
 pub use recorder::Recorder;
+pub use retention::{Purge, Purged, Retention};
 pub use secrets::{SecretKey, is_sealed};
 pub use smartthings::{SmartThingsAccount, SmartThingsTokens};
 pub use statistics::{

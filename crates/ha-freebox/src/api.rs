@@ -14,7 +14,7 @@
 use std::fmt::Write as _;
 use std::time::Duration;
 
-use hmac::{Hmac, KeyInit, Mac};
+use hmac::{Hmac, Mac};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
@@ -204,7 +204,7 @@ pub async fn authorization_status(
 /// Réponse au défi : `HMAC-SHA1(jeton, défi)`, en hexadécimal.
 #[must_use]
 pub fn challenge_password(app_token: &str, challenge: &str) -> String {
-    let Ok(mut mac) = <Hmac<Sha1> as KeyInit>::new_from_slice(app_token.as_bytes()) else {
+    let Ok(mut mac) = <Hmac<Sha1> as Mac>::new_from_slice(app_token.as_bytes()) else {
         // HMAC accepte des clés de toute taille : ce cas n'arrive pas.
         return String::new();
     };
