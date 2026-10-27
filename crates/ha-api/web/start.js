@@ -79,7 +79,8 @@ function hideSaver(event) {
 // touches : rien ne s'allume sous le doigt.
 const WAKE_MS = 700;
 const WAKE_FADE_MS = 300;
-const wake = { timer: 0, ring: null };
+// Pas `wake` : voix.js a le sien, et les scripts partagent leurs noms.
+const saverWake = { timer: 0, ring: null };
 
 /** Une copie muette du dessin, sans id en double, pour la durée de la vague. */
 function wakeGhost(stage) {
@@ -107,13 +108,13 @@ function wakeWave(event, stage) {
   screen.style.setProperty("--wake-end", `${reach}px`);
   screen.classList.add(calm ? "waking-calm" : "waking");
   if (!calm) {
-    wake.ring = el("span", { class: "wake-ring", "aria-hidden": "true" });
-    wake.ring.style.setProperty("--wake-x", `${x}px`);
-    wake.ring.style.setProperty("--wake-y", `${y}px`);
-    wake.ring.style.setProperty("--wake-end", `${reach}px`);
-    document.body.append(wake.ring);
+    saverWake.ring = el("span", { class: "wake-ring", "aria-hidden": "true" });
+    saverWake.ring.style.setProperty("--wake-x", `${x}px`);
+    saverWake.ring.style.setProperty("--wake-y", `${y}px`);
+    saverWake.ring.style.setProperty("--wake-end", `${reach}px`);
+    document.body.append(saverWake.ring);
   }
-  wake.timer = setTimeout(() => {
+  saverWake.timer = setTimeout(() => {
     screen.hidden = true;
     wakeStop();
   }, calm ? WAKE_FADE_MS : WAKE_MS);
@@ -121,12 +122,12 @@ function wakeWave(event, stage) {
 
 /** Fin (ou abandon) de la vague : plus de copie, plus d'onde. */
 function wakeStop() {
-  clearTimeout(wake.timer);
-  wake.timer = 0;
+  clearTimeout(saverWake.timer);
+  saverWake.timer = 0;
   $("#saver").classList.remove("waking", "waking-calm");
   $("#house-stage-ghost")?.remove();
-  wake.ring?.remove();
-  wake.ring = null;
+  saverWake.ring?.remove();
+  saverWake.ring = null;
 }
 
 function renderSaver() {
