@@ -576,22 +576,23 @@ fn tidy(mut drawing: Drawing) -> Drawing {
 }
 
 /// Relit ce qui est rangé. Avant les onglets, c'était le dessin d'une seule
-/// page : il devient l'onglet « Maison ». Un contenu illisible vaut « pas de
-/// dessin ».
-fn parse_stored(text: &str) -> Drawing {
-    if let Ok(drawing) = serde_json::from_str::<Drawing>(text) {
-        return drawing;
-    }
-    match serde_json::from_str::<Page>(text) {
-        Ok(page) => Drawing {
+/// page : il devient l'onglet « Maison ». `Err` : un contenu illisible (par
+/// exemple un champ d'une version plus récente, après un retour en arrière).
+fn parse_stored(text: &str) -> Result<Drawing, serde_json::Error> {
+    let error = match serde_json::from_str::<Drawing>(text) {
+        Ok(drawing) => return Ok(drawing),
+        Err(error) => error,
+    };
+    serde_json::from_str::<Page>(text)
+        .map(|page| Drawing {
             pages: vec![Page {
                 id: "maison".into(),
                 name: "Maison".into(),
                 ..page
             }],
-        },
-        Err(_) => Drawing::default(),
-    }
+        })
+        // L'erreur utile est celle du format actuel.
+        .map_err(|_| error)
 }
 
 /// Ce qu'un compte peut voir de l'assemblage : un invité ne voit ni les
@@ -625,7 +626,15 @@ async fn stored_config(state: &ApiState) -> Result<Drawing, ApiError> {
         .home_drawing()
         .await
         .map_err(|error| ApiError::Internal(error.to_string()))?;
-    Ok(stored.map(|text| parse_stored(&text)).unwrap_or_default())
+    let Some(text) = stored else {
+        return Ok(Drawing::default());
+    };
+    // Illisible : on montre le dessin par défaut, mais on le dit. Le texte
+    // reste dans la base tant que personne n'enregistre (voir `put`).
+    Ok(parse_stored(&text).unwrap_or_else(|error| {
+        tracing::warn!("dessin de la maison illisible, dessin par défaut affiché : {error}");
+        Drawing::default()
+    }))
 }
 
 async fn image_names(state: &ApiState) -> Result<Vec<ha_storage::HomeImageInfo>, ApiError> {
@@ -680,6 +689,17 @@ pub(crate) async fn put(
     let text =
         serde_json::to_string(&config).map_err(|error| ApiError::Internal(error.to_string()))?;
     let username = &auth.user.username;
+    // Un dessin rangé illisible va être remplacé : on en garde une copie
+    // dans le journal du serveur, pour pouvoir le reconstruire.
+    let unreadable = state
+        .store
+        .home_drawing()
+        .await
+        .map_err(|error| ApiError::Internal(error.to_string()))?
+        .filter(|old| parse_stored(old).is_err());
+    if let Some(old) = &unreadable {
+        tracing::warn!("dessin illisible remplacé par {username} ; l'ancien était : {old}");
+    }
     state
         .store
         .save_home_drawing(&text, username)
@@ -687,7 +707,10 @@ pub(crate) async fn put(
         .map_err(|error| ApiError::Internal(error.to_string()))?;
     tracing::info!("dessin de la maison réglé par {username}");
     let names: Vec<&str> = config.pages.iter().map(|page| page.name.as_str()).collect();
-    let detail = format!("onglets : {}", names.join(", "));
+    let mut detail = format!("onglets : {}", names.join(", "));
+    if unreadable.is_some() {
+        detail.push_str(" (remplace un dessin illisible)");
+    }
     audit(&state, username, "drawing_set", None, Some(&detail), client).await;
     Ok(Json(json!({ "config": config })))
 }
@@ -945,12 +968,21 @@ mod tests {
     #[test]
     fn a_drawing_from_before_the_pages_becomes_the_home_page() {
         let old = r#"{"background":"jour","layers":[],"labels":[],"actions":["light.porche"]}"#;
-        let drawing = parse_stored(old);
+        let drawing = parse_stored(old).unwrap();
         assert_eq!(drawing.pages.len(), 1);
         assert_eq!(drawing.pages[0].id, "maison");
         assert_eq!(drawing.pages[0].name, "Maison");
         assert_eq!(drawing.pages[0].background.as_deref(), Some("jour"));
         assert_eq!(drawing.pages[0].actions, ["light.porche"]);
-        assert_eq!(parse_stored("pas du json").pages[0].id, "maison");
+        assert!(parse_stored("pas du json").is_err());
+        // Un champ inconnu (d'une version plus récente) : illisible, et
+        // l'erreur le nomme.
+        let newer = r#"{"pages":[{"id":"maison","name":"Maison","futur":1}]}"#;
+        assert!(
+            parse_stored(newer)
+                .unwrap_err()
+                .to_string()
+                .contains("futur")
+        );
     }
 }
