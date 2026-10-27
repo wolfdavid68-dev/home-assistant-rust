@@ -1,3 +1,7 @@
+# La version de Rust de tout le dépôt : poste de travail, CI, Windows et
+# Linux. Épinglée comme l'image `rust:1.99-…` du Dockerfile (et de
+# release.yml, image-main.yml) : quand Dependabot propose une nouvelle image
+# Rust, monter ce numéro dans la même PR.
 [toolchain]
-channel = "stable"
+channel = "1.99"
 components = ["rustfmt", "clippy"]
