@@ -547,7 +547,7 @@ impl Published {
 
 /// Télécharge une photo d'article (2 Mio au plus).
 async fn download(http: &reqwest::Client, url: &str) -> Result<Vec<u8>, String> {
-    let mut response = http
+    let response = http
         .get(url)
         .send()
         .await
@@ -555,18 +555,12 @@ async fn download(http: &reqwest::Client, url: &str) -> Result<Vec<u8>, String> 
     if !response.status().is_success() {
         return Err(format!("réponse {}", response.status().as_u16()));
     }
-    let mut bytes = Vec::new();
-    while let Some(chunk) = response
-        .chunk()
+    ha_tls::read_limited(response, MAX_IMAGE)
         .await
-        .map_err(|e| e.without_url().to_string())?
-    {
-        if bytes.len() + chunk.len() > MAX_IMAGE {
-            return Err("photo trop grosse".into());
-        }
-        bytes.extend_from_slice(&chunk);
-    }
-    Ok(bytes)
+        .map_err(|error| match error {
+            ha_tls::ReadError::Http(e) => e.without_url().to_string(),
+            ha_tls::ReadError::TooLarge => "photo trop grosse".into(),
+        })
 }
 
 #[cfg(test)]

@@ -3,7 +3,6 @@
 
 use std::time::Duration;
 
-use futures_util::StreamExt;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
@@ -215,16 +214,7 @@ pub(crate) async fn read_json<T: DeserializeOwned>(
 
 /// Lit le corps d'une réponse, en refusant les réponses démesurées.
 pub(crate) async fn read_limited(response: reqwest::Response) -> Result<Vec<u8>, SomfyError> {
-    let mut body = Vec::new();
-    let mut chunks = response.bytes_stream();
-    while let Some(chunk) = chunks.next().await {
-        let chunk = chunk?;
-        if body.len() + chunk.len() > MAX_RESPONSE {
-            return Err(SomfyError::TooLarge);
-        }
-        body.extend_from_slice(&chunk);
-    }
-    Ok(body)
+    Ok(ha_tls::read_limited(response, MAX_RESPONSE).await?)
 }
 
 /// Un morceau d'adresse sûr (identifiant d'écouteur…) : lettres, chiffres, `-`.

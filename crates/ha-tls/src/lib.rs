@@ -18,7 +18,10 @@
 //! premier usage » (TOFU), le même que SSH quand il demande « The
 //! authenticity of host … ».
 
+mod body;
 pub mod local_ca;
+
+pub use body::{ReadError, read_limited};
 
 use std::sync::{Arc, Mutex, PoisonError};
 

@@ -2,7 +2,6 @@
 
 use std::time::Duration;
 
-use futures_util::StreamExt;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
@@ -215,15 +214,7 @@ pub fn is_resource_id(id: &str) -> bool {
 
 /// Lit une réponse JSON en refusant les réponses démesurées.
 async fn read_json<T: DeserializeOwned>(response: reqwest::Response) -> Result<T, HueError> {
-    let mut body = Vec::new();
-    let mut chunks = response.bytes_stream();
-    while let Some(chunk) = chunks.next().await {
-        let chunk = chunk?;
-        if body.len() + chunk.len() > MAX_RESPONSE {
-            return Err(HueError::TooLarge);
-        }
-        body.extend_from_slice(&chunk);
-    }
+    let body = ha_tls::read_limited(response, MAX_RESPONSE).await?;
     serde_json::from_slice(&body)
         .map_err(|error| HueError::Bridge(format!("JSON invalide : {error}")))
 }

@@ -309,7 +309,7 @@ pub fn calendar_state(
 
 /// Télécharge le fichier (2 Mio au plus).
 async fn fetch(http: &reqwest::Client, url: &url::Url) -> Result<String, String> {
-    let mut response = http
+    let response = http
         .get(url.clone())
         .header("Accept", "text/calendar")
         .send()
@@ -324,17 +324,12 @@ async fn fetch(http: &reqwest::Client, url: &url::Url) -> Result<String, String>
     if !response.status().is_success() {
         return Err(format!("le site a répondu {}", response.status().as_u16()));
     }
-    let mut body = Vec::new();
-    while let Some(chunk) = response
-        .chunk()
+    let body = ha_tls::read_limited(response, MAX_BYTES)
         .await
-        .map_err(|_| "téléchargement interrompu".to_owned())?
-    {
-        if body.len() + chunk.len() > MAX_BYTES {
-            return Err("fichier trop gros (2 Mio au plus)".into());
-        }
-        body.extend_from_slice(&chunk);
-    }
+        .map_err(|error| match error {
+            ha_tls::ReadError::Http(_) => "téléchargement interrompu".to_owned(),
+            ha_tls::ReadError::TooLarge => "fichier trop gros (2 Mio au plus)".to_owned(),
+        })?;
     let text = String::from_utf8_lossy(&body).into_owned();
     if !text.contains("BEGIN:VCALENDAR") {
         return Err("ce n'est pas un agenda (ICS)".into());

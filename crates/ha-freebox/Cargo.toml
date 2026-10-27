@@ -9,7 +9,6 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-futures-util.workspace = true
 ha-core = { path = "../ha-core" }
 ha-storage = { path = "../ha-storage" }
 ha-tls = { path = "../ha-tls" }

@@ -654,18 +654,13 @@ fn clean(text: &str, max: usize) -> String {
         .to_owned()
 }
 
-async fn read(mut response: reqwest::Response) -> Result<String, IglouError> {
-    let mut body = Vec::new();
-    while let Some(chunk) = response
-        .chunk()
+async fn read(response: reqwest::Response) -> Result<String, IglouError> {
+    let body = ha_tls::read_limited(response, MAX_BYTES)
         .await
-        .map_err(|_| IglouError::Unreachable)?
-    {
-        if body.len() + chunk.len() > MAX_BYTES {
-            return Err(IglouError::Unexpected("réponse trop grosse".into()));
-        }
-        body.extend_from_slice(&chunk);
-    }
+        .map_err(|error| match error {
+            ha_tls::ReadError::Http(_) => IglouError::Unreachable,
+            ha_tls::ReadError::TooLarge => IglouError::Unexpected(error.to_string()),
+        })?;
     Ok(String::from_utf8_lossy(&body).into_owned())
 }
 

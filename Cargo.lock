@@ -1017,7 +1017,6 @@ dependencies = [
 name = "ha-freebox"
 version = "0.1.0"
 dependencies = [
- "futures-util",
  "ha-core",
  "ha-storage",
  "ha-tls",
@@ -1319,7 +1318,6 @@ dependencies = [
 name = "ha-somfy"
 version = "0.1.0"
 dependencies = [
- "futures-util",
  "ha-core",
  "ha-storage",
  "ha-tls",
@@ -1427,6 +1425,8 @@ dependencies = [
 name = "ha-tls"
 version = "0.1.0"
 dependencies = [
+ "futures-util",
+ "http",
  "jiff",
  "rcgen",
  "reqwest",
@@ -1434,6 +1434,7 @@ dependencies = [
  "rustls-platform-verifier",
  "sha2 0.11.1",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]

@@ -19,5 +19,11 @@ rustls-platform-verifier = "0.7.1"
 sha2.workspace = true
 thiserror.workspace = true
 
+[dev-dependencies]
+# Pour fabriquer des réponses HTTP dans les tests de `read_limited`.
+futures-util.workspace = true
+http = "1.5.0"
+tokio = { workspace = true, features = ["macros", "rt"] }
+
 [lints]
 workspace = true
