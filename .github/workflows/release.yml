@@ -124,7 +124,8 @@ jobs:
 
       # Compilé dans Debian 12 (la même image que le Dockerfile) : le
       # programme tourne sur Debian 12 et 13, et sur les Ubuntu récents. Garder
-      # la même empreinte que dans le Dockerfile, que Dependabot met à jour.
+      # la même empreinte que dans le Dockerfile, que Dependabot met à jour
+      # (et le même Rust que rust-toolchain.toml).
       - name: Build
         run: |
           docker run --rm -v "$PWD":/src -w /src \
