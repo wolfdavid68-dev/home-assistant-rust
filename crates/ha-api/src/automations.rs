@@ -9,7 +9,7 @@
 
 use ha_auth::Permission;
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{Arc, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
 use axum::Json;
@@ -94,10 +94,23 @@ pub(crate) fn editor(state: &ApiState) -> Result<&AutomationEditor, ApiError> {
     state.automations.as_ref().ok_or(ApiError::NotFound)
 }
 
+type Confirmations = std::collections::HashMap<[u8; 32], Instant>;
+
+/// Les confirmations en cours. Un verrou « empoisonné » (une tâche a paniqué
+/// en le tenant) reste utilisable : une table de dates ne peut pas être à
+/// moitié modifiée. L'ignorer ferait pire : la déconnexion n'oublierait plus
+/// la confirmation, et une confirmation réussie ne serait pas notée.
+fn confirmations(state: &ApiState) -> MutexGuard<'_, Confirmations> {
+    state
+        .confirmations
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+}
+
 /// Temps de confirmation restant pour ce jeton.
 pub(crate) fn confirmation_left(state: &ApiState, token: &str) -> Option<Duration> {
     let key = ha_auth::token::hash_token(token);
-    let confirmations = state.confirmations.lock().ok()?;
+    let confirmations = confirmations(state);
     let until = confirmations.get(&key)?;
     until.checked_duration_since(Instant::now())
 }
@@ -122,9 +135,7 @@ pub(crate) fn require_confirmation(
 
 /// Oublie la confirmation d'un jeton (à la déconnexion).
 pub(crate) fn forget_confirmation(state: &ApiState, token: &str) {
-    if let Ok(mut confirmations) = state.confirmations.lock() {
-        confirmations.remove(&ha_auth::token::hash_token(token));
-    }
+    confirmations(state).remove(&ha_auth::token::hash_token(token));
 }
 
 /// `POST /api/auth/confirm` : `{"password", "code"}`. Valable 15 minutes,
@@ -153,7 +164,8 @@ pub(crate) async fn confirm(
         return Err(error.into());
     }
     let now = Instant::now();
-    if let Ok(mut confirmations) = state.confirmations.lock() {
+    {
+        let mut confirmations = confirmations(&state);
         // On en profite pour oublier les confirmations expirées.
         confirmations.retain(|_, until| *until > now);
         confirmations.insert(
