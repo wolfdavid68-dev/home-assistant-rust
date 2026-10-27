@@ -258,8 +258,14 @@ function renderScenes() {
   }));
 }
 
-// L'heure, chaque minute (et la salutation avec).
-setInterval(() => { if (!$("#dashboard-view").hidden) renderHome(); }, 30_000);
+// L'heure, chaque minute (et la salutation avec). Les panneaux du tableau
+// sont refaits en entier : ce qui suit l'heure avance (la courbe qui glisse,
+// le prochain rendez-vous), et les courbes relisent leur historique.
+setInterval(() => {
+  if ($("#dashboard-view").hidden) return;
+  forgetPanels();
+  renderHome();
+}, 30_000);
 
 function renderTile(state) {
   const tile = renderTileContent(state);
@@ -1493,7 +1499,10 @@ function timerTile(state) {
     text: active ? timerRemaining(a.finishes_at) : typeof a.remaining === "string" ? a.remaining : "—",
   });
   // Le compte à rebours avance tout seul (voir `tickCountdowns`).
-  if (active) remaining.dataset.finishesAt = a.finishes_at;
+  if (active) {
+    remaining.dataset.finishesAt = a.finishes_at;
+    startCountdowns();
+  }
   const button = (service, text) => {
     const b = el("button", { type: "button", class: "period", text });
     b.addEventListener("click", () => inputCommand(state, service));
@@ -1556,17 +1565,32 @@ function ring(totalSeconds, leftSeconds, finishesAt) {
   return picture;
 }
 
+// Le compte à rebours ne tourne que si un minuteur en marche est affiché :
+// `timerTile` le lance, et il s'arrête de lui-même quand il n'y a plus rien
+// à faire avancer. Sans minuteur, la page n'est plus fouillée chaque seconde.
+let countdownTimer = 0;
+
+function startCountdowns() {
+  if (countdownTimer === 0) countdownTimer = setInterval(tickCountdowns, 1000);
+}
+
 function tickCountdowns() {
   const full = 2 * Math.PI * 20;
-  for (const arc of document.querySelectorAll("[data-ring-finishes]")) {
+  const arcs = document.querySelectorAll("[data-ring-finishes]");
+  const texts = document.querySelectorAll("[data-finishes-at]");
+  if (arcs.length === 0 && texts.length === 0) {
+    clearInterval(countdownTimer);
+    countdownTimer = 0;
+    return;
+  }
+  for (const arc of arcs) {
     const left = Math.max(0, (Date.parse(arc.dataset.ringFinishes) - Date.now()) / 1000);
     arc.setAttribute("stroke-dashoffset", String(full * (1 - Math.min(1, left / Number(arc.dataset.ringTotal)))));
   }
-  for (const node of document.querySelectorAll("[data-finishes-at]")) {
+  for (const node of texts) {
     node.textContent = timerRemaining(node.dataset.finishesAt);
   }
 }
-setInterval(tickCountdowns, 1000);
 
 const PRESET_LABELS = { confort: "Confort", eco: "Éco", absent: "Absent", hors_gel: "Hors-gel", nuit: "Nuit", programme: "Programme", boost: "Boost" };
 

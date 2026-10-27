@@ -222,9 +222,13 @@ function actionChip(state) {
   return chip;
 }
 
-function renderActions() {
+/** Les boutons rapides de l'onglet, ceux dont l'appareil existe. */
+function actionStates() {
+  return house.config.actions.map((id) => entities.get(id)).filter((state) => state !== undefined);
+}
+
+function renderActions(states = actionStates()) {
   const box = $("#house-actions");
-  const states = house.config.actions.map((id) => entities.get(id)).filter((state) => state !== undefined);
   box.hidden = states.length === 0;
   box.replaceChildren(...states.map(actionChip));
 }
@@ -430,13 +434,16 @@ function heatingStates(inPage) {
       || nameOf(a).localeCompare(nameOf(b), "fr"));
 }
 
-/** Le chauffage, sous le lecteur de musique. */
-function renderHeating() {
-  const box = $("#board-heating");
-  const inPage = pageAreas === null ? null
+/** Les appareils des pièces de l'onglet, ou `null` : toute la maison. */
+function pageEntityIds() {
+  return pageAreas === null ? null
     : new Set(areas.filter((a) => pageAreas.has(a.name)).flatMap((a) => a.entities.map((e) => e.entity_id)));
-  const heating = heatingStates(inPage);
-  // Une consigne confirmée par la box n'a plus besoin d'être retenue ici.
+}
+
+/** Les cadrans à montrer. Une consigne confirmée par la box n'a plus besoin
+ *  d'être retenue ici. */
+function heatingShown() {
+  const heating = heatingStates(pageEntityIds());
   for (const state of heating) {
     const pending = heatPending.get(state.entity_id);
     if (pending?.expire && state.attributes.temperature === pending.value) {
@@ -444,6 +451,12 @@ function renderHeating() {
       heatPending.delete(state.entity_id);
     }
   }
+  return heating;
+}
+
+/** Le chauffage, sous le lecteur de musique. */
+function renderHeating(heating = heatingShown()) {
+  const box = $("#board-heating");
   box.hidden = heating.length === 0;
   if (heating.length === 0) {
     box.replaceChildren();
@@ -454,14 +467,16 @@ function renderHeating() {
 
 /** Les volets (pas les portes de garage ni les portails, ni ceux déjà en
  *  boutons rapides), en lignes sous le dessin. */
-function renderCovers() {
-  const box = $("#board-covers");
-  const inPage = pageAreas === null ? null
-    : new Set(areas.filter((a) => pageAreas.has(a.name)).flatMap((a) => a.entities.map((e) => e.entity_id)));
-  const covers = [...entities.values()]
+function coverStates() {
+  const inPage = pageEntityIds();
+  return [...entities.values()]
     .filter((s) => domainOf(s) === "cover" && !ALERT_COVERS.includes(s.attributes.device_class)
       && !house.config.actions.includes(s.entity_id) && (inPage === null || inPage.has(s.entity_id)))
     .sort((a, b) => nameOf(a).localeCompare(nameOf(b), "fr"));
+}
+
+function renderCovers(covers = coverStates()) {
+  const box = $("#board-covers");
   box.hidden = covers.length === 0;
   box.replaceChildren(el("h2", { text: "Volets" }), el("div", { class: "cover-rows" }, ...covers.map(coverRow)));
 }
@@ -576,11 +591,14 @@ function renderCharts() {
 // En tête de la colonne des pièces : chacun, avec l'initiale de son nom et où
 // il est (« Maison », « Absent », ou le nom de la zone).
 
-function renderPeople() {
-  const box = $("#board-people");
-  const people = [...entities.values()]
+function peopleStates() {
+  return [...entities.values()]
     .filter((s) => domainOf(s) === "person")
     .sort((a, b) => nameOf(a).localeCompare(nameOf(b), "fr"));
+}
+
+function renderPeople(people = peopleStates()) {
+  const box = $("#board-people");
   box.hidden = people.length === 0;
   box.replaceChildren(...people.map((state) => {
     const home = state.state === "home";
@@ -590,6 +608,59 @@ function renderPeople() {
       el("span", { class: "person-avatar", text: name.charAt(0).toUpperCase(), "aria-hidden": "true" }),
       el("span", { class: "house-action-text" }, el("b", { text: name }), el("span", { text: where })));
   }));
+}
+
+// ---------------------------------------------------------------- Ce qui a changé
+// renderHouse passe à chaque changement d'état (au plus une fois par image).
+// Chaque panneau n'est refait que si sa clé change (utils.js, `panelChanged`).
+// Ce qui suit l'heure (la courbe qui glisse, le prochain rendez-vous, la
+// date du cartouche) avance avec la demi-minute, qui redessine tout
+// (tiles.js) ; un panneau appelé directement (courbe chargée, consigne
+// touchée, onglet changé) est refait sans clé.
+
+const marksOf = (states) => states.map(stateMark).join(",");
+const marksOfIds = (ids) => marksOf(ids.map((id) => entities.get(id)));
+
+/** Les repères (house-effets.js) : dehors, dedans, la puissance, les
+ *  lumières, le prochain rendez-vous, les présents. */
+function gaugesKey() {
+  let lights = 0;
+  const read = [];
+  for (const state of entities.values()) {
+    if (isLight(state) && state.state === "on") lights += 1;
+    const domain = domainOf(state);
+    if (domain === "weather" || domain === "calendar") read.push(state);
+  }
+  const hidden = typeof agendaGauge === "function" ? [...agenda.hidden].join(" ") : "";
+  return [
+    marksOfIds(["sensor.temperature_exterieure", "sensor.meteo_temperature", "sensor.linky_puissance", "zone.home", "sun.sun"]),
+    marksOf(read), lights, hidden, objectMark(areas),
+    marksOfIds(areas.flatMap((a) => a.entities.map((e) => e.entity_id))),
+    objectMark(account.permissions),
+  ].join("|");
+}
+
+function heatingKey(heating) {
+  return [
+    marksOf(heating), marksOfIds(["sensor.pompe_a_chaleur", "sensor.temperature_exterieure"]),
+    [...heatPending].map(([id, pending]) => `${id}=${pending.value}`).join(","),
+  ].join("|");
+}
+
+/** Les courbes : la valeur du moment de chacune, et le réglage de l'onglet
+ *  (les points chargés, eux, redessinent directement, voir `seriesFor`). */
+function chartsKey() {
+  const charts = house.config.charts ?? [];
+  return [
+    objectMark(house.config), objectMark(areas), marksOfIds(charts.map((chart) => chart.entity_id)),
+    account.permissions.history,
+  ].join("|");
+}
+
+function titleBlockKey() {
+  let devices = 0;
+  for (const state of entities.values()) if (!["persistent_notification", "zone", "sun"].includes(domainOf(state))) devices += 1;
+  return [account.user, areas.length, devices, fullDate.format(new Date())].join("|");
 }
 
 /** Appelé par app.js à chaque changement (au plus une fois par image). */
@@ -605,20 +676,29 @@ function renderHouse() {
     $("#board-agenda").hidden = true;
     $("#board-music").hidden = true;
     $("#board-heating").hidden = true;
+    // Cachés : au retour, tout est refait (et remontré).
+    forgetPanels();
     return;
   }
   if (house.loading === null && token.get()) loadHouse();
   if (house.config === null) return;
   updateHouse(house.view);
-  renderGauges();
-  renderActions();
-  renderCovers();
-  renderHeating();
-  renderPeople();
-  renderCharts();
+  // Ce que plusieurs panneaux lisent : l'onglet, les pièces (et leurs noms
+  // personnalisés), les droits du compte.
+  const page = `${objectMark(house.config)}|${objectMark(areas)}|${objectMark(pageAreas)}|${objectMark(account.permissions)}`;
+  if (panelChanged("gauges", gaugesKey())) renderGauges();
+  const actions = actionStates();
+  if (panelChanged("actions", `${page}|${marksOf(actions)}`)) renderActions(actions);
+  const covers = coverStates();
+  if (panelChanged("covers", `${page}|${marksOf(covers)}`)) renderCovers(covers);
+  const heating = heatingShown();
+  if (panelChanged("heating", `${page}|${heatingKey(heating)}`)) renderHeating(heating);
+  const people = peopleStates();
+  if (panelChanged("people", `${page}|${marksOf(people)}`)) renderPeople(people);
+  if (panelChanged("charts", chartsKey())) renderCharts();
   if (typeof renderBoardAgenda === "function") renderBoardAgenda();
   if (typeof renderBoardMusic === "function") renderBoardMusic();
-  if (isPlan()) renderTitleBlock();
+  if (isPlan() && panelChanged("title", titleBlockKey())) renderTitleBlock();
 }
 
 // ---------------------------------------------------------------- Machines en marche
@@ -940,6 +1020,7 @@ $("#theme").addEventListener("change", (event) => {
     // Stockage bloqué : l'apparence ne durera que le temps de la page.
   }
   applyTheme(choice);
+  forgetPanels();
   if (!$("#dashboard-view").hidden) renderHome();
 });
 
