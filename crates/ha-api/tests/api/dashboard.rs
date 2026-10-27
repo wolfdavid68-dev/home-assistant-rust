@@ -136,8 +136,14 @@ fn dashboard_never_uses_inner_html() {
         ("canvas.js", include_str!("../../web/canvas.js")),
         ("house.js", include_str!("../../web/house.js")),
         ("house-effets.js", include_str!("../../web/house-effets.js")),
-        ("house-tableau.js", include_str!("../../web/house-tableau.js")),
-        ("house-reglage.js", include_str!("../../web/house-reglage.js")),
+        (
+            "house-tableau.js",
+            include_str!("../../web/house-tableau.js"),
+        ),
+        (
+            "house-reglage.js",
+            include_str!("../../web/house-reglage.js"),
+        ),
         ("agenda.js", include_str!("../../web/agenda.js")),
         ("hub.js", include_str!("../../web/hub.js")),
         ("sonnette.js", include_str!("../../web/sonnette.js")),
