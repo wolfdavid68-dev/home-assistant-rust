@@ -57,6 +57,9 @@ erreur fait sortir de la fonction plus tôt), Rust la détruit automatiquement�
 s'arrête quand même. Impossible de laisser une tâche orpheline tourner pour rien. Deux tests le
 vérifient.
 
+Si la tâche **panique**, une petite tâche de garde, qui attend sa `JoinHandle`, l'écrit tout de
+suite dans le journal (`JoinError::is_panic`), sans attendre l'arrêt du serveur.
+
 **Concept Rust : un « newtype » qui enveloppe un autre type.** `pub struct Recorder(Background);`
 réutilise tout le comportement de `Background` tout en gardant un nom clair et sa propre
 méthode `start`.

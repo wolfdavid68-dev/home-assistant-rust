@@ -62,6 +62,15 @@ contient quatre, commentés.
 | `delay` | attente : `30s`, `5min`, `2h` ou `00:05:00` |
 
 Les heures sont en **heure locale** (fuseau horaire de la machine, heure d'été comprise).
+
+**Les nuits de changement d'heure**, chaque heure (`time`, `time_pattern`) sonne une seule fois :
+
+- fin octobre, l'horloge repasse de 3 h à 2 h : `02:30` sonne la première fois (heure d'été), pas
+  la seconde ;
+- fin mars, l'horloge saute de 2 h à 3 h : `02:30` n'existe pas, il sonne une fois, à 3 h 00.
+
+Home Assistant fait autrement (deux fois en octobre, pas du tout en mars). Le moteur compare des
+moments réels (`jiff::Timestamp`) et non l'heure affichée, qui, elle, recule une fois par an.
 Mettre `enabled: false` désactive une automatisation sans l'effacer.
 
 ## Les fichiers

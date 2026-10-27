@@ -53,6 +53,9 @@ la télé du salon sur « Maison ».
 - `ha-api/src/drawing.rs` : l'assemblage devient `{"pages": [...]}`. Chaque onglet (`Page`) a un
   `id`, un `name`, ses `areas`, et les champs du dessin. Ce qui était rangé avant (un seul dessin)
   est relu comme l'onglet « Maison » (`parse_stored`).
+  Un contenu rangé illisible (par exemple après un retour à une version plus ancienne) affiche le
+  dessin par défaut avec un avertissement dans le journal. S'il est ensuite remplacé depuis
+  l'éditeur, l'ancien contenu est copié dans le journal et l'audit le signale.
 - `house.js` : `selectPage` affiche un onglet et met les pièces dans `pageAreas`, que `app.js` lit
   pour le plan des pièces et les sections (`shownAreas`) ; l'onglet retenu est dans
   `localStorage` (`ha-page`).

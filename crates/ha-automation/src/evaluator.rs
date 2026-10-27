@@ -7,9 +7,9 @@ use std::time::SystemTime;
 
 use ha_core::{Attributes, EntityId, State, StateMachine};
 use ha_sun::{Location, SunEvent};
-use jiff::SignedDuration;
 use jiff::civil::{Date, DateTime, Time};
-use jiff::tz::TimeZone;
+use jiff::tz::{AmbiguousOffset, TimeZone};
+use jiff::{SignedDuration, Timestamp};
 use serde_json::Value;
 use tokio::time::Instant;
 
@@ -39,6 +39,9 @@ pub struct Evaluator {
     automations: Vec<Automation>,
     pending: Vec<Pending>,
     sun: Option<Sun>,
+    /// Le fuseau horaire de la maison : il dit à quel moment réel sonne
+    /// « 7 h 30 », y compris les jours de changement d'heure.
+    zone: TimeZone,
 }
 
 /// Une automatisation déclenchée, par lequel de ses déclencheurs, et le
@@ -109,12 +112,11 @@ struct Sun {
 }
 
 impl Sun {
-    /// L'heure locale de `event` (plus `offset`) le jour `date`. `None` si
+    /// Le moment de `event` (plus `offset`) le jour `date`. `None` si
     /// l'événement n'a pas lieu ce jour-là (jour ou nuit polaire).
-    fn event_at(&self, date: Date, event: SunEvent, offset: SignedDuration) -> Option<DateTime> {
+    fn event_at(&self, date: Date, event: SunEvent, offset: SignedDuration) -> Option<Timestamp> {
         let time = event.time_in(&ha_sun::sun_times(date, self.location)?)?;
-        let time = time.checked_add(offset).ok()?;
-        Some(time.to_zoned(self.zone.clone()).datetime())
+        time.checked_add(offset).ok()
     }
 }
 
@@ -125,13 +127,25 @@ impl Evaluator {
             automations,
             pending: Vec::new(),
             sun: None,
+            // Par défaut UTC : pas de changement d'heure, les heures civiles
+            // passées à `on_tick` se comparent telles quelles (les tests).
+            zone: TimeZone::UTC,
         }
     }
 
+    /// Le fuseau horaire de la maison (le moteur prend celui de la machine).
+    #[must_use]
+    pub fn with_zone(mut self, zone: TimeZone) -> Self {
+        self.zone = zone;
+        self
+    }
+
     /// Active les déclencheurs et conditions `sun`, pour la maison située à
-    /// `location`, dans le fuseau horaire `zone`.
+    /// `location`, dans le fuseau horaire `zone` (qui devient aussi celui de
+    /// l'évaluateur, voir [`Evaluator::with_zone`]).
     #[must_use]
     pub fn with_sun(mut self, location: Location, zone: TimeZone) -> Self {
+        self.zone = zone.clone();
         self.sun = Some(Sun { location, zone });
         self
     }
@@ -312,6 +326,8 @@ impl Evaluator {
 
     /// Appelé régulièrement (chaque seconde) : déclencheurs `time` passés
     /// entre `previous` et `now`, et attentes `for:` arrivées à échéance.
+    /// Les heures sont locales, lues dans le fuseau de l'évaluateur ; le
+    /// moteur, lui, passe des moments réels à [`Evaluator::on_tick_at`].
     pub fn on_tick(
         &mut self,
         previous: DateTime,
@@ -330,23 +346,55 @@ impl Evaluator {
         instant: Instant,
         states: &StateMachine,
     ) -> Vec<Fired> {
+        let previous = instant_of(&self.zone, previous).unwrap_or_default();
+        let now = instant_of(&self.zone, now).unwrap_or_default();
+        self.fire_on_tick_at(previous, now, instant, states)
+    }
+
+    /// Comme [`Evaluator::on_tick`], avec des moments réels.
+    pub fn on_tick_at(
+        &mut self,
+        previous: Timestamp,
+        now: Timestamp,
+        instant: Instant,
+        states: &StateMachine,
+    ) -> Vec<usize> {
+        automations(self.fire_on_tick_at(previous, now, instant, states))
+    }
+
+    /// Le cœur du tic. On compare des moments réels (`Timestamp`), pas des
+    /// heures affichées : quand on recule d'une heure, l'horloge repasse par
+    /// 2 h 30, mais le temps, lui, ne revient pas en arrière. Chaque heure
+    /// locale sonne donc une fois par jour (voir `instant_of`).
+    pub fn fire_on_tick_at(
+        &mut self,
+        previous: Timestamp,
+        now: Timestamp,
+        instant: Instant,
+        states: &StateMachine,
+    ) -> Vec<Fired> {
+        let span = Span {
+            zone: &self.zone,
+            previous,
+            now,
+        };
         let mut fired = FiredMap::new();
         for (a, automation) in self.automations.iter().enumerate() {
             for (t, trigger) in automation.triggers.iter().enumerate() {
                 let crossed_now = match trigger {
                     Trigger::Time { at } => at.iter().any(|at| match at {
-                        TimeAt::Fixed(time) => crossed(previous, now, *time),
-                        TimeAt::Entity(id) => entity_time_crossed(states, id, previous, now),
+                        TimeAt::Fixed(time) => span.crossed(*time),
+                        TimeAt::Entity(id) => entity_time_crossed(states, id, &span),
                     }),
                     Trigger::TimePattern {
                         hours,
                         minutes,
                         second,
-                    } => pattern_crossed(previous, now, *hours, *minutes, *second),
+                    } => span.pattern_crossed(*hours, *minutes, *second),
                     Trigger::Sun { event, offset } => self.sun.as_ref().is_some_and(|sun| {
-                        [previous.date(), now.date()].into_iter().any(|date| {
+                        span.dates().any(|date| {
                             sun.event_at(date, *event, *offset)
-                                .is_some_and(|moment| previous < moment && moment <= now)
+                                .is_some_and(|moment| span.contains(moment))
                         })
                     }),
                     Trigger::Calendar {
@@ -357,7 +405,7 @@ impl Evaluator {
                         // Le rendez-vous en cause, pour les modèles
                         // (`trigger.calendar_event.summary`).
                         if let Some(event) =
-                            calendar_crossed(states, entity_id, *edge, *offset, previous, now)
+                            calendar_crossed(states, entity_id, *edge, *offset, &span)
                         {
                             fired.entry(a).or_insert((
                                 t,
@@ -440,8 +488,7 @@ fn calendar_crossed(
     entity_id: &EntityId,
     edge: CalendarEdge,
     offset: SignedDuration,
-    previous: DateTime,
-    now: DateTime,
+    span: &Span,
 ) -> Option<Attributes> {
     let calendar = states.get(entity_id)?;
     let events = calendar
@@ -456,7 +503,7 @@ fn calendar_crossed(
                 .and_then(Value::as_str)
                 .and_then(|text| text.parse::<DateTime>().ok())
                 .and_then(|moment| moment.checked_add(offset).ok())
-                .is_some_and(|moment| previous < moment && moment <= now)
+                .is_some_and(|moment| span.contains_local(moment))
         })
         .and_then(Value::as_object)
         .cloned()
@@ -495,24 +542,91 @@ fn in_range(value: f64, above: Option<f64>, below: Option<f64>) -> bool {
     above.is_none_or(|a| value > a) && below.is_none_or(|b| value < b)
 }
 
-/// L'heure `time` (aujourd'hui ou hier) tombe-t-elle dans `]previous, now]` ?
-fn crossed(previous: DateTime, now: DateTime, time: Time) -> bool {
-    [previous.date(), now.date()]
-        .into_iter()
-        .map(|date| date.to_datetime(time))
-        .any(|moment| previous < moment && moment <= now)
+/// Le moment réel où sonne l'heure locale `moment` dans `zone`.
+///
+/// Deux jours par an, la réponse n'est pas évidente :
+/// - on recule d'une heure (fin octobre) : 2 h 30 a lieu deux fois. On
+///   sonne à la première ; la seconde fois, ce moment est déjà passé.
+/// - on avance d'une heure (fin mars) : 2 h 30 n'existe pas. On sonne une
+///   fois, à la fin du trou (3 h 00), plutôt que de sauter le jour.
+///
+/// Concept : `to_ambiguous_timestamp` ne choisit pas à notre place, il dit
+/// si l'heure est normale, dans un trou (`Gap`) ou en double (`Fold`).
+fn instant_of(zone: &TimeZone, moment: DateTime) -> Option<Timestamp> {
+    let ambiguous = zone.to_ambiguous_timestamp(moment);
+    if let AmbiguousOffset::Gap { .. } = ambiguous.offset() {
+        // `earlier` lit l'heure avec le décalage d'après le trou : un moment
+        // juste avant le changement. Le changement suivant est la fin du trou.
+        let before = ambiguous.earlier().ok()?;
+        return zone.following(before).next().map(|t| t.timestamp());
+    }
+    ambiguous.earlier().ok()
 }
 
-/// L'heure réglée dans une entrée `input_datetime` est-elle passée entre
-/// `previous` (exclu) et `now` ? Une heure seule (`07:30:00`) sonne chaque
-/// jour ; une date (`2026-10-20`) à minuit ce jour-là ; une date et une heure
-/// une seule fois.
-fn entity_time_crossed(
-    states: &StateMachine,
-    id: &EntityId,
-    previous: DateTime,
-    now: DateTime,
-) -> bool {
+/// L'intervalle `]previous, now]` d'un tic, et le fuseau où lire les heures.
+struct Span<'a> {
+    zone: &'a TimeZone,
+    previous: Timestamp,
+    now: Timestamp,
+}
+
+impl Span<'_> {
+    fn contains(&self, moment: Timestamp) -> bool {
+        self.previous < moment && moment <= self.now
+    }
+
+    /// L'heure locale `moment` sonne-t-elle dans l'intervalle ?
+    fn contains_local(&self, moment: DateTime) -> bool {
+        instant_of(self.zone, moment).is_some_and(|at| self.contains(at))
+    }
+
+    /// Les jours (locaux) où tombent `previous` et `now`.
+    fn dates(&self) -> impl Iterator<Item = Date> {
+        [self.previous, self.now]
+            .map(|moment| self.zone.to_datetime(moment).date())
+            .into_iter()
+    }
+
+    /// L'heure `time` (aujourd'hui ou hier) tombe-t-elle dans l'intervalle ?
+    fn crossed(&self, time: Time) -> bool {
+        self.dates()
+            .any(|date| self.contains_local(date.to_datetime(time)))
+    }
+
+    /// Un moment du motif est-il passé dans l'intervalle ? On regarde les
+    /// minutes locales à partir de `previous` (deux heures au plus : après
+    /// une mise en veille plus longue, on ne rattrape pas tout).
+    fn pattern_crossed(&self, hours: Pattern, minutes: Pattern, second: i8) -> bool {
+        let start = self.zone.to_datetime(self.previous);
+        let Ok(mut minute) = start.with().second(0).subsec_nanosecond(0).build() else {
+            return false;
+        };
+        for _ in 0..=120 {
+            // Fin octobre, les minutes de l'heure rejouée ont sonné la
+            // première fois : elles tombent avant `previous`, on passe.
+            if instant_of(self.zone, minute).is_none_or(|at| at > self.now) {
+                break;
+            }
+            if hours.matches(minute.hour())
+                && minutes.matches(minute.minute())
+                && let Ok(moment) = minute.with().second(second).build()
+                && self.contains_local(moment)
+            {
+                return true;
+            }
+            let Ok(next) = minute.checked_add(SignedDuration::from_mins(1)) else {
+                break;
+            };
+            minute = next;
+        }
+        false
+    }
+}
+
+/// L'heure réglée dans une entrée `input_datetime` est-elle passée dans
+/// l'intervalle ? Une heure seule (`07:30:00`) sonne chaque jour ; une date
+/// (`2026-10-20`) à minuit ce jour-là ; une date et une heure une seule fois.
+fn entity_time_crossed(states: &StateMachine, id: &EntityId, span: &Span) -> bool {
     let Some(state) = states.get(id) else {
         return false;
     };
@@ -523,7 +637,7 @@ fn entity_time_crossed(
     if !text.contains('-')
         && let Ok(time) = text.parse::<Time>()
     {
-        return crossed(previous, now, time);
+        return span.crossed(time);
     }
     let moment = text
         .replacen(' ', "T", 1)
@@ -534,40 +648,7 @@ fn entity_time_crossed(
                 .ok()
                 .map(|d| d.to_datetime(Time::midnight()))
         });
-    moment.is_some_and(|moment| previous < moment && moment <= now)
-}
-
-/// Un moment du motif est-il passé entre `previous` (exclu) et `now` ?
-/// On regarde les minutes de l'intervalle (deux heures au plus : après une
-/// mise en veille plus longue, on ne rattrape pas tout).
-fn pattern_crossed(
-    previous: DateTime,
-    now: DateTime,
-    hours: Pattern,
-    minutes: Pattern,
-    second: i8,
-) -> bool {
-    let Ok(mut minute) = previous.with().second(0).subsec_nanosecond(0).build() else {
-        return false;
-    };
-    for _ in 0..=120 {
-        if minute > now {
-            break;
-        }
-        if hours.matches(minute.hour())
-            && minutes.matches(minute.minute())
-            && let Ok(moment) = minute.with().second(second).build()
-            && previous < moment
-            && moment <= now
-        {
-            return true;
-        }
-        let Ok(next) = minute.checked_add(SignedDuration::from_mins(1)) else {
-            break;
-        };
-        minute = next;
-    }
-    false
+    moment.is_some_and(|moment| span.contains_local(moment))
 }
 
 fn condition_passes(
@@ -629,7 +710,10 @@ fn condition_passes(
             // `Some(None)` : l'événement n'a pas lieu aujourd'hui (pays
             // polaires) ; la condition est alors fausse.
             let at = |limit: &Option<(SunEvent, SignedDuration)>| {
-                limit.map(|(event, offset)| sun.event_at(now.date(), event, offset))
+                limit.map(|(event, offset)| {
+                    sun.event_at(now.date(), event, offset)
+                        .map(|moment| sun.zone.to_datetime(moment))
+                })
             };
             match (at(after), at(before)) {
                 // « Après le coucher et avant le lever » : la plage passe
