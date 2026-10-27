@@ -32,10 +32,15 @@ pub struct Purged {
     pub audit: u64,
 }
 
-/// La date `days` jours avant `now`.
+/// La date `days` jours avant `now`, jamais avant 1970.
+///
+/// Linux sait représenter une date d'avant 1970, Windows non : on s'arrête
+/// à 1970 partout, pour que le résultat soit le même.
 fn days_before(now: SystemTime, days: u32) -> SystemTime {
     now.checked_sub(Duration::from_hours(24 * u64::from(days)))
-        .unwrap_or(SystemTime::UNIX_EPOCH)
+        .map_or(SystemTime::UNIX_EPOCH, |date| {
+            date.max(SystemTime::UNIX_EPOCH)
+        })
 }
 
 impl Store {
