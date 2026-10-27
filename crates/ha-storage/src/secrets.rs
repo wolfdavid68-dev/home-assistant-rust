@@ -108,7 +108,7 @@ impl SecretKey {
             .map_err(|_| StorageError::Secret("taille de clé"))?;
         // Une clé par usage : la clé du journal est dérivée de la clé
         // principale (HMAC avec une étiquette), au lieu de la réutiliser.
-        let mut derive = <Hmac<Sha256> as hmac::KeyInit>::new_from_slice(bytes)
+        let mut derive = <Hmac<Sha256> as Mac>::new_from_slice(bytes)
             .map_err(|_| StorageError::Secret("taille de clé"))?;
         derive.update(b"ha-rust audit log v1");
         let audit = Zeroizing::new(derive.finalize().into_bytes().into());
@@ -119,8 +119,7 @@ impl SecretKey {
     /// est précédé de sa longueur : « ab » + « c » et « a » + « bc » ne
     /// donnent pas la même signature.
     pub(crate) fn audit_mac(&self, fields: &[&[u8]]) -> [u8; 32] {
-        let Ok(mut mac) = <Hmac<Sha256> as hmac::KeyInit>::new_from_slice(self.0.audit.as_slice())
-        else {
+        let Ok(mut mac) = <Hmac<Sha256> as Mac>::new_from_slice(self.0.audit.as_slice()) else {
             // HMAC accepte des clés de toute taille : ce cas n'arrive pas.
             return [0; 32];
         };

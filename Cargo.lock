@@ -346,12 +346,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "const-oid"
-version = "0.10.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a6ef517f0926dd24a1582492c791b6a4818a4d94e789a334894aa15b0d12f55c"
-
-[[package]]
 name = "core-foundation"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -523,6 +517,7 @@ checksum = "9ed9a281f7bc9b7576e61468ba615a66a5c8cfdff42420a70aa82701a3b1e292"
 dependencies = [
  "block-buffer 0.10.4",
  "crypto-common 0.1.6",
+ "subtle",
 ]
 
 [[package]]
@@ -532,7 +527,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1dd6dbb5841937940781866fa1281a1ff7bd3bf827091440879f9994983d5c2"
 dependencies = [
  "block-buffer 0.12.1",
- "const-oid",
  "crypto-common 0.2.2",
  "ctutils",
 ]
@@ -599,7 +593,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -856,13 +850,13 @@ dependencies = [
  "serde",
  "serde-saphyr",
  "serde_json",
- "sha2 0.11.1",
+ "sha2 0.10.9",
  "socket2",
  "sqlx",
  "thiserror",
  "tokio",
  "tower",
- "tower-http 0.7.1",
+ "tower-http",
  "tracing",
 ]
 
@@ -890,12 +884,12 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
- "sha2 0.11.1",
+ "sha2 0.10.9",
  "tokio",
  "tokio-rustls",
  "tokio-tungstenite",
  "tower",
- "tower-http 0.7.1",
+ "tower-http",
  "tracing",
  "url",
  "zeroize",
@@ -926,9 +920,9 @@ dependencies = [
  "argon2",
  "getrandom 0.4.3",
  "ha-storage",
- "hmac",
- "sha1 0.11.0",
- "sha2 0.11.1",
+ "hmac 0.12.1",
+ "sha1 0.10.7",
+ "sha2 0.10.9",
  "sqlx",
  "thiserror",
  "tokio",
@@ -1021,13 +1015,13 @@ dependencies = [
  "ha-core",
  "ha-storage",
  "ha-tls",
- "hmac",
+ "hmac 0.12.1",
  "rcgen",
  "reqwest",
  "serde",
  "serde_json",
- "sha1 0.11.0",
- "sha2 0.11.1",
+ "sha1 0.10.7",
+ "sha2 0.10.9",
  "sqlx",
  "thiserror",
  "tokio",
@@ -1048,7 +1042,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "sha2 0.11.1",
+ "sha2 0.10.9",
  "sqlx",
  "thiserror",
  "tokio",
@@ -1326,7 +1320,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "sha2 0.11.1",
+ "sha2 0.10.9",
  "sqlx",
  "thiserror",
  "tokio",
@@ -1348,7 +1342,7 @@ dependencies = [
  "jiff",
  "reqwest",
  "serde_json",
- "sha2 0.11.1",
+ "sha2 0.10.9",
  "thiserror",
  "tokio",
  "tracing",
@@ -1362,10 +1356,10 @@ dependencies = [
  "chacha20poly1305",
  "getrandom 0.4.3",
  "ha-core",
- "hmac",
+ "hmac 0.12.1",
  "jiff",
  "serde_json",
- "sha2 0.11.1",
+ "sha2 0.10.9",
  "sqlx",
  "thiserror",
  "tokio",
@@ -1433,7 +1427,7 @@ dependencies = [
  "reqwest",
  "rustls",
  "rustls-platform-verifier",
- "sha2 0.11.1",
+ "sha2 0.10.9",
  "thiserror",
  "tokio",
 ]
@@ -1522,7 +1516,16 @@ version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4aaa26c720c68b866f2c96ef5c1264b3e6f473fe5d4ce61cd44bbe913e553018"
 dependencies = [
- "hmac",
+ "hmac 0.13.0",
+]
+
+[[package]]
+name = "hmac"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c49c37c09c17a53d937dfbb742eb3a961d65a994e6bcdcf37e7399d0cc8ab5e"
+dependencies = [
+ "digest 0.10.7",
 ]
 
 [[package]]
@@ -2379,7 +2382,7 @@ dependencies = [
  "tokio-rustls",
  "tokio-util",
  "tower",
- "tower-http 0.6.11",
+ "tower-http",
  "tower-service",
  "url",
  "wasm-bindgen",
@@ -2511,7 +2514,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2932,7 +2935,7 @@ dependencies = [
  "futures-util",
  "hex",
  "hkdf",
- "hmac",
+ "hmac 0.13.0",
  "itoa",
  "log",
  "md-5",
@@ -3225,27 +3228,11 @@ dependencies = [
  "http",
  "http-body",
  "pin-project-lite",
+ "tokio",
  "tower",
  "tower-layer",
  "tower-service",
  "url",
-]
-
-[[package]]
-name = "tower-http"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08a05a66a4fdd61cbbe0a1d755ffe0ca6aba159dd4820936a0ff8a8278245b9c"
-dependencies = [
- "bitflags 2.13.2",
- "bytes",
- "http",
- "http-body",
- "percent-encoding",
- "pin-project-lite",
- "tokio",
- "tower-layer",
- "tower-service",
 ]
 
 [[package]]
@@ -3549,7 +3536,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
