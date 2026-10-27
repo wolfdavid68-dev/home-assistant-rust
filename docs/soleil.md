@@ -114,7 +114,7 @@ démarrer avec un message clair, plutôt que d'ignorer l'automatisation en silen
 | Fichier | Contenu |
 |---------|---------|
 | [ha-sun/src/lib.rs](../crates/ha-sun/src/lib.rs) | Calcul des heures et de la position du soleil, entités `sun.sun` et `sensor.saison` |
-| [config.rs](../crates/ha-automation/src/config.rs) | Lecture du déclencheur et de la condition `sun` |
+| [config/](../crates/ha-automation/src/config/) | Lecture du déclencheur et de la condition `sun` |
 | [evaluator.rs](../crates/ha-automation/src/evaluator.rs) | Quand se déclencher, conditions remplies ou non |
 
 Le calcul est l'« équation du lever du soleil » (méthode de la NOAA, simplifiée) :

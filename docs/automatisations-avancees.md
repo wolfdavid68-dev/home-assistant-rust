@@ -141,7 +141,7 @@ reste active dans tous les modes.
 
 | Fichier | Contenu |
 |---------|---------|
-| [config.rs](../crates/ha-automation/src/config.rs) | Lecture, vérification (profondeur, budget), modes |
+| [config/](../crates/ha-automation/src/config/) | Lecture, vérification (profondeur, budget), modes |
 | [evaluator.rs](../crates/ha-automation/src/evaluator.rs) | `Checker` : les conditions, imbriquées ; quel déclencheur a fonctionné |
 | [engine.rs](../crates/ha-automation/src/engine.rs) | Exécution des blocs, modes `single` / `restart` / `queued` / `parallel` |
 | [app.js](../crates/ha-api/web/app.js) | Les blocs imbriqués dans l'éditeur |

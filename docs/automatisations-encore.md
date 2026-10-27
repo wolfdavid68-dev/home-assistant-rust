@@ -117,7 +117,7 @@ s'arrête) ».
 
 | Fichier | Contenu |
 |---------|---------|
-| [config.rs](../crates/ha-automation/src/config.rs) | Lecture et vérification (`check_time_pattern`, `repeat`, `wait_for_trigger`) |
+| [config/](../crates/ha-automation/src/config/) | Lecture et vérification (`check_time_pattern`, `repeat`, `wait_for_trigger`) |
 | [evaluator.rs](../crates/ha-automation/src/evaluator.rs) | `pattern_crossed` : un moment du motif est-il passé depuis la dernière seconde ? |
 | [engine.rs](../crates/ha-automation/src/engine.rs) | L'exécution de `repeat`, et `wait_for_trigger` |
 | [app.js](../crates/ha-api/web/app.js) | L'éditeur |
