@@ -131,17 +131,22 @@ function cleanDrawing(config) {
 
 async function loadHouse(force = false) {
   if (house.loading && !force) return house.loading;
-  house.loading = (async () => {
+  const loading = (async () => {
     const { status, data } = await api("GET", "/api/home/drawing");
-    if (status !== 200) return;
+    if (status !== 200) throw new Error(`dessin : erreur ${status}`);
     house.pages = cleanPages(data.config);
     house.images = Array.isArray(data.images) ? data.images : [];
     house.editable = data.editable === true;
     const used = house.pages.flatMap((page) => [page.background, page.night, ...Object.values(page.ambiances), ...page.layers.map((l) => l.image)]);
     await Promise.all(used.filter(Boolean).map(houseImage));
     selectPage(house.config?.id ?? pageWanted(), false);
-  })().catch(() => {});
-  return house.loading;
+  })().catch(() => {
+    // Raté (serveur redémarré, réseau coupé) : un prochain affichage
+    // réessaiera, pas avant 10 s.
+    setTimeout(() => { if (house.loading === loading) house.loading = null; }, 10_000);
+  });
+  house.loading = loading;
+  return loading;
 }
 
 /** L'adresse locale (blob:) d'une image : une balise <img> ne sait pas
