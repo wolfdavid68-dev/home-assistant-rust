@@ -166,6 +166,7 @@ async function houseImage(name) {
     if (old.startsWith(`${name}@`)) {
       URL.revokeObjectURL(oldUrl);
       house.urls.delete(old);
+      forgetCutout(oldUrl);
     }
   }
   house.urls.set(key, url);
@@ -339,6 +340,8 @@ function shutterShape(img) {
   return img._shape;
 }
 
+const shutterWaiting = new WeakSet();
+
 /** Dessine le volet descendu de ce qu'il faut : le haut de l'image, coupé
  *  par une ligne qui suit la pente de la fenêtre. */
 function placeShutter(img, state) {
@@ -346,7 +349,15 @@ function placeShutter(img, state) {
   const shape = shutterShape(img);
   if (open === null || !shape || open <= 2) {
     img.style.clipPath = "";
-    if (!shape && img.naturalWidth === 0) img.addEventListener("load", () => placeShutter(img, entities.get(img.dataset.entity)), { once: true });
+    // Image pas encore chargée : on réessaie à son chargement (une seule
+    // attente par image, même si le dessin est mis à jour entre-temps).
+    if (!shape && img.naturalWidth === 0 && !shutterWaiting.has(img)) {
+      shutterWaiting.add(img);
+      img.addEventListener("load", () => {
+        shutterWaiting.delete(img);
+        placeShutter(img, entities.get(img.dataset.entity));
+      }, { once: true });
+    }
     return;
   }
   const closed = 1 - open / 100;
@@ -499,6 +510,18 @@ async function makeCutout(img) {
   const [maskBlob, shadowBlob] = await Promise.all([toBlob(mask), toBlob(shadow)]);
   if (!maskBlob || !shadowBlob) return null;
   return { mask: URL.createObjectURL(maskBlob), shadow: URL.createObjectURL(shadowBlob) };
+}
+
+/** L'image `url` est remplacée : son masque et son ombre ne servent plus. */
+function forgetCutout(url) {
+  const cut = houseCutouts.get(url);
+  if (!cut) return;
+  houseCutouts.delete(url);
+  cut.then((done) => {
+    if (!done) return;
+    URL.revokeObjectURL(done.mask);
+    URL.revokeObjectURL(done.shadow);
+  });
 }
 
 const toBlob = (canvas) => new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
