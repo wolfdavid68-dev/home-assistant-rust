@@ -11,8 +11,9 @@ name: Publication
 #   4. Docker : l'image, testée comme dans docker.yml, publiée sur
 #      ghcr.io/wolfdavid68-dev/home-assistant-rust (`X.Y.Z` et `latest`).
 #
-# Aucune action tierce en dehors de checkout et rust-cache (épinglées) :
-# `gh` et `docker` sont déjà sur les machines de GitHub.
+# Peu d'actions tierces, toutes épinglées : checkout, rust-cache, et celles
+# de Docker pour le cache de l'image. `gh` et `docker` sont déjà sur les
+# machines de GitHub.
 
 on:
   push:
@@ -177,15 +178,29 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Build
+      - name: Version de l'image
+        id: version
         env:
           TAG: ${{ github.ref_name }}
-        run: |
-          docker build \
-            --label org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY} \
-            --label org.opencontainers.image.version=${TAG#v} \
-            --label org.opencontainers.image.licenses=MIT \
-            -t ha-server:release .
+        run: echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      # Le même cache que docker.yml (voir là-bas) : relancer une
+      # publication qui a échoué après la construction ne recompile rien.
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          load: true
+          tags: ha-server:release
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.licenses=MIT
+          provenance: false
+          cache-from: type=gha,scope=image
+          cache-to: type=gha,scope=image,mode=max,ignore-error=true
 
       - name: Smoke test
         run: |
