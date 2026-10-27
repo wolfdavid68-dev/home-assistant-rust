@@ -9,8 +9,9 @@
 //! (réglage `HA_ECOUTE`) :
 //!
 //! - **le service** `sherpa-onnx-offline-websocket-server`, installé par
-//!   `installer.sh --voix` : il garde le modèle en mémoire (≈ 900 Mo) et
-//!   répond en moins d'une seconde avec Parakeet (3 à 4 s avec Whisper) ;
+//!   `installer.sh --voix` (ou le service `ecoute` avec Docker) : il garde
+//!   le modèle en mémoire (≈ 900 Mo) et répond en moins d'une seconde avec
+//!   Parakeet (3 à 4 s avec Whisper) ;
 //! - **le programme** `sherpa-onnx-offline`, lancé pour chaque phrase :
 //!   rien qui tourne en permanence, mais 4 à 5 s de plus pour relire le
 //!   modèle (pour essayer sur un PC).
@@ -25,7 +26,7 @@
 pub(crate) mod server;
 mod wav;
 
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
@@ -86,8 +87,10 @@ enum Engine {
     /// modèle est relu à chaque fois (4 à 5 s de plus).
     Program(Program),
     /// Le service `sherpa-onnx-offline-websocket-server`, qui garde le
-    /// modèle en mémoire, sur cette machine (installé par `--voix`).
-    Server(SocketAddr),
+    /// modèle en mémoire, sur cette machine (installé par `--voix`) ou dans
+    /// le réseau interne de Docker : « hôte:port », vérifié par
+    /// [`service_address`].
+    Server(String),
 }
 
 #[derive(Debug)]
@@ -110,31 +113,20 @@ pub struct Stt {
 
 impl Stt {
     /// D'après le réglage `HA_ECOUTE` :
-    /// - `ws://127.0.0.1:port` : le service d'écoute, sur cette machine
-    ///   seulement (il n'a pas de mot de passe) ;
+    /// - `ws://127.0.0.1:port` : le service d'écoute, sur cette machine ;
+    /// - `ws://ecoute:port` : le service `ecoute` de Docker Compose, joint
+    ///   par le réseau interne de Docker (aucun port ouvert sur la machine) ;
     /// - sinon, le dossier du programme (voir [`Stt::from_dir`]).
+    ///
+    /// Le service n'a pas de mot de passe : une autre machine du réseau est
+    /// refusée (voir [`service_address`]).
     pub fn from_settings(setting: &str) -> Result<Self, SttError> {
         let setting = setting.trim();
         let Some(address) = setting.strip_prefix("ws://") else {
             return Self::from_dir(Path::new(setting));
         };
-        let address = address.trim_end_matches('/');
-        let address: SocketAddr = address
-            .replacen("localhost:", "127.0.0.1:", 1)
-            .parse()
-            .map_err(|_| {
-                SttError::Config(format!(
-                    "HA_ECOUTE : adresse invalide « {address} » (attendu : ws://127.0.0.1:port)"
-                ))
-            })?;
-        if !address.ip().is_loopback() {
-            return Err(SttError::Config(
-                "HA_ECOUTE : le service d'écoute doit tourner sur cette machine (ws://127.0.0.1:port)"
-                    .into(),
-            ));
-        }
         Ok(Self {
-            engine: Engine::Server(address),
+            engine: Engine::Server(service_address(address)?),
             turn: Semaphore::new(1),
         })
     }
@@ -171,7 +163,7 @@ impl Stt {
         })
     }
 
-    /// Pour le journal : « Whisper, service sherpa-onnx (ws://127.0.0.1:10350) ».
+    /// Pour le journal : « service d'écoute sherpa-onnx (ws://127.0.0.1:10350) ».
     #[must_use]
     pub fn describe(&self) -> String {
         match &self.engine {
@@ -234,7 +226,7 @@ impl Stt {
                     .map_err(|_| SttError::Timeout)??
             }
             Engine::Server(address) => {
-                tokio::time::timeout(TIMEOUT, server::transcribe(*address, samples))
+                tokio::time::timeout(TIMEOUT, server::transcribe(address, samples))
                     .await
                     .map_err(|_| SttError::Timeout)??
             }
@@ -366,6 +358,61 @@ impl Drop for TempWav {
     fn drop(&mut self) {
         let _ = std::fs::remove_file(&self.path);
     }
+}
+
+/// L'adresse du service d'écoute (`HA_ECOUTE=ws://…`), en « hôte:port ».
+/// Il n'a pas de mot de passe, alors seuls sont acceptés :
+/// - cette machine : `127.0.0.1`, `[::1]` ou `localhost` ;
+/// - un **nom de service Docker** sans point (`ecoute`), joint par le
+///   réseau interne de Docker Compose. Pas d'adresse IP d'une autre
+///   machine, ni de nom de domaine (`ecoute.exemple.fr`).
+///
+/// Avec Docker, le nom évite `network_mode: "service:ha-server"` : ainsi
+/// lié, le service d'écoute s'arrêtait à chaque nouveau conteneur
+/// `ha-server` et ne repartait pas tout seul.
+fn service_address(address: &str) -> Result<String, SttError> {
+    const WHERE: &str = "le service d'écoute doit tourner sur cette machine \
+                         (ws://127.0.0.1:port) ou dans Docker à côté (ws://ecoute:port)";
+    let address = address.trim_end_matches('/');
+    let refused = || SttError::Config(format!("HA_ECOUTE : « {address} » refusé, {WHERE}"));
+    if let Ok(socket) = address
+        .replacen("localhost:", "127.0.0.1:", 1)
+        .parse::<SocketAddr>()
+    {
+        return if socket.ip().is_loopback() {
+            Ok(socket.to_string())
+        } else {
+            Err(refused())
+        };
+    }
+    let Some((host, port)) = address.rsplit_once(':') else {
+        return Err(SttError::Config(format!(
+            "HA_ECOUTE : adresse invalide « {address} » (attendu : ws://127.0.0.1:port ou ws://ecoute:port)"
+        )));
+    };
+    let port = port
+        .parse::<u16>()
+        .ok()
+        .filter(|port| *port != 0)
+        .ok_or_else(|| SttError::Config(format!("HA_ECOUTE : port invalide dans « {address} »")))?;
+    // Une adresse IP écrite autrement (« 10.1 », « [fe80::1] ») : refusée.
+    if host.trim_matches(['[', ']']).parse::<IpAddr>().is_ok() || !is_service_name(host) {
+        return Err(refused());
+    }
+    Ok(format!("{host}:{port}"))
+}
+
+/// Un nom de service Docker Compose : une lettre d'abord, puis lettres,
+/// chiffres, « - » ou « _ », sans point (donc jamais un nom de domaine), et
+/// au plus 63 caractères. « 1 » ou « 0x7f » seraient lus comme des adresses
+/// IP par le système : la première lettre l'empêche.
+fn is_service_name(host: &str) -> bool {
+    let mut chars = host.chars();
+    chars
+        .next()
+        .is_some_and(|first| first.is_ascii_alphabetic())
+        && host.len() <= 63
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
 #[cfg(test)]

@@ -60,7 +60,7 @@ Le mot est reconnu avec de la tolérance : majuscules, accents et ponctuation ne
 | Le serveur | `HA_MOT_APPEL=Maison` | Le mot d'appel, 1 à 3 mots, des lettres seulement (« Maison » si rien n'est dit) ; un mauvais réglage est signalé au démarrage et « Maison » reste |
 
 Le mot d'appel demande le **service d'écoute** (`HA_ECOUTE=ws://127.0.0.1:10350`, mis par
-`tout-compris.sh --voix` ou le service `ecoute` avec Docker, voir l'[étape 84](voix.md)) : il garde
+`tout-compris.sh --voix`, ou `ws://ecoute:10350` avec le service `ecoute` de Docker, voir l'[étape 84](voix.md)) : il garde
 Parakeet en mémoire et répond en une fraction de seconde. Avec le programme lancé pour chaque phrase
 (`HA_ECOUTE=/chemin/du/dossier`), le modèle serait relu pour chaque morceau : la case n'est alors
 pas montrée, et `/api/conversation/wake` répond 503.

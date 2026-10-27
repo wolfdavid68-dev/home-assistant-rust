@@ -6,8 +6,6 @@
 //! à virgule de 32 bits (tout en petit-boutiste). Le service répond par un
 //! texte JSON (`{"text": "…"}`), et on lui dit « Done » pour finir.
 
-use std::net::SocketAddr;
-
 use futures_util::{SinkExt, StreamExt};
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
@@ -34,7 +32,7 @@ pub(crate) fn message(samples: &[u8]) -> Vec<u8> {
     out
 }
 
-pub(crate) async fn transcribe(address: SocketAddr, samples: &[u8]) -> Result<String, SttError> {
+pub(crate) async fn transcribe(address: &str, samples: &[u8]) -> Result<String, SttError> {
     let config = WebSocketConfig::default()
         .max_message_size(Some(MAX_REPLY))
         .max_frame_size(Some(MAX_REPLY));
@@ -121,6 +119,40 @@ mod tests {
             .to_string();
         assert!(error.contains("cette machine"), "{error}");
         assert!(Stt::from_settings("ws://maison").is_err());
+        assert!(Stt::from_settings("ws://localhost").is_err());
+    }
+
+    /// Avec Docker Compose : le nom du service, joint par le réseau interne.
+    #[test]
+    fn a_docker_service_is_accepted() {
+        let stt = Stt::from_settings("ws://ecoute:10350/").unwrap();
+        assert!(
+            stt.describe().contains("ws://ecoute:10350"),
+            "{}",
+            stt.describe()
+        );
+        assert!(Stt::from_settings("ws://ha-ecoute_1:10350").is_ok());
+        for refused in [
+            "ws://ecoute.exemple.fr:10350",
+            "ws://10.1:10350",
+            "ws://0x7f000001:10350",
+            "ws://1:10350",
+            "ws://[fe80::1]:10350",
+            "ws://-ecoute:10350",
+            "ws://éc:10350",
+            "ws://ecoute",
+            "ws://ecoute:0",
+            "ws://ecoute:99999",
+            "ws://ecoute:10350/chemin",
+            "ws://user@ecoute:10350",
+        ] {
+            let error = Stt::from_settings(refused).unwrap_err().to_string();
+            assert!(error.contains("HA_ECOUTE"), "{refused} : {error}");
+        }
+        let error = Stt::from_settings("ws://ecoute.exemple.fr:10350")
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("cette machine"), "{error}");
     }
 
     #[test]
