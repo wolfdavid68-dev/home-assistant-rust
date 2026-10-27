@@ -211,7 +211,7 @@ Les évènements servent aux automatisations. Par exemple, un message quand un c
 | [crates/ha-colis/src/amazon.rs](../crates/ha-colis/src/amazon.rs) | L'étape d'après l'objet, le nom de l'article, et les colis d'après les e-mails |
 | [crates/ha-colis/src/client.rs](../crates/ha-colis/src/client.rs) | La boucle : la boîte relue toutes les 3 minutes, les entités, les évènements, la photo |
 | [crates/ha-storage/src/mail.rs](../crates/ha-storage/src/mail.rs) | La boîte, mot de passe chiffré (migration `0025_colis`) |
-| [crates/ha-server/src/cli.rs](../crates/ha-server/src/cli.rs) | `colis pair`, `status`, `forget` |
+| [crates/ha-server/src/cli/accounts.rs](../crates/ha-server/src/cli/accounts.rs) | `colis pair`, `status`, `forget` |
 | [web/colis.js](../crates/ha-api/web/colis.js) | Nouveau : la fenêtre de la tablette, et la phrase de la vue hub |
 | [crates/ha-assist/src/lib.rs](../crates/ha-assist/src/lib.rs) | « J'ai un colis ? » |
 
