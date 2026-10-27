@@ -137,15 +137,24 @@ const live = {
   socket: null,
   retry: 1000,
   stopped: false,
+  timer: 0,
 
   open() {
     this.stopped = false;
+    clearTimeout(this.timer);
+    this.timer = 0;
+    // Une seule connexion à la fois : l'ancienne est fermée, et ce qu'elle
+    // dirait encore est ignoré (chaque écouteur vérifie qu'il est le bon).
+    const old = this.socket;
+    this.socket = null;
+    old?.close();
     const scheme = location.protocol === "https:" ? "wss" : "ws";
     const socket = new WebSocket(`${scheme}://${location.host}/api/websocket`);
     this.socket = socket;
     setStatus("Connexion…", false);
 
     socket.addEventListener("message", (event) => {
+      if (socket !== this.socket) return;
       const message = JSON.parse(event.data);
       if (message.type === "result" || message.type === "event") link.lastData = Date.now();
       switch (message.type) {
@@ -184,16 +193,24 @@ const live = {
     });
 
     socket.addEventListener("close", () => {
-      if (this.stopped) return;
+      if (socket !== this.socket || this.stopped) return;
       setStatus("Reconnexion…", false);
-      setTimeout(() => this.open(), this.retry);
+      clearTimeout(this.timer);
+      this.timer = setTimeout(() => {
+        this.timer = 0;
+        this.open();
+      }, this.retry);
       this.retry = Math.min(this.retry * 2, 30000);
     });
   },
 
   close() {
     this.stopped = true;
-    this.socket?.close();
+    clearTimeout(this.timer);
+    this.timer = 0;
+    const socket = this.socket;
+    this.socket = null;
+    socket?.close();
     linkLine(true);
   },
 };
