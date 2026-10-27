@@ -1,34 +1,25 @@
 name: CI
 
-# Mesuré sur les 118 runs du 14 au 16 octobre : 2 447 minutes facturées en
-# deux jours et demi, plus que tout le quota mensuel d'un dépôt privé.
+# Le dépôt est public depuis le 19 octobre 2026 : les machines standard de
+# GitHub ne sont plus facturées. La CI vérifie donc tout ce qui compte, sans
+# économiser les minutes :
 #
-#   job                     minutes   part
-#   clippy et tests Windows   1 282    52 %   (minute Windows comptée double)
-#   image Docker                506    21 %
-#   clippy et tests Linux       280    11 %
-#   deny + msrv + format        355    15 %   (une minute pleine chacun)
-#
-# Et 42 % de ce total venait des pushes sur `main`, qui revalidaient l'arbre
-# que la PR venait de valider. Trois changements :
-#
-#   1. Sur `main`, plus de CI complète. `pull_request` teste déjà le résultat
-#      de la fusion. Un push ne relance ce job que si le lockfile ou la
-#      toolchain bougent : c'est ce qui périme le cache Rust, et le cache de
-#      `main` est le seul dont toutes les PR héritent.
-#   2. Windows et Docker sortent dans leurs propres workflows (windows.yml,
-#      docker.yml), déclenchés seulement quand ils ont quelque chose à dire.
-#   3. Format, clippy, tests, deny et MSRV tiennent dans un seul job : chaque
-#      job est arrondi à la minute supérieure, cinq jobs de 10 à 50 s
-#      coûtaient cinq minutes.
+#   1. Chaque PR prête, et `main` après chaque fusion : `pull_request` teste
+#      le résultat de la fusion au moment du push, mais `main` a pu bouger
+#      depuis. Ce run garde aussi le cache Rust de `main`, le seul dont toutes
+#      les PR héritent.
+#   2. Windows et Docker ont leurs propres workflows (windows.yml,
+#      docker.yml) : leurs verdicts se lisent à part.
+#   3. Format, clippy, tests, deny et MSRV tiennent en deux jobs : un seul
+#      cache Rust par version de rustc.
 
 on:
   # Une PR en brouillon ne lance rien : une session de travail pousse une
-  # dizaine de commits par PR (56 PR en deux jours et demi), et chacun
-  # repayait toute la CI alors que seul le dernier verdict compte. La PR
+  # dizaine de commits par PR, et seul le dernier verdict compte (des runs
+  # inutiles encombrent l'onglet Actions et retardent les autres). La PR
   # s'ouvre en brouillon (voir CLAUDE.md) et la CI part au passage en
-  # « prête » (`ready_for_review`), puis à chaque push. Un job sauté ne coûte
-  # rien. Même règle dans windows.yml et docker.yml.
+  # « prête » (`ready_for_review`), puis à chaque push. Même règle dans
+  # windows.yml et docker.yml.
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     paths-ignore:
@@ -36,10 +27,9 @@ on:
       - "**/*.md"
   push:
     branches: [main]
-    paths:
-      - Cargo.lock
-      - Cargo.toml
-      - rust-toolchain.toml
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
   # Filet contre l'éviction du cache (7 jours sans accès).
   schedule:
     - cron: "0 3 * * 1"
