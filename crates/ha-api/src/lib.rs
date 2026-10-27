@@ -77,7 +77,7 @@ use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::timeout::TimeoutLayer;
 
 pub use automations::{AutomationEditor, CONFIRMATION_LIFETIME};
-pub use json::{format_timestamp, state_to_json};
+pub use json::{StateJson, format_timestamp};
 
 /// Taille maximale du corps d'une requête : 64 Kio suffisent largement.
 const MAX_BODY_SIZE: usize = 64 * 1024;

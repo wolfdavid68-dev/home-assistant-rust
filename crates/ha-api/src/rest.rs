@@ -20,7 +20,7 @@ use zeroize::Zeroizing;
 use crate::ApiState;
 use crate::auth::Authenticated;
 use crate::error::ApiError;
-use crate::json::{format_timestamp, state_to_json};
+use crate::json::{StateJson, format_timestamp};
 use crate::roles;
 
 /// Nombre de lignes d'historique renvoyées par défaut.
@@ -295,16 +295,15 @@ pub(crate) async fn root(
 pub(crate) async fn list_states(
     State(state): State<Arc<ApiState>>,
     auth: Authenticated,
-) -> Json<Value> {
-    let states: Vec<Value> = state
-        .core
-        .states
-        .all()
+) -> Response {
+    let all = state.core.states.all();
+    // Écrits directement depuis les états partagés, sans copie intermédiaire.
+    let states: Vec<StateJson<'_>> = all
         .iter()
         .filter(|s| roles::can_see(&auth.user, s.entity_id(), Some(s)))
-        .map(|s| state_to_json(s))
+        .map(|s| StateJson::new(s))
         .collect();
-    Json(Value::Array(states))
+    Json(states).into_response()
 }
 
 /// `GET /api/states/{entity_id}`
@@ -312,7 +311,7 @@ pub(crate) async fn get_state(
     State(state): State<Arc<ApiState>>,
     auth: Authenticated,
     Path(entity_id): Path<String>,
-) -> Result<Json<Value>, ApiError> {
+) -> Result<Response, ApiError> {
     let entity_id = parse_entity_id(&entity_id)?;
     let current = state
         .core
@@ -321,7 +320,7 @@ pub(crate) async fn get_state(
         // Caché : comme s'il n'existait pas (on ne révèle pas qu'il existe).
         .filter(|current| roles::can_see(&auth.user, &entity_id, Some(current)))
         .ok_or(ApiError::NotFound)?;
-    Ok(Json(state_to_json(&current)))
+    Ok(Json(StateJson::new(&current)).into_response())
 }
 
 /// `GET /api/camera_proxy/{entity_id}` : la dernière image d'une caméra
@@ -431,7 +430,7 @@ pub(crate) async fn set_state(
     } else {
         StatusCode::CREATED
     };
-    Ok((status, Json(state_to_json(&current))).into_response())
+    Ok((status, Json(StateJson::new(&current))).into_response())
 }
 
 /// `DELETE /api/states/{entity_id}`

@@ -2,19 +2,58 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use ha_core::State;
-use serde_json::{Value, json};
+use ha_core::{Attributes, State};
+use serde::{Serialize, Serializer};
 
-/// `{"entity_id": …, "state": …, "attributes": {…}, "last_changed": …, "last_updated": …}`
-#[must_use]
-pub fn state_to_json(state: &State) -> Value {
-    json!({
+/// L'ancien chemin, par un arbre `serde_json::Value` : gardé seulement comme
+/// référence, pour vérifier que [`StateJson`] écrit exactement le même texte.
+#[cfg(test)]
+pub(crate) fn state_to_json(state: &State) -> serde_json::Value {
+    serde_json::json!({
         "entity_id": state.entity_id().as_str(),
         "state": state.state(),
         "attributes": state.attributes(),
         "last_changed": format_timestamp(state.last_changed()),
         "last_updated": format_timestamp(state.last_updated()),
     })
+}
+
+/// Un état vu en JSON, écrit directement depuis l'état : rien n'est copié
+/// dans un arbre `serde_json::Value` intermédiaire.
+///
+/// Les champs suivent l'ordre alphabétique, celui que donnait jusqu'ici
+/// `serde_json::Value` (ses objets sont triés) : la sortie reste identique,
+/// octet pour octet.
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct StateJson<'a> {
+    attributes: &'a Attributes,
+    entity_id: &'a str,
+    #[serde(serialize_with = "timestamp")]
+    last_changed: SystemTime,
+    #[serde(serialize_with = "timestamp")]
+    last_updated: SystemTime,
+    state: &'a str,
+}
+
+impl<'a> StateJson<'a> {
+    #[must_use]
+    pub fn new(state: &'a State) -> Self {
+        Self {
+            attributes: state.attributes(),
+            entity_id: state.entity_id().as_str(),
+            last_changed: state.last_changed(),
+            last_updated: state.last_updated(),
+            state: state.state(),
+        }
+    }
+}
+
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "signature imposée par `serialize_with`"
+)]
+fn timestamp<S: Serializer>(time: &SystemTime, serializer: S) -> Result<S::Ok, S::Error> {
+    serializer.serialize_str(&format_timestamp(*time))
 }
 
 /// Date au format ISO 8601 / RFC 3339 en UTC : `2026-10-14T17:01:59.780320Z`.
@@ -55,6 +94,8 @@ fn civil_from_days(days: i64) -> (i64, i64, i64) {
 mod tests {
     use std::time::Duration;
 
+    use serde_json::{Value, json};
+
     use super::*;
 
     #[test]
@@ -67,5 +108,74 @@ mod tests {
         assert_eq!(at(951_782_400, 0), "2000-02-29T00:00:00.000000Z");
         assert_eq!(at(1_700_000_000, 123_456), "2023-11-14T22:13:20.123456Z");
         assert_eq!(at(1_798_761_599, 0), "2026-12-31T23:59:59.000000Z");
+    }
+
+    /// La vue écrite directement donne exactement le même texte que l'ancien
+    /// passage par `serde_json::Value`, sur des états variés.
+    #[test]
+    fn the_direct_view_writes_the_same_text_as_the_value_tree() {
+        use ha_core::{EntityId, EventBus, StateMachine};
+
+        let states = StateMachine::new(EventBus::new(16));
+        let at = |secs: u64, micros: u64| {
+            UNIX_EPOCH + Duration::from_secs(secs) + Duration::from_micros(micros)
+        };
+        let cases = [
+            (
+                "light.salon",
+                "on",
+                json!({"brightness": 200, "friendly_name": "Salon"}),
+                at(1_700_000_000, 123_456),
+                at(1_700_000_005, 1),
+            ),
+            ("sensor.vide", "unknown", json!({}), at(0, 0), at(0, 0)),
+            (
+                "sensor.temperature",
+                "21.5",
+                json!({
+                    "unit_of_measurement": "°C",
+                    "zéro": 0.0,
+                    "pi": std::f64::consts::PI,
+                    "petit": 1e-7,
+                    "grand": 1.5e300,
+                    "négatif": -42,
+                    "énorme": u64::MAX,
+                }),
+                at(951_782_400, 999_999),
+                at(1_798_761_599, 0),
+            ),
+            (
+                "cover.volet_chambre",
+                "ouvert \"à moitié\"\n\ttab \\ \u{1}",
+                json!({
+                    "liste": [1, "deux", null, true, {"z": 1, "a": [2.5, []]}],
+                    "objet": {"b": {"c": {"d": "profond"}}, "a": null},
+                    "emoji": "🏠 maison",
+                    "Majuscule": false,
+                    "": "clé vide",
+                    "\u{7f}contrôle": "\u{0}</script>",
+                }),
+                at(1_234_567_890, 500_000),
+                at(1_234_567_891, 0),
+            ),
+        ];
+        for (id, value, attributes, changed, updated) in cases {
+            let id = EntityId::new(id).unwrap();
+            let Value::Object(attributes) = attributes else {
+                unreachable!()
+            };
+            states
+                .restore(id.clone(), value, attributes, changed, updated)
+                .unwrap();
+            let state = states.get(&id).unwrap();
+            let before = state_to_json(&state).to_string();
+            let after = serde_json::to_string(&StateJson::new(&state)).unwrap();
+            assert_eq!(after, before, "{id}");
+        }
+        // Une liste d'états aussi, telle que la renvoient REST et WebSocket.
+        let all = states.all();
+        let before = Value::Array(all.iter().map(|s| state_to_json(s)).collect()).to_string();
+        let views: Vec<StateJson<'_>> = all.iter().map(|s| StateJson::new(s)).collect();
+        assert_eq!(serde_json::to_string(&views).unwrap(), before);
     }
 }
