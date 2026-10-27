@@ -1,7 +1,7 @@
 name: Publication
 
 # Publier une version : pousser une étiquette `vX.Y.Z` égale à la version
-# de Cargo.toml. Quatre jobs :
+# de Cargo.toml, sur un commit de `main` (vérifié). Quatre jobs :
 #
 #   1. la version GitHub, avec ses notes ;
 #   2. Windows : `ha-server.exe` et ses fichiers, dans un zip joint à la
@@ -39,6 +39,20 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # Tout l'historique : il faut `main` pour l'étape suivante.
+          fetch-depth: 0
+
+      # `latest` est ce que télécharge toute nouvelle installation : seul un
+      # commit fusionné dans `main` (donc passé par une PR et sa CI) peut
+      # devenir une version. Une étiquette posée sur une branche de travail
+      # arrête tout ici, avant la version GitHub et les images.
+      - name: L'étiquette est sur main
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Le commit $GITHUB_SHA n'est pas dans main : pas de version."
+            exit 1
+          fi
 
       - name: L'étiquette suit Cargo.toml
         env:
@@ -215,6 +229,9 @@ jobs:
           done
           docker logs ha
           test "$status" = healthy
+          # La politique de sécurité (CSP) part avec chaque page, comme dans
+          # docker.yml et image-main.yml.
+          curl -fsS -D - -o /dev/null http://127.0.0.1:8123/ | grep -i '^content-security-policy:'
           docker stop ha
 
       - name: Publier sur ghcr.io
