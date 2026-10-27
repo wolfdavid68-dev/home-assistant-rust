@@ -10,6 +10,12 @@ use tracing::{error, warn};
 
 use crate::store::Store;
 
+/// Nombre maximal d'événements écrits dans une même transaction.
+///
+/// Assez pour absorber une rafale (des dizaines de capteurs qui changent
+/// ensemble), assez peu pour ne pas bloquer la base longtemps.
+const MAX_BATCH: usize = 256;
+
 /// Poignée vers l'enregistreur qui tourne en arrière-plan.
 ///
 /// Si la poignée est abandonnée sans appeler [`Recorder::stop`], l'enregistreur
@@ -41,12 +47,22 @@ async fn run(
     mut events: Receiver<Arc<Event>>,
     token: CancellationToken,
 ) {
+    let mut batch = Vec::with_capacity(MAX_BATCH);
     loop {
         // Concept Rust : `select!` attend le premier qui arrive, un événement
         // ou la demande d'arrêt.
         tokio::select! {
             received = events.recv() => match received {
-                Ok(event) => record(&store, &event).await,
+                Ok(event) => {
+                    // Ceux qui attendent déjà derrière partent avec lui, dans
+                    // la même transaction.
+                    batch.push(event);
+                    let missed = take_pending(&mut events, &mut batch);
+                    record_batch(&store, &mut batch).await;
+                    if let Some(missed) = missed {
+                        resync(&store, &core, missed).await;
+                    }
+                }
                 Err(RecvError::Lagged(missed)) => resync(&store, &core, missed).await,
                 Err(RecvError::Closed) => return,
             },
@@ -56,32 +72,67 @@ async fn run(
 
     // Arrêt demandé : on vide ce qui reste dans le canal avant de partir.
     loop {
-        match events.try_recv() {
-            Ok(event) => record(&store, &event).await,
-            Err(TryRecvError::Lagged(missed)) => resync(&store, &core, missed).await,
-            Err(TryRecvError::Empty | TryRecvError::Closed) => break,
+        let missed = take_pending(&mut events, &mut batch);
+        if batch.is_empty() && missed.is_none() {
+            break;
+        }
+        record_batch(&store, &mut batch).await;
+        if let Some(missed) = missed {
+            resync(&store, &core, missed).await;
         }
     }
 }
 
-async fn record(store: &Store, event: &Event) {
-    match event {
-        Event::StateChanged {
-            entity_id,
-            new_state,
-            ..
-        } => {
-            // Une erreur d'écriture (disque plein…) ne doit pas arrêter le
-            // système : on la signale et on continue avec l'événement suivant.
-            if let Err(error) = store.record_change(entity_id, new_state.as_ref()).await {
-                error!("échec d'enregistrement de {entity_id} : {error}");
+/// Ajoute au lot les événements déjà arrivés, sans attendre, jusqu'à
+/// [`MAX_BATCH`]. Renvoie le nombre d'événements perdus si l'enregistreur a
+/// pris trop de retard : le lot est alors à écrire **avant** de resynchroniser.
+fn take_pending(events: &mut Receiver<Arc<Event>>, batch: &mut Vec<Arc<Event>>) -> Option<u64> {
+    while batch.len() < MAX_BATCH {
+        match events.try_recv() {
+            Ok(event) => batch.push(event),
+            Err(TryRecvError::Lagged(missed)) => return Some(missed),
+            Err(TryRecvError::Empty | TryRecvError::Closed) => break,
+        }
+    }
+    None
+}
+
+/// Écrit les changements d'état du lot, dans l'ordre, puis vide le lot.
+async fn record_batch(store: &Store, batch: &mut Vec<Arc<Event>>) {
+    let changes: Vec<_> = batch
+        .iter()
+        .filter_map(|event| match event.as_ref() {
+            Event::StateChanged {
+                entity_id,
+                new_state,
+                ..
+            } => Some((entity_id, new_state.as_ref())),
+            // Un appel de service n'est pas un changement d'état : si
+            // l'appareil obéit, son nouvel état arrivera par un `StateChanged`.
+            // Pareil pour un événement nommé (`timer.finished`…).
+            Event::CallService { .. } | Event::Fired { .. } => None,
+        })
+        .collect();
+    if let Err(error) = store.record_changes(&changes).await {
+        if let [(entity_id, _)] = changes.as_slice() {
+            error!("échec d'enregistrement de {entity_id} : {error}");
+        } else {
+            // La transaction groupée a été annulée en entier : on réessaie
+            // un par un, pour ne perdre que le changement fautif.
+            warn!(
+                "échec d'enregistrement groupé ({} changements) : {error} ; nouvel essai un par un",
+                changes.len()
+            );
+            for (entity_id, new_state) in changes {
+                // Une erreur d'écriture (disque plein…) ne doit pas arrêter le
+                // système : on la signale et on continue avec la suivante.
+                if let Err(error) = store.record_change(entity_id, new_state).await {
+                    error!("échec d'enregistrement de {entity_id} : {error}");
+                }
             }
         }
-        // Un appel de service n'est pas un changement d'état : si l'appareil
-        // obéit, son nouvel état arrivera par un `StateChanged`.
-        // Pareil pour un événement nommé (`timer.finished`…).
-        Event::CallService { .. } | Event::Fired { .. } => {}
     }
+    batch.clear();
 }
 
 /// L'enregistreur a pris trop de retard et des événements ont été perdus.

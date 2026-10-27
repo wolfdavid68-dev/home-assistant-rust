@@ -16,12 +16,15 @@
 
 1. Le **Recorder** (l'enregistreur) est un abonné du bus comme un autre. Pour chaque
    `StateChanged`, il met à jour la table `states` et ajoute une ligne dans `state_history`,
-   dans une seule **transaction** (tout ou rien).
+   dans une **transaction** (tout ou rien). Les changements déjà en attente (une rafale de
+   capteurs) partent ensemble, jusqu'à 256 par transaction, dans le même ordre.
 2. Au démarrage, `Store::restore_into` relit la table `states` et remet chaque entité dans la
    machine à états, avec ses dates d'origine. Aucun événement n'est publié : rien n'a vraiment
    changé, on se souvient simplement de ce qu'on savait avant l'arrêt.
-3. Au démarrage aussi, l'historique plus vieux que `HA_HISTORY_DAYS` jours (10 par défaut) est
-   supprimé, pour que la base ne grossisse pas sans fin.
+3. Au démarrage, puis une fois par jour, l'historique plus vieux que `HA_HISTORY_DAYS` jours
+   (10 par défaut) est supprimé, pour que la base ne grossisse pas sans fin, même si le serveur
+   reste allumé des mois. Après la purge quotidienne, `PRAGMA optimize` laisse SQLite mettre à
+   jour ses statistiques sur les index.
 4. À l'arrêt (Ctrl+C), l'enregistreur écrit les derniers événements en attente avant de fermer
    la base.
 
