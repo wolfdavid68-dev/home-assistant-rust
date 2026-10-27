@@ -72,12 +72,17 @@ services:
       # HA_PIPER: tcp://piper:10200
       # Parler à la maison depuis la tablette (voir docs/voix.md) : la voix
       # ci-dessus (HA_PIPER et le service « piper ») et l'écoute (service
-      # « ecoute » plus bas) :
-      # HA_ECOUTE: ws://127.0.0.1:10350
+      # « ecoute » plus bas, avec « networks » ci-dessous) :
+      # HA_ECOUTE: ws://ecoute:10350
       # Compteur Linky (voir docs/energie.md) : module USB (avec « devices »
       # et « group_add » plus bas), ou module réseau :
       # HA_TELEINFO: /dev/ttyUSB0
       # HA_TELEINFO: tcp://192.168.1.50:3333
+    # L'écoute (service « ecoute » plus bas) : ha-server rejoint aussi son
+    # réseau interne.
+    # networks:
+    #   - default
+    #   - ecoute
     volumes:
       - ha-data:/data
       # La clé qui chiffre les jetons Hue et Somfy, à part de la base.
@@ -134,18 +139,18 @@ services:
   #   mem_limit: 512m
 
   # L'écoute de la tablette (Parakeet, voir docs/voix.md) : enlève les « # »
-  # de ce service, et mets HA_ECOUTE plus haut. Construite sur cette machine
-  # (670 Mo téléchargés une fois, chaque fichier vérifié par son empreinte),
-  # avec « docker compose build ecoute ». Elle vit dans le réseau de
-  # ha-server, qui la joint sur 127.0.0.1 : aucun port publié. Pas avec
-  # « network_mode: host » (Alexa) : elle serait alors ouverte au réseau.
+  # de ce service, du réseau « ecoute » tout en bas, et mets HA_ECOUTE et
+  # « networks » dans ha-server. Construite sur cette machine (670 Mo
+  # téléchargés une fois, chaque fichier vérifié par son empreinte), avec
+  # « docker compose build ecoute ». Elle vit dans un réseau interne à elle,
+  # que seul ha-server rejoint : aucun port publié, pas d'accès à Internet.
+  # Pas avec « network_mode: host » (Alexa) : ha-server ne la joindrait pas.
   # ecoute:
   #   build: https://github.com/wolfdavid68-dev/home-assistant-rust.git#main:packaging/docker/ecoute
   #   image: ha-maison-ecoute:local
   #   restart: unless-stopped
-  #   network_mode: "service:ha-server"
-  #   depends_on:
-  #     - ha-server
+  #   networks:
+  #     - ecoute
   #   user: "65532:65532"
   #   read_only: true
   #   cap_drop:
@@ -179,3 +184,8 @@ volumes:
 #     file: ./secrets/mqtt_password
 #   meteofrance:
 #     file: ./secrets/meteofrance.txt
+
+# Le réseau de l'écoute (voir le service « ecoute ») : interne, sans Internet.
+# networks:
+#   ecoute:
+#     internal: true
