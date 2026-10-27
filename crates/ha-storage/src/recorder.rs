@@ -73,7 +73,7 @@ async fn record(store: &Store, event: &Event) {
         } => {
             // Une erreur d'écriture (disque plein…) ne doit pas arrêter le
             // système : on la signale et on continue avec l'événement suivant.
-            if let Err(error) = store.record_change(entity_id, new_state.as_ref()).await {
+            if let Err(error) = store.record_change(entity_id, new_state.as_deref()).await {
                 error!("échec d'enregistrement de {entity_id} : {error}");
             }
         }

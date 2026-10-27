@@ -159,7 +159,7 @@ fn tracker_home(entity_id: &EntityId, state: Option<&State>) -> Option<bool> {
 pub fn person_state(person: &Person, core: &Core) -> (&'static str, Option<EntityId>) {
     let mut away = None;
     for tracker in &person.trackers {
-        match tracker_home(tracker, core.states.get(tracker).as_ref()) {
+        match tracker_home(tracker, core.states.get(tracker).as_deref()) {
             Some(true) => return ("home", Some(tracker.clone())),
             Some(false) => away = away.or_else(|| Some(tracker.clone())),
             None => {}

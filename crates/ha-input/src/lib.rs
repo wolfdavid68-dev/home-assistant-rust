@@ -70,7 +70,7 @@ impl Inputs {
         let mut finished = Vec::new();
         for helper in config.helpers {
             let restored = core.states.get(&helper.entity_id);
-            let (entry, finished_while_down) = Entry::new(helper, restored.as_ref(), now, wall);
+            let (entry, finished_while_down) = Entry::new(helper, restored.as_deref(), now, wall);
             let entity_id = entry.helper.entity_id.clone();
             publish(core, &entry, now);
             if finished_while_down {

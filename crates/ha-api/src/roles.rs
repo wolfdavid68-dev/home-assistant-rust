@@ -124,7 +124,7 @@ pub(crate) fn can_control_with_members(
     states: &ha_core::StateMachine,
 ) -> bool {
     let state = states.get(entity_id);
-    if !can_control(user, entity_id, state.as_ref()) {
+    if !can_control(user, entity_id, state.as_deref()) {
         return false;
     }
     let Some(members) = state
@@ -138,7 +138,7 @@ pub(crate) fn can_control_with_members(
         member
             .as_str()
             .and_then(|id| id.parse::<EntityId>().ok())
-            .is_some_and(|id| can_control(user, &id, states.get(&id).as_ref()))
+            .is_some_and(|id| can_control(user, &id, states.get(&id).as_deref()))
     })
 }
 
@@ -153,7 +153,7 @@ pub(crate) fn guards_the_house(entity_id: &EntityId, states: &ha_core::StateMach
                 && device_class(state).is_some_and(|c| FORBIDDEN_COVER_CLASSES.contains(&c)))
     };
     let state = states.get(entity_id);
-    if sensitive(entity_id, state.as_ref()) {
+    if sensitive(entity_id, state.as_deref()) {
         return true;
     }
     state
@@ -165,7 +165,7 @@ pub(crate) fn guards_the_house(entity_id: &EntityId, states: &ha_core::StateMach
                 .iter()
                 .filter_map(Value::as_str)
                 .filter_map(|id| id.parse::<EntityId>().ok())
-                .any(|id| sensitive(&id, states.get(&id).as_ref()))
+                .any(|id| sensitive(&id, states.get(&id).as_deref()))
         })
 }
 

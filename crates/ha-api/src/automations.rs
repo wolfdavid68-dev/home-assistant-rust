@@ -184,7 +184,7 @@ fn warnings(state: &ApiState, automation: &Automation) -> Vec<String> {
     automation
         .entity_ids()
         .into_iter()
-        .filter(|entity_id| state.core.states.get(entity_id).is_none())
+        .filter(|entity_id| !state.core.states.contains(entity_id))
         .map(|entity_id| format!("{entity_id} n'existe pas (pour l'instant)"))
         .collect()
 }
@@ -453,7 +453,7 @@ pub(crate) fn notify(state: &ApiState, message: &str) {
     let Ok(entity_id) = NOTIFY_ENTITY.parse::<EntityId>() else {
         return;
     };
-    if state.core.states.get(&entity_id).is_none() {
+    if !state.core.states.contains(&entity_id) {
         return;
     }
     let mut data = Attributes::new();

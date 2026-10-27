@@ -298,7 +298,7 @@ async fn run(
             let current = core.states.get(device);
             let Some(service) = order(
                 device.domain(),
-                current.as_ref().map(ha_core::State::state),
+                current.as_deref().map(ha_core::State::state),
                 target,
             ) else {
                 continue;

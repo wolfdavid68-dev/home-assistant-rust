@@ -31,7 +31,7 @@ async fn setup() -> (Arc<Core>, Agenda, Store) {
 }
 
 /// Appelle un service puis attend que l'entité change (2 s au plus).
-async fn call(core: &Core, domain: &str, service: &str, entity: &str, value: Value) -> State {
+async fn call(core: &Core, domain: &str, service: &str, entity: &str, value: Value) -> Arc<State> {
     let id: EntityId = entity.parse().unwrap();
     let before = core.states.get(&id);
     core.call_service_from(

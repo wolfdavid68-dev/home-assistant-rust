@@ -41,7 +41,7 @@ fn change(
         .set(id(entity), value, attributes(attrs))
         .unwrap();
     let new = core.states.get(&id(entity));
-    evaluator.on_state_changed(&id(entity), old.as_ref(), new.as_ref(), Instant::now())
+    evaluator.on_state_changed(&id(entity), old.as_deref(), new.as_deref(), Instant::now())
 }
 
 const NONE: [usize; 0] = [];

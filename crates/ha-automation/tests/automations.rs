@@ -29,7 +29,7 @@ fn change(core: &Core, evaluator: &mut Evaluator, entity: &str, value: &str) -> 
         .set(id(entity), value, Attributes::new())
         .unwrap();
     let new = core.states.get(&id(entity));
-    evaluator.on_state_changed(&id(entity), old.as_ref(), new.as_ref(), Instant::now())
+    evaluator.on_state_changed(&id(entity), old.as_deref(), new.as_deref(), Instant::now())
 }
 
 #[test]

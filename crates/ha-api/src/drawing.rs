@@ -601,7 +601,7 @@ fn visible_to(state: &ApiState, user: &User, mut drawing: Drawing) -> Drawing {
     let can_see = |entity_id: &str| {
         entity_id.parse::<EntityId>().is_ok_and(|id| {
             let current = state.core.states.get(&id);
-            roles::can_see(user, &id, current.as_ref())
+            roles::can_see(user, &id, current.as_deref())
         })
     };
     for page in &mut drawing.pages {

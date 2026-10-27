@@ -88,10 +88,10 @@ pub fn line_for(
             old_state,
             new_state,
         } => {
-            let message = describe_change(old_state.as_ref(), new_state.as_ref())?;
+            let message = describe_change(old_state.as_deref(), new_state.as_deref())?;
             Some(Line {
                 entity_id: Some(entity_id.clone()),
-                name: name_of(entity_id, new_state.as_ref()),
+                name: name_of(entity_id, new_state.as_deref()),
                 message,
                 cause: recent.take_cause(entity_id, now),
             })
@@ -115,7 +115,7 @@ pub fn line_for(
                 recent.take_cause(&entity_id, now)
             };
             Some(Line {
-                name: name_of(&entity_id, states.get(&entity_id).as_ref()),
+                name: name_of(&entity_id, states.get(&entity_id).as_deref()),
                 message: message.into(),
                 cause,
                 entity_id: Some(entity_id),
@@ -187,7 +187,7 @@ mod tests {
         value.parse().unwrap()
     }
 
-    fn state(core: &Core, entity: &str, value: &str) -> State {
+    fn state(core: &Core, entity: &str, value: &str) -> std::sync::Arc<State> {
         let mut attributes = Attributes::new();
         attributes.insert("friendly_name".into(), "Salon".into());
         core.states.set(id(entity), value, attributes).unwrap();

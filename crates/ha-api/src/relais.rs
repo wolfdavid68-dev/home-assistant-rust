@@ -287,7 +287,7 @@ fn publish_mower(
                 .core
                 .states
                 .get(&entity_id)
-                .as_ref()
+                .as_deref()
                 .map(ha_core::State::state),
         ),
     };

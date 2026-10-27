@@ -205,7 +205,11 @@ fn visible(user: &User, event: &Event) -> bool {
             entity_id,
             old_state,
             new_state,
-        } => roles::can_see(user, entity_id, new_state.as_ref().or(old_state.as_ref())),
+        } => roles::can_see(
+            user,
+            entity_id,
+            new_state.as_deref().or(old_state.as_deref()),
+        ),
         // Commandes et événements nommés (qui a fait quoi) : pas pour un invité.
         Event::CallService { .. } | Event::Fired { .. } => user.can(Permission::AllDevices),
     }
@@ -227,7 +231,7 @@ fn handle_command(
                 .all()
                 .iter()
                 .filter(|s| roles::can_see(user, s.entity_id(), Some(s)))
-                .map(state_to_json)
+                .map(|s| state_to_json(s))
                 .collect();
             json!({"id": id, "type": "result", "success": true, "result": states})
         }
@@ -285,7 +289,7 @@ fn registry_entry(state: &ApiState, user: &User, entity_id: &str) -> Option<Valu
     if current.is_none() && placed.is_none() {
         return None;
     }
-    if !roles::can_see(user, &entity_id, current.as_ref()) {
+    if !roles::can_see(user, &entity_id, current.as_deref()) {
         return None;
     }
     let attribute = |key: &str| {
@@ -353,8 +357,8 @@ fn event_message(id: u64, event: &Event) -> Value {
                 "event_type": "state_changed",
                 "data": {
                     "entity_id": entity_id.as_str(),
-                    "old_state": old_state.as_ref().map(state_to_json),
-                    "new_state": new_state.as_ref().map(state_to_json),
+                    "old_state": old_state.as_deref().map(state_to_json),
+                    "new_state": new_state.as_deref().map(state_to_json),
                 },
             },
         }),

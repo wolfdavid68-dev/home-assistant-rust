@@ -2,6 +2,7 @@
 //! sont passés en paramètre, pour les tester facilement.
 
 use std::collections::VecDeque;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use ha_core::State;
@@ -15,12 +16,22 @@ fn silent(state: &State) -> bool {
     matches!(state.state(), "unavailable" | "unknown")
 }
 
+/// Les membres connus qui répondent.
+fn answering(members: &[Option<Arc<State>>]) -> Vec<&State> {
+    members
+        .iter()
+        .flatten()
+        .map(Arc::as_ref)
+        .filter(|s| !silent(s))
+        .collect()
+}
+
 /// L'état d'un groupe de lumières, prises, ventilateurs ou détecteurs :
 /// allumé si au moins un membre l'est (ou tous, avec `all`). `None` si aucun
 /// membre ne répond.
 #[must_use]
-pub fn on_off_group(members: &[Option<State>], all: bool) -> Option<bool> {
-    let answering: Vec<&State> = members.iter().flatten().filter(|s| !silent(s)).collect();
+pub fn on_off_group(members: &[Option<Arc<State>>], all: bool) -> Option<bool> {
+    let answering: Vec<&State> = answering(members);
     if answering.is_empty() {
         return None;
     }
@@ -31,8 +42,8 @@ pub fn on_off_group(members: &[Option<State>], all: bool) -> Option<bool> {
 /// L'état d'un groupe de volets : en mouvement si l'un bouge, ouvert si l'un
 /// est ouvert, fermé si tous le sont. Avec la position moyenne.
 #[must_use]
-pub fn cover_group(members: &[Option<State>]) -> Option<(&'static str, Option<f64>)> {
-    let answering: Vec<&State> = members.iter().flatten().filter(|s| !silent(s)).collect();
+pub fn cover_group(members: &[Option<Arc<State>>]) -> Option<(&'static str, Option<f64>)> {
+    let answering: Vec<&State> = answering(members);
     if answering.is_empty() {
         return None;
     }
@@ -63,10 +74,11 @@ fn count(n: usize) -> f64 {
 /// Minimum, maximum, moyenne… des capteurs qui répondent par un nombre.
 /// `last` prend le plus récemment changé.
 #[must_use]
-pub fn statistic(kind: Statistic, sources: &[Option<State>]) -> Option<f64> {
+pub fn statistic(kind: Statistic, sources: &[Option<Arc<State>>]) -> Option<f64> {
     let mut values: Vec<(f64, &State)> = sources
         .iter()
         .flatten()
+        .map(Arc::as_ref)
         .filter_map(|s| {
             Some((
                 s.state()
@@ -550,7 +562,7 @@ mod tests {
     use jiff::civil::date;
     use serde_json::{Value, json};
 
-    fn state(value: &str, attributes: Value) -> Option<State> {
+    fn state(value: &str, attributes: Value) -> Option<Arc<State>> {
         let Value::Object(attributes) = attributes else {
             panic!("un objet est attendu")
         };

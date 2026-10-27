@@ -570,20 +570,19 @@ impl Base {
     fn eval(&self, scope: &Scope<'_>) -> Val {
         match self {
             Self::Literal(value) => value.clone(),
+            // Lus sur place, sans prendre l'état entier.
             Self::States(id) => Val::Text(
                 scope
                     .states
-                    .get(id)
-                    .map_or_else(|| "unknown".to_owned(), |s| s.state().to_owned()),
+                    .with(id, |s| s.state().to_owned())
+                    .unwrap_or_else(|| "unknown".to_owned()),
             ),
             Self::StateAttr(id, name) => scope
                 .states
-                .get(id)
-                .and_then(|s| s.attributes().get(name).map(Val::from_json))
+                .with(id, |s| s.attributes().get(name).map(Val::from_json))
+                .flatten()
                 .unwrap_or(Val::None),
-            Self::IsState(id, expected) => {
-                Val::Bool(scope.states.get(id).is_some_and(|s| s.state() == expected))
-            }
+            Self::IsState(id, expected) => Val::Bool(scope.states.is_state(id, expected)),
             Self::Entity(id, field) => scope
                 .states
                 .get(id)
@@ -1607,8 +1606,8 @@ mod tests {
         let trigger = TriggerData {
             id: Some("orange".into()),
             entity_id: Some(id.clone()),
-            from_state: other.states.get(&id),
-            to_state: after,
+            from_state: other.states.get(&id).as_deref().cloned(),
+            to_state: after.as_deref().cloned(),
             ..TriggerData::default()
         };
         let text = "{{ trigger.to_state.name }} : {{ trigger.from_state.state | lower }} → \

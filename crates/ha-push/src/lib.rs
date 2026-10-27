@@ -1017,7 +1017,7 @@ mod tests {
         }
     }
 
-    fn notice(id: &str, state: &str, value: Value) -> State {
+    fn notice(id: &str, state: &str, value: Value) -> Arc<State> {
         let core = Core::new();
         let id: EntityId = id.parse().unwrap();
         core.states
@@ -1026,7 +1026,7 @@ mod tests {
         core.states.get(&id).unwrap()
     }
 
-    fn changed(new: State, old: Option<State>) -> Event {
+    fn changed(new: Arc<State>, old: Option<Arc<State>>) -> Event {
         Event::StateChanged {
             entity_id: new.entity_id().clone(),
             old_state: old,
@@ -1548,7 +1548,7 @@ mod tests {
 
     #[test]
     fn a_serious_alert_that_goes_away_is_resolved() {
-        let gone = |state: State| Event::StateChanged {
+        let gone = |state: Arc<State>| Event::StateChanged {
             entity_id: state.entity_id().clone(),
             old_state: Some(state),
             new_state: None,

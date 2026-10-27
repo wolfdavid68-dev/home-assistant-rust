@@ -163,6 +163,77 @@ fn all_returns_states_sorted_by_id() {
 }
 
 #[test]
+fn reading_shares_the_state_instead_of_copying_it() {
+    let core = Core::new();
+    let mut rx = core.bus.subscribe();
+    let salon = id("light.salon");
+    assert!(core.states.is_empty());
+    core.states
+        .set(salon.clone(), "on", attrs(json!({"brightness": 200})))
+        .unwrap();
+
+    // `get`, `all` et l'événement donnent le même état, pas trois copies.
+    let read = core.states.get(&salon).unwrap();
+    assert!(Arc::ptr_eq(&read, &core.states.all()[0]));
+    let event = rx.try_recv().unwrap();
+    let Event::StateChanged { new_state, .. } = event.as_ref() else {
+        panic!("StateChanged attendu");
+    };
+    assert!(Arc::ptr_eq(&read, new_state.as_ref().unwrap()));
+
+    // Un changement range un nouvel état : l'ancien reste tel quel.
+    core.states
+        .set(salon.clone(), "off", Attributes::new())
+        .unwrap();
+    assert_eq!(read.state(), "on");
+    assert_eq!(read.attributes()["brightness"], json!(200));
+    let event = rx.try_recv().unwrap();
+    let Event::StateChanged { old_state, .. } = event.as_ref() else {
+        panic!("StateChanged attendu");
+    };
+    assert!(Arc::ptr_eq(&read, old_state.as_ref().unwrap()));
+
+    // Les lectures sur place.
+    assert_eq!(core.states.len(), 1);
+    assert!(!core.states.is_empty());
+    assert!(core.states.contains(&salon));
+    assert!(!core.states.contains(&id("light.cuisine")));
+    assert!(core.states.is_state(&salon, "off"));
+    assert!(!core.states.is_state(&salon, "on"));
+    assert!(!core.states.is_state(&id("light.cuisine"), "off"));
+    assert_eq!(
+        core.states.with(&salon, |s| s.state().len()),
+        Some("off".len())
+    );
+    assert_eq!(
+        core.states.with(&id("light.cuisine"), |s| s.state().len()),
+        None
+    );
+}
+
+#[test]
+fn a_new_owner_alone_publishes_nothing_but_is_kept() {
+    let core = Core::new();
+    let mut rx = core.bus.subscribe();
+    let lamp = id("light.salon");
+    core.states
+        .set(lamp.clone(), "on", Attributes::new())
+        .unwrap();
+    let before = core.states.get(&lamp).unwrap();
+    rx.try_recv().unwrap();
+
+    let changed = core
+        .states
+        .set_by("hue", lamp.clone(), "on", Attributes::new())
+        .unwrap();
+    assert!(!changed);
+    assert_eq!(rx.try_recv(), Err(TryRecvError::Empty));
+    assert_eq!(core.states.owner_of(&lamp).as_deref(), Some("hue"));
+    // L'état déjà lu n'a pas bougé.
+    assert_eq!(before.owner(), None);
+}
+
+#[test]
 fn restore_keeps_dates_and_publishes_nothing() {
     let core = Core::new();
     let mut rx = core.bus.subscribe();
