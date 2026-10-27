@@ -40,5 +40,5 @@ commit, une PR ou un commentaire. Ses fichiers personnels restent hors du dépô
 explicite de David : la version est publique et téléchargée telle quelle. Voir
 `docs/installation.md`.
 
-Ajouter l'étiquette `windows` à une PR qui touche aux chemins de fichiers, au
-port série ou aux permissions : c'est elle qui lance la vérification Windows.
+La vérification Windows (`windows.yml`) tourne sur chaque PR prête, comme la
+CI Linux : plus besoin d'étiquette.

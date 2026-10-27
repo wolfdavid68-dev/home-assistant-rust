@@ -110,11 +110,8 @@ async function cameraUrl(state) {
   if (!Number.isFinite(at) || at <= 0) return null;
   const key = `${state.entity_id}@${at}`;
   if (doorbell.urls.has(key)) return doorbell.urls.get(key);
-  const response = await fetch(`/api/camera_proxy/${encodeURIComponent(state.entity_id)}`, {
-    headers: { Authorization: `Bearer ${token.get()}` },
-    cache: "no-store",
-  });
-  if (!response.ok) return null;
+  const response = await authFetch(`/api/camera_proxy/${encodeURIComponent(state.entity_id)}`, { cache: "no-store" });
+  if (!response?.ok) return null;
   const url = URL.createObjectURL(await response.blob());
   for (const [old, oldUrl] of doorbell.urls) {
     if (old.startsWith(`${state.entity_id}@`)) {

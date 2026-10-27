@@ -56,6 +56,22 @@ function ago(iso) {
   return relative.format(-Math.round(value), unit).replace(/^il y a /, "");
 }
 
+/** Un texte « … il y a 5 minutes … » qui vieillit sur place : `before`,
+ *  `ago(iso)`, `after`. La minute qui passe le réécrit (refreshAgo). */
+function markAgo(node, iso, before, after = "") {
+  node.dataset.ago = iso;
+  node.dataset.agoBefore = before;
+  node.dataset.agoAfter = after;
+  setText(node, `${before}${ago(iso)}${after}`);
+  return node;
+}
+
+function refreshAgo() {
+  for (const node of document.querySelectorAll("[data-ago]")) {
+    setText(node, `${node.dataset.agoBefore}${ago(node.dataset.ago)}${node.dataset.agoAfter}`);
+  }
+}
+
 /** Crée un élément. Le texte passe TOUJOURS par `textContent` (jamais de HTML). */
 function el(tag, attributes = {}, ...children) {
   const node = document.createElement(tag);

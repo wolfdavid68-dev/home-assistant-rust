@@ -458,29 +458,31 @@ $("#hub-courses").addEventListener("click", () => {
   $("#hub-list").showModal();
 });
 $("#hub-list-close").addEventListener("click", () => $("#hub-list").close());
-$("#hub-list-form").addEventListener("submit", (event) => {
+$("#hub-list-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const input = $("#hub-list-text");
   const item = input.value.trim();
   if (item === "") return;
-  callService("todo", "add_item", { entity_id: HUB_LIST, item });
-  input.value = "";
+  // Effacé seulement si l'ordre est parti.
+  if (await callService("todo", "add_item", { entity_id: HUB_LIST, item }) && input.value.trim() === item) input.value = "";
 });
 
 // ---------------------------------------------------------------- Annonce
 // « Annonce à la maison » : une phrase, lue sur toutes les enceintes.
 
-$("#hub-say-form").addEventListener("submit", (event) => {
+$("#hub-say-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const input = $("#hub-say-text");
   const announcer = hubAnnouncer();
   const message = input.value.trim();
   if (!announcer || message === "") return;
-  callService("tts", "speak", {
+  const sent = await callService("tts", "speak", {
     entity_id: announcer.tts.entity_id,
     media_player_entity_id: announcer.speakers,
     message,
   });
+  // L'annonce n'est pas partie : la fenêtre reste ouverte, le texte aussi.
+  if (!sent) return;
   input.value = "";
   $("#hub-say").close();
 });

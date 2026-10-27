@@ -317,6 +317,8 @@ fn wav_of(samples: Vec<i16>) -> Vec<u8> {
 async fn the_tablet_can_talk_to_the_house() {
     use std::os::unix::fs::PermissionsExt;
 
+    use crate::common::furnish;
+
     let app = TestApp::new().await;
     furnish(&app);
     let david = app.login().await;

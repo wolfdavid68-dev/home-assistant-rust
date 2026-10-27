@@ -88,7 +88,7 @@ refuse donne « Pas fait : … ». C'est la meilleure confirmation possible en m
 
 Tests : confirmé tout de suite, confirmé après un moment, jamais confirmé, déjà dans le bon
 état, indisponible, et les intégrations lentes ou supposées non attendues (`confirm.rs`) ; la
-même chose de bout en bout par `/api/conversation/process` (`tests/api.rs`).
+même chose de bout en bout par `/api/conversation/process` (`tests/api/assist.rs`).
 
 Limites : les ordres donnés en touchant le tableau de bord ne sont pas concernés (la carte montre
 déjà l'état réel quand il arrive). Le seuil de 3 s est fixe.

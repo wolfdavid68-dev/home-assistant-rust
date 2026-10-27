@@ -1,23 +1,18 @@
-# Ce qui n'est jamais envoyé à Docker pendant la construction :
-# fichiers compilés, historique git, et surtout tes données et secrets.
-target
-.git
-.github
-docs
-config
-secrets
-.env
-.env.*
-*.db
-*.db-*
-*.pem
-*.key
-automations.yaml
-areas.yaml
-scripts.yaml
-scenes.yaml
-alexa.yaml
-thermostats.yaml
-persons.yaml
-inputs.yaml
-sauvegardes
+# Liste blanche : Docker ne reçoit que ce qui sert à compiler ha-server.
+# Tout le reste (tes fichiers YAML, config/, secrets/, la base, les
+# sauvegardes, l'historique git, target/…) n'est jamais envoyé, même sous
+# un nom qu'on n'aurait pas prévu.
+*
+
+# Le workspace et ses dépendances exactes (Cargo.lock).
+!Cargo.toml
+!Cargo.lock
+!crates
+# Supprimé dans le Dockerfile (le Rust de l'image suffit), mais présent pour
+# que `COPY . .` donne le même arbre qu'un checkout.
+!rust-toolchain.toml
+# Les exemples, que des tests lisent avec `include_str!("../../../…")`.
+!*.example.yaml
+
+# Des fichiers compilés à l'intérieur des crates, s'il y en a.
+crates/**/target

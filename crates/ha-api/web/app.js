@@ -137,15 +137,24 @@ const live = {
   socket: null,
   retry: 1000,
   stopped: false,
+  timer: 0,
 
   open() {
     this.stopped = false;
+    clearTimeout(this.timer);
+    this.timer = 0;
+    // Une seule connexion à la fois : l'ancienne est fermée, et ce qu'elle
+    // dirait encore est ignoré (chaque écouteur vérifie qu'il est le bon).
+    const old = this.socket;
+    this.socket = null;
+    old?.close();
     const scheme = location.protocol === "https:" ? "wss" : "ws";
     const socket = new WebSocket(`${scheme}://${location.host}/api/websocket`);
     this.socket = socket;
     setStatus("Connexion…", false);
 
     socket.addEventListener("message", (event) => {
+      if (socket !== this.socket) return;
       const message = JSON.parse(event.data);
       if (message.type === "result" || message.type === "event") link.lastData = Date.now();
       switch (message.type) {
@@ -184,16 +193,24 @@ const live = {
     });
 
     socket.addEventListener("close", () => {
-      if (this.stopped) return;
+      if (socket !== this.socket || this.stopped) return;
       setStatus("Reconnexion…", false);
-      setTimeout(() => this.open(), this.retry);
+      clearTimeout(this.timer);
+      this.timer = setTimeout(() => {
+        this.timer = 0;
+        this.open();
+      }, this.retry);
       this.retry = Math.min(this.retry * 2, 30000);
     });
   },
 
   close() {
     this.stopped = true;
-    this.socket?.close();
+    clearTimeout(this.timer);
+    this.timer = 0;
+    const socket = this.socket;
+    this.socket = null;
+    socket?.close();
     linkLine(true);
   },
 };
@@ -244,8 +261,8 @@ function onStateChanged({ entity_id, old_state, new_state }) {
   scheduleHome();
   // La tuile est dans les sections, et peut-être aussi dans la fenêtre d'une
   // pièce (house.js) : on remplace chacune.
-  const existing = document.querySelectorAll(`:is(.sections, .room-body) #${CSS.escape(tileId(entity_id))}`);
-  if (existing.length > 0 && new_state) for (const tile of existing) tile.replaceWith(renderTile(new_state));
+  const existing = shownTiles(entity_id);
+  if (existing.length > 0 && new_state) updateTiles(entity_id);
   else if (!old_state || !new_state) {
     // Entité ajoutée ou supprimée : on redessine tout. Une entité sans tuile
     // (rangée dans une pièce du tableau, une scène…) n'a rien à remplacer :
@@ -255,46 +272,120 @@ function onStateChanged({ entity_id, old_state, new_state }) {
   }
 }
 
+// ---------------------------------------------------------------- Tuile en main
+// Un doigt posé sur une tuile (un curseur qu'on glisse) : elle n'est pas
+// remplacée sous lui, mais quand il se lève. Le champ où l'on écrit, lui,
+// passe dans la nouvelle tuile avec son texte : une liste de courses se
+// met à jour pendant qu'on tape l'article suivant.
+const tileHold = { pointer: null, waiting: new Set(), moved: new WeakMap() };
+const TILE_FIELDS = "button, input, select, textarea";
+const TYPED_INPUT = /^(text|search|number|email|url|tel|password|date|time|datetime-local)$/;
+
+function shownTiles(entityId) {
+  return document.querySelectorAll(`:is(.sections, .room-body) #${CSS.escape(tileId(entityId))}`);
+}
+
+function updateTiles(entityId) {
+  const state = entities.get(entityId);
+  if (!state) return;
+  for (const tile of shownTiles(entityId)) {
+    if (tileHold.pointer && tile.contains(tileHold.pointer)) tileHold.waiting.add(entityId);
+    else replaceTile(tile, state);
+  }
+}
+
+/** Remplace une tuile ; le focus (et le texte en cours) passe au même champ
+ *  de la nouvelle. */
+function replaceTile(tile, state) {
+  const next = renderTile(state);
+  const focused = tile.contains(document.activeElement) ? document.activeElement : null;
+  const index = focused ? [...tile.querySelectorAll(TILE_FIELDS)].indexOf(focused) : -1;
+  const twin = index < 0 ? null : next.querySelectorAll(TILE_FIELDS)[index];
+  const same = twin && twin.tagName === focused.tagName && twin.type === focused.type;
+  const typed = same && (focused.tagName === "TEXTAREA" || TYPED_INPUT.test(focused.type));
+  if (typed) {
+    twin.value = focused.value;
+    tileHold.moved.set(focused, twin);
+  }
+  tile.replaceWith(next);
+  if (!same) return;
+  twin.focus({ preventScroll: true });
+  if (typed) {
+    try {
+      twin.setSelectionRange(focused.selectionStart, focused.selectionEnd);
+    } catch {
+      // Champ sans curseur de texte (nombre, date) : le focus suffit.
+    }
+  }
+}
+
+/** Le champ qui a pris la place de `field` dans une tuile redessinée
+ *  (ou `field` lui-même) : c'est lui qu'on vide après un envoi. */
+function liveField(field) {
+  let node = field;
+  while (!node.isConnected && tileHold.moved.has(node)) node = tileHold.moved.get(node);
+  return node;
+}
+
+addEventListener("pointerdown", (event) => {
+  tileHold.pointer = event.target instanceof Element ? event.target : null;
+}, { capture: true, passive: true });
+for (const type of ["pointerup", "pointercancel"]) {
+  addEventListener(type, () => {
+    tileHold.pointer = null;
+    // Un peu plus tard : le clic et le `change` du même geste visent encore
+    // l'ancienne tuile.
+    setTimeout(() => {
+      if (tileHold.pointer) return;
+      const waiting = [...tileHold.waiting];
+      tileHold.waiting.clear();
+      for (const id of waiting) updateTiles(id);
+    }, 50);
+  }, { capture: true, passive: true });
+}
+
 // ---------------------------------------------------------------- Commandes
+/** Envoie un ordre. Renvoie true s'il est parti (ou attend sa validation),
+ *  false sinon : la raison est déjà dite à l'écran. */
 async function callService(domain, service, data) {
-  const response = await fetch(`/api/services/${domain}/${service}`, {
+  const response = await authFetch(`/api/services/${domain}/${service}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token.get()}` },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  if (response.status === 401) {
-    token.clear();
-    live.close();
-    showLogin("Session expirée : reconnecte-toi.");
-  } else if (response.status === 403) {
-    const body = await response.json().catch(() => ({}));
+  if (!response) {
+    flash("Serveur injoignable : l'ordre n'est pas parti.");
+    unmarkPending(data.entity_id);
+    return false;
+  }
+  if (response.ok && response.status !== 202) return true;
+  if (response.status === 401) return false;
+  const body = await response.json().catch(() => ({}));
+  unmarkPending(data.entity_id);
+  if (response.status === 403) {
     // Déverrouiller une porte : le serveur redemande le mot de passe.
     if (body.confirm === true) {
-      unmarkPending(data.entity_id);
       askConfirmation(() => callService(domain, service, data));
-      return;
+      return false;
     }
     flash(typeof body.error === "string" ? `${body.error}.` : "Ton compte ne permet pas cette commande.");
-    unmarkPending(data.entity_id);
   } else if (response.status === 202) {
     // Pièce protégée, heures calmes : l'ordre attend qu'un membre de la
     // famille le valide.
-    const body = await response.json().catch(() => ({}));
     flash(typeof body.message === "string" ? `${body.message}.` : "Ordre en attente de validation.");
-    unmarkPending(data.entity_id);
+    return true;
   } else if (response.status === 400) {
     // L'ordre ne convient pas à l'appareil (« consigne entre 7 et 30 ») :
     // le serveur l'a refusé avant de l'envoyer.
-    const body = await response.json().catch(() => ({}));
     flash(typeof body.error === "string" ? `${body.error}.` : "Commande refusée.");
-    unmarkPending(data.entity_id);
   } else if ([502, 503, 504].includes(response.status)) {
     // L'appareil a refusé, son intégration est en panne, ou il n'a pas
     // répondu : on le dit, plutôt que de laisser la tuile clignoter.
-    const body = await response.json().catch(() => ({}));
     flash(typeof body.error === "string" ? `${body.error}.` : "L'appareil n'a pas répondu.");
-    unmarkPending(data.entity_id);
+  } else {
+    flash(`La commande a échoué (erreur ${response.status}).`);
   }
+  return false;
 }
 
 // La tuile « clignote » jusqu'à ce que l'appareil confirme (ou 5 s au plus).
@@ -346,8 +437,8 @@ function shownAreas() {
 }
 
 async function loadAreas() {
-  const response = await fetch("/api/areas", { headers: { Authorization: `Bearer ${token.get()}` } });
-  if (!response.ok) return;
+  const response = await authFetch("/api/areas");
+  if (!response?.ok) return;
   areas = (await response.json()).areas ?? [];
   customNames.clear();
   for (const area of areas) {
@@ -440,23 +531,36 @@ function showRoom(name) {
   $("#sections").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
 }
 
+/** Le jeton n'est plus bon (expiré, révoqué) : retour à la connexion. */
+function sessionExpired() {
+  for (const dialog of document.querySelectorAll("dialog[open]")) dialog.close();
+  token.clear();
+  live.close();
+  showLogin("Session expirée : reconnecte-toi.");
+}
+
+/** `fetch` avec le jeton. Renvoie la réponse, ou `null` si le serveur est
+ *  injoignable. Un 401 ramène à la connexion (la réponse est quand même
+ *  rendue : pas `ok`, l'appelant s'arrête là). */
+async function authFetch(url, options = {}) {
+  let response;
+  try {
+    response = await fetch(url, { ...options, headers: { ...options.headers, Authorization: `Bearer ${token.get()}` } });
+  } catch {
+    return null;
+  }
+  if (response.status === 401) sessionExpired();
+  return response;
+}
+
 /** Appel à l'API : renvoie { status, data }. */
 async function api(method, url, body) {
-  const response = await fetch(url, {
+  const response = await authFetch(url, {
     method,
-    headers: {
-      Authorization: `Bearer ${token.get()}`,
-      ...(body !== undefined && { "Content-Type": "application/json" }),
-    },
-    ...(body !== undefined && { body: JSON.stringify(body) }),
+    ...(body !== undefined && { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
   });
-  if (response.status === 401) {
-    for (const dialog of document.querySelectorAll("dialog[open]")) dialog.close();
-    token.clear();
-    live.close();
-    showLogin("Session expirée : reconnecte-toi.");
-    throw new Error("session expirée");
-  }
+  if (!response) throw new Error("serveur injoignable");
+  if (response.status === 401) throw new Error("session expirée");
   const data = await response.json().catch(() => ({}));
   return { status: response.status, data };
 }

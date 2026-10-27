@@ -43,8 +43,8 @@ jobs:
         with:
           persist-credentials: false
 
-      # Le Rust de l'image (épinglé), pas la « stable » du moment demandée
-      # par ce fichier (comme dans le Dockerfile).
+      # Le Rust de l'image (la même 1.99 que rust-toolchain.toml), sans en
+      # faire télécharger une seconde copie par rustup (comme le Dockerfile).
       - name: Rust de l'image
         run: rm rust-toolchain.toml
 
