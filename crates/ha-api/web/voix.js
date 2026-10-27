@@ -300,11 +300,8 @@ async function voiceStop() {
     const url = conversation
       ? `/api/conversation/audio?conversation_id=${encodeURIComponent(conversation)}`
       : "/api/conversation/audio";
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token.get()}`, "Content-Type": "audio/wav" },
-      body: wav,
-    });
+    const response = await authFetch(url, { method: "POST", headers: { "Content-Type": "audio/wav" }, body: wav });
+    if (!response) throw new Error("réseau");
     const data = await response.json().catch(() => ({}));
     if (response.ok) answer = data;
     else assistSay("home", typeof data?.error === "string" ? `${data.error}.` : "La maison n'a pas répondu.", "is-error");
@@ -391,12 +388,12 @@ function voiceCancel() {
 
 /** La réponse, dite par la voix de la maison, sur la tablette. */
 async function voiceSay(text) {
-  const response = await fetch("/api/conversation/speech", {
+  const response = await authFetch("/api/conversation/speech", {
     method: "POST",
-    headers: { Authorization: `Bearer ${token.get()}`, "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text }),
   });
-  if (!response.ok) return;
+  if (!response?.ok) return;
   const sound = await voice.player.decodeAudioData(await response.arrayBuffer());
   if (voice.state !== "speaking") return;
   const play = voice.player.createBufferSource();
@@ -566,11 +563,9 @@ async function wakeHeard(samples) {
   const run = voice.run;
   try {
     const wav = wavFile(downsample([samples], wake.context.sampleRate, VOICE_RATE), VOICE_RATE);
-    const response = await fetch("/api/conversation/wake", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token.get()}`, "Content-Type": "audio/wav" },
-      body: wav,
-    });
+    const response = await authFetch("/api/conversation/wake", { method: "POST", headers: { "Content-Type": "audio/wav" }, body: wav });
+    // Le réseau a manqué : ce morceau est perdu, le suivant passera.
+    if (!response) return;
     if (response.status === 429 || response.status >= 500) {
       // Trop de morceaux, ou l'écoute en panne : une pause, puis on reprend.
       const wait = Number(response.headers.get("Retry-After")) * 1000 || WAKE_RETRY_MS;

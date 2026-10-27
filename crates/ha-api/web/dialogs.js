@@ -71,15 +71,9 @@ async function loadHistory() {
   const request = ++historyView.request;
   if (historyView.hours > LONG_TERM_HOURS) return loadStatistics(request);
   const url = `/api/history/${encodeURIComponent(historyView.entityId)}/series?hours=${historyView.hours}`;
-  const response = await fetch(url, { headers: { Authorization: `Bearer ${token.get()}` } });
-  if (request !== historyView.request) return;
-  if (response.status === 401) {
-    $("#history").close();
-    token.clear();
-    live.close();
-    return showLogin("Session expirée : reconnecte-toi.");
-  }
-  if (!response.ok) throw new Error("historique");
+  const response = await authFetch(url);
+  if (request !== historyView.request || response?.status === 401) return;
+  if (!response?.ok) throw new Error("historique");
   const data = await response.json();
   if (request === historyView.request) drawHistory(data);
 }
@@ -291,15 +285,9 @@ const dateTime = new Intl.DateTimeFormat("fr", { dateStyle: "short", timeStyle: 
 
 async function loadJournal() {
   const list = $("#journal-list");
-  const response = await fetch("/api/audit?limit=50", {
-    headers: { Authorization: `Bearer ${token.get()}` },
-  });
-  if (response.status === 401) {
-    token.clear();
-    live.close();
-    return showLogin("Session expirée : reconnecte-toi.");
-  }
-  if (!response.ok) return list.replaceChildren(el("li", { text: "Journal indisponible." }));
+  const response = await authFetch("/api/audit?limit=50");
+  if (response?.status === 401) return;
+  if (!response?.ok) return list.replaceChildren(el("li", { text: "Journal indisponible." }));
   const { entries } = await response.json();
   list.replaceChildren(
     ...entries.map((entry) => {

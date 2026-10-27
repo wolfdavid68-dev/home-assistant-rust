@@ -156,10 +156,8 @@ async function houseImage(name) {
   if (!info) return null;
   const key = `${name}@${info.updated_at}`;
   if (house.urls.has(key)) return house.urls.get(key);
-  const response = await fetch(`/api/home/images/${encodeURIComponent(name)}`, {
-    headers: { Authorization: `Bearer ${token.get()}` },
-  });
-  if (!response.ok) return null;
+  const response = await authFetch(`/api/home/images/${encodeURIComponent(name)}`);
+  if (!response?.ok) return null;
   const url = URL.createObjectURL(await response.blob());
   // Une ancienne version de la même image n'a plus d'usage.
   for (const [old, oldUrl] of house.urls) {
@@ -2662,11 +2660,11 @@ function cutPart(draft, refresh) {
           create.disabled = false;
           return drawingStatus(`« ${entry.name} » : image trop grosse.`, "error");
         }
-        const response = await fetch(`/api/home/images/${encodeURIComponent(entry.name)}`, {
+        const response = await authFetch(`/api/home/images/${encodeURIComponent(entry.name)}`, {
           method: "PUT",
-          headers: { Authorization: `Bearer ${token.get()}`, "Content-Type": blob.type },
+          headers: { "Content-Type": blob.type },
           body: blob,
-        }).catch(() => null);
+        });
         if (!response?.ok) {
           const data = await response?.json().catch(() => ({}));
           create.disabled = false;
@@ -2706,9 +2704,7 @@ function renderDrawingEditor() {
     remove.addEventListener("click", async () => {
       // Effacée du serveur, pas seulement du brouillon : on demande.
       if (!window.confirm(`Retirer l'image « ${image.name} » du serveur ? Les calques qui s'en servent ne l'afficheront plus.`)) return;
-      const response = await fetch(`/api/home/images/${encodeURIComponent(image.name)}`, {
-        method: "DELETE", headers: { Authorization: `Bearer ${token.get()}` },
-      }).catch(() => null);
+      const response = await authFetch(`/api/home/images/${encodeURIComponent(image.name)}`, { method: "DELETE" });
       if (!response) return drawingStatus("Serveur injoignable : l'image n'est pas retirée.", "error");
       const data = await response.json().catch(() => ({}));
       if (!response.ok) return drawingStatus(data.error ?? "Retrait impossible.", "error");
@@ -2733,11 +2729,11 @@ function renderDrawingEditor() {
     if (file.size > MAX_HOUSE_IMAGE) return drawingStatus("Image trop grosse : 3 Mio au plus (exporte-la en WebP, qualité 80).", "error");
     send.disabled = true;
     drawingStatus("Envoi…");
-    const response = await fetch(`/api/home/images/${encodeURIComponent(name)}`, {
+    const response = await authFetch(`/api/home/images/${encodeURIComponent(name)}`, {
       method: "PUT",
-      headers: { Authorization: `Bearer ${token.get()}`, "Content-Type": file.type || "application/octet-stream" },
+      headers: { "Content-Type": file.type || "application/octet-stream" },
       body: file,
-    }).catch(() => null);
+    });
     send.disabled = false;
     const data = await response?.json().catch(() => ({}));
     if (!response?.ok) return drawingStatus(data?.error ?? "Envoi impossible.", "error");

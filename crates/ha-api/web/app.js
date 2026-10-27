@@ -348,25 +348,18 @@ for (const type of ["pointerup", "pointercancel"]) {
 /** Envoie un ordre. Renvoie true s'il est parti (ou attend sa validation),
  *  false sinon : la raison est déjà dite à l'écran. */
 async function callService(domain, service, data) {
-  let response;
-  try {
-    response = await fetch(`/api/services/${domain}/${service}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token.get()}` },
-      body: JSON.stringify(data),
-    });
-  } catch {
+  const response = await authFetch(`/api/services/${domain}/${service}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!response) {
     flash("Serveur injoignable : l'ordre n'est pas parti.");
     unmarkPending(data.entity_id);
     return false;
   }
   if (response.ok && response.status !== 202) return true;
-  if (response.status === 401) {
-    token.clear();
-    live.close();
-    showLogin("Session expirée : reconnecte-toi.");
-    return false;
-  }
+  if (response.status === 401) return false;
   const body = await response.json().catch(() => ({}));
   unmarkPending(data.entity_id);
   if (response.status === 403) {
@@ -444,8 +437,8 @@ function shownAreas() {
 }
 
 async function loadAreas() {
-  const response = await fetch("/api/areas", { headers: { Authorization: `Bearer ${token.get()}` } });
-  if (!response.ok) return;
+  const response = await authFetch("/api/areas");
+  if (!response?.ok) return;
   areas = (await response.json()).areas ?? [];
   customNames.clear();
   for (const area of areas) {
@@ -538,23 +531,36 @@ function showRoom(name) {
   $("#sections").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
 }
 
+/** Le jeton n'est plus bon (expiré, révoqué) : retour à la connexion. */
+function sessionExpired() {
+  for (const dialog of document.querySelectorAll("dialog[open]")) dialog.close();
+  token.clear();
+  live.close();
+  showLogin("Session expirée : reconnecte-toi.");
+}
+
+/** `fetch` avec le jeton. Renvoie la réponse, ou `null` si le serveur est
+ *  injoignable. Un 401 ramène à la connexion (la réponse est quand même
+ *  rendue : pas `ok`, l'appelant s'arrête là). */
+async function authFetch(url, options = {}) {
+  let response;
+  try {
+    response = await fetch(url, { ...options, headers: { ...options.headers, Authorization: `Bearer ${token.get()}` } });
+  } catch {
+    return null;
+  }
+  if (response.status === 401) sessionExpired();
+  return response;
+}
+
 /** Appel à l'API : renvoie { status, data }. */
 async function api(method, url, body) {
-  const response = await fetch(url, {
+  const response = await authFetch(url, {
     method,
-    headers: {
-      Authorization: `Bearer ${token.get()}`,
-      ...(body !== undefined && { "Content-Type": "application/json" }),
-    },
-    ...(body !== undefined && { body: JSON.stringify(body) }),
+    ...(body !== undefined && { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
   });
-  if (response.status === 401) {
-    for (const dialog of document.querySelectorAll("dialog[open]")) dialog.close();
-    token.clear();
-    live.close();
-    showLogin("Session expirée : reconnecte-toi.");
-    throw new Error("session expirée");
-  }
+  if (!response) throw new Error("serveur injoignable");
+  if (response.status === 401) throw new Error("session expirée");
   const data = await response.json().catch(() => ({}));
   return { status: response.status, data };
 }
