@@ -207,10 +207,17 @@ function showDashboard() {
   }
 }
 
-// Rafraîchit les « il y a … » chaque minute.
-// (Sauf si un curseur ou un champ de texte est en train d'être utilisé.)
+// Les « il y a … » vieillissent sur place chaque minute : plus besoin de
+// tout redessiner (un curseur ou un menu ouvert sautait sous le doigt).
+// Seul le changement de jour redessine tout (« Demain » devient
+// « Aujourd'hui » dans l'agenda), sauf champ ou curseur en main.
+let shownDay = new Date().toDateString();
 setInterval(() => {
-  if (entities.size && !["range", "text"].includes(document.activeElement?.type)) renderAll();
+  refreshAgo();
+  const today = new Date().toDateString();
+  if (today === shownDay || !entities.size || ["range", "text"].includes(document.activeElement?.type)) return;
+  shownDay = today;
+  renderAll();
 }, 60_000);
 
 if (token.get()) showDashboard();
