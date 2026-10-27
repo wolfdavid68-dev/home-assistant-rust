@@ -48,7 +48,9 @@ impl<'a> StateJson<'a> {
     }
 }
 
-#[expect(
+// `allow` et non `expect` : l'avertissement n'existe que sous Windows, où
+// `SystemTime` tient en 8 octets (16 sous Linux).
+#[allow(
     clippy::trivially_copy_pass_by_ref,
     reason = "signature imposée par `serialize_with`"
 )]
