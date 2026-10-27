@@ -2704,9 +2704,12 @@ function renderDrawingEditor() {
   const list = el("ul", { class: "drawing-images" }, ...house.images.map((image) => {
     const remove = el("button", { type: "button", class: "ghost small danger", text: "Retirer" });
     remove.addEventListener("click", async () => {
+      // Effacée du serveur, pas seulement du brouillon : on demande.
+      if (!window.confirm(`Retirer l'image « ${image.name} » du serveur ? Les calques qui s'en servent ne l'afficheront plus.`)) return;
       const response = await fetch(`/api/home/images/${encodeURIComponent(image.name)}`, {
         method: "DELETE", headers: { Authorization: `Bearer ${token.get()}` },
-      });
+      }).catch(() => null);
+      if (!response) return drawingStatus("Serveur injoignable : l'image n'est pas retirée.", "error");
       const data = await response.json().catch(() => ({}));
       if (!response.ok) return drawingStatus(data.error ?? "Retrait impossible.", "error");
       await loadHouse(true);
