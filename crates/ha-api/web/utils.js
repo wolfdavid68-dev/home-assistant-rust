@@ -108,6 +108,55 @@ function setAttr(node, name, value) {
   if (node.getAttribute(name) !== value) node.setAttribute(name, value);
 }
 
+// ---------------------------------------------------------------- Panneaux à clé
+// Un panneau du tableau (les volets, le chauffage, les courbes…) n'est refait
+// que si sa clé change. La clé dit tout ce qu'il affiche : les états qu'il
+// montre, l'onglet, les droits du compte. Un état n'est jamais modifié sur
+// place (app.js met un objet neuf à chaque changement, et tous à la
+// reconnexion) : le numéro de l'objet suffit à dire s'il a bougé, attributs
+// compris. Le compteur Linky, une mesure par seconde, ne refait plus que ce
+// qui le montre.
+
+const objectMarks = new WeakMap();
+let lastObjectMark = 0;
+
+/** Le numéro d'un objet : le même tant que c'est le même objet. « - » pour
+ *  rien, la valeur elle-même pour un texte ou un nombre. */
+function objectMark(value) {
+  if (value === null || value === undefined) return "-";
+  if (typeof value !== "object") return String(value);
+  let n = objectMarks.get(value);
+  if (n === undefined) {
+    n = ++lastObjectMark;
+    objectMarks.set(value, n);
+  }
+  return String(n);
+}
+
+/** La part d'un état dans une clé : son numéro, et celui de chacun de ses
+ *  membres pour un groupe (`canControl` les relit). */
+function stateMark(state) {
+  if (state === undefined) return "-";
+  const members = Array.isArray(state.attributes?.entity_id) ? state.attributes.entity_id : [];
+  if (members.length === 0) return objectMark(state);
+  return `${objectMark(state)}(${members.map((id) => objectMark(entities.get(id))).join(" ")})`;
+}
+
+const panelKeys = new Map();
+
+/** Vrai (et la clé est retenue) si le panneau `name` doit être refait. */
+function panelChanged(name, key) {
+  if (panelKeys.get(name) === key) return false;
+  panelKeys.set(name, key);
+  return true;
+}
+
+/** Tout sera refait au prochain passage : la page est redessinée en entier,
+ *  ou les panneaux ont été cachés. */
+function forgetPanels() {
+  panelKeys.clear();
+}
+
 /** Icône SVG, construite élément par élément (pas de HTML non plus). */
 function svgIcon(paths) {
   const NS = "http://www.w3.org/2000/svg";
