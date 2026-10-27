@@ -218,11 +218,11 @@ fn check_cycles(entities: &[TemplateEntity]) -> Result<(), String> {
 /// # Errors
 /// Le fichier existe mais ne peut pas être lu, ou il est faux.
 pub fn load_template_entities(path: &Path) -> Result<Vec<TemplateEntity>, String> {
-    match std::fs::read_to_string(path) {
-        Ok(text) => {
+    match ha_core::config_file::read(path, ha_core::config_file::DEFAULT_MAX) {
+        Ok(Some(text)) => {
             parse_template_entities(&text).map_err(|error| format!("{} : {error}", path.display()))
         }
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+        Ok(None) => Ok(Vec::new()),
         Err(error) => Err(format!(
             "lecture de {} impossible : {error}",
             path.display()

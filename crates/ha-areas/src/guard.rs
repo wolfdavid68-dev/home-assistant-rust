@@ -42,17 +42,12 @@ struct HoursConfig {
 
 /// Lit `guard.yaml`. Un fichier absent donne une garde qui ne fait rien.
 pub fn load(path: &Path, areas: &[Area]) -> Result<Policy, AreaError> {
-    let metadata = match std::fs::metadata(path) {
-        Ok(metadata) => metadata,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(Policy::default());
-        }
-        Err(error) => return Err(error.into()),
+    let Some(text) = ha_core::config_file::read(path, MAX_FILE_SIZE)
+        .map_err(|error| error.into_error(AreaError::TooLarge))?
+    else {
+        return Ok(Policy::default());
     };
-    if metadata.len() > MAX_FILE_SIZE {
-        return Err(AreaError::TooLarge);
-    }
-    parse(&std::fs::read_to_string(path)?, areas)
+    parse(&text, areas)
 }
 
 /// Lit et vérifie le contenu de `guard.yaml`, avec les pièces connues.

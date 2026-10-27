@@ -47,6 +47,17 @@ pub enum FreeboxError {
     Storage(#[from] ha_storage::StorageError),
 }
 
+/// Concept Rust : grâce à ce `From`, `?` transforme l'erreur de lecture
+/// d'une réponse (voir [`ha_tls::read_limited`]) en `FreeboxError`.
+impl From<ha_tls::ReadError> for FreeboxError {
+    fn from(error: ha_tls::ReadError) -> Self {
+        match error {
+            ha_tls::ReadError::Http(error) => Self::Http(error),
+            ha_tls::ReadError::TooLarge => Self::TooLarge,
+        }
+    }
+}
+
 /// Le message d'une erreur et de toutes ses causes : « erreur d'envoi :
 /// certificat inattendu… » plutôt que seulement « erreur d'envoi ».
 fn chain(error: &dyn std::error::Error) -> String {

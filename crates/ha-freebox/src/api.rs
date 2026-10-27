@@ -14,7 +14,6 @@
 use std::fmt::Write as _;
 use std::time::Duration;
 
-use futures_util::StreamExt;
 use hmac::{Hmac, KeyInit, Mac};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
@@ -148,7 +147,7 @@ pub async fn api_version(http: &reqwest::Client, host: &str) -> Result<ApiVersio
         .timeout(REQUEST_TIMEOUT)
         .send()
         .await?;
-    let body = read_body(response).await?;
+    let body = ha_tls::read_limited(response, MAX_RESPONSE).await?;
     let version: ApiVersion = serde_json::from_slice(&body)
         .map_err(|_| FreeboxError::Unexpected("ce n'est pas une Freebox".into()))?;
     if version.api_version.is_empty() {
@@ -350,19 +349,6 @@ impl Session {
     }
 }
 
-async fn read_body(response: reqwest::Response) -> Result<Vec<u8>, FreeboxError> {
-    let mut body = Vec::new();
-    let mut chunks = response.bytes_stream();
-    while let Some(chunk) = chunks.next().await {
-        let chunk = chunk?;
-        if body.len() + chunk.len() > MAX_RESPONSE {
-            return Err(FreeboxError::TooLarge);
-        }
-        body.extend_from_slice(&chunk);
-    }
-    Ok(body)
-}
-
 async fn read_envelope<T: DeserializeOwned>(
     response: reqwest::Response,
 ) -> Result<T, FreeboxError> {
@@ -375,7 +361,7 @@ async fn read_envelope<T: DeserializeOwned>(
 async fn read_envelope_optional<T: DeserializeOwned>(
     response: reqwest::Response,
 ) -> Result<Option<T>, FreeboxError> {
-    let body = read_body(response).await?;
+    let body = ha_tls::read_limited(response, MAX_RESPONSE).await?;
     let envelope: Envelope<T> = serde_json::from_slice(&body)
         .map_err(|error| FreeboxError::Unexpected(format!("JSON : {error}")))?;
     if envelope.success {

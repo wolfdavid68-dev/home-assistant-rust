@@ -351,18 +351,13 @@ fn session_cookie(header: &str) -> Option<Zeroizing<String>> {
 }
 
 /// Lit une réponse, [`MAX_BYTES`] au plus.
-async fn read(mut response: reqwest::Response) -> Result<String, TimeTreeError> {
-    let mut body = Vec::new();
-    while let Some(chunk) = response
-        .chunk()
+async fn read(response: reqwest::Response) -> Result<String, TimeTreeError> {
+    let body = ha_tls::read_limited(response, MAX_BYTES)
         .await
-        .map_err(|_| TimeTreeError::Unreachable)?
-    {
-        if body.len() + chunk.len() > MAX_BYTES {
-            return Err(TimeTreeError::Unexpected("réponse trop grosse".into()));
-        }
-        body.extend_from_slice(&chunk);
-    }
+        .map_err(|error| match error {
+            ha_tls::ReadError::Http(_) => TimeTreeError::Unreachable,
+            ha_tls::ReadError::TooLarge => TimeTreeError::Unexpected(error.to_string()),
+        })?;
     Ok(String::from_utf8_lossy(&body).into_owned())
 }
 

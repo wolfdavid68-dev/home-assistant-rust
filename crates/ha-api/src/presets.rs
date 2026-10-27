@@ -139,11 +139,9 @@ pub(crate) fn house(state: &ApiState) -> House {
 
 /// Les réglages gardés pour chaque automatisation toute prête.
 async fn stored_options(state: &ApiState) -> Result<HashMap<String, Options>, ApiError> {
-    let rows = state
-        .store
-        .automation_presets()
-        .await
-        .map_err(|error| ApiError::Internal(error.to_string()))?;
+    // Concept Rust : `?` range l'erreur de la base dans `ApiError::Internal`
+    // tout seul, grâce à `impl From<StorageError> for ApiError` (error.rs).
+    let rows = state.store.automation_presets().await?;
     Ok(rows
         .into_iter()
         .filter_map(|(name, options)| {
@@ -251,8 +249,7 @@ pub(crate) async fn save(
     state
         .store
         .save_automation_preset(preset.name(), &stored, username)
-        .await
-        .map_err(|error| ApiError::Internal(error.to_string()))?;
+        .await?;
     let verb = if enabled { "activée" } else { "désactivée" };
     tracing::info!("automatisation toute prête « {name} » {verb} par {username}");
     audit(

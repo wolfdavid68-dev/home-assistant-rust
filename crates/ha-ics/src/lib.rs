@@ -230,12 +230,14 @@ fn parse_url(name: &str, raw: &str) -> Result<url::Url, ConfigError> {
 
 /// Lit `calendriers.yaml` ; un fichier absent ne donne aucun agenda.
 pub fn load(path: &Path) -> Result<Vec<RemoteCalendar>, ConfigError> {
-    match std::fs::read_to_string(path) {
-        Ok(text) => parse_config(&text),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
-        Err(source) => Err(ConfigError::Read {
+    match ha_core::config_file::read(path, ha_core::config_file::DEFAULT_MAX) {
+        Ok(Some(text)) => parse_config(&text),
+        Ok(None) => Ok(Vec::new()),
+        Err(error) => Err(ConfigError::Read {
             path: path.display().to_string(),
-            source,
+            // Concept Rust : `.into()` range « fichier trop gros » dans une
+            // erreur d'entrée-sortie, avec son message.
+            source: error.into(),
         }),
     }
 }
@@ -309,7 +311,7 @@ pub fn calendar_state(
 
 /// Télécharge le fichier (2 Mio au plus).
 async fn fetch(http: &reqwest::Client, url: &url::Url) -> Result<String, String> {
-    let mut response = http
+    let response = http
         .get(url.clone())
         .header("Accept", "text/calendar")
         .send()
@@ -324,17 +326,12 @@ async fn fetch(http: &reqwest::Client, url: &url::Url) -> Result<String, String>
     if !response.status().is_success() {
         return Err(format!("le site a répondu {}", response.status().as_u16()));
     }
-    let mut body = Vec::new();
-    while let Some(chunk) = response
-        .chunk()
+    let body = ha_tls::read_limited(response, MAX_BYTES)
         .await
-        .map_err(|_| "téléchargement interrompu".to_owned())?
-    {
-        if body.len() + chunk.len() > MAX_BYTES {
-            return Err("fichier trop gros (2 Mio au plus)".into());
-        }
-        body.extend_from_slice(&chunk);
-    }
+        .map_err(|error| match error {
+            ha_tls::ReadError::Http(_) => "téléchargement interrompu".to_owned(),
+            ha_tls::ReadError::TooLarge => "fichier trop gros (2 Mio au plus)".to_owned(),
+        })?;
     let text = String::from_utf8_lossy(&body).into_owned();
     if !text.contains("BEGIN:VCALENDAR") {
         return Err("ce n'est pas un agenda (ICS)".into());

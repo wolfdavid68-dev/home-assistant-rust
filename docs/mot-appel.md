@@ -133,7 +133,7 @@ Browser :
 | [web/voix.js](../crates/ha-api/web/voix.js) | L'écoute du mot, le signe, la pause, le réveil d'Assist, la case |
 | [web/index.html](../crates/ha-api/web/index.html), [web/style.css](../crates/ha-api/web/style.css) | La case dans Mon compte et le signe en bas à gauche |
 
-Les tests (`crates/ha-api/tests/api.rs`) utilisent une fausse écoute qui « entend » des phrases
+Les tests (`crates/ha-api/tests/api/voice.rs`) utilisent une fausse écoute qui « entend » des phrases
 données : « Maison, allume la lumière du salon. » qui donne l'ordre, « Maison. » seul, une phrase
 sans le mot, un silence pas même écouté, un morceau trop long ou qui n'est pas un WAV, la limite
 de 30 morceaux (et une autre tablette qui passe), un jeton d'assistant refusé, et une vraie phrase

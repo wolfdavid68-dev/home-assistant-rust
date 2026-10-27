@@ -6,7 +6,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use ha_core::{Attributes, Background, CancellationToken, Core, EntityId, Health};
+use ha_core::{Attributes, Background, Backoff, CancellationToken, Core, EntityId, Health};
 use ha_storage::{MailAccount, Store};
 use jiff::tz::TimeZone;
 use jiff::{Timestamp, ToSpan, Zoned};
@@ -286,7 +286,7 @@ async fn run(store: Store, mailbox: Mailbox, core: Arc<Core>, token: Cancellatio
     };
     let mut cache = Cache::default();
     let mut published = Published::default();
-    let mut backoff = Duration::from_mins(1);
+    let mut backoff = Backoff::new(Duration::from_mins(1), MAX_BACKOFF);
     loop {
         let reading = async {
             let account = store
@@ -311,11 +311,14 @@ async fn run(store: Store, mailbox: Mailbox, core: Arc<Core>, token: Cancellatio
                     () = token.cancelled() => break,
                 }
                 core.report(crate::ID, crate::NAME, Health::Connected);
-                backoff = Duration::from_mins(1);
+                backoff.reset();
                 mailbox.poll
             }
             Err(error) => {
                 cache.folder = None;
+                // L'attente double à chaque échec, même quand une autre
+                // attente l'emporte.
+                let next = backoff.next();
                 let (wait, message) = match &error {
                     ColisError::Unauthorized => (
                         UNAUTHORIZED_WAIT,
@@ -325,7 +328,7 @@ async fn run(store: Store, mailbox: Mailbox, core: Arc<Core>, token: Cancellatio
                         if mailbox.test.is_some() {
                             Duration::from_secs(5)
                         } else {
-                            backoff
+                            next
                         },
                         format!("boîte aux lettres injoignable ({error})"),
                     ),
@@ -339,7 +342,6 @@ async fn run(store: Store, mailbox: Mailbox, core: Arc<Core>, token: Cancellatio
                         retry_at: SystemTime::now() + wait,
                     },
                 );
-                backoff = (backoff * 2).min(MAX_BACKOFF);
                 wait
             }
         };
@@ -545,7 +547,7 @@ impl Published {
 
 /// Télécharge une photo d'article (2 Mio au plus).
 async fn download(http: &reqwest::Client, url: &str) -> Result<Vec<u8>, String> {
-    let mut response = http
+    let response = http
         .get(url)
         .send()
         .await
@@ -553,18 +555,12 @@ async fn download(http: &reqwest::Client, url: &str) -> Result<Vec<u8>, String> 
     if !response.status().is_success() {
         return Err(format!("réponse {}", response.status().as_u16()));
     }
-    let mut bytes = Vec::new();
-    while let Some(chunk) = response
-        .chunk()
+    ha_tls::read_limited(response, MAX_IMAGE)
         .await
-        .map_err(|e| e.without_url().to_string())?
-    {
-        if bytes.len() + chunk.len() > MAX_IMAGE {
-            return Err("photo trop grosse".into());
-        }
-        bytes.extend_from_slice(&chunk);
-    }
-    Ok(bytes)
+        .map_err(|error| match error {
+            ha_tls::ReadError::Http(e) => e.without_url().to_string(),
+            ha_tls::ReadError::TooLarge => "photo trop grosse".into(),
+        })
 }
 
 #[cfg(test)]

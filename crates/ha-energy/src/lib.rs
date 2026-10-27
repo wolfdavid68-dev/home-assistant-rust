@@ -112,17 +112,12 @@ fn check_price(place: &str, value: Option<f64>, max: f64) -> Result<Option<f64>,
 
 /// Lit le fichier. Un fichier absent donne la configuration automatique.
 pub fn load(path: &Path) -> Result<EnergyConfig, EnergyError> {
-    let metadata = match std::fs::metadata(path) {
-        Ok(metadata) => metadata,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(EnergyConfig::default());
-        }
-        Err(error) => return Err(error.into()),
+    let Some(text) = ha_core::config_file::read(path, MAX_FILE_SIZE)
+        .map_err(|error| error.into_error(EnergyError::TooLarge))?
+    else {
+        return Ok(EnergyConfig::default());
     };
-    if metadata.len() > MAX_FILE_SIZE {
-        return Err(EnergyError::TooLarge);
-    }
-    parse(&std::fs::read_to_string(path)?)
+    parse(&text)
 }
 
 /// Lit et vérifie le contenu du fichier.

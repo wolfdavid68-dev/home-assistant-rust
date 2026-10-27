@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use ha_core::{Background, CancellationToken, Core, Event, Health};
+use ha_core::{Background, Backoff, CancellationToken, Core, Event, Health};
 use ha_storage::{SmartThingsAccount, SmartThingsTokens, Store};
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::mpsc;
@@ -103,7 +103,7 @@ async fn run(store: Store, endpoint: Endpoint, core: Arc<Core>, token: Cancellat
     let mut devices = Devices::default();
     let mut events = core.bus.subscribe();
     let (refresh_tx, mut refresh_rx) = mpsc::channel::<String>(64);
-    let mut backoff = Duration::from_secs(5);
+    let mut backoff = Backoff::new(Duration::from_secs(5), MAX_BACKOFF);
     let mut rooms: HashMap<String, String> = HashMap::new();
 
     'connection: loop {
@@ -128,6 +128,9 @@ async fn run(store: Store, endpoint: Endpoint, core: Arc<Core>, token: Cancellat
         let api = match connected {
             Ok(api) => api,
             Err(error) => {
+                // L'attente double à chaque échec, même quand une autre
+                // attente l'emporte (accès refusé, trop de demandes).
+                let next = backoff.next();
                 let (wait, message) = match &error {
                     SmartThingsError::Unauthorized => (
                         UNAUTHORIZED_WAIT,
@@ -136,7 +139,7 @@ async fn run(store: Store, endpoint: Endpoint, core: Arc<Core>, token: Cancellat
                     SmartThingsError::RateLimited(seconds) => {
                         (Duration::from_secs(*seconds), error.to_string())
                     }
-                    _ => (backoff, format!("SmartThings injoignable ({error})")),
+                    _ => (next, format!("SmartThings injoignable ({error})")),
                 };
                 warn!(
                     "SmartThings : {message}, nouvel essai dans {} s",
@@ -154,13 +157,12 @@ async fn run(store: Store, endpoint: Endpoint, core: Arc<Core>, token: Cancellat
                     () = tokio::time::sleep(wait) => {}
                     () = token.cancelled() => break 'connection,
                 }
-                backoff = (backoff * 2).min(MAX_BACKOFF);
                 continue;
             }
         };
         info!("SmartThings : connecté, {} appareils", devices.len());
         core.report(crate::ID, crate::NAME, Health::Connected);
-        backoff = Duration::from_secs(5);
+        backoff.reset();
         let poll = tokio::time::sleep(Duration::ZERO);
         tokio::pin!(poll);
         let refresh = tokio::time::sleep(FULL_REFRESH);

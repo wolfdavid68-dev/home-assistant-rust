@@ -230,7 +230,7 @@ async fn fetch(http: &reqwest::Client, config: &Config) -> Result<Report, String
     // Sécurité : le message d'une erreur `reqwest` contient l'adresse
     // appelée, donc la position. `without_url` la retire avant les logs.
     let describe = |error: reqwest::Error| error.without_url().to_string();
-    let mut response = http
+    let response = http
         .get(config.request_url())
         .header("Accept", "application/json")
         .send()
@@ -239,13 +239,12 @@ async fn fetch(http: &reqwest::Client, config: &Config) -> Result<Report, String
     let status = response.status();
     // On lit la réponse morceau par morceau, en s'arrêtant si elle est trop
     // grosse : un serveur ne peut pas nous faire remplir la mémoire.
-    let mut body = Vec::new();
-    while let Some(chunk) = response.chunk().await.map_err(describe)? {
-        if body.len() + chunk.len() > MAX_RESPONSE {
-            return Err("réponse trop grosse".into());
-        }
-        body.extend_from_slice(&chunk);
-    }
+    let body = ha_tls::read_limited(response, MAX_RESPONSE)
+        .await
+        .map_err(|error| match error {
+            ha_tls::ReadError::Http(error) => describe(error),
+            ha_tls::ReadError::TooLarge => error.to_string(),
+        })?;
     match openmeteo::parse(&body) {
         Ok(report) if status.is_success() => Ok(report),
         // Open-Meteo explique ses refus (limite atteinte…) dans le corps.

@@ -29,3 +29,14 @@ pub enum SomfyError {
     #[error("erreur de stockage : {0}")]
     Storage(#[from] ha_storage::StorageError),
 }
+
+/// Concept Rust : grâce à ce `From`, `?` transforme l'erreur de lecture
+/// d'une réponse (voir [`ha_tls::read_limited`]) en `SomfyError`.
+impl From<ha_tls::ReadError> for SomfyError {
+    fn from(error: ha_tls::ReadError) -> Self {
+        match error {
+            ha_tls::ReadError::Http(error) => Self::Http(error),
+            ha_tls::ReadError::TooLarge => Self::TooLarge,
+        }
+    }
+}

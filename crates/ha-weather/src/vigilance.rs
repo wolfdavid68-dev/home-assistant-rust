@@ -261,7 +261,7 @@ async fn fetch(http: &reqwest::Client, config: &VigilanceConfig) -> Result<Map, 
         HeaderValue::from_str(&config.key).map_err(|_| Failure::Other("clé invalide".into()))?;
     // La valeur ne sera jamais affichée par `reqwest` (logs, erreurs).
     key.set_sensitive(true);
-    let mut response = http
+    let response = http
         .get(config.url.clone())
         .header("apikey", key)
         .header("Accept", "application/json")
@@ -275,13 +275,12 @@ async fn fetch(http: &reqwest::Client, config: &VigilanceConfig) -> Result<Map, 
     if !status.is_success() {
         return Err(Failure::Other(format!("erreur HTTP {status}")));
     }
-    let mut body = Vec::new();
-    while let Some(chunk) = response.chunk().await.map_err(describe)? {
-        if body.len() + chunk.len() > carte::MAX_BODY {
-            return Err(Failure::Other("réponse trop grosse".into()));
-        }
-        body.extend_from_slice(&chunk);
-    }
+    let body = ha_tls::read_limited(response, carte::MAX_BODY)
+        .await
+        .map_err(|error| match error {
+            ha_tls::ReadError::Http(error) => describe(error),
+            ha_tls::ReadError::TooLarge => Failure::Other(error.to_string()),
+        })?;
     carte::parse(&body, config.department.as_str()).map_err(Failure::Other)
 }
 

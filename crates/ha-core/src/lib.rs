@@ -4,8 +4,10 @@
 //! remettent les types principaux à la racine, pour écrire `ha_core::EntityId`
 //! au lieu de `ha_core::entity_id::EntityId`.
 
+pub mod backoff;
 pub mod checks;
 pub mod commands;
+pub mod config_file;
 pub mod covers;
 mod entity_id;
 mod error;
@@ -19,6 +21,7 @@ mod state;
 mod state_machine;
 pub mod task;
 
+pub use backoff::Backoff;
 pub use commands::{COMMAND_TTL, CommandResult, Commands};
 pub use entity_id::{EntityId, MAX_ENTITY_ID_LEN, slugify};
 pub use error::CoreError;

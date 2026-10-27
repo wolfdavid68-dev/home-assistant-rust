@@ -48,13 +48,10 @@ pub fn load(path: &Path) -> Result<Vec<Automation>, AutomationError> {
 /// Lit le fichier d'automatisations sans vérifier les valeurs (voir
 /// [`check_all`]). Un fichier absent donne une liste vide.
 pub fn load_configs(path: &Path) -> Result<Vec<AutomationConfig>, AutomationError> {
-    let metadata = match std::fs::metadata(path) {
-        Ok(metadata) => metadata,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => return Err(error.into()),
+    let Some(text) = ha_core::config_file::read(path, config::MAX_FILE_SIZE as u64)
+        .map_err(|error| error.into_error(AutomationError::TooLarge))?
+    else {
+        return Ok(Vec::new());
     };
-    if metadata.len() > config::MAX_FILE_SIZE as u64 {
-        return Err(AutomationError::TooLarge);
-    }
-    parse_configs(&std::fs::read_to_string(path)?)
+    parse_configs(&text)
 }

@@ -153,12 +153,14 @@ pub fn parse_config(text: &str) -> Result<Config, ConfigError> {
 
 /// Lit `delestage.yaml` ; `None` si le fichier est absent.
 pub fn load(path: &std::path::Path) -> Result<Option<Config>, ConfigError> {
-    match std::fs::read_to_string(path) {
-        Ok(text) => parse_config(&text).map(Some),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(source) => Err(ConfigError::Read {
+    match ha_core::config_file::read(path, ha_core::config_file::DEFAULT_MAX) {
+        Ok(Some(text)) => parse_config(&text).map(Some),
+        Ok(None) => Ok(None),
+        Err(error) => Err(ConfigError::Read {
             path: path.display().to_string(),
-            source,
+            // Concept Rust : `.into()` range « fichier trop gros » dans une
+            // erreur d'entrée-sortie, avec son message.
+            source: error.into(),
         }),
     }
 }

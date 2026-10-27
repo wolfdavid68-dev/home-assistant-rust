@@ -102,7 +102,7 @@ pub fn picture(key: &str) -> String {
 
 /// Télécharge une pochette (adresse déjà passée par [`resolve`]).
 pub async fn fetch(http: &reqwest::Client, url: &str) -> Result<Vec<u8>, String> {
-    let mut response = http
+    let response = http
         .get(url)
         .timeout(FETCH_TIMEOUT)
         .header("Accept", "image/jpeg, image/png")
@@ -112,24 +112,13 @@ pub async fn fetch(http: &reqwest::Client, url: &str) -> Result<Vec<u8>, String>
     if !response.status().is_success() {
         return Err(format!("réponse {}", response.status().as_u16()));
     }
-    if response
-        .content_length()
-        .is_some_and(|length| length > MAX_COVER as u64)
-    {
-        return Err("pochette trop grosse".into());
-    }
-    let mut bytes = Vec::new();
-    while let Some(chunk) = response
-        .chunk()
+    // Une taille annoncée trop grande est refusée sans rien lire.
+    ha_tls::read_limited(response, MAX_COVER)
         .await
-        .map_err(|error| error.without_url().to_string())?
-    {
-        if bytes.len() + chunk.len() > MAX_COVER {
-            return Err("pochette trop grosse".into());
-        }
-        bytes.extend_from_slice(&chunk);
-    }
-    Ok(bytes)
+        .map_err(|error| match error {
+            ha_tls::ReadError::Http(error) => error.without_url().to_string(),
+            ha_tls::ReadError::TooLarge => "pochette trop grosse".into(),
+        })
 }
 
 /// Les pochettes à aller chercher, et celles qui ont échoué récemment.

@@ -24,7 +24,7 @@ pub mod list;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use ha_core::{Attributes, Background, CancellationToken, Core, EntityId, Event};
+use ha_core::{Attributes, Background, Backoff, CancellationToken, Core, EntityId, Event};
 use serde_json::{Value, json};
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{info, warn};
@@ -79,31 +79,32 @@ async fn run(shared: Arc<Shared>, core: Arc<Core>, token: CancellationToken) {
     let mut events = core.bus.subscribe();
     let mut items: Vec<Item> = Vec::new();
     let mut next = tokio::time::Instant::now();
-    let mut backoff = Duration::from_secs(5);
+    let mut backoff = Backoff::new(Duration::from_secs(5), MAX_BACKOFF);
     loop {
         tokio::select! {
             () = token.cancelled() => break,
             () = tokio::time::sleep_until(next) => {
                 match shared.client.shopping_list(&shared.maison).await {
                     Ok(list) => {
-                        if backoff > Duration::from_secs(5) || items.is_empty() && !list.is_empty() {
+                        if backoff.is_retrying() || items.is_empty() && !list.is_empty() {
                             info!("Iglou : {} article(s) dans la liste de courses", list.len());
                         }
                         items = list;
                         publish(&core, &left(&items), &items);
                         core.report(ID, NAME, ha_core::Health::Connected);
-                        backoff = Duration::from_secs(5);
+                        backoff.reset();
                         next = tokio::time::Instant::now() + POLL;
                     }
                     Err(error) => {
-                        let wait = if error.is_lasting() { LASTING_WAIT } else { backoff };
+                        // L'attente double à chaque échec, même après un refus durable.
+                        let retry = backoff.next();
+                        let wait = if error.is_lasting() { LASTING_WAIT } else { retry };
                         warn!("Iglou : {error}, nouvel essai dans {} s", wait.as_secs());
                         core.report(ID, NAME, ha_core::Health::Retrying {
                             error: error.to_string(),
                             retry_at: SystemTime::now() + wait,
                         });
                         publish(&core, "unavailable", &items);
-                        backoff = (backoff * 2).min(MAX_BACKOFF);
                         next = tokio::time::Instant::now() + wait;
                     }
                 }

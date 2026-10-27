@@ -165,11 +165,10 @@ pub fn load_file<T>(
     path: &std::path::Path,
     parse: impl Fn(&str) -> Result<Vec<T>, AutomationError>,
 ) -> Result<Vec<T>, AutomationError> {
-    match std::fs::metadata(path) {
-        Ok(metadata) if metadata.len() > MAX_FILE_SIZE as u64 => Err(AutomationError::TooLarge),
-        Ok(_) => parse(&std::fs::read_to_string(path)?),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
-        Err(error) => Err(error.into()),
+    match ha_core::config_file::read(path, MAX_FILE_SIZE as u64) {
+        Ok(Some(text)) => parse(&text),
+        Ok(None) => Ok(Vec::new()),
+        Err(error) => Err(error.into_error(AutomationError::TooLarge)),
     }
 }
 

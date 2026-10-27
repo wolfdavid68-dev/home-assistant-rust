@@ -445,18 +445,13 @@ impl Api {
 }
 
 /// Lit une réponse JSON, [`MAX_BYTES`] au plus.
-async fn read_json(mut response: reqwest::Response) -> Result<Value, SmartThingsError> {
-    let mut body = Vec::new();
-    while let Some(chunk) = response
-        .chunk()
+async fn read_json(response: reqwest::Response) -> Result<Value, SmartThingsError> {
+    let body = ha_tls::read_limited(response, MAX_BYTES)
         .await
-        .map_err(|_| SmartThingsError::Unreachable)?
-    {
-        if body.len() + chunk.len() > MAX_BYTES {
-            return Err(SmartThingsError::Unexpected("réponse trop grosse".into()));
-        }
-        body.extend_from_slice(&chunk);
-    }
+        .map_err(|error| match error {
+            ha_tls::ReadError::Http(_) => SmartThingsError::Unreachable,
+            ha_tls::ReadError::TooLarge => SmartThingsError::Unexpected(error.to_string()),
+        })?;
     if body.is_empty() {
         return Ok(Value::Null);
     }
