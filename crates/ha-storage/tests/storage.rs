@@ -822,6 +822,143 @@ async fn history_states(store: &Store, entity: &EntityId) -> Vec<Option<String>>
 }
 
 #[tokio::test]
+async fn history_is_sorted_by_date_then_by_insertion_order() {
+    let store = Store::open_in_memory().await.unwrap();
+    // Écrites dans le désordre : la date compte d'abord, puis l'ordre
+    // d'écriture pour deux lignes à la même microseconde.
+    history_row(&store, "sensor.ordre", Some("300"), 300).await;
+    history_row(&store, "sensor.ordre", Some("100"), 100).await;
+    history_row(&store, "sensor.ordre", Some("200a"), 200).await;
+    history_row(&store, "sensor.ordre", Some("200b"), 200).await;
+    history_row(&store, "sensor.autre", Some("x"), 250).await;
+    let states = history_states(&store, &id("sensor.ordre")).await;
+    let expected = ["300", "200b", "200a", "100"].map(|s| Some(s.to_owned()));
+    assert_eq!(states, expected);
+
+    // L'index (entity_id, id) a disparu : (entity_id, recorded_at) suffit…
+    let indexes: Vec<(String,)> = sqlx::query_as(
+        "SELECT name FROM sqlite_master
+         WHERE type = 'index' AND tbl_name = 'state_history' ORDER BY name",
+    )
+    .fetch_all(store.pool())
+    .await
+    .unwrap();
+    let indexes: Vec<&str> = indexes.iter().map(|(name,)| name.as_str()).collect();
+    assert_eq!(
+        indexes,
+        [
+            "idx_state_history_entity_time",
+            "idx_state_history_recorded_at"
+        ]
+    );
+    // … et la lecture de l'historique s'en sert, sans tri à part.
+    let plan: Vec<(i64, i64, i64, String)> = sqlx::query_as(
+        "EXPLAIN QUERY PLAN
+         SELECT entity_id, state, attributes, last_changed, last_updated, recorded_at
+         FROM state_history WHERE entity_id = ?1
+         ORDER BY recorded_at DESC, id DESC LIMIT ?2",
+    )
+    .bind("sensor.ordre")
+    .bind(10)
+    .fetch_all(store.pool())
+    .await
+    .unwrap();
+    let plan: Vec<&str> = plan.iter().map(|row| row.3.as_str()).collect();
+    assert!(
+        plan.iter()
+            .any(|step| step.contains("idx_state_history_entity_time")),
+        "{plan:?}"
+    );
+    assert!(
+        !plan.iter().any(|step| step.contains("TEMP B-TREE")),
+        "{plan:?}"
+    );
+}
+
+#[tokio::test]
+async fn several_changes_are_written_in_one_go_and_in_order() {
+    let store = Store::open_in_memory().await.unwrap();
+    let core = Core::new();
+    let lamp = id("light.salon");
+    let plug = id("switch.prise");
+    core.states
+        .set(lamp.clone(), "on", Attributes::new())
+        .unwrap();
+    core.states
+        .set(plug.clone(), "on", Attributes::new())
+        .unwrap();
+    let lamp_on = core.states.get(&lamp).unwrap();
+    let plug_on = core.states.get(&plug).unwrap();
+    core.states
+        .set(lamp.clone(), "off", Attributes::new())
+        .unwrap();
+    let lamp_off = core.states.get(&lamp).unwrap();
+
+    store
+        .record_changes(&[
+            (&lamp, Some(&lamp_on)),
+            (&plug, Some(&plug_on)),
+            (&lamp, Some(&lamp_off)),
+            (&plug, None),
+        ])
+        .await
+        .unwrap();
+    // Rien à écrire : rien ne se passe.
+    store.record_changes(&[]).await.unwrap();
+
+    let states = store.load_states().await.unwrap();
+    assert_eq!(states.len(), 1, "la prise a été supprimée");
+    assert_eq!(
+        (&states[0].entity_id, states[0].state.as_str()),
+        (&lamp, "off")
+    );
+    assert_eq!(
+        history_states(&store, &lamp).await,
+        [Some("off".to_owned()), Some("on".to_owned())]
+    );
+    assert_eq!(
+        history_states(&store, &plug).await,
+        [None, Some("on".to_owned())]
+    );
+}
+
+#[tokio::test]
+async fn queued_events_are_recorded_in_batches_and_in_order() {
+    let (core, store, recorder) = setup().await;
+    let sensor = id("sensor.rafale");
+    // Le test tourne sur un seul fil : tous ces changements attendent dans le
+    // bus avant que l'enregistreur ne se réveille. Plus que la taille d'un lot
+    // (256), moins que la capacité du bus (1024) : rien n'est perdu.
+    let count = 600;
+    for value in 0..count {
+        core.states
+            .set(sensor.clone(), value.to_string(), Attributes::new())
+            .unwrap();
+    }
+    // L'enregistreur tourne pendant qu'on attend : il lit les événements en
+    // attente par lots, sans qu'on lui demande de s'arrêter.
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+    while store.history(&sensor, 1000).await.unwrap().len() < count {
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "historique incomplet"
+        );
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    // Et ceux qui arrivent juste avant l'arrêt sont écrits aussi.
+    core.states
+        .set(sensor.clone(), "fin", Attributes::new())
+        .unwrap();
+    core.states.remove(&sensor);
+    recorder.stop().await;
+
+    let mut expected: Vec<Option<String>> = vec![None, Some("fin".to_owned())];
+    expected.extend((0..count).rev().map(|value| Some(value.to_string())));
+    assert_eq!(history_states(&store, &sensor).await, expected);
+    assert_eq!(store.load_states().await.unwrap(), Vec::new());
+}
+
+#[tokio::test]
 async fn the_daily_purge_keeps_each_journal_for_its_own_duration() {
     let (core, store, recorder) = setup().await;
     let light = id("light.salon");
