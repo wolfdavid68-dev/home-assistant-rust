@@ -12,6 +12,7 @@ const cleanPages = (config) => plain(run("cleanPages")(config));
 const coverOpenPercent = run("coverOpenPercent");
 const layerShown = run("layerShown");
 const roomLit = run("roomLit");
+const houseImageAddress = run("houseImageAddress");
 
 const EMPTY = { id: "maison", name: "Maison", areas: [], layers: [], labels: [], actions: [], charts: [], zones: [], ambiances: {} };
 
@@ -202,5 +203,27 @@ describe("layerShown et roomLit", () => {
     assert.equal(layerShown(layer, false), true);
     set("cover.salon", "unavailable");
     assert.equal(layerShown(layer, false), false);
+  });
+});
+
+describe("houseImageAddress", () => {
+  test("avec la version : une adresse que le navigateur garde", () => {
+    assert.equal(houseImageAddress({ name: "jour", version: "6123abc" }), "/api/home/images/jour?v=6123abc");
+  });
+
+  test("une nouvelle version donne une nouvelle adresse", () => {
+    const before = houseImageAddress({ name: "garage_ouvert", version: "1a" });
+    const after = houseImageAddress({ name: "garage_ouvert", version: "1b" });
+    assert.notEqual(before, after);
+  });
+
+  test("sans version (ancien serveur) : l'adresse nue", () => {
+    assert.equal(houseImageAddress({ name: "jour" }), "/api/home/images/jour");
+    assert.equal(houseImageAddress({ name: "jour", version: "" }), "/api/home/images/jour");
+    assert.equal(houseImageAddress({ name: "jour", version: 12 }), "/api/home/images/jour");
+  });
+
+  test("le nom et la version sont encodés", () => {
+    assert.equal(houseImageAddress({ name: "a b", version: "x&y" }), "/api/home/images/a%20b?v=x%26y");
   });
 });

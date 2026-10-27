@@ -172,6 +172,14 @@ page s'élargit jusqu'à 1 760 px. Sur téléphone, les repères défilent sur u
 | GET | `/api/home/images/{nom}` | Une image |
 | PUT / DELETE | `/api/home/images/{nom}` | Ajoute, remplace, retire une image (administrateur) |
 
+Les images restent dans le navigateur d'un rechargement à l'autre, comme les fichiers du tableau
+de bord (voir `tableau-leger.md`) : `GET /api/home/drawing` donne la `version` de chaque image, qui
+change à chaque envoi, et la page la demande à `/api/home/images/{nom}?v={version}`. À cette
+adresse, le serveur répond `Cache-Control: private, max-age=31536000, immutable` : la tablette ne
+la redemande plus. Sans version, c'est `private, no-cache` avec une empreinte (`ETag`, le SHA-256
+de l'image) : le navigateur redemande, et le serveur répond `304` sans l'image si elle n'a pas
+changé. Toujours `private` (jamais un cache partagé) et toujours avec le jeton.
+
 ### Le thème, avant le premier affichage
 
 Jusqu'ici, le sombre suivait le système avec `@media (prefers-color-scheme: dark)`. Pour pouvoir le

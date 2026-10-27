@@ -23,6 +23,7 @@ const house = {
   images: [],
   editable: false,
   // Images lues avec le jeton, gardées en mémoire : « nom@date » → blob:…
+  // (et par le navigateur, d'un rechargement à l'autre : voir houseImageAddress).
   urls: new Map(),
   loading: null,
   // Ce qui est dessiné, pour le mettre à jour sans tout refaire.
@@ -154,14 +155,25 @@ async function loadHouse(force = false) {
   return loading;
 }
 
+/** L'adresse d'une image chez le serveur, avec sa version (`?v=…`, donnée
+ *  par /api/home/drawing) : elle change à chaque envoi de l'image, donc le
+ *  navigateur garde l'image d'un rechargement à l'autre sans la redemander.
+ *  Sans version (ancien serveur), l'adresse nue : l'image est revérifiée. */
+function houseImageAddress(info) {
+  const address = `/api/home/images/${encodeURIComponent(info.name)}`;
+  const version = typeof info.version === "string" && info.version !== "" ? info.version : null;
+  return version ? `${address}?v=${encodeURIComponent(version)}` : address;
+}
+
 /** L'adresse locale (blob:) d'une image : une balise <img> ne sait pas
- *  envoyer le jeton, on la lit donc avec fetch. */
+ *  envoyer le jeton, on la lit donc avec fetch (qui passe par le cache du
+ *  navigateur). */
 async function houseImage(name) {
   const info = house.images.find((image) => image.name === name);
   if (!info) return null;
   const key = `${name}@${info.updated_at}`;
   if (house.urls.has(key)) return house.urls.get(key);
-  const response = await authFetch(`/api/home/images/${encodeURIComponent(name)}`);
+  const response = await authFetch(houseImageAddress(info));
   if (!response?.ok) return null;
   const url = URL.createObjectURL(await response.blob());
   // Une ancienne version de la même image n'a plus d'usage.
