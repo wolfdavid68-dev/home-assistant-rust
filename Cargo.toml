@@ -67,7 +67,10 @@ flate2 = { version = "1.1.10", default-features = false, features = ["rust_backe
 futures-util = { version = "0.3.34", default-features = false, features = ["sink"] }
 rcgen = "0.14.10"
 tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring"] }
-tokio-tungstenite = "0.30.0"
+# Le client WebSocket de l'écoute (ha-stt) et des tests : la même version
+# que celle d'axum, pour n'avoir qu'un seul tungstenite dans le programme.
+# À monter avec axum (cargo tree -d).
+tokio-tungstenite = "0.29.0"
 tower = { version = "0.5.3", features = ["util"] }
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt", "ansi", "env-filter", "std"] }
 
