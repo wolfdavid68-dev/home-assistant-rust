@@ -22,10 +22,11 @@ pub const DEFAULT_BUS_CAPACITY: usize = 1024;
 pub enum Event {
     /// L'état d'une entité a changé.
     /// `old_state` vaut `None` à la création, `new_state` vaut `None` à la suppression.
+    /// Les états sont partagés avec la machine à états (`Arc`), pas copiés.
     StateChanged {
         entity_id: EntityId,
-        old_state: Option<State>,
-        new_state: Option<State>,
+        old_state: Option<Arc<State>>,
+        new_state: Option<Arc<State>>,
     },
 
     /// Demande d'action sur une entité, par exemple `switch.turn_on` sur

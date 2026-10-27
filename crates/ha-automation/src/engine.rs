@@ -347,8 +347,8 @@ async fn run(
                     Event::StateChanged { entity_id, old_state, new_state } => {
                         let fired = runner.evaluator.fire_on_state_changed(
                             entity_id,
-                            old_state.as_ref(),
-                            new_state.as_ref(),
+                            old_state.as_deref(),
+                            new_state.as_deref(),
                             Instant::now(),
                         );
                         runner.launch_all(fired);
@@ -446,7 +446,7 @@ impl Runner {
                 let missing: Vec<&str> = automation
                     .entity_ids()
                     .into_iter()
-                    .filter(|id| self.core.states.get(id).is_none())
+                    .filter(|id| !self.core.states.contains(id))
                     .map(EntityId::as_str)
                     .collect();
                 (!missing.is_empty()).then(|| ha_notices::Issue {
@@ -709,7 +709,7 @@ async fn wait_for_trigger(
             received = events.recv() => match received {
                 Ok(event) => match event.as_ref() {
                     Event::StateChanged { entity_id, old_state, new_state } => evaluator
-                        .fire_on_state_changed(entity_id, old_state.as_ref(), new_state.as_ref(), Instant::now()),
+                        .fire_on_state_changed(entity_id, old_state.as_deref(), new_state.as_deref(), Instant::now()),
                     Event::Fired { event_type, data } => evaluator.fire_on_event(event_type, data),
                     Event::CallService { .. } => Vec::new(),
                 },

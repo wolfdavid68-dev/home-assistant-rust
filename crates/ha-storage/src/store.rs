@@ -291,7 +291,10 @@ impl Store {
     ///
     /// Sert à resynchroniser la base quand des événements ont été manqués.
     /// L'historique n'est pas touché.
-    pub async fn replace_all_states(&self, states: &[State]) -> Result<(), StorageError> {
+    pub async fn replace_all_states(
+        &self,
+        states: &[std::sync::Arc<State>],
+    ) -> Result<(), StorageError> {
         let mut tx = self.pool.begin().await?;
         sqlx::query("DELETE FROM states").execute(&mut *tx).await?;
         for state in states {

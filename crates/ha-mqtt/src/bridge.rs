@@ -294,7 +294,7 @@ impl Bridge {
 
         // Un état restauré depuis la base (même entité avant redémarrage) est
         // conservé ; sinon l'entité démarre en « unknown » comme dans Home Assistant.
-        if states.get(&entity_id).is_none() {
+        if !states.contains(&entity_id) {
             let _ = states.set_by(
                 crate::ID,
                 entity_id.clone(),

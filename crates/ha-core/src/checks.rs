@@ -293,7 +293,7 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    fn device(id: &str, attributes: Value) -> State {
+    fn device(id: &str, attributes: Value) -> std::sync::Arc<State> {
         let core = crate::Core::new();
         let states = &core.states;
         let id: crate::EntityId = id.parse().unwrap();

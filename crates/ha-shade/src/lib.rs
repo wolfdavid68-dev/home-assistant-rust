@@ -691,7 +691,7 @@ async fn run(
         };
         for (cover, tracker) in config.covers.iter().zip(trackers.iter_mut()) {
             let state = core.states.get(&cover.entity_id);
-            if let Some(order) = tracker.step(cover, sky, state.as_ref(), now) {
+            if let Some(order) = tracker.step(cover, sky, state.as_deref(), now) {
                 send(&core, order);
             }
         }
@@ -723,7 +723,7 @@ volets:
         parse_config(FILE).unwrap()
     }
 
-    fn cover_state(state: &str, position: Option<u8>) -> State {
+    fn cover_state(state: &str, position: Option<u8>) -> Arc<State> {
         let core = Core::new();
         let id: EntityId = "cover.salon".parse().unwrap();
         let mut attributes = Attributes::new();

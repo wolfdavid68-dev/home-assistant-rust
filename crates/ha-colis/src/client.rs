@@ -497,7 +497,7 @@ impl Published {
         if self.image.is_none()
             && !self.camera_cleared
             && let Ok(id) = EntityId::new(crate::CAMERA)
-            && core.states.get(&id).is_some()
+            && core.states.contains(&id)
         {
             let mut attributes = Attributes::new();
             attributes.insert("friendly_name".into(), json!(crate::NAME));

@@ -20,7 +20,7 @@ use zeroize::Zeroizing;
 use crate::ApiState;
 use crate::auth::Authenticated;
 use crate::error::ApiError;
-use crate::json::{format_timestamp, state_to_json};
+use crate::json::{StateJson, format_timestamp};
 use crate::roles;
 
 /// Nombre de lignes d'historique renvoyées par défaut.
@@ -295,16 +295,15 @@ pub(crate) async fn root(
 pub(crate) async fn list_states(
     State(state): State<Arc<ApiState>>,
     auth: Authenticated,
-) -> Json<Value> {
-    let states: Vec<Value> = state
-        .core
-        .states
-        .all()
+) -> Response {
+    let all = state.core.states.all();
+    // Écrits directement depuis les états partagés, sans copie intermédiaire.
+    let states: Vec<StateJson<'_>> = all
         .iter()
         .filter(|s| roles::can_see(&auth.user, s.entity_id(), Some(s)))
-        .map(state_to_json)
+        .map(|s| StateJson::new(s))
         .collect();
-    Json(Value::Array(states))
+    Json(states).into_response()
 }
 
 /// `GET /api/states/{entity_id}`
@@ -312,7 +311,7 @@ pub(crate) async fn get_state(
     State(state): State<Arc<ApiState>>,
     auth: Authenticated,
     Path(entity_id): Path<String>,
-) -> Result<Json<Value>, ApiError> {
+) -> Result<Response, ApiError> {
     let entity_id = parse_entity_id(&entity_id)?;
     let current = state
         .core
@@ -321,7 +320,7 @@ pub(crate) async fn get_state(
         // Caché : comme s'il n'existait pas (on ne révèle pas qu'il existe).
         .filter(|current| roles::can_see(&auth.user, &entity_id, Some(current)))
         .ok_or(ApiError::NotFound)?;
-    Ok(Json(state_to_json(&current)))
+    Ok(Json(StateJson::new(&current)).into_response())
 }
 
 /// `GET /api/camera_proxy/{entity_id}` : la dernière image d'une caméra
@@ -338,7 +337,7 @@ pub(crate) async fn camera_image(
         return Err(ApiError::NotFound);
     }
     let current = state.core.states.get(&entity_id);
-    if !roles::can_see(&auth.user, &entity_id, current.as_ref()) || current.is_none() {
+    if !roles::can_see(&auth.user, &entity_id, current.as_deref()) || current.is_none() {
         return Err(ApiError::NotFound);
     }
     let image = state
@@ -402,7 +401,7 @@ pub(crate) async fn set_state(
     let entity_id = parse_entity_id(&entity_id)?;
     let request: SetStateRequest = parse_json(&body)?;
 
-    let existed = state.core.states.get(&entity_id).is_some();
+    let existed = state.core.states.contains(&entity_id);
     state
         .core
         .states
@@ -410,7 +409,7 @@ pub(crate) async fn set_state(
         .map_err(|error| ApiError::BadRequest(error.to_string()))?;
     tracing::info!("{entity_id} modifié par {} via l'API", auth.user.username);
     let new_state = state.core.states.get(&entity_id);
-    let detail = new_state.as_ref().map(ha_core::State::state);
+    let detail = new_state.as_deref().map(ha_core::State::state);
     audit(
         &state,
         &auth.user.username,
@@ -431,7 +430,7 @@ pub(crate) async fn set_state(
     } else {
         StatusCode::CREATED
     };
-    Ok((status, Json(state_to_json(&current))).into_response())
+    Ok((status, Json(StateJson::new(&current))).into_response())
 }
 
 /// `DELETE /api/states/{entity_id}`
@@ -1035,7 +1034,7 @@ pub(crate) async fn areas(State(state): State<Arc<ApiState>>, auth: Authenticate
                 .iter()
                 .filter(|entity| {
                     let current = state.core.states.get(&entity.entity_id);
-                    roles::can_see(&auth.user, &entity.entity_id, current.as_ref())
+                    roles::can_see(&auth.user, &entity.entity_id, current.as_deref())
                 })
                 .map(|entity| json!({"entity_id": entity.entity_id.as_str(), "name": entity.name}))
                 .collect();
@@ -1050,9 +1049,8 @@ pub(crate) async fn areas(State(state): State<Arc<ApiState>>, auth: Authenticate
         .iter()
         .flat_map(|area| area.entities.iter().map(|e| &e.entity_id))
         .collect();
-    let mut extra = state.core.states.all();
-    extra.sort_by(|a, b| a.entity_id().as_str().cmp(b.entity_id().as_str()));
-    for entity in extra {
+    // `all()` les donne déjà triés par identifiant.
+    for entity in state.core.states.all() {
         let Some(room) = entity
             .attributes()
             .get("piece")

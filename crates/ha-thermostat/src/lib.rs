@@ -80,7 +80,7 @@ impl Live {
     fn restore(config: Thermostat, core: &Core) -> Option<Self> {
         let entity = config.entity_id()?;
         let previous = core.states.get(&entity);
-        let attributes = previous.as_ref().map(State::attributes);
+        let attributes = previous.as_deref().map(State::attributes);
         let mode = previous
             .as_ref()
             .and_then(|state| Mode::parse(state.state()))

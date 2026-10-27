@@ -442,7 +442,7 @@ impl Evaluator {
                 let data = change(
                     &pending.entity_id,
                     pending.from_state.as_ref(),
-                    current.as_ref(),
+                    current.as_deref(),
                 );
                 fired
                     .entry(pending.automation)
@@ -677,7 +677,7 @@ fn condition_passes(
             attribute,
             states: expected,
         } => entity_ids.iter().all(|id| {
-            watched(states.get(id).as_ref(), attribute.as_deref())
+            watched(states.get(id).as_deref(), attribute.as_deref())
                 .is_some_and(|value| expected.contains(&value))
         }),
         Condition::NumericState {

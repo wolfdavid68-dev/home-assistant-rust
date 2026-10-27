@@ -188,7 +188,7 @@ pub(crate) async fn system(
         "database_bytes": database,
         "devices": devices,
         "slow_ms": u64::try_from(ha_core::latency::SLOW.as_millis()).unwrap_or(u64::MAX),
-        "entities": state.core.states.all().len(),
+        "entities": state.core.states.len(),
         "budget": {
             "memory_mib": BUDGET_MEMORY_MIB,
             "cpu_percent": BUDGET_CPU_PERCENT,

@@ -256,7 +256,7 @@ mod tests {
         value.parse().unwrap()
     }
 
-    fn state(core: &Core, entity: &str, value: &str, attributes: Value) -> State {
+    fn state(core: &Core, entity: &str, value: &str, attributes: Value) -> std::sync::Arc<State> {
         let Value::Object(map) = attributes else {
             panic!("objet attendu")
         };

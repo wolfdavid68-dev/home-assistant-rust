@@ -151,7 +151,7 @@ fn is_repair(state: &State) -> bool {
 }
 
 /// Les notifications existantes.
-fn all_notices(states: &StateMachine) -> Vec<State> {
+fn all_notices(states: &StateMachine) -> Vec<Arc<State>> {
     states
         .all()
         .into_iter()
@@ -416,7 +416,7 @@ fn approvals(core: &Core) {
         else {
             continue;
         };
-        if states.get(&entity_id).is_some() {
+        if states.contains(&entity_id) {
             continue;
         }
         let who = order.origin.describe().map_or_else(
@@ -570,9 +570,7 @@ pub fn unavailable(core: &Core, now: SystemTime) -> Vec<Issue> {
         .into_iter()
         .filter(|state| {
             state.state() == "unavailable"
-                && states
-                    .owner_of(state.entity_id())
-                    .is_none_or(|owner| !down.contains(&owner.as_str()))
+                && state.owner().is_none_or(|owner| !down.contains(&owner))
                 && state.entity_id().domain() != DOMAIN
                 && now
                     .duration_since(state.last_changed())
@@ -648,7 +646,7 @@ pub fn low_batteries(states: &StateMachine) -> Vec<Issue> {
             let key = entity_id.as_str().replace('.', "_");
             let shown = format!("{DOMAIN}.{BATTERY_PREFIX}{key}")
                 .parse::<EntityId>()
-                .is_ok_and(|id| states.get(&id).is_some());
+                .is_ok_and(|id| states.contains(&id));
             let name = text(state.attributes(), "friendly_name").unwrap_or(entity_id.as_str());
             let (title, message, severity) = match battery(&state)? {
                 Battery::Level(level) if level <= BATTERY_EMPTY => (

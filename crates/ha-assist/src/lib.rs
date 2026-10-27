@@ -22,6 +22,7 @@
 pub mod suite;
 
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use ha_core::{Attributes, EntityId, State};
 use serde_json::Value;
@@ -34,7 +35,8 @@ pub const MAX_TARGETS: usize = 30;
 /// Un appareil que la personne a le droit de voir.
 #[derive(Debug, Clone)]
 pub struct Device {
-    pub state: State,
+    /// Son état, partagé avec la machine à états (pas de copie).
+    pub state: Arc<State>,
     /// Son nom lisible (« Volet chambre »).
     pub name: String,
     /// Ses autres noms (« le store », « la lampe du canapé »), compris

@@ -259,7 +259,7 @@ pub(crate) async fn wait(
     let mut pending = Vec::new();
     // D'abord l'état actuel : déjà bon, rien à attendre.
     for watch in watches {
-        match judge(&watch, states.get(&watch.entity_id).as_ref()) {
+        match judge(&watch, states.get(&watch.entity_id).as_deref()) {
             Judgement::Reached => {}
             Judgement::Unavailable => {
                 unconfirmed.push(Unconfirmed::Unavailable(watch.entity_id, watch.name));
@@ -280,9 +280,9 @@ pub(crate) async fn wait(
                     entity_id,
                     new_state,
                     ..
-                }) if *entity_id == watch.entity_id => judge(watch, new_state.as_ref()),
+                }) if *entity_id == watch.entity_id => judge(watch, new_state.as_deref()),
                 Some(_) => return true,
-                None => judge(watch, states.get(&watch.entity_id).as_ref()),
+                None => judge(watch, states.get(&watch.entity_id).as_deref()),
             };
             match judgement {
                 Judgement::Reached => false,

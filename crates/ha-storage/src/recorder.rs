@@ -106,7 +106,7 @@ async fn record_batch(store: &Store, batch: &mut Vec<Arc<Event>>) {
                 entity_id,
                 new_state,
                 ..
-            } => Some((entity_id, new_state.as_ref())),
+            } => Some((entity_id, new_state.as_deref())),
             // Un appel de service n'est pas un changement d'état : si
             // l'appareil obéit, son nouvel état arrivera par un `StateChanged`.
             // Pareil pour un événement nommé (`timer.finished`…).

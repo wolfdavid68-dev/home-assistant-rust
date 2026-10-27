@@ -840,7 +840,7 @@ mod tests {
         let restored = core.states.get(&id);
         assert_eq!(
             state(
-                &one("counter:\n  lessives:", restored.as_ref()),
+                &one("counter:\n  lessives:", restored.as_deref()),
                 Instant::now()
             ),
             "7"
@@ -848,7 +848,10 @@ mod tests {
         // Sauf si on le demande.
         assert_eq!(
             state(
-                &one("counter:\n  lessives: {restore: false}", restored.as_ref()),
+                &one(
+                    "counter:\n  lessives: {restore: false}",
+                    restored.as_deref()
+                ),
                 Instant::now()
             ),
             "0"

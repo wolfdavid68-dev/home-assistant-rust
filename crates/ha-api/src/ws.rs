@@ -26,14 +26,14 @@ use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::response::Response;
 use ha_auth::User;
 use ha_core::{EntityId, Event};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::RecvError;
 use zeroize::Zeroizing;
 
 use crate::ApiState;
-use crate::json::state_to_json;
+use crate::json::StateJson;
 use crate::roles;
 
 /// Taille maximale d'un message reçu : nos commandes font quelques dizaines d'octets.
@@ -169,9 +169,10 @@ async fn session(mut socket: WebSocket, state: &ApiState, mut user: User, token:
                         "type": "result",
                         "success": false,
                         "error": {"code": "invalid_format", "message": error.to_string()},
-                    }),
+                    })
+                    .to_string(),
                 };
-                if send(&mut socket, reply).await.is_err() {
+                if send_text(&mut socket, reply).await.is_err() {
                     break;
                 }
             }
@@ -181,7 +182,7 @@ async fn session(mut socket: WebSocket, state: &ApiState, mut user: User, token:
                 if !visible(&user, &event) {
                     continue;
                 }
-                if send(&mut socket, event_message(id, &event)).await.is_err() {
+                if send_text(&mut socket, event_message(id, &event)).await.is_err() {
                     break;
                 }
             }
@@ -205,7 +206,11 @@ fn visible(user: &User, event: &Event) -> bool {
             entity_id,
             old_state,
             new_state,
-        } => roles::can_see(user, entity_id, new_state.as_ref().or(old_state.as_ref())),
+        } => roles::can_see(
+            user,
+            entity_id,
+            new_state.as_deref().or(old_state.as_deref()),
+        ),
         // Commandes et événements nommés (qui a fait quoi) : pas pour un invité.
         Event::CallService { .. } | Event::Fired { .. } => user.can(Permission::AllDevices),
     }
@@ -216,20 +221,27 @@ fn handle_command(
     state: &ApiState,
     user: &User,
     subscription: &mut Option<(u64, broadcast::Receiver<Arc<Event>>)>,
-) -> Value {
+) -> String {
     let id = command.id;
-    match command.kind.as_str() {
+    let reply = match command.kind.as_str() {
         "ping" => json!({"id": id, "type": "pong"}),
+        // La réponse la plus lourde : écrite directement depuis les états.
         "get_states" => {
-            let states: Vec<Value> = state
-                .core
-                .states
-                .all()
+            let all = state.core.states.all();
+            let result = all
                 .iter()
                 .filter(|s| roles::can_see(user, s.entity_id(), Some(s)))
-                .map(state_to_json)
+                .map(|s| StateJson::new(s))
                 .collect();
-            json!({"id": id, "type": "result", "success": true, "result": states})
+            return to_text(
+                id,
+                &StatesReply {
+                    id,
+                    result,
+                    success: true,
+                    kind: "result",
+                },
+            );
         }
         "subscribe_events" if subscription.is_none() => {
             *subscription = Some((id, state.core.bus.subscribe()));
@@ -251,10 +263,10 @@ fn handle_command(
         }
         "config/entity_registry/get_entries" => {
             let Some(entity_ids) = &command.entity_ids else {
-                return error_result(id, "invalid_format", "entity_ids attendu");
+                return error_result(id, "invalid_format", "entity_ids attendu").to_string();
             };
             if entity_ids.len() > MAX_REGISTRY_IDS {
-                return error_result(id, "invalid_format", "trop d'appareils demandés");
+                return error_result(id, "invalid_format", "trop d'appareils demandés").to_string();
             }
             let entries: serde_json::Map<String, Value> = entity_ids
                 .iter()
@@ -266,7 +278,52 @@ fn handle_command(
             json!({"id": id, "type": "result", "success": true, "result": entries})
         }
         _ => error_result(id, "unknown_command", "commande inconnue"),
-    }
+    };
+    reply.to_string()
+}
+
+/// Réponse à `get_states`. Les champs suivent l'ordre alphabétique, comme
+/// dans un objet `serde_json::Value` (trié) : le texte reste le même qu'avant.
+#[derive(Serialize)]
+struct StatesReply<'a> {
+    id: u64,
+    result: Vec<StateJson<'a>>,
+    success: bool,
+    #[serde(rename = "type")]
+    kind: &'static str,
+}
+
+/// `{"event": {"data": {…}, "event_type": "state_changed"}, "id": …, "type": "event"}`,
+/// champs dans l'ordre alphabétique (voir [`StatesReply`]).
+#[derive(Serialize)]
+struct StateChangedMessage<'a> {
+    event: StateChangedEvent<'a>,
+    id: u64,
+    #[serde(rename = "type")]
+    kind: &'static str,
+}
+
+#[derive(Serialize)]
+struct StateChangedEvent<'a> {
+    data: StateChangedData<'a>,
+    event_type: &'static str,
+}
+
+#[derive(Serialize)]
+struct StateChangedData<'a> {
+    entity_id: &'a str,
+    new_state: Option<StateJson<'a>>,
+    old_state: Option<StateJson<'a>>,
+}
+
+/// Écrit un message en JSON. Cela n'échoue qu'avec des clés d'objet qui ne
+/// sont pas du texte, ce que nos types n'ont pas ; le client reçoit alors une
+/// erreur plutôt qu'un message vide.
+fn to_text(id: u64, message: &impl Serialize) -> String {
+    serde_json::to_string(message).unwrap_or_else(|error| {
+        tracing::error!("message WebSocket impossible à écrire : {error}");
+        error_result(id, "internal_error", "erreur interne").to_string()
+    })
 }
 
 /// L'entrée « registre » d'un appareil, comme Home Assistant la donne :
@@ -285,7 +342,7 @@ fn registry_entry(state: &ApiState, user: &User, entity_id: &str) -> Option<Valu
     if current.is_none() && placed.is_none() {
         return None;
     }
-    if !roles::can_see(user, &entity_id, current.as_ref()) {
+    if !roles::can_see(user, &entity_id, current.as_deref()) {
         return None;
     }
     let attribute = |key: &str| {
@@ -340,24 +397,30 @@ async fn next_event(
     }
 }
 
-fn event_message(id: u64, event: &Event) -> Value {
-    match event {
+fn event_message(id: u64, event: &Event) -> String {
+    let message = match event {
+        // Le plus fréquent : écrit directement depuis les états partagés.
         Event::StateChanged {
             entity_id,
             old_state,
             new_state,
-        } => json!({
-            "id": id,
-            "type": "event",
-            "event": {
-                "event_type": "state_changed",
-                "data": {
-                    "entity_id": entity_id.as_str(),
-                    "old_state": old_state.as_ref().map(state_to_json),
-                    "new_state": new_state.as_ref().map(state_to_json),
+        } => {
+            return to_text(
+                id,
+                &StateChangedMessage {
+                    event: StateChangedEvent {
+                        data: StateChangedData {
+                            entity_id: entity_id.as_str(),
+                            new_state: new_state.as_deref().map(StateJson::new),
+                            old_state: old_state.as_deref().map(StateJson::new),
+                        },
+                        event_type: "state_changed",
+                    },
+                    id,
+                    kind: "event",
                 },
-            },
-        }),
+            );
+        }
         Event::CallService {
             domain,
             service,
@@ -381,9 +444,79 @@ fn event_message(id: u64, event: &Event) -> Value {
             "type": "event",
             "event": {"event_type": event_type, "data": data},
         }),
-    }
+    };
+    message.to_string()
 }
 
 async fn send(socket: &mut WebSocket, value: Value) -> Result<(), axum::Error> {
-    socket.send(Message::Text(value.to_string().into())).await
+    send_text(socket, value.to_string()).await
+}
+
+async fn send_text(socket: &mut WebSocket, text: String) -> Result<(), axum::Error> {
+    socket.send(Message::Text(text.into())).await
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::{Duration, UNIX_EPOCH};
+
+    use ha_core::{EventBus, StateMachine};
+
+    use super::*;
+    use crate::json::state_to_json;
+
+    /// Les messages écrits directement donnent le même texte qu'avec l'ancien
+    /// arbre `serde_json::Value`.
+    #[test]
+    fn direct_messages_write_the_same_text_as_the_value_tree() {
+        let states = StateMachine::new(EventBus::new(16));
+        let id: EntityId = "sensor.salon".parse().unwrap();
+        let Value::Object(attributes) =
+            json!({"unit_of_measurement": "°C", "friendly_name": "Salon \"sud\""})
+        else {
+            unreachable!()
+        };
+        let at = UNIX_EPOCH + Duration::from_micros(1_761_000_000_123_456);
+        states
+            .restore(id.clone(), "21.5", attributes, at, at)
+            .unwrap();
+        let current = states.get(&id).unwrap();
+
+        let reply = to_text(
+            7,
+            &StatesReply {
+                id: 7,
+                result: vec![StateJson::new(&current)],
+                success: true,
+                kind: "result",
+            },
+        );
+        let before = json!({"id": 7, "type": "result", "success": true, "result": [state_to_json(&current)]});
+        assert_eq!(reply, before.to_string());
+
+        for (old_state, new_state) in [
+            (None, Some(Arc::clone(&current))),
+            (Some(Arc::clone(&current)), None),
+            (Some(Arc::clone(&current)), Some(Arc::clone(&current))),
+        ] {
+            let before = json!({
+                "id": 3,
+                "type": "event",
+                "event": {
+                    "event_type": "state_changed",
+                    "data": {
+                        "entity_id": id.as_str(),
+                        "old_state": old_state.as_deref().map(state_to_json),
+                        "new_state": new_state.as_deref().map(state_to_json),
+                    },
+                },
+            });
+            let event = Event::StateChanged {
+                entity_id: id.clone(),
+                old_state,
+                new_state,
+            };
+            assert_eq!(event_message(3, &event), before.to_string());
+        }
+    }
 }

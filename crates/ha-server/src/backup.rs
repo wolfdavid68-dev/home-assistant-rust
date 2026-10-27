@@ -199,7 +199,7 @@ fn notify(core: &Core, message: &str) {
     let Ok(entity_id) = "notify.telephone".parse::<EntityId>() else {
         return;
     };
-    if core.states.get(&entity_id).is_none() {
+    if !core.states.contains(&entity_id) {
         return;
     }
     let mut data = Attributes::new();

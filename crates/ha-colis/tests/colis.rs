@@ -154,7 +154,7 @@ async fn wait_for(
     core: &Core,
     entity: &str,
     check: impl Fn(&ha_core::State) -> bool,
-) -> ha_core::State {
+) -> std::sync::Arc<ha_core::State> {
     for _ in 0..200 {
         if let Some(state) = core.states.get(&entity.parse().unwrap())
             && check(&state)

@@ -1177,7 +1177,7 @@ fn publish_tts(shared: &Shared, core: &Core, message: Option<&str>) {
     let state = if message.is_some() {
         jiff::Timestamp::now().to_string()
     } else {
-        idle_state(previous.as_ref().map(ha_core::State::state))
+        idle_state(previous.as_deref().map(ha_core::State::state))
     };
     let last = message.map(str::to_owned).or_else(|| {
         previous.as_ref().and_then(|s| {

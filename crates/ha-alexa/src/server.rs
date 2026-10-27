@@ -162,8 +162,8 @@ impl Bridge {
 
     fn light(&self, number: u32, device: &Device) -> Option<Value> {
         let state = self.core.states.get(&device.entity_id);
-        hue::is_allowed(&device.entity_id, state.as_ref())
-            .then(|| hue::light_json(device, state.as_ref(), self.promise(number)))
+        hue::is_allowed(&device.entity_id, state.as_deref())
+            .then(|| hue::light_json(device, state.as_deref(), self.promise(number)))
     }
 
     fn lights_json(&self) -> Value {
@@ -352,7 +352,7 @@ async fn set_state(
     };
     let entity_id = &device.entity_id;
     let state = bridge.core.states.get(entity_id);
-    if !hue::is_allowed(entity_id, state.as_ref()) {
+    if !hue::is_allowed(entity_id, state.as_deref()) {
         tracing::warn!("Alexa : {entity_id} ne se pilote pas à la voix (portail, garage)");
         return hue_json(&hue::error_response(1, &address, "unauthorized user"));
     }

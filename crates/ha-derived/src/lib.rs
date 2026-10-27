@@ -113,7 +113,7 @@ impl Live {
                 }
                 let meter = match &derived.kind {
                     Kind::Meter { cycle, .. } => Some(restore_meter(
-                        core.states.get(&derived.entity_id).as_ref(),
+                        core.states.get(&derived.entity_id).as_deref(),
                         *cycle,
                         now,
                     )),
@@ -132,7 +132,7 @@ impl Live {
                 // L'appareil reprend sa phase, et son dernier cycle.
                 let appliance = matches!(derived.kind, Kind::Appliance { .. }).then(|| {
                     let previous = core.states.get(&derived.entity_id);
-                    let phase = match previous.as_ref().map(State::state) {
+                    let phase = match previous.as_deref().map(State::state) {
                         Some("En marche") => Phase::Running,
                         Some("Terminé") => Phase::Finished,
                         _ => Phase::Off,
@@ -178,7 +178,7 @@ impl Live {
         let Some(item) = self.items.get_mut(index) else {
             return;
         };
-        let read = |ids: &[EntityId]| -> Vec<Option<State>> {
+        let read = |ids: &[EntityId]| -> Vec<Option<Arc<State>>> {
             ids.iter().map(|id| core.states.get(id)).collect()
         };
         let mut attributes = Attributes::new();
@@ -316,11 +316,11 @@ impl Live {
                     Some(new) => integral.feed(number(Some(new)), instant, *method, scale),
                     // Au démarrage : on part de la valeur actuelle.
                     None if !integral.running() => {
-                        integral.feed(number(source_state.as_ref()), instant, *method, scale);
+                        integral.feed(number(source_state.as_deref()), instant, *method, scale);
                     }
                     None => integral.advance(instant, *method, scale),
                 }
-                if let Some(unit) = source_unit(source_state.as_ref()) {
+                if let Some(unit) = source_unit(source_state.as_deref()) {
                     attributes.insert(
                         "unit_of_measurement".into(),
                         json!(format!("{prefix}{unit}{}", unit_time.symbol())),
@@ -351,10 +351,12 @@ impl Live {
                 let instant = std::time::Instant::now();
                 match fed {
                     Some(new) => slope.feed(number(Some(new)), instant),
-                    None if slope.is_empty() => slope.feed(number(source_state.as_ref()), instant),
+                    None if slope.is_empty() => {
+                        slope.feed(number(source_state.as_deref()), instant);
+                    }
                     None => {}
                 }
-                if let Some(unit) = source_unit(source_state.as_ref()) {
+                if let Some(unit) = source_unit(source_state.as_deref()) {
                     attributes.insert(
                         "unit_of_measurement".into(),
                         json!(format!("{unit}/{}", unit_time.symbol())),
@@ -377,10 +379,10 @@ impl Live {
                 let Some((appliance, last)) = item.appliance.as_mut() else {
                     return;
                 };
-                let power = number(core.states.get(source).as_ref());
+                let power = number(core.states.get(source).as_deref());
                 let counter = energy
                     .as_ref()
-                    .and_then(|id| number(core.states.get(id).as_ref()));
+                    .and_then(|id| number(core.states.get(id).as_deref()));
                 let finished = appliance.step(
                     std::time::Instant::now(),
                     power,
@@ -551,7 +553,7 @@ async fn run(
                         let indexes = live.watchers.get(entity_id).cloned().unwrap_or_default();
                         let now = local_now();
                         for index in indexes {
-                            live.refresh(index, &core, now, new_state.as_ref());
+                            live.refresh(index, &core, now, new_state.as_deref());
                         }
                     }
                     Event::CallService { domain, service, entity_id, data, origin, .. } if domain == entity_id.domain() => {
@@ -625,7 +627,7 @@ fn source_unit(state: Option<&State>) -> Option<String> {
         .map(str::to_owned)
 }
 
-fn copy_unit(states: &[Option<State>], attributes: &mut Attributes) {
+fn copy_unit(states: &[Option<Arc<State>>], attributes: &mut Attributes) {
     if let Some(unit) = states
         .iter()
         .flatten()

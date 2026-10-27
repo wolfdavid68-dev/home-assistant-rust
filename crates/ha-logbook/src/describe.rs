@@ -365,7 +365,7 @@ mod tests {
     use serde_json::json;
 
     /// Un état, tel que le noyau le fabrique.
-    fn state(entity: &str, value: &str, attributes: Value) -> State {
+    fn state(entity: &str, value: &str, attributes: Value) -> std::sync::Arc<State> {
         let Value::Object(attributes) = attributes else {
             panic!("un objet est attendu")
         };

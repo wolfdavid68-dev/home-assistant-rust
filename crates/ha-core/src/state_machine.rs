@@ -14,9 +14,14 @@ use crate::state::{Attributes, MAX_STATE_LEN, State};
 /// temps. Rust refuse de compiler un accès concurrent non protégé. Le `RwLock`
 /// (verrou lecteurs/rédacteur) autorise soit plusieurs lecteurs, soit un seul
 /// rédacteur à la fois.
+///
+/// Chaque état est rangé dans un `Arc` : le lire ne le copie pas (attributs
+/// compris), on reçoit une deuxième « poignée » sur le même état. Un état
+/// n'est jamais modifié sur place : un changement en range un nouveau, et
+/// ceux qui tiennent l'ancien le gardent tel quel.
 #[derive(Debug)]
 pub struct StateMachine {
-    states: RwLock<HashMap<EntityId, State>>,
+    states: RwLock<HashMap<EntityId, Arc<State>>>,
     bus: EventBus,
 }
 
@@ -29,19 +34,56 @@ impl StateMachine {
         }
     }
 
-    /// Renvoie une copie de l'état actuel d'une entité, ou `None` si elle n'existe pas.
+    /// Renvoie l'état actuel d'une entité, ou `None` si elle n'existe pas.
     ///
     /// Concept Rust : `Option<T>` remplace `null`. Le compilateur oblige
-    /// l'appelant à traiter le cas `None`.
-    pub fn get(&self, entity_id: &EntityId) -> Option<State> {
+    /// l'appelant à traiter le cas `None`. L'état n'est pas copié : cloner un
+    /// `Arc` ne fait qu'incrémenter un compteur.
+    pub fn get(&self, entity_id: &EntityId) -> Option<Arc<State>> {
         self.read().get(entity_id).cloned()
     }
 
     /// Tous les états, triés par identifiant.
-    pub fn all(&self) -> Vec<State> {
-        let mut states: Vec<State> = self.read().values().cloned().collect();
+    pub fn all(&self) -> Vec<Arc<State>> {
+        let mut states: Vec<Arc<State>> = self.read().values().cloned().collect();
         states.sort_by(|a, b| a.entity_id().cmp(b.entity_id()));
         states
+    }
+
+    /// Nombre d'entités connues.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.read().len()
+    }
+
+    /// Aucune entité connue ?
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.read().is_empty()
+    }
+
+    /// Cette entité existe-t-elle ?
+    #[must_use]
+    pub fn contains(&self, entity_id: &EntityId) -> bool {
+        self.read().contains_key(entity_id)
+    }
+
+    /// L'entité vaut-elle `value` ? `false` si elle n'existe pas.
+    #[must_use]
+    pub fn is_state(&self, entity_id: &EntityId, value: &str) -> bool {
+        self.read()
+            .get(entity_id)
+            .is_some_and(|state| state.state() == value)
+    }
+
+    /// Lit l'état d'une entité sur place, sans même toucher au compteur de
+    /// l'`Arc` : `f` reçoit l'état, et son résultat est renvoyé (`None` si
+    /// l'entité n'existe pas).
+    ///
+    /// Le verrou est tenu pendant `f` : elle doit être courte et ne jamais
+    /// rappeler la machine à états (ce serait un interblocage).
+    pub fn with<R>(&self, entity_id: &EntityId, f: impl FnOnce(&State) -> R) -> Option<R> {
+        self.read().get(entity_id).map(|state| f(state))
     }
 
     /// Crée ou met à jour l'état d'une entité.
@@ -80,9 +122,9 @@ impl StateMachine {
                 // Rien ne change, sauf peut-être le propriétaire : on le note
                 // sans publier d'événement.
                 if old.owner != owner {
-                    let mut kept = old.clone();
+                    let mut kept = State::clone(old);
                     kept.owner = owner;
-                    states.insert(entity_id, kept);
+                    states.insert(entity_id, Arc::new(kept));
                 }
                 return Ok(false);
             }
@@ -91,15 +133,16 @@ impl StateMachine {
             _ => now,
         };
 
-        let state = State::new(
+        let state = Arc::new(State::new(
             entity_id.clone(),
             new_state,
             attributes,
             last_changed,
             now,
             owner,
-        );
-        let old_state = states.insert(entity_id.clone(), state.clone());
+        ));
+        // L'événement et la table partagent le même état : aucune copie.
+        let old_state = states.insert(entity_id.clone(), Arc::clone(&state));
 
         // On publie pendant que le verrou est tenu : ainsi les événements sortent
         // toujours dans l'ordre réel des changements. `publish` ne bloque jamais.
@@ -196,7 +239,7 @@ impl StateMachine {
             last_updated,
             owner.map(Arc::from),
         );
-        states.insert(entity_id, restored);
+        states.insert(entity_id, Arc::new(restored));
         Ok(true)
     }
 
@@ -217,11 +260,11 @@ impl StateMachine {
     // Un verrou est « empoisonné » si une tâche a paniqué en le tenant. Nos
     // modifications sont faites en une seule opération (`insert` / `remove`),
     // donc les données restent cohérentes : on peut continuer sans planter.
-    fn read(&self) -> RwLockReadGuard<'_, HashMap<EntityId, State>> {
+    fn read(&self) -> RwLockReadGuard<'_, HashMap<EntityId, Arc<State>>> {
         self.states.read().unwrap_or_else(PoisonError::into_inner)
     }
 
-    fn write(&self) -> RwLockWriteGuard<'_, HashMap<EntityId, State>> {
+    fn write(&self) -> RwLockWriteGuard<'_, HashMap<EntityId, Arc<State>>> {
         self.states.write().unwrap_or_else(PoisonError::into_inner)
     }
 }
