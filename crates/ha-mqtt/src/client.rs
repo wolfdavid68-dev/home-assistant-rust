@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 
-use ha_core::{Background, CancellationToken, Core, Event};
+use ha_core::{Background, Backoff, CancellationToken, Core, Event};
 use rumqttc::{AsyncClient, Event as MqttEvent, MqttOptions, Packet, QoS};
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{info, warn};
@@ -61,7 +61,7 @@ async fn run(config: MqttConfig, core: Arc<Core>, token: CancellationToken) {
     // Les Shelly récents, sans découverte (étape 66).
     let mut shellies = crate::shelly::Shellies::default();
     let mut events = core.bus.subscribe();
-    let mut backoff = Duration::from_secs(1);
+    let mut backoff = Backoff::new(Duration::from_secs(1), MAX_BACKOFF);
     info!("MQTT : connexion à {}:{}", config.host, config.port);
 
     loop {
@@ -72,7 +72,7 @@ async fn run(config: MqttConfig, core: Arc<Core>, token: CancellationToken) {
                 Ok(MqttEvent::Incoming(Packet::ConnAck(_))) => {
                     info!("MQTT : connecté à {}:{}", config.host, config.port);
                     core.report(crate::ID, crate::NAME, Health::Connected);
-                    backoff = Duration::from_secs(1);
+                    backoff.reset();
                     // Session neuve à chaque connexion : on se réabonne à tout.
                     let topics = bridge
                         .discovery_filters()
@@ -107,17 +107,17 @@ async fn run(config: MqttConfig, core: Arc<Core>, token: CancellationToken) {
                 }
                 Ok(_) => {}
                 Err(error) => {
-                    warn!("MQTT : connexion perdue ({error}), nouvel essai dans {} s", backoff.as_secs());
+                    let wait = backoff.next();
+                    warn!("MQTT : connexion perdue ({error}), nouvel essai dans {} s", wait.as_secs());
                     core.report(crate::ID, crate::NAME, Health::Retrying {
                         error: format!("broker injoignable ({error})"),
-                        retry_at: SystemTime::now() + backoff,
+                        retry_at: SystemTime::now() + wait,
                     });
                     // On attend avant de réessayer, sans ignorer une demande d'arrêt.
                     tokio::select! {
-                        () = tokio::time::sleep(backoff) => {}
+                        () = tokio::time::sleep(wait) => {}
                         () = token.cancelled() => break,
                     }
-                    backoff = (backoff * 2).min(MAX_BACKOFF);
                 }
             },
 

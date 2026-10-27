@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 use std::time::{Duration, Instant};
 
-use ha_core::{Background, CancellationToken, Core};
+use ha_core::{Background, Backoff, CancellationToken, Core};
 use ha_storage::{AuditRecord, Store};
 use tracing::{info, warn};
 
@@ -72,7 +72,7 @@ async fn run(
         "Freebox : connexion à {} ({})",
         pairing.device_name, pairing.host
     );
-    let mut backoff = interval;
+    let mut backoff = Backoff::new(interval, MAX_BACKOFF);
     let mut session = None;
     let mut presence: Option<Presence> = None;
 
@@ -112,26 +112,25 @@ async fn run(
         let wait = match result {
             Ok(()) => {
                 core.report(crate::ID, crate::NAME, Health::Connected);
-                backoff = interval;
+                backoff.reset();
                 interval
             }
             Err(error) => {
+                let wait = backoff.next();
                 warn!(
                     "Freebox : relevé impossible ({error}), nouvel essai dans {} s",
-                    backoff.as_secs()
+                    wait.as_secs()
                 );
                 core.report(
                     crate::ID,
                     crate::NAME,
                     Health::Retrying {
                         error: format!("relevé impossible ({error})"),
-                        retry_at: SystemTime::now() + backoff,
+                        retry_at: SystemTime::now() + wait,
                     },
                 );
                 // On rouvrira une session au prochain essai.
                 session = None;
-                let wait = backoff;
-                backoff = (backoff * 2).min(MAX_BACKOFF);
                 wait
             }
         };

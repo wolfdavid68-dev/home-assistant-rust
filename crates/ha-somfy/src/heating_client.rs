@@ -8,7 +8,7 @@
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use ha_core::{Background, CancellationToken, Core, Event, Health};
+use ha_core::{Background, Backoff, CancellationToken, Core, Event, Health};
 use tokio::sync::broadcast::error::RecvError;
 use tokio::time::Instant;
 use tracing::{debug, error, info, warn};
@@ -87,7 +87,7 @@ async fn run(account: CloudAccount, core: Arc<Core>, token: CancellationToken) {
     };
     let mut heating = Heating::default();
     let mut events = core.bus.subscribe();
-    let mut backoff = FIRST_BACKOFF;
+    let mut backoff = Backoff::new(FIRST_BACKOFF, MAX_BACKOFF);
     info!("chauffage : connexion au serveur Somfy");
 
     'login: loop {
@@ -112,6 +112,8 @@ async fn run(account: CloudAccount, core: Arc<Core>, token: CancellationToken) {
         let (session, mut listener) = match connected {
             Ok(connected) => connected,
             Err(error) => {
+                // L'attente double à chaque échec, même compte refusé.
+                let next = backoff.next();
                 let (wait, message) = if matches!(error, SomfyError::BadCredentials) {
                     error!("chauffage : {error}, vérifie l'e-mail et le mot de passe Somfy");
                     (
@@ -121,9 +123,9 @@ async fn run(account: CloudAccount, core: Arc<Core>, token: CancellationToken) {
                 } else {
                     warn!(
                         "chauffage : serveur Somfy injoignable ({error}), nouvel essai dans {} s",
-                        backoff.as_secs()
+                        next.as_secs()
                     );
-                    (backoff, format!("serveur Somfy injoignable ({error})"))
+                    (next, format!("serveur Somfy injoignable ({error})"))
                 };
                 core.report(
                     heating::ID,
@@ -137,13 +139,12 @@ async fn run(account: CloudAccount, core: Arc<Core>, token: CancellationToken) {
                     () = tokio::time::sleep(wait) => {}
                     () = token.cancelled() => break 'login,
                 }
-                backoff = (backoff * 2).min(MAX_BACKOFF);
                 continue;
             }
         };
         info!("chauffage : connecté, {} entités", heating.len());
         core.report(heating::ID, heating::NAME, Health::Connected);
-        backoff = FIRST_BACKOFF;
+        backoff.reset();
         let mut fast_until: Option<Instant> = None;
         let fetch = tokio::time::sleep(FETCH_INTERVAL);
         tokio::pin!(fetch);

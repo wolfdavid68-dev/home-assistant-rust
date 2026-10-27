@@ -26,7 +26,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, SystemTime};
 
-use ha_core::{Attributes, Background, CancellationToken, Core, EntityId, Event, Health};
+use ha_core::{Attributes, Background, Backoff, CancellationToken, Core, EntityId, Event, Health};
 use ha_tts::Tts;
 use serde_json::{Value, json};
 use tokio::sync::broadcast::error::RecvError;
@@ -349,7 +349,7 @@ async fn run(shared: Arc<Shared>, core: Arc<Core>, token: CancellationToken) {
     let mut ticker = tokio::time::interval(shared.config.poll);
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let mut next_topology = tokio::time::Instant::now();
-    let mut backoff = Duration::from_secs(1);
+    let mut backoff = Backoff::new(Duration::from_secs(1), MAX_BACKOFF);
     loop {
         tokio::select! {
             () = token.cancelled() => break,
@@ -357,21 +357,21 @@ async fn run(shared: Arc<Shared>, core: Arc<Core>, token: CancellationToken) {
                 if tokio::time::Instant::now() >= next_topology {
                     match refresh_topology(&shared, &core).await {
                         Ok(count) => {
-                            if backoff > Duration::from_secs(1) || count > 0 {
+                            if backoff.is_retrying() || count > 0 {
                                 info!("Sonos : {count} enceinte(s)");
                             }
                             next_topology = tokio::time::Instant::now() + TOPOLOGY_EVERY;
-                            backoff = Duration::from_secs(1);
+                            backoff.reset();
                             refresh_favorites(&shared).await;
                         }
                         Err(error) => {
-                            warn!("Sonos : {error}, nouvel essai dans {} s", backoff.as_secs());
+                            let wait = backoff.next();
+                            warn!("Sonos : {error}, nouvel essai dans {} s", wait.as_secs());
                             core.report(ID, NAME, Health::Retrying {
                                 error,
-                                retry_at: SystemTime::now() + backoff,
+                                retry_at: SystemTime::now() + wait,
                             });
-                            next_topology = tokio::time::Instant::now() + backoff;
-                            backoff = (backoff * 2).min(MAX_BACKOFF);
+                            next_topology = tokio::time::Instant::now() + wait;
                             continue;
                         }
                     }

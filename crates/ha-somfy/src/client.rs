@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 
-use ha_core::{Background, CancellationToken, Core, Event};
+use ha_core::{Background, Backoff, CancellationToken, Core, Event};
 use tokio::sync::broadcast::error::RecvError;
 use tokio::time::Instant;
 use tracing::{debug, error, info, warn};
@@ -64,7 +64,7 @@ async fn run(pairing: Pairing, core: Arc<Core>, token: CancellationToken) {
     let api = LocalApi::new(http, &pairing.host, pairing.token);
     let mut devices = Devices::default();
     let mut events = core.bus.subscribe();
-    let mut backoff = Duration::from_secs(1);
+    let mut backoff = Backoff::new(Duration::from_secs(1), MAX_BACKOFF);
     info!(
         "Somfy : connexion à la box {} ({})",
         pairing.gateway_id, pairing.host
@@ -80,15 +80,17 @@ async fn run(pairing: Pairing, core: Arc<Core>, token: CancellationToken) {
         let listener = match connected {
             Ok(listener) => listener,
             Err(error) => {
+                // L'attente double à chaque échec, même jeton refusé.
+                let next = backoff.next();
                 let wait = if matches!(error, SomfyError::Unauthorized) {
                     error!("Somfy : {error}. Refais « ha-server somfy pair ».");
                     UNAUTHORIZED_BACKOFF
                 } else {
                     warn!(
                         "Somfy : box injoignable ({error}), nouvel essai dans {} s",
-                        backoff.as_secs()
+                        next.as_secs()
                     );
-                    backoff
+                    next
                 };
                 core.report(
                     crate::ID,
@@ -106,13 +108,12 @@ async fn run(pairing: Pairing, core: Arc<Core>, token: CancellationToken) {
                     () = tokio::time::sleep(wait) => {}
                     () = token.cancelled() => break 'connection,
                 }
-                backoff = (backoff * 2).min(MAX_BACKOFF);
                 continue;
             }
         };
         info!("Somfy : connecté, {} appareils", devices.len());
         core.report(crate::ID, crate::NAME, Health::Connected);
-        backoff = Duration::from_secs(1);
+        backoff.reset();
         // Le relevé suivant, et jusqu'à quand relever vite (après un ordre).
         let mut fast_until: Option<Instant> = None;
         let fetch = tokio::time::sleep(Duration::ZERO);

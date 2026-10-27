@@ -7,7 +7,7 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 use futures_util::StreamExt;
-use ha_core::{Background, CancellationToken, Core, Event};
+use ha_core::{Background, Backoff, CancellationToken, Core, Event};
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{debug, error, info, warn};
 
@@ -57,7 +57,7 @@ async fn run(pairing: Pairing, core: Arc<Core>, token: CancellationToken) {
     let api = HueApi::new(http, &pairing.host, pairing.app_key);
     let mut lights = Lights::default();
     let mut events = core.bus.subscribe();
-    let mut backoff = Duration::from_secs(1);
+    let mut backoff = Backoff::new(Duration::from_secs(1), MAX_BACKOFF);
     info!(
         "Hue : connexion au pont {} ({})",
         pairing.bridge_id, pairing.host
@@ -75,29 +75,29 @@ async fn run(pairing: Pairing, core: Arc<Core>, token: CancellationToken) {
         let response = match connected {
             Ok(response) => response,
             Err(error) => {
+                let wait = backoff.next();
                 warn!(
                     "Hue : pont injoignable ({error}), nouvel essai dans {} s",
-                    backoff.as_secs()
+                    wait.as_secs()
                 );
                 core.report(
                     crate::ID,
                     crate::NAME,
                     Health::Retrying {
                         error: format!("pont injoignable ({error})"),
-                        retry_at: SystemTime::now() + backoff,
+                        retry_at: SystemTime::now() + wait,
                     },
                 );
                 tokio::select! {
-                    () = tokio::time::sleep(backoff) => {}
+                    () = tokio::time::sleep(wait) => {}
                     () = token.cancelled() => break 'connection,
                 }
-                backoff = (backoff * 2).min(MAX_BACKOFF);
                 continue;
             }
         };
         info!("Hue : connecté, {} lampes", lights.len());
         core.report(crate::ID, crate::NAME, Health::Connected);
-        backoff = Duration::from_secs(1);
+        backoff.reset();
         let mut stream = response.bytes_stream();
         let mut parser = SseParser::default();
 
