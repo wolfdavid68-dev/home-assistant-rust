@@ -18,11 +18,35 @@ const HUB_V3_LENSES = [
   { id: "securite", label: "Sécurité" },
 ];
 const HUB_V3_KEY = "ha-hub-style";
-// Les capteurs qui comptent pour la sécurité (une porte ouverte, une fumée…).
-const HUB_V3_SECURITY = ["door", "window", "garage_door", "opening", "motion", "occupancy", "presence", "smoke",
-  "moisture", "gas", "safety", "tamper"];
 const HUB_V3_OPENINGS = ["door", "window", "garage_door", "opening"];
-const hubV3 = { placed: false, lens: "vivant", ui: null, pins: new Map(), chips: new Map() };
+// Les capteurs d'alerte : fumée, fuite d'eau, gaz…
+const HUB_V3_ALERTS = ["smoke", "moisture", "gas", "carbon_monoxide", "safety", "tamper"];
+// Le mot de chaque alerte.
+const HUB_V3_ALERT_WORDS = {
+  smoke: "fumée", moisture: "fuite d'eau", gas: "gaz", carbon_monoxide: "monoxyde de carbone",
+  safety: "danger", tamper: "sabotage",
+};
+// Les capteurs qui comptent pour la sécurité : les ouvertures, les alertes, les mouvements.
+const HUB_V3_SECURITY = [...HUB_V3_OPENINGS, ...HUB_V3_ALERTS, "motion", "occupancy", "presence"];
+// Les portes de garage et les portails sont des « volets » pour HA, mais comptent pour la sécurité.
+const HUB_V3_GATES = ["garage", "gate", "door"];
+// Ce qui cloche pour une serrure.
+const HUB_V3_LOCK_ISSUES = { unlocked: "déverrouillé", open: "ouvert", jammed: "bloqué" };
+// L'eau chaude : sa température n'est pas celle d'une pièce.
+const HUB_V3_WATER = "climate.eau_chaude";
+const HUB_V3_NUMBER = new Intl.NumberFormat("fr", { maximumFractionDigits: 1 });
+// Les lentilles qui posent une pastille par pièce : l'icône (cherchée dans ICONS au rendu)
+// et le nom des deux groupes pour le lecteur d'écran.
+const HUB_V3_PIN_LENSES = {
+  lumieres: { icon: "bulb", pins: "Lumières par pièce", rooms: "Lumières des pièces hors du dessin" },
+  volets: { icon: "blinds", pins: "Volets par pièce", rooms: "Volets des pièces hors du dessin" },
+  chauffage: { icon: "temperature", pins: "Températures par pièce", rooms: "Températures des pièces hors du dessin" },
+  musique: { icon: "music", pins: "Musique par pièce", rooms: "Musique des pièces hors du dessin" },
+  securite: { icon: "shield", pins: "Sécurité par pièce", rooms: "Sécurité des pièces hors du dessin" },
+};
+// L'icône devant la phrase de chaque lentille.
+const HUB_V3_READ_ICONS = { lumieres: "bulb", volets: "blinds", chauffage: "flame", musique: "music", securite: "shield" };
+const hubV3 = { placed: false, lens: "vivant", ui: null, pins: new Map(), chips: new Map(), pinLens: "" };
 // Les pastilles entrent l'une après l'autre ; au-delà de 10, elles arrivent ensemble.
 const HUB_V3_STAGGER_MAX = 10;
 // La minuterie de chaque bouton qui attend une réponse.
@@ -45,10 +69,76 @@ function hubV3Count(n, one, many) {
   return `${n} ${n === 1 ? one : many}`;
 }
 
+/** La phrase des volets : tous fermés, tous ouverts, ou le compte de chaque. */
+function hubV3CoversText(open, total) {
+  if (total === 0) return "Aucun volet";
+  if (open === 0) return total === 1 ? "Le volet est fermé" : `Les ${total} volets sont fermés`;
+  if (open === total) return total === 1 ? "Le volet est ouvert" : `Les ${total} volets sont ouverts`;
+  return `${hubV3Count(open, "ouvert", "ouverts")} · ${hubV3Count(total - open, "fermé", "fermés")}`;
+}
+
+/** Les volets d'une pièce qui en a plusieurs : « Fermés », « Ouverts » ou « 1 ouvert sur 3 ». */
+function hubV3CoverSummary(open, total) {
+  if (open === 0) return "Fermés";
+  if (open === total) return "Ouverts";
+  return `${hubV3Count(open, "ouvert", "ouverts")} sur ${total}`;
+}
+
+/** La phrase de la sécurité : en ordre, ce qui cloche (deux choses au plus), ou le compte. */
+function hubV3SecurityText(issues) {
+  if (issues.length === 0) return "Tout est en ordre";
+  if (issues.length <= 2) return issues.join(" · ");
+  return hubV3Count(issues.length, "chose à vérifier", "choses à vérifier");
+}
+
+/** Une température à la française : « 21,2° ». */
+function hubV3Temp(value) {
+  return `${HUB_V3_NUMBER.format(value)}°`;
+}
+
+/** Une chaîne nettoyée, ou "" si ce n'en est pas une. */
+function hubV3Clean(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+/** Le titre en cours d'une enceinte (morceau, radio ou source), ou "" à l'arrêt. */
+function hubV3MusicTitle(state) {
+  if (state.state !== "playing" && state.state !== "paused") return "";
+  const a = state.attributes;
+  return hubV3Clean(a.media_title) || hubV3Clean(a.media_channel) || hubV3Clean(a.source);
+}
+
+/** Le résumé d'une pièce en Sécurité : « En ordre » ou « 2 à vérifier ». */
+function hubV3SecurityShort(n) {
+  return n === 0 ? "En ordre" : `${n} à vérifier`;
+}
+
+/** Ce que dit la pastille des volets d'une pièce (lecteur d'écran). */
+function hubV3CoverLabel(name, open, total, canMove = true) {
+  const said = open > 0 && open < total ? `${hubV3Count(open, "volet ouvert", "volets ouverts")} sur ${total}`
+    : hubV3CoversText(open, total).toLowerCase();
+  const hint = !canMove ? "" : open > 0 ? " Toucher pour fermer." : " Toucher pour ouvrir.";
+  return `${name} : ${said}.${hint}`;
+}
+
+/** Un volet (pas une porte de garage ni un portail). */
+function hubV3IsShutter(state) {
+  return domainOf(state) === "cover" && !HUB_V3_GATES.includes(state.attributes.device_class);
+}
+
+/** Un appareil qui compte pour la sécurité : ouverture, alerte, serrure, alarme, sirène, portail. */
+function hubV3IsSecurity(state) {
+  const domain = domainOf(state);
+  const dc = state.attributes.device_class;
+  if (domain === "binary_sensor") return HUB_V3_OPENINGS.includes(dc) || HUB_V3_ALERTS.includes(dc);
+  if (domain === "cover") return HUB_V3_GATES.includes(dc);
+  return ["lock", "alarm_control_panel", "siren"].includes(domain);
+}
+
 /** La lentille d'un appareil, ou "" s'il n'en a pas. */
 function hubV3Kind(domain, deviceClass) {
   if (domain === "light") return deviceClass === "outlet" ? "" : "lumieres";
-  if (domain === "cover") return "volets";
+  if (domain === "cover") return HUB_V3_GATES.includes(deviceClass) ? "securite" : "volets";
   if (domain === "climate" || domain === "water_heater") return "chauffage";
   if (domain === "sensor") return deviceClass === "temperature" || deviceClass === "humidity" ? "chauffage" : "";
   if (domain === "media_player") return "musique";
@@ -131,7 +221,8 @@ function hubV3Build() {
       svgIcon(ICONS.sparkle)),
     account: button({ id: "hub-v3-account", class: "hub-v3-ib hub-v3-avatar", "aria-label": "Mon compte" }),
     lens: el("nav", { id: "hub-v3-lens", class: "hub-v3-lens", "aria-label": "Ce que montre la maison" }),
-    readIcon: el("span", { class: "hub-v3-read-icon", "aria-hidden": "true" }, svgIcon(ICONS.bulb)),
+    readIcon: el("span", { class: "hub-v3-read-icon", "aria-hidden": "true", "data-icon": "bulb" },
+      svgIcon(ICONS.bulb)),
     readout: el("p", { id: "hub-v3-readout", class: "hub-v3-readout", role: "status" }),
     allOff: button({ id: "hub-v3-alloff", class: "hub-v3-alloff" }, "Tout éteindre"),
     pins: el("div", { class: "hub-v3-pins", role: "group", "aria-label": "Lumières par pièce" }),
@@ -189,15 +280,9 @@ function hubV3Build() {
   ui.bell.addEventListener("click", () => $("#open-notices")?.click());
   ui.assist.addEventListener("click", () => $("#open-assist")?.click());
   ui.account.addEventListener("click", () => $("#open-account")?.click());
-  // Tout éteindre : une commande par lumière allumée que ce compte commande,
-  // comme « Éteindre les lumières » dans la fiche d'une pièce.
+  // Le bouton de la phrase suit la lentille (voir hubV3Action).
   ui.allOff.addEventListener("click", () => {
-    const lit = [...entities.values()].filter((s) => isLight(s) && s.state === "on" && canControl(s));
-    for (const state of lit) {
-      markPending(state.entity_id);
-      callService("light", "turn_off", { entity_id: state.entity_id });
-    }
-    if (lit.length > 0) hubV3Wait(ui.allOff);
+    if (hubV3ActionRun(hubV3.lens)) hubV3Wait(ui.allOff);
   });
 
   hubV3.ui = ui;
@@ -248,17 +333,15 @@ function renderHubV3() {
   hubV3RenderLens();
 }
 
-/** Les compteurs de la maison : lumières, volets, ouvertures. */
+/** Les compteurs de la maison : lumières et volets. */
 function hubV3Counts() {
   const states = [...entities.values()];
-  const covers = states.filter((s) => domainOf(s) === "cover");
+  const covers = states.filter(hubV3IsShutter);
   return {
     lights: states.filter(isLight).length,
     lit: states.filter((s) => isLight(s) && s.state === "on").length,
     covers: covers.length,
-    open: covers.filter((s) => s.state === "open").length,
-    openings: states.filter((s) => domainOf(s) === "binary_sensor"
-      && HUB_V3_OPENINGS.includes(s.attributes.device_class) && s.state === "on").length,
+    open: covers.filter((s) => s.state === "open" || s.state === "opening").length,
   };
 }
 
@@ -337,11 +420,10 @@ function hubV3RenderMusic() {
   const playing = state.state === "playing";
   const active = playing || state.state === "paused";
   const allowed = canControl(state) && available;
-  const text = (value) => (typeof value === "string" && value.trim() !== "" ? value.trim() : "");
-  const title = active ? text(a.media_title) || text(a.media_channel) || text(a.source) : "";
+  const title = hubV3MusicTitle(state);
   const status = available ? lookup(MEDIA_LABELS, state.state) ?? statusText(state) : "Injoignable";
   setText(ui.musicTitle, title || "Musique");
-  setText(ui.musicSub, [active ? text(a.media_artist) || status : status, nameOf(state)].filter(Boolean).join(" · "));
+  setText(ui.musicSub, [active ? hubV3Clean(a.media_artist) || status : status, nameOf(state)].filter(Boolean).join(" · "));
   showCover(ui.musicImg, active ? a.entity_picture : null);
   ui.music.classList.toggle("playing", playing);
   setAttr(ui.musicOpen, "aria-label", `Ouvrir le lecteur${title ? ` : ${title}` : ""}`);
@@ -384,7 +466,7 @@ function hubV3RenderHeating() {
     const mode = heatMode(state);
     const target = state.state !== "off" && state.state !== "unavailable" ? heatTarget(state) : null;
     const classes = ["hub-v3-zone"];
-    if (state.entity_id === "climate.eau_chaude") classes.push("water");
+    if (state.entity_id === HUB_V3_WATER) classes.push("water");
     if (state.attributes.hvac_action === "heating") classes.push("heating");
     const children = [el("span", { class: "hub-v3-zone-text" }, el("b", { text: nameOf(state) }),
       el("small", { text: finite(current) ? `il fait ${number.format(current)}° · ${mode}` : mode }))];
@@ -405,7 +487,7 @@ function hubV3Readout(lens) {
       return counts.lit > 0 ? hubV3Count(counts.lit, "lumière allumée", "lumières allumées")
         : "Toutes les lumières sont éteintes";
     case "volets":
-      return counts.open > 0 ? hubV3Count(counts.open, "volet ouvert", "volets ouverts") : "Tous les volets sont fermés";
+      return hubV3CoversText(counts.open, counts.covers);
     case "chauffage": {
       const heating = heatingStates(null).filter((s) => s.attributes.hvac_action === "heating").length;
       const parts = [heating > 0 ? hubV3Count(heating, "zone chauffe", "zones chauffent") : "Rien ne chauffe"];
@@ -417,16 +499,15 @@ function hubV3Readout(lens) {
     }
     case "musique": {
       const player = musicPlayer();
-      if (player && player.state === "playing") {
-        const title = typeof player.attributes.media_title === "string" ? player.attributes.media_title.trim() : "";
-        return `${title || "Musique"} · ${nameOf(player)}`;
+      if (player && (player.state === "playing" || player.state === "paused")) {
+        const playing = player.state === "playing";
+        return [hubV3MusicTitle(player) || "Musique", playing ? hubV3Clean(player.attributes.media_artist) : "En pause",
+          nameOf(player)].filter(Boolean).join(" · ");
       }
       return "Pas de musique en ce moment";
     }
     case "securite":
-      if (counts.openings === 0) return "Tout est fermé";
-      if (counts.openings === 1) return "1 porte ou fenêtre ouverte";
-      return `${counts.openings} portes ou fenêtres ouvertes`;
+      return hubV3SecurityText(hubV3Issues());
     default:
       return "";
   }
@@ -444,12 +525,20 @@ function hubV3RenderLens() {
   const text = hubV3Readout(hubV3.lens);
   setText(ui.readout, text);
   ui.read.hidden = text === "";
-  // Lumières : l'ampoule, et « Tout éteindre » s'il y a de quoi éteindre.
-  const lights = hubV3.lens === "lumieres";
-  ui.readIcon.hidden = !lights;
-  ui.allOff.hidden = !lights
-    || ![...entities.values()].some((s) => isLight(s) && s.state === "on" && canControl(s));
-  if (ui.allOff.hidden) ui.allOff.classList.remove("pending");
+  const lens = hubV3.lens;
+  setAttr(ui.read, "data-lens", lens);
+  // L'icône de la lentille, et son bouton (« Tout éteindre », « Tout fermer »…) s'il y a de quoi faire.
+  const icon = lookup(HUB_V3_READ_ICONS, lens) ?? "";
+  ui.readIcon.hidden = icon === "";
+  if (icon !== "" && ui.readIcon.dataset.icon !== icon) {
+    ui.readIcon.dataset.icon = icon;
+    ui.readIcon.replaceChildren(svgIcon(ICONS[icon]));
+  }
+  const action = hubV3Action(lens);
+  if (action === null || ui.allOff.textContent !== action) ui.allOff.classList.remove("pending");
+  ui.allOff.hidden = action === null;
+  if (action !== null) setText(ui.allOff, action);
+  ui.read.classList.toggle("alert", lens === "securite" && hubV3Issues().length > 0);
   hubV3Tag();
   hubV3RenderPins();
 }
@@ -514,19 +603,247 @@ function hubV3ToggleRoom(name) {
   return targets.length > 0;
 }
 
-/** Un bouton de pièce : l'ampoule, le nom (dans la rangée) et le nombre allumé. */
-function hubV3RoomButton(name, cls, withName) {
+/** Un bouton de pièce : l'icône de la lentille, le nom (dans la rangée) et ce qu'elle montre. */
+function hubV3RoomButton(name, cls, withName, lens) {
   const count = el("span", { class: "hub-v3-pin-n" });
-  const parts = [svgIcon(ICONS.bulb)];
+  const parts = [svgIcon(ICONS[HUB_V3_PIN_LENSES[lens].icon])];
   if (withName) parts.push(el("span", { class: "hub-v3-chip-name", text: name }));
-  parts.push(count);
+  let sub = null;
+  // Sur le dessin, hors Lumières : une deuxième ligne possible (consigne, artiste).
+  if (!withName && lens !== "lumieres") {
+    sub = el("span", { class: "hub-v3-pin-sub" });
+    sub.hidden = true;
+    parts.push(el("span", { class: "hub-v3-pin-text" }, count, sub));
+  } else {
+    parts.push(count);
+  }
   const attributes = { type: "button", class: cls };
   if (!withName) attributes.title = name;
   const node = el("button", attributes, ...parts);
   node.addEventListener("click", () => {
-    if (hubV3ToggleRoom(name)) hubV3Wait(node);
+    if (hubV3Tap(lens, name)) hubV3Wait(node);
   });
-  return { node, count };
+  return { node, count, sub };
+}
+
+/** Les appareils d'une pièce que montre une lentille. */
+function hubV3Members(lens, area) {
+  if (lens === "lumieres") return hubV3RoomLights(area);
+  const states = area.entities.map((e) => entities.get(e.entity_id)).filter((s) => s !== undefined);
+  switch (lens) {
+    case "volets":
+      return states.filter(hubV3IsShutter);
+    case "chauffage":
+      return states.filter((s) => (domainOf(s) === "climate" && s.entity_id !== HUB_V3_WATER)
+        || (domainOf(s) === "sensor" && s.attributes.device_class === "temperature"
+          && Number.isFinite(Number(s.state))));
+    case "musique":
+      return states.filter((s) => domainOf(s) === "media_player");
+    case "securite":
+      return states.filter(hubV3IsSecurity);
+    default:
+      return [];
+  }
+}
+
+/** Le mot d'un appareil de sécurité : « Fermée », « Verrouillé », « Rien à signaler »… */
+function hubV3SecurityWord(state) {
+  const domain = domainOf(state);
+  const s = state.state;
+  if (s === "unavailable" || s === "unknown") return statusText(state);
+  if (domain === "binary_sensor") {
+    const dc = state.attributes.device_class;
+    if (HUB_V3_OPENINGS.includes(dc)) return agree(state, s === "on" ? "Ouvert" : "Fermé");
+    if (s !== "on") return "Rien à signaler";
+    const word = lookup(HUB_V3_ALERT_WORDS, dc) ?? "alerte";
+    return `${word.charAt(0).toUpperCase()}${word.slice(1)} !`;
+  }
+  if (domain === "lock") return agree(state, lookup(LOCK_LABELS, s) ?? statusText(state));
+  if (domain === "cover") return coverText(state);
+  if (domain === "alarm_control_panel") {
+    const known = lookup(ALARM_LABELS, s);
+    if (known) return known[0];
+    if (s === "triggered") return "Intrusion !";
+    return s.startsWith("armed") ? "Activée" : statusText(state);
+  }
+  if (domain === "siren") return s === "on" ? "Sonne !" : statusText(state);
+  return statusText(state);
+}
+
+/** Ce qui cloche chez un appareil de sécurité, ou null. */
+function hubV3SecurityIssue(state) {
+  const domain = domainOf(state);
+  const dc = state.attributes.device_class;
+  const s = state.state;
+  const name = nameOf(state);
+  if (domain === "binary_sensor" && s === "on") {
+    if (HUB_V3_OPENINGS.includes(dc)) return `${name} ${agree(state, "ouvert")}`;
+    if (HUB_V3_ALERTS.includes(dc)) return `${name} : ${lookup(HUB_V3_ALERT_WORDS, dc) ?? "alerte"}`;
+  }
+  const lockIssue = domain === "lock" ? lookup(HUB_V3_LOCK_ISSUES, s) : undefined;
+  if (lockIssue) return `${name} ${agree(state, lockIssue)}`;
+  if (domain === "cover") {
+    const text = alertText(state);
+    return text === null ? null : `${name} ${text}`;
+  }
+  if (domain === "alarm_control_panel") {
+    if (s === "triggered") return `${name} : intrusion`;
+    if (s === "detection" || s === "sos") return `${name} : ${lookup(ALARM_LABELS, s)[0].toLowerCase()}`;
+  }
+  if (domain === "siren" && s === "on") return `${name} sonne`;
+  return null;
+}
+
+/** Tout ce qui cloche dans la maison, côté sécurité. */
+function hubV3Issues() {
+  return [...entities.values()].filter(hubV3IsSecurity).map(hubV3SecurityIssue).filter(Boolean);
+}
+
+/** Ce que montre une pastille hors Lumières : texte, deuxième ligne, état, étiquette. */
+function hubV3Look(lens, name, members) {
+  const available = (s) => s.state !== "unavailable" && s.state !== "unknown";
+  switch (lens) {
+    case "volets": {
+      const open = members.filter((s) => s.state === "open" || s.state === "opening").length;
+      const allowed = members.some((s) => canControl(s) && available(s));
+      const text = members.length === 1 ? coverText(members[0]) : hubV3CoverSummary(open, members.length);
+      return { text, sub: "", quiet: open === 0, alert: false, pressed: open > 0, disabled: !allowed,
+        label: hubV3CoverLabel(name, open, members.length, allowed), key: `${text}|${open}` };
+    }
+    case "chauffage": {
+      const climates = members.filter((s) => domainOf(s) === "climate");
+      const climate = climates[0] ?? null;
+      const sensor = roomThermometer(members);
+      const ct = climate ? climate.attributes.current_temperature : null;
+      const current = typeof ct === "number" && Number.isFinite(ct) ? ct : sensor ? Number(sensor.state) : null;
+      const heating = climates.some((s) => s.attributes.hvac_action === "heating");
+      const mode = climate ? heatMode(climate) : "";
+      const target = climate && climate.state !== "off" && available(climate) ? heatTarget(climate) : null;
+      const text = current !== null ? hubV3Temp(current) : mode;
+      const sub = target !== null ? `consigne ${hubV3Temp(target)}` : "";
+      const said = [current !== null ? `il fait ${hubV3Temp(current)}` : "", sub, mode.toLowerCase()]
+        .filter(Boolean).join(", ");
+      return { text, sub, quiet: !heating, alert: false, pressed: null, disabled: false,
+        label: `${name} : ${said}. Toucher pour ouvrir la pièce.`, key: `${text}|${heating}` };
+    }
+    case "musique": {
+      const player = members.find((s) => s.state === "playing") ?? members.find((s) => s.state === "paused")
+        ?? members[0];
+      const playing = player.state === "playing";
+      const title = playing ? hubV3MusicTitle(player) : "";
+      const status = available(player) ? lookup(MEDIA_LABELS, player.state) ?? statusText(player) : "Injoignable";
+      const text = title || status;
+      const sub = playing ? hubV3Clean(player.attributes.media_artist) : "";
+      const said = title ? `${title}, en lecture` : status.toLowerCase();
+      return { text, sub, quiet: !playing, alert: false, pressed: null, disabled: false,
+        label: `${name} : ${said}. Toucher pour ouvrir le lecteur.`, key: text };
+    }
+    default: {
+      const issues = members.map(hubV3SecurityIssue).filter(Boolean);
+      const text = members.length === 1 ? hubV3SecurityWord(members[0]) : hubV3SecurityShort(issues.length);
+      const said = issues.length === 0 ? "tout est en ordre" : issues.join(", ");
+      return { text, sub: "", quiet: issues.length === 0, alert: issues.length > 0, pressed: null, disabled: false,
+        label: `${name} : ${said}. Toucher pour ouvrir la pièce.`, key: text };
+    }
+  }
+}
+
+/** Met à jour un bouton de pièce d'après la lentille. Lumières garde son propre rendu. */
+function hubV3Paint(lens, item, name, members) {
+  if (lens === "lumieres") {
+    hubV3PaintRoom(item, name, members);
+    return;
+  }
+  const look = hubV3Look(lens, name, members);
+  setText(item.count, look.text);
+  if (item.sub) {
+    setText(item.sub, look.sub);
+    item.sub.hidden = look.sub === "";
+  }
+  item.node.classList.toggle("zero", look.quiet);
+  item.node.classList.toggle("alert", look.alert);
+  if (look.pressed !== null) setAttr(item.node, "aria-pressed", String(look.pressed));
+  setAttr(item.node, "aria-label", look.label);
+  item.node.disabled = look.disabled;
+  if (item.node.dataset.seen !== look.key) {
+    item.node.dataset.seen = look.key;
+    item.node.classList.remove("pending");
+  }
+}
+
+/** Ferme les volets ouverts ; s'ils sont tous fermés, les ouvre. Faux si rien n'est parti. */
+function hubV3MoveCovers(covers) {
+  const movable = covers.filter((s) => canControl(s) && s.state !== "unavailable" && s.state !== "unknown");
+  const open = movable.filter((s) => s.state === "open" || s.state === "opening");
+  const service = open.length > 0 ? "close_cover" : "open_cover";
+  const targets = open.length > 0 ? open : movable;
+  for (const state of targets) {
+    markPending(state.entity_id);
+    callService("cover", service, { entity_id: state.entity_id });
+  }
+  return targets.length > 0;
+}
+
+/** Toucher une pastille. Vrai si une commande est partie (la pastille attend la réponse).
+ *  Chauffage et Sécurité ouvrent la pièce : jamais de déverrouillage d'un seul geste. */
+function hubV3Tap(lens, name) {
+  if (lens === "lumieres") return hubV3ToggleRoom(name);
+  const area = areas.find((a) => a.name === name);
+  if (!area) return false;
+  if (lens === "volets") return hubV3MoveCovers(hubV3Members("volets", area));
+  if (lens === "musique") {
+    const players = hubV3Members("musique", area);
+    const player = players.find((s) => s.state === "playing") ?? players[0];
+    if (player) {
+      leaveHub();
+      openMusic(player.entity_id);
+    }
+    return false;
+  }
+  openRoom(name);
+  return false;
+}
+
+/** Le bouton de la phrase sous la barre, ou null. */
+function hubV3Action(lens) {
+  const all = [...entities.values()];
+  if (lens === "lumieres") {
+    return all.some((s) => isLight(s) && s.state === "on" && canControl(s)) ? "Tout éteindre" : null;
+  }
+  if (lens === "volets") {
+    const covers = all.filter((s) => hubV3IsShutter(s) && canControl(s)
+      && s.state !== "unavailable" && s.state !== "unknown");
+    if (covers.length === 0) return null;
+    return covers.some((s) => s.state === "open" || s.state === "opening") ? "Tout fermer" : "Tout ouvrir";
+  }
+  if (lens === "musique") {
+    const player = musicPlayer();
+    if (!player || !canControl(player) || player.state === "unavailable" || player.state === "unknown") return null;
+    return player.state === "playing" ? "Pause" : "Lecture";
+  }
+  return null;
+}
+
+/** Le geste du bouton de la phrase. Vrai si une commande est partie. */
+function hubV3ActionRun(lens) {
+  if (lens === "lumieres") {
+    // Tout éteindre : une commande par lumière allumée que ce compte commande,
+    // comme « Éteindre les lumières » dans la fiche d'une pièce.
+    const lit = [...entities.values()].filter((s) => isLight(s) && s.state === "on" && canControl(s));
+    for (const state of lit) {
+      markPending(state.entity_id);
+      callService("light", "turn_off", { entity_id: state.entity_id });
+    }
+    return lit.length > 0;
+  }
+  if (lens === "volets") return hubV3MoveCovers([...entities.values()].filter(hubV3IsShutter));
+  if (lens === "musique") {
+    const player = musicPlayer();
+    if (!player || !canControl(player)) return false;
+    musicCommand(player, player.state === "playing" ? "media_pause" : "media_play");
+    return true;
+  }
+  return false;
 }
 
 /** Met à jour un bouton de pièce d'après ses lumières. */
@@ -553,7 +870,7 @@ function hubV3Order(parent, nodes) {
 }
 
 /** Garde un bouton par pièce voulue : retire les autres, crée les manquants. */
-function hubV3Sync(map, parent, wanted, make) {
+function hubV3Sync(map, parent, wanted, make, lens) {
   const names = new Set(wanted.map((w) => w.name));
   for (const [name, item] of map) {
     if (!names.has(name)) {
@@ -567,21 +884,35 @@ function hubV3Sync(map, parent, wanted, make) {
       item = make(w.name);
       map.set(w.name, item);
     }
-    hubV3PaintRoom(item, w.name, w.lights);
+    hubV3Paint(lens, item, w.name, w.members);
     return item;
   });
   hubV3Order(parent, items.map((i) => i.node));
   return items;
 }
 
-/** Lentille Lumières : une pastille par pièce sur le dessin, une rangée pour les autres. */
+/** Une pastille par pièce sur le dessin, une rangée pour les autres, selon la lentille. */
 function hubV3RenderPins() {
   const ui = hubV3.ui;
   if (!ui || !hubV3.placed) return;
-  if (hubV3.lens !== "lumieres") {
+  const lens = hubV3.lens;
+  // Nouvelle lentille : des pastilles neuves, qui entrent l'une après l'autre.
+  if (hubV3.pinLens !== lens) {
+    for (const map of [hubV3.pins, hubV3.chips]) {
+      for (const item of map.values()) item.node.remove();
+      map.clear();
+    }
+    hubV3.pinLens = lens;
+  }
+  const config = lookup(HUB_V3_PIN_LENSES, lens);
+  if (!config) {
     ui.rooms.hidden = true;
     return;
   }
+  setAttr(ui.pins, "data-lens", lens);
+  setAttr(ui.pins, "aria-label", config.pins);
+  setAttr(ui.rooms, "data-lens", lens);
+  setAttr(ui.rooms, "aria-label", config.rooms);
   const view = house.view;
   // La plus grande zone de chaque pièce porte sa pastille.
   const largest = new Map();
@@ -594,13 +925,14 @@ function hubV3RenderPins() {
   for (const [name, zone] of largest) {
     const area = areas.find((a) => a.name === name);
     if (!area) continue;
-    const lights = hubV3RoomLights(area);
-    if (lights.length > 0) onDrawing.push({ name, lights, at: hubV3ZoneCenter(zone) });
+    const members = hubV3Members(lens, area);
+    if (members.length > 0) onDrawing.push({ name, members, at: hubV3ZoneCenter(zone) });
   }
   // De haut en bas puis de gauche à droite : l'ordre d'entrée et de lecture.
   onDrawing.sort((a, b) => a.at.y - b.at.y || a.at.x - b.at.x);
   if (view && ui.pins.parentNode !== view.stage) view.stage.append(ui.pins);
-  const pins = hubV3Sync(hubV3.pins, ui.pins, onDrawing, (name) => hubV3RoomButton(name, "hub-v3-pin", false));
+  const pins = hubV3Sync(hubV3.pins, ui.pins, onDrawing,
+    (name) => hubV3RoomButton(name, "hub-v3-pin", false, lens), lens);
   pins.forEach((item, index) => {
     const { x, y } = onDrawing[index].at;
     if (item.node.style.left !== `${x}%`) item.node.style.left = `${x}%`;
@@ -612,9 +944,10 @@ function hubV3RenderPins() {
   for (const name of largest.keys()) drawn.add(name);
   const offDrawing = shownAreas()
     .filter((area) => !drawn.has(area.name))
-    .map((area) => ({ name: area.name, lights: hubV3RoomLights(area) }))
-    .filter((w) => w.lights.length > 0);
-  hubV3Sync(hubV3.chips, ui.rooms, offDrawing, (name) => hubV3RoomButton(name, "hub-v3-room-chip", true));
+    .map((area) => ({ name: area.name, members: hubV3Members(lens, area) }))
+    .filter((w) => w.members.length > 0);
+  hubV3Sync(hubV3.chips, ui.rooms, offDrawing,
+    (name) => hubV3RoomButton(name, "hub-v3-room-chip", true, lens), lens);
   ui.rooms.hidden = offDrawing.length === 0;
 }
 

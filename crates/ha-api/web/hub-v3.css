@@ -12,6 +12,7 @@
   --v3-violet: #b9a3ff;
   --v3-ok: #6fdc9c;
   --v3-pink: #ff9bd2;
+  --v3-alert: #ff8f8f;
   --v3-ease: cubic-bezier(0.2, 0, 0, 1);
   --v3-glass: rgb(18 20 46 / 0.52);
   --v3-glass-shadow: inset 0 1px 0 rgb(255 255 255 / 0.09), inset 0 0 0 1px rgb(255 255 255 / 0.06), 0 1px 1px rgb(0 0 0 / 0.2), 0 18px 40px -18px rgb(0 0 0 / 0.65);
@@ -433,7 +434,52 @@
   :root[data-hub-style="v3"] .hub .hub-v3-sd { display: none; }
 }
 
-/* Lecture : une phrase sous la bascule (en Lumières : l'ampoule et « Tout éteindre »). */
+/* La couleur de chaque lentille, pour la phrase, les pastilles et la rangée (ambre par défaut). */
+:root[data-hub-style="v3"] .hub :is(.hub-v3-read, .hub-v3-pins, .hub-v3-lit-rooms) {
+  --v3-lens: var(--v3-amber);
+  --v3-lens-ink: #26170a;
+  --v3-lens-ring: rgb(255 191 94 / 0.22);
+  --v3-lens-glow: rgb(255 160 60 / 0.8);
+  --v3-lens-hover: #ffcb78;
+}
+:root[data-hub-style="v3"] .hub :is(.hub-v3-read, .hub-v3-pins, .hub-v3-lit-rooms)[data-lens="volets"] {
+  --v3-lens: var(--v3-sky);
+  --v3-lens-ink: #0a1f2e;
+  --v3-lens-ring: rgb(154 216 255 / 0.22);
+  --v3-lens-glow: rgb(90 180 255 / 0.7);
+  --v3-lens-hover: #b5e3ff;
+}
+:root[data-hub-style="v3"] .hub :is(.hub-v3-read, .hub-v3-pins, .hub-v3-lit-rooms)[data-lens="chauffage"] {
+  --v3-lens: var(--v3-heat);
+  --v3-lens-ink: #2a1206;
+  --v3-lens-ring: rgb(255 139 94 / 0.22);
+  --v3-lens-glow: rgb(255 110 60 / 0.75);
+  --v3-lens-hover: #ffa47f;
+}
+:root[data-hub-style="v3"] .hub :is(.hub-v3-read, .hub-v3-pins, .hub-v3-lit-rooms)[data-lens="musique"] {
+  --v3-lens: var(--v3-violet);
+  --v3-lens-ink: #1c1238;
+  --v3-lens-ring: rgb(185 163 255 / 0.22);
+  --v3-lens-glow: rgb(150 120 255 / 0.7);
+  --v3-lens-hover: #cbb9ff;
+}
+:root[data-hub-style="v3"] .hub :is(.hub-v3-read, .hub-v3-pins, .hub-v3-lit-rooms)[data-lens="securite"] {
+  --v3-lens: var(--v3-ok);
+  --v3-lens-ink: #08261a;
+  --v3-lens-ring: rgb(111 220 156 / 0.22);
+  --v3-lens-glow: rgb(70 200 130 / 0.7);
+  --v3-lens-hover: #8fe6b3;
+}
+/* Une alerte (fumée, porte ouverte…) passe en rouge, quelle que soit la lentille. */
+:root[data-hub-style="v3"] .hub :is(.hub-v3-read, .hub-v3-pin, .hub-v3-room-chip).alert {
+  --v3-lens: var(--v3-alert);
+  --v3-lens-ink: #2e0a0a;
+  --v3-lens-ring: rgb(255 143 143 / 0.24);
+  --v3-lens-glow: rgb(255 90 90 / 0.75);
+  --v3-lens-hover: #ffa8a8;
+}
+
+/* Lecture : une phrase sous la bascule, avec l'icône de la lentille et son bouton (« Tout éteindre »…). */
 :root[data-hub-style="v3"] .hub .hub-v3-read {
   position: absolute;
   top: 62px;
@@ -461,7 +507,7 @@
   font-size: 13px;
   color: var(--v3-ink2);
 }
-:root[data-hub-style="v3"] .hub .hub-v3-read-icon { display: grid; flex: none; color: var(--v3-amber); }
+:root[data-hub-style="v3"] .hub .hub-v3-read-icon { display: grid; flex: none; color: var(--v3-lens); }
 :root[data-hub-style="v3"] .hub .hub-v3-read-icon svg { width: 15px; height: 15px; stroke-width: 2; }
 :root[data-hub-style="v3"] .hub .hub-v3-alloff {
   position: relative;
@@ -470,8 +516,8 @@
   padding: 0 11px;
   border: 0;
   border-radius: 999px;
-  background: var(--v3-amber);
-  color: #26170a;
+  background: var(--v3-lens);
+  color: var(--v3-lens-ink);
   font-size: 12.5px;
   font-weight: 650;
   white-space: nowrap;
@@ -481,8 +527,8 @@
 :root[data-hub-style="v3"] .hub .hub-v3-alloff::before { content: ""; position: absolute; inset: -9px -4px; }
 :root[data-hub-style="v3"] .hub .hub-v3-alloff.pending { opacity: 0.6; }
 
-/* Lumières : une pastille par pièce sur le dessin ; la toucher allume ou éteint la pièce. */
-:root[data-hub-style="v3"] .hub #hub-house[data-lens="lumieres"] .hub-v3-pins { display: block; }
+/* Une pastille par pièce sur le dessin, dans chaque lentille sauf Vivant. */
+:root[data-hub-style="v3"] .hub #hub-house[data-lens]:not([data-lens="vivant"]) .hub-v3-pins { display: block; }
 :root[data-hub-style="v3"] .hub .hub-v3-pins { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
 :root[data-hub-style="v3"] .hub .hub-v3-pin {
   position: absolute;
@@ -493,14 +539,14 @@
   padding: 0 10px 0 7px;
   border: 0;
   border-radius: 999px;
-  background: var(--v3-amber);
-  color: #26170a;
+  background: var(--v3-lens);
+  color: var(--v3-lens-ink);
   font-size: 14px;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
   line-height: 1;
   white-space: nowrap;
-  box-shadow: 0 0 0 3px rgb(255 191 94 / 0.22), 0 6px 16px -6px rgb(255 160 60 / 0.8);
+  box-shadow: 0 0 0 3px var(--v3-lens-ring), 0 6px 16px -6px var(--v3-lens-glow);
   transform: translate(-50%, -50%);
   pointer-events: auto;
   cursor: pointer;
@@ -518,6 +564,26 @@
   box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.18);
 }
 :root[data-hub-style="v3"] .hub .hub-v3-pin.pending { opacity: 0.6; }
+/* Hors Lumières : l'icône garde la couleur de la lentille au repos, le texte peut avoir deux lignes. */
+:root[data-hub-style="v3"] .hub .hub-v3-pins:not([data-lens="lumieres"]) .hub-v3-pin.zero svg,
+:root[data-hub-style="v3"] .hub .hub-v3-lit-rooms:not([data-lens="lumieres"]) .hub-v3-room-chip.zero svg { color: var(--v3-lens); }
+:root[data-hub-style="v3"] .hub .hub-v3-pin-text { display: grid; text-align: start; }
+:root[data-hub-style="v3"] .hub .hub-v3-pin-text .hub-v3-pin-n { max-width: 16ch; overflow: hidden; text-overflow: ellipsis; }
+:root[data-hub-style="v3"] .hub .hub-v3-pin-sub {
+  max-width: 18ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  font-weight: 500;
+  opacity: 0.78;
+}
+:root[data-hub-style="v3"] .hub .hub-v3-pin:has(.hub-v3-pin-sub:not([hidden])) {
+  height: auto;
+  min-height: 28px;
+  padding-block: 4px;
+  border-radius: 14px;
+  line-height: 1.2;
+}
 :root[data-hub-style="v3"] .hub .hub-v3-pin:disabled { cursor: default; opacity: 0.6; }
 :root[data-hub-style="v3"] .hub .hub-v3-pin:active:not(:disabled) { transform: translate(-50%, -50%) scale(0.96); }
 @keyframes hub-v3-pin-in {
@@ -569,8 +635,8 @@
   cursor: pointer;
 }
 :root[data-hub-style="v3"] .hub .hub-v3-room-chip::before { content: ""; position: absolute; inset: -4px 0; }
-:root[data-hub-style="v3"] .hub .hub-v3-room-chip svg { width: 15px; height: 15px; stroke-width: 2; color: var(--v3-amber); }
-:root[data-hub-style="v3"] .hub .hub-v3-room-chip .hub-v3-pin-n { font-weight: 650; font-variant-numeric: tabular-nums; color: var(--v3-amber); }
+:root[data-hub-style="v3"] .hub .hub-v3-room-chip svg { width: 15px; height: 15px; stroke-width: 2; color: var(--v3-lens); }
+:root[data-hub-style="v3"] .hub .hub-v3-room-chip .hub-v3-pin-n { font-weight: 650; font-variant-numeric: tabular-nums; color: var(--v3-lens); }
 :root[data-hub-style="v3"] .hub .hub-v3-room-chip.zero :is(svg, .hub-v3-pin-n) { color: var(--v3-mute); }
 :root[data-hub-style="v3"] .hub .hub-v3-room-chip.pending { opacity: 0.6; }
 :root[data-hub-style="v3"] .hub .hub-v3-room-chip:disabled { cursor: default; opacity: 0.6; }
@@ -639,6 +705,8 @@
 :root[data-hub-style="v3"] .hub #hub-house[data-lens="chauffage"] :is(.house-label, .house-zone):not([data-kind="chauffage"]),
 :root[data-hub-style="v3"] .hub #hub-house[data-lens="musique"] :is(.house-label, .house-zone):not([data-kind="musique"]),
 :root[data-hub-style="v3"] .hub #hub-house[data-lens="securite"] :is(.house-label, .house-zone):not([data-kind="securite"]) { opacity: 0.15; }
+/* Hors Lumières, les pastilles disent déjà l'état de chaque pièce : les étiquettes du dessin s'effacent aussi. */
+:root[data-hub-style="v3"] .hub #hub-house:is([data-lens="volets"], [data-lens="chauffage"], [data-lens="musique"], [data-lens="securite"]) .house-label { opacity: 0.15; }
 :root[data-hub-style="v3"] .hub #hub-house[data-lens="lumieres"] .house-layer:not(.off):not([data-kind="lumieres"]),
 :root[data-hub-style="v3"] .hub #hub-house[data-lens="volets"] .house-layer:not(.off):not([data-kind="volets"]),
 :root[data-hub-style="v3"] .hub #hub-house[data-lens="chauffage"] .house-layer:not(.off):not([data-kind="chauffage"]),
@@ -704,7 +772,7 @@
 @media (hover: hover) {
   :root[data-hub-style="v3"] .hub :is(.hub-scene:not(.on), .hub-v3-zone, .hub-v3-play, .hub-v3-next, .hub-views button:not([aria-pressed="true"]), .hub-dock button:not(.hub-talk-button)):hover { background-color: rgb(255 255 255 / 0.08); }
   :root[data-hub-style="v3"] .hub .hub-v3-ib:not(.hub-v3-avatar):hover { background-color: rgb(255 255 255 / 0.12); }
-  :root[data-hub-style="v3"] .hub :is(.hub-v3-pin:not(.zero):not(:disabled), .hub-v3-alloff):hover { background-color: #ffcb78; }
+  :root[data-hub-style="v3"] .hub :is(.hub-v3-pin:not(.zero):not(:disabled), .hub-v3-alloff):hover { background-color: var(--v3-lens-hover); }
   :root[data-hub-style="v3"] .hub .hub-v3-pin.zero:not(:disabled):hover { background-color: rgb(34 36 70 / 0.86); }
   :root[data-hub-style="v3"] .hub .hub-v3-room-chip:not(:disabled):hover { background-color: rgb(255 255 255 / 0.08); }
 }
