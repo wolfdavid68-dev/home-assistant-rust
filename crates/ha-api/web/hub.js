@@ -112,6 +112,8 @@ function renderHub() {
   renderHubRooms();
   renderHubDock();
   if (house.view) updateHouse(house.view);
+  // L'accueil v3 (hub-v3.js, chargé après) : ne fait rien tant qu'il n'est pas choisi.
+  if (typeof renderHubV3 === "function") renderHubV3();
 }
 
 function personColor(name) {
