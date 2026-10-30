@@ -96,7 +96,7 @@ macro_rules! asset {
 
 /// Tous les fichiers servis. Le JavaScript est découpé par thème ; l'ordre
 /// de chargement est donné par `index.html` (voir l'en-tête de `app.js`).
-static ASSETS: [Asset; 39] = [
+static ASSETS: [Asset; 41] = [
     asset!("/", "index.html", "text/html; charset=utf-8", REVALIDATE),
     asset!("/utils.js", "utils.js", JS, REVALIDATE),
     asset!("/app.js", "app.js", JS, REVALIDATE),
@@ -123,11 +123,19 @@ static ASSETS: [Asset; 39] = [
     asset!("/voix.js", "voix.js", JS, REVALIDATE),
     asset!("/pretes.js", "pretes.js", JS, REVALIDATE),
     asset!("/musique.js", "musique.js", JS, REVALIDATE),
+    // L'accueil v3 (essai), choisi appareil par appareil dans Compte.
+    asset!("/hub-v3.js", "hub-v3.js", JS, REVALIDATE),
     // Le micro (étape 84) : chargé par voix.js dans le fil audio.
     asset!("/ecoute.js", "ecoute.js", JS, REVALIDATE),
     asset!(
         "/style.css",
         "style.css",
+        "text/css; charset=utf-8",
+        REVALIDATE
+    ),
+    asset!(
+        "/hub-v3.css",
+        "hub-v3.css",
         "text/css; charset=utf-8",
         REVALIDATE
     ),
@@ -219,7 +227,7 @@ impl Asset {
     /// (chargé par `voix.js`), ni les fichiers de l'appli installée.
     fn versioned(&self) -> bool {
         (self.content_type == JS && !matches!(self.path, "/sw.js" | "/ecoute.js"))
-            || matches!(self.path, "/style.css" | "/icon.svg")
+            || matches!(self.path, "/style.css" | "/hub-v3.css" | "/icon.svg")
     }
 }
 
@@ -373,6 +381,7 @@ mod tests {
             "{index}"
         );
         assert!(index.contains("href=\"/style.css?v="));
+        assert!(index.contains("href=\"/hub-v3.css?v="));
         // Ni le manifeste ni les icônes de l'appli installée.
         assert!(index.contains("href=\"/manifest.webmanifest\""));
         assert!(!index.contains("src=\"/utils.js\""));

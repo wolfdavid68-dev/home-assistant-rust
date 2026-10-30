@@ -13,6 +13,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Maison">
   <link rel="stylesheet" href="/style.css">
+  <!-- L'accueil v3 (essai) : rien ne change tant qu'il n'est pas choisi dans Compte. -->
+  <link rel="stylesheet" href="/hub-v3.css">
   <!-- Le code est dans ces fichiers, chargés dans cet ordre (voir l'en-tête
        de app.js) : la politique de sécurité (CSP) interdit le JavaScript
        écrit directement dans la page. -->
@@ -41,6 +43,7 @@
   <script src="/voix.js" defer></script>
   <script src="/pretes.js" defer></script>
   <script src="/musique.js" defer></script>
+  <script src="/hub-v3.js" defer></script>
 </head>
 <body>
   <!-- La ligne d'état (étape 101, app.js) : la maison ne répond plus. -->
@@ -210,6 +213,14 @@
         <p class="account">Sur cet appareil seulement : l'écran reste allumé, en plein écran, et revient à l'accueil après 2 minutes sans contact.</p>
         <label class="check"><input id="hub-mode" type="checkbox" checked> Vue hub, la maison au centre</label>
         <p class="account">À l'horizontale : l'heure, la météo et l'agenda, les scènes et les pièces, autour du dessin de la maison.</p>
+        <label class="hub-style-pick">
+          Style de l'accueil
+          <select id="hub-style">
+            <option value="">Actuel</option>
+            <option value="v3">v3, la maison en vedette (essai)</option>
+          </select>
+        </label>
+        <p class="account">Sur cet appareil seulement. « Actuel » remet l'accueil d'avant, à tout moment.</p>
         <details id="hub-pick" class="hub-pick">
           <summary>Les scènes du hub (6 au plus)</summary>
           <p class="account">Sans choix, les 6 premières par ordre alphabétique.</p>
