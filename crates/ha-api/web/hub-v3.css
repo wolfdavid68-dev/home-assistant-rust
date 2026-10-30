@@ -433,27 +433,147 @@
   :root[data-hub-style="v3"] .hub .hub-v3-sd { display: none; }
 }
 
-/* Lecture : une phrase sous la bascule. */
-:root[data-hub-style="v3"] .hub .hub-v3-readout {
+/* Lecture : une phrase sous la bascule (en Lumières : l'ampoule et « Tout éteindre »). */
+:root[data-hub-style="v3"] .hub .hub-v3-read {
   position: absolute;
   top: 62px;
   left: 50%;
   z-index: 3;
-  margin: 0;
-  padding: 6px 12px;
-  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
   max-width: calc(100% - 24px);
-  overflow: hidden;
+  padding: 6px 12px;
   border-radius: 999px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: 13px;
-  color: var(--v3-ink2);
   background: var(--v3-glass);
   -webkit-backdrop-filter: blur(20px) saturate(150%);
   backdrop-filter: blur(20px) saturate(150%);
   box-shadow: var(--v3-glass-shadow);
+  transform: translateX(-50%);
 }
+:root[data-hub-style="v3"] .hub .hub-v3-read:has(.hub-v3-alloff:not([hidden])) { padding: 4px 4px 4px 12px; }
+:root[data-hub-style="v3"] .hub .hub-v3-readout {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  color: var(--v3-ink2);
+}
+:root[data-hub-style="v3"] .hub .hub-v3-read-icon { display: grid; flex: none; color: var(--v3-amber); }
+:root[data-hub-style="v3"] .hub .hub-v3-read-icon svg { width: 15px; height: 15px; stroke-width: 2; }
+:root[data-hub-style="v3"] .hub .hub-v3-alloff {
+  position: relative;
+  flex: none;
+  height: 26px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--v3-amber);
+  color: #26170a;
+  font-size: 12.5px;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+}
+/* Une cible de 44 px de haut pour le doigt. */
+:root[data-hub-style="v3"] .hub .hub-v3-alloff::before { content: ""; position: absolute; inset: -9px -4px; }
+:root[data-hub-style="v3"] .hub .hub-v3-alloff.pending { opacity: 0.6; }
+
+/* Lumières : une pastille par pièce sur le dessin ; la toucher allume ou éteint la pièce. */
+:root[data-hub-style="v3"] .hub #hub-house[data-lens="lumieres"] .hub-v3-pins { display: block; }
+:root[data-hub-style="v3"] .hub .hub-v3-pins { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+:root[data-hub-style="v3"] .hub .hub-v3-pin {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px 0 7px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--v3-amber);
+  color: #26170a;
+  font-size: 14px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: 0 0 0 3px rgb(255 191 94 / 0.22), 0 6px 16px -6px rgb(255 160 60 / 0.8);
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  cursor: pointer;
+  transition: background-color 0.2s var(--v3-ease), color 0.2s var(--v3-ease), box-shadow 0.2s var(--v3-ease),
+    opacity 0.3s var(--v3-ease), transform 0.12s var(--v3-ease);
+  animation: hub-v3-pin-in 0.45s var(--v3-ease) backwards;
+  animation-delay: calc(var(--d, 0) * 45ms);
+}
+/* Une cible de 44 px de haut pour le doigt. */
+:root[data-hub-style="v3"] .hub .hub-v3-pin::before { content: ""; position: absolute; inset: -8px -2px; }
+:root[data-hub-style="v3"] .hub .hub-v3-pin svg { width: 15px; height: 15px; stroke-width: 2; }
+:root[data-hub-style="v3"] .hub .hub-v3-pin.zero {
+  background: rgb(20 22 48 / 0.78);
+  color: var(--v3-ink2);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.18);
+}
+:root[data-hub-style="v3"] .hub .hub-v3-pin.pending { opacity: 0.6; }
+:root[data-hub-style="v3"] .hub .hub-v3-pin:disabled { cursor: default; opacity: 0.6; }
+:root[data-hub-style="v3"] .hub .hub-v3-pin:active:not(:disabled) { transform: translate(-50%, -50%) scale(0.96); }
+@keyframes hub-v3-pin-in {
+  from { opacity: 0; transform: translate(-50%, -50%) translateY(8px) scale(0.96); }
+}
+
+/* Les pièces qu'aucun dessin ne montre : une rangée en bas. */
+:root[data-hub-style="v3"] .hub .hub-v3-lit-rooms {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  z-index: 3;
+  display: flex;
+  gap: 2px;
+  max-width: calc(100% - 28px);
+  padding: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-radius: 18px;
+  background: var(--v3-glass);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  backdrop-filter: blur(20px) saturate(150%);
+  box-shadow: var(--v3-glass-shadow);
+  transform: translateX(-50%);
+}
+:root[data-hub-style="v3"] .hub .hub-v3-lit-rooms::-webkit-scrollbar { display: none; }
+/* Les onglets de la maison occupent déjà le bas à gauche : la rangée passe à droite. */
+:root[data-hub-style="v3"] .hub .hub-center:has(> .hub-views:not([hidden])) .hub-v3-lit-rooms {
+  left: auto;
+  right: 14px;
+  max-width: calc(50% - 21px);
+  transform: none;
+}
+:root[data-hub-style="v3"] .hub .hub-v3-room-chip {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 12px 0 10px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--v3-ink2);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+:root[data-hub-style="v3"] .hub .hub-v3-room-chip::before { content: ""; position: absolute; inset: -4px 0; }
+:root[data-hub-style="v3"] .hub .hub-v3-room-chip svg { width: 15px; height: 15px; stroke-width: 2; color: var(--v3-amber); }
+:root[data-hub-style="v3"] .hub .hub-v3-room-chip .hub-v3-pin-n { font-weight: 650; font-variant-numeric: tabular-nums; color: var(--v3-amber); }
+:root[data-hub-style="v3"] .hub .hub-v3-room-chip.zero :is(svg, .hub-v3-pin-n) { color: var(--v3-mute); }
+:root[data-hub-style="v3"] .hub .hub-v3-room-chip.pending { opacity: 0.6; }
+:root[data-hub-style="v3"] .hub .hub-v3-room-chip:disabled { cursor: default; opacity: 0.6; }
 
 /* Vues de la maison, en bas à gauche. */
 :root[data-hub-style="v3"] .hub .hub-views {
@@ -531,6 +651,10 @@
 :root[data-hub-style="v3"] .hub #hub-house[data-lens="chauffage"] .house-label[data-kind="chauffage"] .house-tag { box-shadow: 0 0 0 1px rgb(255 139 94 / 0.55), 0 0 18px rgb(255 139 94 / 0.35); }
 :root[data-hub-style="v3"] .hub #hub-house[data-lens="musique"] .house-label[data-kind="musique"] .house-tag { box-shadow: 0 0 0 1px rgb(185 163 255 / 0.55), 0 0 18px rgb(185 163 255 / 0.35); }
 :root[data-hub-style="v3"] .hub #hub-house[data-lens="securite"] .house-label[data-kind="securite"] .house-tag { box-shadow: 0 0 0 1px rgb(111 220 156 / 0.55), 0 0 18px rgb(111 220 156 / 0.35); }
+/* Les fenêtres des pièces allumées rayonnent. */
+:root[data-hub-style="v3"] .hub #hub-house[data-lens="lumieres"] .house-layer[data-kind="lumieres"]:not(.off) {
+  filter: brightness(1.15) saturate(1.1) drop-shadow(0 0 8px rgb(255 191 94 / 0.55));
+}
 
 /* Machine à laver en cours : carte de verre, toujours en pilule. Sa position ne change pas. */
 :root[data-hub-style="v3"] .hub .ml-card {
@@ -571,15 +695,18 @@
 :root[data-hub-style="v3"] .hub .hub-dock .hub-say-button[type] { background: transparent; color: var(--v3-amber2); }
 
 /* ---------------------------------------------------------------- Interactions */
-:root[data-hub-style="v3"] .hub :is(.hub-scene, .hub-v3-music-open, .hub-v3-play, .hub-v3-next, .hub-v3-ib, .hub-v3-seg, .hub-v3-zone, .hub-dock button, .hub-views button) {
+:root[data-hub-style="v3"] .hub :is(.hub-scene, .hub-v3-music-open, .hub-v3-play, .hub-v3-next, .hub-v3-ib, .hub-v3-seg, .hub-v3-zone, .hub-v3-alloff, .hub-v3-room-chip, .hub-dock button, .hub-views button) {
   transition: background-color 0.2s var(--v3-ease), color 0.2s var(--v3-ease), box-shadow 0.2s var(--v3-ease), opacity 0.4s var(--v3-ease), transform 0.12s var(--v3-ease);
 }
-:root[data-hub-style="v3"] .hub :is(.hub-scene, .hub-v3-music-open, .hub-v3-play, .hub-v3-next, .hub-v3-ib, .hub-v3-seg, .hub-v3-zone, .hub-dock button, .hub-views button):active:not(:disabled) { transform: scale(0.96); }
+:root[data-hub-style="v3"] .hub :is(.hub-scene, .hub-v3-music-open, .hub-v3-play, .hub-v3-next, .hub-v3-ib, .hub-v3-seg, .hub-v3-zone, .hub-v3-alloff, .hub-v3-room-chip, .hub-dock button, .hub-views button):active:not(:disabled) { transform: scale(0.96); }
 :root[data-hub-style="v3"] .hub :focus-visible { outline: 2px solid var(--v3-sky); outline-offset: 3px; }
 
 @media (hover: hover) {
   :root[data-hub-style="v3"] .hub :is(.hub-scene:not(.on), .hub-v3-zone, .hub-v3-play, .hub-v3-next, .hub-views button:not([aria-pressed="true"]), .hub-dock button:not(.hub-talk-button)):hover { background-color: rgb(255 255 255 / 0.08); }
   :root[data-hub-style="v3"] .hub .hub-v3-ib:not(.hub-v3-avatar):hover { background-color: rgb(255 255 255 / 0.12); }
+  :root[data-hub-style="v3"] .hub :is(.hub-v3-pin:not(.zero):not(:disabled), .hub-v3-alloff):hover { background-color: #ffcb78; }
+  :root[data-hub-style="v3"] .hub .hub-v3-pin.zero:not(:disabled):hover { background-color: rgb(34 36 70 / 0.86); }
+  :root[data-hub-style="v3"] .hub .hub-v3-room-chip:not(:disabled):hover { background-color: rgb(255 255 255 / 0.08); }
 }
 
 /* ---------------------------------------------------------------- Entrée animée */
@@ -598,9 +725,13 @@
   :root[data-hub-style="v3"] .hub :is(.hub-left, .hub-right) > * { animation: none; }
   :root[data-hub-style="v3"] .hub .hub-live i.on { animation: none; }
   :root[data-hub-style="v3"] .hub .hub-v3-seg-ind { transition: none; }
-  :root[data-hub-style="v3"] .hub :is(.hub-scene, .hub-v3-music-open, .hub-v3-play, .hub-v3-next, .hub-v3-ib, .hub-v3-seg, .hub-v3-zone, .hub-dock button, .hub-views button):active:not(:disabled) { transform: none; }
+  :root[data-hub-style="v3"] .hub .hub-v3-pin { animation: none; }
+  :root[data-hub-style="v3"] .hub .hub-v3-pin:active:not(:disabled) { transform: translate(-50%, -50%); }
+  :root[data-hub-style="v3"] .hub :is(.hub-scene, .hub-v3-music-open, .hub-v3-play, .hub-v3-next, .hub-v3-ib, .hub-v3-seg, .hub-v3-zone, .hub-v3-alloff, .hub-v3-room-chip, .hub-dock button, .hub-views button):active:not(:disabled) { transform: none; }
 }
 
 /* ---------------------------------------------------------------- Hors v3 : le réglage du style */
 .hub-style-pick { display: grid; gap: .3rem; }
 .hub-style-pick select { width: 100%; }
+/* Les pastilles du dessin ne se montrent qu'en v3, sur l'accueil. */
+.hub-v3-pins { display: none; }

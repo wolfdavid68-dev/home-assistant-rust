@@ -22,7 +22,11 @@ const HUB_V3_KEY = "ha-hub-style";
 const HUB_V3_SECURITY = ["door", "window", "garage_door", "opening", "motion", "occupancy", "presence", "smoke",
   "moisture", "gas", "safety", "tamper"];
 const HUB_V3_OPENINGS = ["door", "window", "garage_door", "opening"];
-const hubV3 = { placed: false, lens: "vivant", ui: null };
+const hubV3 = { placed: false, lens: "vivant", ui: null, pins: new Map(), chips: new Map() };
+// Les pastilles entrent l'une après l'autre ; au-delà de 10, elles arrivent ensemble.
+const HUB_V3_STAGGER_MAX = 10;
+// La minuterie de chaque bouton qui attend une réponse.
+const hubV3Waits = new WeakMap();
 
 /** Le salut selon l'heure. */
 function hubV3Hello(hour) {
@@ -89,11 +93,13 @@ function hubV3Init() {
     });
   }
   // Un nouveau dessin (changement de page, redessin) : ses appareils se
-  // retrouvent à leur lentille.
+  // retrouvent à leur lentille, et les pastilles des pièces reviennent.
   const stage = $("#house-stage");
   if (stage) {
     const observer = new MutationObserver(() => {
-      if (hubV3On() && hubV3.placed) hubV3Tag();
+      if (!hubV3On() || !hubV3.placed) return;
+      hubV3Tag();
+      hubV3RenderPins();
     });
     observer.observe(stage, { childList: true });
   }
@@ -125,13 +131,22 @@ function hubV3Build() {
       svgIcon(ICONS.sparkle)),
     account: button({ id: "hub-v3-account", class: "hub-v3-ib hub-v3-avatar", "aria-label": "Mon compte" }),
     lens: el("nav", { id: "hub-v3-lens", class: "hub-v3-lens", "aria-label": "Ce que montre la maison" }),
+    readIcon: el("span", { class: "hub-v3-read-icon", "aria-hidden": "true" }, svgIcon(ICONS.bulb)),
     readout: el("p", { id: "hub-v3-readout", class: "hub-v3-readout", role: "status" }),
+    allOff: button({ id: "hub-v3-alloff", class: "hub-v3-alloff" }, "Tout éteindre"),
+    pins: el("div", { class: "hub-v3-pins", role: "group", "aria-label": "Lumières par pièce" }),
+    rooms: el("div", { id: "hub-v3-lit-rooms", class: "hub-v3-lit-rooms", role: "group",
+      "aria-label": "Lumières des pièces hors du dessin" }),
     musicBtn: button({ id: "hub-v3-music-btn" }, svgIcon(ICONS.music), el("span", { text: "Musique" })),
   };
   ui.music.hidden = true;
   ui.tempo.hidden = true;
   ui.heating.hidden = true;
-  ui.readout.hidden = true;
+  ui.read = el("div", { id: "hub-v3-read", class: "hub-v3-read" }, ui.readIcon, ui.readout, ui.allOff);
+  ui.read.hidden = true;
+  ui.readIcon.hidden = true;
+  ui.allOff.hidden = true;
+  ui.rooms.hidden = true;
   ui.musicBtn.hidden = true;
   ui.badge.hidden = true;
 
@@ -174,6 +189,16 @@ function hubV3Build() {
   ui.bell.addEventListener("click", () => $("#open-notices")?.click());
   ui.assist.addEventListener("click", () => $("#open-assist")?.click());
   ui.account.addEventListener("click", () => $("#open-account")?.click());
+  // Tout éteindre : une commande par lumière allumée que ce compte commande,
+  // comme « Éteindre les lumières » dans la fiche d'une pièce.
+  ui.allOff.addEventListener("click", () => {
+    const lit = [...entities.values()].filter((s) => isLight(s) && s.state === "on" && canControl(s));
+    for (const state of lit) {
+      markPending(state.entity_id);
+      callService("light", "turn_off", { entity_id: state.entity_id });
+    }
+    if (lit.length > 0) hubV3Wait(ui.allOff);
+  });
 
   hubV3.ui = ui;
   return ui;
@@ -186,7 +211,8 @@ function hubV3Place() {
   root.querySelector(".hub-left").append(root.querySelector(".hub-time"), ui.hello, ui.summary, $("#hub-scenes"), ui.music);
   root.querySelector(".hub-right").append($("#hub-weather"), ui.tempo, $("#hub-agenda"), ui.heating, $("#hub-rooms"));
   root.querySelector(".hub-top").append(ui.actions);
-  root.querySelector(".hub-center").prepend(ui.lens, ui.readout);
+  root.querySelector(".hub-center").prepend(ui.lens, ui.read);
+  root.querySelector(".hub-center").append(ui.rooms);
   $("#hub-open-agenda").after(ui.musicBtn);
   hubV3.placed = true;
 }
@@ -197,9 +223,9 @@ function hubV3Restore() {
   const root = $("#hub");
   root.querySelector(".hub-left").append(root.querySelector(".hub-time"), $("#hub-weather"), $("#hub-agenda"));
   root.querySelector(".hub-right").append($("#hub-scenes"), $("#hub-rooms"));
-  for (const node of [ui.hello, ui.summary, ui.music, ui.tempo, ui.heating, ui.actions, ui.lens, ui.readout, ui.musicBtn]) {
-    node.remove();
-  }
+  const added = [ui.hello, ui.summary, ui.music, ui.tempo, ui.heating, ui.actions, ui.lens, ui.read, ui.rooms, ui.pins,
+    ui.musicBtn];
+  for (const node of added) node.remove();
   const box = $("#hub-house");
   if (box) delete box.dataset.lens;
   hubV3.placed = false;
@@ -417,8 +443,15 @@ function hubV3RenderLens() {
   if (box) setAttr(box, "data-lens", hubV3.lens);
   const text = hubV3Readout(hubV3.lens);
   setText(ui.readout, text);
-  ui.readout.hidden = text === "";
+  ui.read.hidden = text === "";
+  // Lumières : l'ampoule, et « Tout éteindre » s'il y a de quoi éteindre.
+  const lights = hubV3.lens === "lumieres";
+  ui.readIcon.hidden = !lights;
+  ui.allOff.hidden = !lights
+    || ![...entities.values()].some((s) => isLight(s) && s.state === "on" && canControl(s));
+  if (ui.allOff.hidden) ui.allOff.classList.remove("pending");
   hubV3Tag();
+  hubV3RenderPins();
 }
 
 /** La lentille d'une entité, d'après son identifiant ("" si inconnue). */
@@ -436,6 +469,153 @@ function hubV3Tag() {
   for (const { label, node } of house.view.labels ?? []) mark(node, hubV3KindOf(label.entity_id));
   for (const { zone, node } of house.view.zones ?? []) mark(node, zone.area ? "lumieres" : hubV3KindOf(zone.entity_id));
   for (const { layer, img } of house.view.layers ?? []) mark(img, layer.area ? "lumieres" : hubV3KindOf(layer.entity_id));
+}
+
+/** Le centre d'une zone du dessin, en % : là où se pose sa pastille. */
+function hubV3ZoneCenter(zone) {
+  return { x: zone.x + zone.w / 2, y: zone.y + zone.h / 2 };
+}
+
+/** Ce que dit la pastille d'une pièce (lecteur d'écran). */
+function hubV3PinLabel(name, lit, total, canToggle = true) {
+  let said;
+  if (lit === 0) said = "tout est éteint";
+  else if (total === 1) said = "la lumière est allumée";
+  else if (lit === total) said = `les ${total} lumières sont allumées`;
+  else said = `${hubV3Count(lit, "lumière allumée", "lumières allumées")} sur ${total}`;
+  const hint = !canToggle ? "" : lit === 0 ? " Toucher pour allumer." : " Toucher pour éteindre.";
+  return `${name} : ${said}.${hint}`;
+}
+
+/** Un bouton qui attend la réponse : grisé 5 s au plus. */
+function hubV3Wait(node) {
+  node.classList.add("pending");
+  clearTimeout(hubV3Waits.get(node));
+  hubV3Waits.set(node, setTimeout(() => node.classList.remove("pending"), 5000));
+}
+
+/** Les lumières d'une pièce (sans les prises). */
+function hubV3RoomLights(area) {
+  return area.entities.map((e) => entities.get(e.entity_id)).filter((s) => s !== undefined && isLight(s));
+}
+
+/** Une pièce éclairée s'éteint ; une pièce éteinte s'allume. Faux si rien n'est parti. */
+function hubV3ToggleRoom(name) {
+  const area = areas.find((a) => a.name === name);
+  if (!area) return false;
+  const lights = hubV3RoomLights(area).filter(canControl);
+  const lit = lights.filter((s) => s.state === "on");
+  const service = lit.length > 0 ? "turn_off" : "turn_on";
+  const targets = lit.length > 0 ? lit : lights.filter((s) => s.state === "off");
+  for (const state of targets) {
+    markPending(state.entity_id);
+    callService("light", service, { entity_id: state.entity_id });
+  }
+  return targets.length > 0;
+}
+
+/** Un bouton de pièce : l'ampoule, le nom (dans la rangée) et le nombre allumé. */
+function hubV3RoomButton(name, cls, withName) {
+  const count = el("span", { class: "hub-v3-pin-n" });
+  const parts = [svgIcon(ICONS.bulb)];
+  if (withName) parts.push(el("span", { class: "hub-v3-chip-name", text: name }));
+  parts.push(count);
+  const attributes = { type: "button", class: cls };
+  if (!withName) attributes.title = name;
+  const node = el("button", attributes, ...parts);
+  node.addEventListener("click", () => {
+    if (hubV3ToggleRoom(name)) hubV3Wait(node);
+  });
+  return { node, count };
+}
+
+/** Met à jour un bouton de pièce d'après ses lumières. */
+function hubV3PaintRoom(item, name, lights) {
+  const lit = lights.filter((s) => s.state === "on").length;
+  const allowed = lights.some(canControl);
+  setText(item.count, String(lit));
+  item.node.classList.toggle("zero", lit === 0);
+  setAttr(item.node, "aria-pressed", String(lit > 0));
+  setAttr(item.node, "aria-label", hubV3PinLabel(name, lit, lights.length, allowed));
+  item.node.disabled = !allowed;
+  // Le nombre a changé : la réponse est arrivée, le bouton redevient vif.
+  if (item.node.dataset.lit !== String(lit)) {
+    item.node.dataset.lit = String(lit);
+    item.node.classList.remove("pending");
+  }
+}
+
+/** Range les enfants dans l'ordre voulu, sans toucher ceux déjà à leur place. */
+function hubV3Order(parent, nodes) {
+  nodes.forEach((node, index) => {
+    if (parent.children[index] !== node) parent.insertBefore(node, parent.children[index] ?? null);
+  });
+}
+
+/** Garde un bouton par pièce voulue : retire les autres, crée les manquants. */
+function hubV3Sync(map, parent, wanted, make) {
+  const names = new Set(wanted.map((w) => w.name));
+  for (const [name, item] of map) {
+    if (!names.has(name)) {
+      item.node.remove();
+      map.delete(name);
+    }
+  }
+  const items = wanted.map((w) => {
+    let item = map.get(w.name);
+    if (!item) {
+      item = make(w.name);
+      map.set(w.name, item);
+    }
+    hubV3PaintRoom(item, w.name, w.lights);
+    return item;
+  });
+  hubV3Order(parent, items.map((i) => i.node));
+  return items;
+}
+
+/** Lentille Lumières : une pastille par pièce sur le dessin, une rangée pour les autres. */
+function hubV3RenderPins() {
+  const ui = hubV3.ui;
+  if (!ui || !hubV3.placed) return;
+  if (hubV3.lens !== "lumieres") {
+    ui.rooms.hidden = true;
+    return;
+  }
+  const view = house.view;
+  // La plus grande zone de chaque pièce porte sa pastille.
+  const largest = new Map();
+  for (const { zone } of view?.zones ?? []) {
+    if (!zone.area) continue;
+    const known = largest.get(zone.area);
+    if (!known || zone.w * zone.h > known.w * known.h) largest.set(zone.area, zone);
+  }
+  const onDrawing = [];
+  for (const [name, zone] of largest) {
+    const area = areas.find((a) => a.name === name);
+    if (!area) continue;
+    const lights = hubV3RoomLights(area);
+    if (lights.length > 0) onDrawing.push({ name, lights, at: hubV3ZoneCenter(zone) });
+  }
+  // De haut en bas puis de gauche à droite : l'ordre d'entrée et de lecture.
+  onDrawing.sort((a, b) => a.at.y - b.at.y || a.at.x - b.at.x);
+  if (view && ui.pins.parentNode !== view.stage) view.stage.append(ui.pins);
+  const pins = hubV3Sync(hubV3.pins, ui.pins, onDrawing, (name) => hubV3RoomButton(name, "hub-v3-pin", false));
+  pins.forEach((item, index) => {
+    const { x, y } = onDrawing[index].at;
+    if (item.node.style.left !== `${x}%`) item.node.style.left = `${x}%`;
+    if (item.node.style.top !== `${y}%`) item.node.style.top = `${y}%`;
+    item.node.style.setProperty("--d", String(Math.min(index, HUB_V3_STAGGER_MAX)));
+  });
+  // Les pièces qu'aucun onglet ne dessine : une rangée en bas.
+  const drawn = new Set((house.pages ?? []).flatMap((page) => page.zones.map((zone) => zone.area)));
+  for (const name of largest.keys()) drawn.add(name);
+  const offDrawing = shownAreas()
+    .filter((area) => !drawn.has(area.name))
+    .map((area) => ({ name: area.name, lights: hubV3RoomLights(area) }))
+    .filter((w) => w.lights.length > 0);
+  hubV3Sync(hubV3.chips, ui.rooms, offDrawing, (name) => hubV3RoomButton(name, "hub-v3-room-chip", true));
+  ui.rooms.hidden = offDrawing.length === 0;
 }
 
 document.addEventListener("DOMContentLoaded", hubV3Init);
