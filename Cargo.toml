@@ -37,7 +37,7 @@ base64 = "0.22.1"
 axum = { version = "0.8.9", default-features = false, features = ["http1", "json", "query", "tokio", "tracing", "ws"] }
 # La même version que celle de reqwest, pour n'avoir qu'un seul tower-http
 # dans le programme. À monter avec reqwest (cargo tree -d).
-tower-http = { version = "0.6.11", features = ["set-header", "timeout"] }
+tower-http = { version = "0.7.1", features = ["set-header", "timeout"] }
 # MQTT sans TLS : la partie TLS de rumqttc 0.25 dépend de crates vulnérables
 # ou abandonnées (refusées par cargo deny). À réactiver quand ce sera corrigé.
 rumqttc = { version = "0.25.1", default-features = false }
