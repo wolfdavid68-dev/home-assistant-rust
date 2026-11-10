@@ -23,6 +23,8 @@ struct Site {
     /// La prochaine lecture répond 401 (session expirée).
     expire_next: bool,
     session: String,
+    /// Début de la piscine, en millisecondes : voir [`site`].
+    start: i64,
 }
 
 type Shared = Arc<Mutex<Site>>;
@@ -98,8 +100,7 @@ async fn events(
         return StatusCode::UNAUTHORIZED.into_response();
     }
     assert_eq!(id, 22);
-    // 2026-10-21 18:00, heure de Paris.
-    let start = 1_792_533_600_000_i64 + 18 * 3_600_000;
+    let start = site.lock().unwrap().start;
     let page = if query.get("since").map(String::as_str) == Some("0") {
         json!({"chunk": true, "since": 500, "events": [
             {"uuid": "e1", "title": "Piscine", "start_at": start, "end_at": start + 3_600_000,
@@ -127,7 +128,16 @@ async fn labels(State(site): State<Shared>, headers: HeaderMap, Path(id): Path<i
 }
 
 async fn site() -> (String, Shared) {
-    let shared: Shared = Arc::default();
+    // L'agenda publie la semaine passée et les deux mois à venir, d'après
+    // l'heure réelle : les dates suivent donc le jour du test. La piscine
+    // commence hier, à l'heure pile, et revient chaque semaine ; le dentiste
+    // est un jour plus tard, aujourd'hui.
+    let now = jiff::Timestamp::now().as_millisecond();
+    let start = now - now.rem_euclid(3_600_000) - 86_400_000;
+    let shared: Shared = Arc::new(Mutex::new(Site {
+        start,
+        ..Site::default()
+    }));
     let app = Router::new()
         .route("/api/v1/auth/email/signin", put(signin))
         .route("/api/v1/calendars", get(calendars))
