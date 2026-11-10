@@ -89,6 +89,27 @@ impl Store {
             .collect()
     }
 
+    /// Une ligne, par son numéro.
+    pub async fn logbook_entry(&self, id: i64) -> Result<Option<LogbookEntry>, StorageError> {
+        let row: Option<LogbookRow> = sqlx::query_as(
+            "SELECT id, at, entity_id, name, message, cause FROM logbook WHERE id = ?1",
+        )
+        .bind(id)
+        .fetch_optional(self.pool())
+        .await?;
+        row.map(|(id, at, entity_id, name, message, cause)| {
+            Ok(LogbookEntry {
+                id,
+                at: from_micros(at)?,
+                entity_id,
+                name,
+                message,
+                cause,
+            })
+        })
+        .transpose()
+    }
+
     /// Supprime les lignes plus anciennes que `older_than`. Renvoie leur nombre.
     pub async fn purge_logbook(&self, older_than: SystemTime) -> Result<u64, StorageError> {
         let deleted = sqlx::query("DELETE FROM logbook WHERE at < ?1")

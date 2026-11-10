@@ -42,6 +42,7 @@ mod assist;
 mod auth;
 mod automations;
 mod cerveau;
+mod cerveau_api;
 mod confirm;
 mod conversation;
 mod drawing;
@@ -78,6 +79,8 @@ use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::timeout::TimeoutLayer;
 
 pub use automations::{AutomationEditor, CONFIRMATION_LIFETIME};
+pub use cerveau::{DEFAULT_PER_DAY as CERVEAU_PER_DAY, MAX_PER_DAY as CERVEAU_MAX_PER_DAY};
+pub use cerveau_api::morning_summary;
 pub use json::{StateJson, format_timestamp};
 
 /// Taille maximale du corps d'une requête : 64 Kio suffisent largement.
@@ -188,10 +191,12 @@ impl ApiState {
             .map_err(|_| "la clé du relais est déjà réglée".to_owned())
     }
 
-    /// Branche le cerveau (docs/cerveau.md) : son adresse (`HA_CERVEAU`) et
-    /// sa clé (`HA_CERVEAU_CLE_FILE`). Sans lui, Assist répond seul.
-    pub fn set_cerveau(&self, address: &str, key: &str) -> Result<(), String> {
-        let cerveau = cerveau::Cerveau::new(address, key)?;
+    /// Branche le cerveau (docs/cerveau.md) : son adresse (`HA_CERVEAU`), sa
+    /// clé (`HA_CERVEAU_CLE_FILE`) et ses demandes par jour au plus
+    /// (`HA_CERVEAU_PAR_JOUR`, [`CERVEAU_PER_DAY`] sans réglage). Sans lui,
+    /// Assist répond seul.
+    pub fn set_cerveau(&self, address: &str, key: &str, per_day: usize) -> Result<(), String> {
+        let cerveau = cerveau::Cerveau::new(address, key, per_day)?;
         self.cerveau
             .set(cerveau)
             .map_err(|_| "le cerveau est déjà branché".to_owned())
@@ -274,6 +279,11 @@ pub fn router(state: Arc<ApiState>) -> Router {
         )
         .route("/api/services/{domain}/{service}", post(rest::call_service))
         .route("/api/websocket", get(ws::handler))
+        .route("/api/cerveau", get(cerveau_api::overview))
+        .route(
+            "/api/cerveau/preferences",
+            get(cerveau_api::preferences).put(cerveau_api::save_preferences),
+        )
         // Tableau de bord web (compressé, avec empreinte).
         .merge(web::router())
         .layer(TimeoutLayer::with_status_code(
@@ -296,6 +306,14 @@ pub fn router(state: Arc<ApiState>) -> Router {
         .route(
             "/api/conversation/process",
             post(assist::process).layer(TimeoutLayer::with_status_code(
+                StatusCode::REQUEST_TIMEOUT,
+                ASSIST_TIMEOUT,
+            )),
+        )
+        // « Pourquoi ? » sur une ligne du journal : le cerveau aussi.
+        .route(
+            "/api/cerveau/explique",
+            post(cerveau_api::explain).layer(TimeoutLayer::with_status_code(
                 StatusCode::REQUEST_TIMEOUT,
                 ASSIST_TIMEOUT,
             )),

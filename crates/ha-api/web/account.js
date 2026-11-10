@@ -37,7 +37,46 @@ async function loadAccount() {
   // Le service worker est (ré)enregistré à chaque ouverture : il prend la
   // version du serveur.
   loadPush().catch(() => {});
+  loadCerveau().catch(() => {});
 }
+
+/** Le cerveau (étape 106) : branché, et ce compte de la famille ? Alors les
+ *  préférences de la maison et le « Pourquoi ? » du journal sont montrés. */
+async function loadCerveau() {
+  const { status, data } = await api("GET", "/api/cerveau");
+  account.cerveau = status === 200 && data.installe === true && data.usage !== null && typeof data.usage === "object";
+  $("#cerveau-prefs").hidden = !account.cerveau;
+  if (!account.cerveau) return;
+  const used = `${data.usage.last_day} question${data.usage.last_day > 1 ? "s" : ""} à Claude en 24 h, sur ${data.usage.per_day}.`;
+  const prefs = await api("GET", "/api/cerveau/preferences");
+  if (prefs.status !== 200) return;
+  const box = $("#cerveau-prefs-text");
+  // Un texte en cours d'écriture n'est pas écrasé.
+  if (document.activeElement !== box) box.value = typeof prefs.data.texte === "string" ? prefs.data.texte : "";
+  const by = typeof prefs.data.modifie_par === "string" && typeof prefs.data.modifie_le === "string"
+    ? `Modifiées par ${prefs.data.modifie_par} le ${new Date(prefs.data.modifie_le).toLocaleString("fr", { dateStyle: "short", timeStyle: "short" })}. `
+    : "";
+  $("#cerveau-prefs-status").textContent = by + used;
+}
+
+$("#cerveau-prefs-save").addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    const { status, data } = await api("PUT", "/api/cerveau/preferences", { texte: $("#cerveau-prefs-text").value });
+    if (status === 200) {
+      $("#cerveau-prefs-text").value = data.texte;
+      flash("Préférences enregistrées.");
+      loadCerveau().catch(() => {});
+    } else {
+      flash(typeof data?.error === "string" ? data.error : "Préférences refusées.");
+    }
+  } catch {
+    flash("Préférences non enregistrées : le serveur ne répond pas.");
+  } finally {
+    button.disabled = false;
+  }
+});
 
 /** Un message bref en bas de l'écran (une commande refusée…). */
 function flash(text) {
@@ -62,6 +101,7 @@ for (const opener of ["#dock-account", "#open-account"]) {
     $("#account-dialog").showModal();
     watchIntegrations();
     loadPush().catch(() => {});
+    loadCerveau().catch(() => {});
   });
 }
 $("#account-close").addEventListener("click", () => $("#account-dialog").close());

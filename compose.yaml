@@ -74,6 +74,10 @@ services:
       # « cerveau » plus bas, et « cerveau_cle » dans « secrets ») :
       # HA_CERVEAU: http://cerveau:8790
       # HA_CERVEAU_CLE_FILE: /run/secrets/cerveau_cle
+      # Les questions à Claude sur 24 heures (150 si rien n'est dit), et
+      # l'heure du résumé du matin (pas de résumé si rien n'est dit) :
+      # HA_CERVEAU_PAR_JOUR: 150
+      # HA_CERVEAU_MATIN: "07:15"
       # Le mot d'appel des tablettes (voir docs/mot-appel.md), « Maison » si
       # rien n'est dit :
       # HA_MOT_APPEL: Maison

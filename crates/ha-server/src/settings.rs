@@ -473,6 +473,50 @@ pub(crate) fn cerveau_settings() -> Result<Option<(String, Zeroizing<String>)>, 
     Ok(Some((address, Zeroizing::new(key.to_owned()))))
 }
 
+/// Combien de questions par jour au cerveau (`HA_CERVEAU_PAR_JOUR`, 150
+/// par défaut, 1000 au plus).
+pub(crate) fn cerveau_per_day() -> Result<usize, String> {
+    let Some(value) = std::env::var("HA_CERVEAU_PAR_JOUR")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+    else {
+        return Ok(ha_api::CERVEAU_PER_DAY);
+    };
+    value
+        .trim()
+        .parse::<usize>()
+        .ok()
+        .filter(|n| (1..=ha_api::CERVEAU_MAX_PER_DAY).contains(n))
+        .ok_or_else(|| {
+            format!(
+                "HA_CERVEAU_PAR_JOUR invalide : {value:?} (entre 1 et {})",
+                ha_api::CERVEAU_MAX_PER_DAY
+            )
+        })
+}
+
+/// L'heure du résumé du matin (`HA_CERVEAU_MATIN`, `07:15`). Absente : pas
+/// de résumé.
+pub(crate) fn cerveau_morning() -> Result<Option<jiff::civil::Time>, String> {
+    let Some(value) = std::env::var("HA_CERVEAU_MATIN")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+    else {
+        return Ok(None);
+    };
+    let (hours, minutes) = value
+        .trim()
+        .split_once(':')
+        .ok_or_else(|| format!("HA_CERVEAU_MATIN invalide : {value:?} (HH:MM)"))?;
+    let time = hours
+        .parse()
+        .ok()
+        .zip(minutes.parse().ok())
+        .and_then(|(hours, minutes)| jiff::civil::Time::new(hours, minutes, 0, 0).ok())
+        .ok_or_else(|| format!("HA_CERVEAU_MATIN invalide : {value:?} (HH:MM)"))?;
+    Ok(Some(time))
+}
+
 /// Lit la configuration MQTT. `None` si `HA_MQTT_HOST` n'est pas défini.
 pub(crate) fn mqtt_config() -> Result<Option<MqttConfig>, String> {
     let Ok(host) = std::env::var("HA_MQTT_HOST") else {

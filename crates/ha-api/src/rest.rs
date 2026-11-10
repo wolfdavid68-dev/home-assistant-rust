@@ -523,6 +523,7 @@ pub(crate) async fn logbook(
         .into_iter()
         .map(|entry| {
             json!({
+                "id": entry.id,
                 "at": format_timestamp(entry.at),
                 "entity_id": entry.entity_id,
                 "name": entry.name,
