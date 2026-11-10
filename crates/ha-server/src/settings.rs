@@ -452,6 +452,27 @@ pub(crate) fn relay_key() -> Result<Option<Zeroizing<String>>, String> {
     Ok(Some(Zeroizing::new(content.trim().to_owned())))
 }
 
+/// Le cerveau (docs/cerveau.md) : son adresse (`HA_CERVEAU`,
+/// `http://cerveau:8790`) et sa clé (fichier `HA_CERVEAU_CLE_FILE`). Sans
+/// `HA_CERVEAU`, Assist répond seul.
+pub(crate) fn cerveau_settings() -> Result<Option<(String, Zeroizing<String>)>, String> {
+    let Some(address) = std::env::var("HA_CERVEAU")
+        .ok()
+        .filter(|address| !address.trim().is_empty())
+    else {
+        return Ok(None);
+    };
+    let path = std::env::var("HA_CERVEAU_CLE_FILE")
+        .map_err(|_| "HA_CERVEAU sans HA_CERVEAU_CLE_FILE (la clé du cerveau)".to_owned())?;
+    let content = Zeroizing::new(
+        std::fs::read_to_string(&path)
+            .map_err(|error| format!("lecture de HA_CERVEAU_CLE_FILE ({path}) : {error}"))?,
+    );
+    // Un fichier écrit sous Windows peut commencer par une marque BOM.
+    let key = content.trim().trim_start_matches('\u{feff}').trim();
+    Ok(Some((address, Zeroizing::new(key.to_owned()))))
+}
+
 /// Lit la configuration MQTT. `None` si `HA_MQTT_HOST` n'est pas défini.
 pub(crate) fn mqtt_config() -> Result<Option<MqttConfig>, String> {
     let Ok(host) = std::env::var("HA_MQTT_HOST") else {

@@ -41,6 +41,7 @@
 mod assist;
 mod auth;
 mod automations;
+mod cerveau;
 mod confirm;
 mod conversation;
 mod drawing;
@@ -85,6 +86,9 @@ const MAX_BODY_SIZE: usize = 64 * 1024;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 /// L'écoute d'une phrase : son tour, puis Whisper.
 const VOICE_TIMEOUT: Duration = Duration::from_secs(90);
+/// Une phrase tapée : Assist répond tout de suite, le cerveau (s'il est
+/// installé) en 40 s au plus.
+const ASSIST_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Ce que les routes de l'API partagent.
 #[derive(Debug)]
@@ -120,6 +124,9 @@ pub struct ApiState {
     /// Le relais des notifications du téléphone (étape 103), si sa clé est
     /// configurée.
     relay: OnceLock<relais::Relay>,
+    /// Le cerveau (Claude), pour les phrases qu'Assist ne comprend pas, si
+    /// installé (docs/cerveau.md).
+    cerveau: OnceLock<cerveau::Cerveau>,
     shutdown: CancellationToken,
 }
 
@@ -150,6 +157,7 @@ impl ApiState {
             conversations: conversation::Conversations::default(),
             wake: wake::Wake::default(),
             relay: OnceLock::new(),
+            cerveau: OnceLock::new(),
             shutdown,
         })
     }
@@ -178,6 +186,15 @@ impl ApiState {
         self.relay
             .set(relay)
             .map_err(|_| "la clé du relais est déjà réglée".to_owned())
+    }
+
+    /// Branche le cerveau (docs/cerveau.md) : son adresse (`HA_CERVEAU`) et
+    /// sa clé (`HA_CERVEAU_CLE_FILE`). Sans lui, Assist répond seul.
+    pub fn set_cerveau(&self, address: &str, key: &str) -> Result<(), String> {
+        let cerveau = cerveau::Cerveau::new(address, key)?;
+        self.cerveau
+            .set(cerveau)
+            .map_err(|_| "le cerveau est déjà branché".to_owned())
     }
 
     /// Demande l'arrêt du serveur : plus de nouvelles connexions, et les
@@ -243,7 +260,6 @@ pub fn router(state: Arc<ApiState>) -> Router {
         .route("/api/push/test", post(push::test))
         .route("/api/push/action", post(push::action))
         .route("/api/relais", post(relais::receive))
-        .route("/api/conversation/process", post(assist::process))
         .route("/api/conversation/voice", get(voice::overview))
         .route("/api/mcp", post(mcp::handle).get(mcp::no_stream))
         .route("/api/home/drawing", get(drawing::get).put(drawing::put))
@@ -275,6 +291,14 @@ pub fn router(state: Arc<ApiState>) -> Router {
                     StatusCode::REQUEST_TIMEOUT,
                     VOICE_TIMEOUT,
                 )),
+        )
+        // Une phrase tapée : le cerveau peut prendre jusqu'à 40 s.
+        .route(
+            "/api/conversation/process",
+            post(assist::process).layer(TimeoutLayer::with_status_code(
+                StatusCode::REQUEST_TIMEOUT,
+                ASSIST_TIMEOUT,
+            )),
         )
         // Le mot d'appel (étape 97) : des morceaux de 6 s au plus.
         .route(

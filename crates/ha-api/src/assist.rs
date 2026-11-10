@@ -22,7 +22,7 @@ use axum::Json;
 use axum::body::Bytes;
 use axum::extract::{ConnectInfo, State};
 use ha_assist::suite::{goodbye_reply, is_goodbye, understand_with};
-use ha_assist::{Device, Order, Understood};
+use ha_assist::{Device, NotUnderstood, Order, Understood};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -190,7 +190,20 @@ pub(crate) async fn converse_in(
     let context = state.conversations.context(conversation_id, user_id);
     let devices = devices(state, auth);
     let (kind, speech, next) = match understand_with(text, &devices, context.as_ref()) {
-        Ok((Understood::Answer(answer), next)) => ("query_answer", capitalized(&answer), next),
+        Ok((Understood::Answer(answer), next)) => {
+            // Une question sur rien de connu (« est-ce que je dois arroser ? ») :
+            // Assist répond « appareil introuvable », le cerveau peut mieux.
+            let lost = answer == NotUnderstood::NoDevice.message();
+            let helped = if lost {
+                ask_cerveau(state, auth, text, &NotUnderstood::NoDevice).await
+            } else {
+                None
+            };
+            match helped {
+                Some(reply) => ("query_answer", reply, None),
+                None => ("query_answer", capitalized(&answer), next),
+            }
+        }
         Ok((Understood::Orders(orders), next)) => {
             let (kind, speech) = run(state, auth, client, orders, false).await;
             (kind, speech, next)
@@ -200,7 +213,10 @@ pub(crate) async fn converse_in(
                 "assist : phrase de {} non comprise ({not_understood:?})",
                 auth.user.username
             );
-            ("error", not_understood.message(), None)
+            match ask_cerveau(state, auth, text, &not_understood).await {
+                Some(reply) => ("query_answer", reply, None),
+                None => ("error", not_understood.message(), None),
+            }
         }
     };
     let kept = state.conversations.keep(conversation_id, user_id, next);
@@ -210,6 +226,21 @@ pub(crate) async fn converse_in(
         conversation_id: kept.id,
         more: kept.more,
     }
+}
+
+/// Le cerveau (docs/cerveau.md), s'il est installé et que la phrase peut
+/// lui être passée : sa réponse, sinon `None`.
+async fn ask_cerveau(
+    state: &ApiState,
+    auth: &Authenticated,
+    text: &str,
+    why: &NotUnderstood,
+) -> Option<String> {
+    let cerveau = state.cerveau.get()?;
+    if !crate::cerveau::eligible(auth.user.role, text, why) {
+        return None;
+    }
+    cerveau.ask(&auth.user.username, text.trim()).await
 }
 
 /// Comprend `text` et donne les ordres. Renvoie le type de réponse

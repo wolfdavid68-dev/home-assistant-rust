@@ -8,7 +8,7 @@
 # construction. Il n'est pas dans le dépôt (licence d'Anthropic).
 #
 # Construit par compose.yaml (service « cerveau »). Pas de port publié :
-# seul ha-server le joint, par le réseau « cerveau ».
+# seul ha-server lui parle, avec la clé partagée.
 
 FROM busybox:1.37@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e AS fichiers
 ADD --checksum=sha256:25d2e2cae6d3d1d5ceeaf0da02e83c45c16455e45efa1ab305395dc05227ad0d \

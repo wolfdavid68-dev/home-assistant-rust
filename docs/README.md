@@ -139,6 +139,7 @@ a besoin.
 - [Étape 97 : le mot d'appel « Maison »](mot-appel.md)
 - [Étape 98 : l'orbe de la voix](orbe.md)
 - [Étape 55 : brancher un assistant IA (MCP)](mcp.md)
+- [Étape 105 : le cerveau, Claude quand Assist ne comprend pas](cerveau.md)
 
 ## Le projet
 
