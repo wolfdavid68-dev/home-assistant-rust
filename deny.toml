@@ -10,7 +10,14 @@ all-features = true
 # Crates non maintenues ou retirées : bloquantes aussi pour nos dépendances directes et indirectes.
 unmaintained = "all"
 yanked = "deny"
-ignore = []
+ignore = [
+    # SQLite avant 3.54 peut rendre de la mémoire non effacée quand on ouvre
+    # une base et son fichier -wal fabriqués par un tiers. Le hub n'ouvre que
+    # sa propre base, qu'il écrit lui-même : il n'est pas exposé. sqlx 0.9 ne
+    # permet pas encore libsqlite3-sys 0.39 (il demande moins de 0.38).
+    # À enlever dès qu'une version de sqlx l'accepte.
+    { id = "RUSTSEC-2026-0459", reason = "le hub n'ouvre que sa propre base ; sqlx 0.9 bloque libsqlite3-sys sous 0.38" },
+]
 
 [licenses]
 # Licences permissives uniquement.

@@ -32,7 +32,8 @@ la phrase entendue s'affiche, la maison obéit, et **répond à voix haute** sur
    0,1 à 0,3 s) : la réponse est lue sur la tablette.
 
 **Rien ne sort de la maison** : ni le son, ni le texte. Ni le son ni la phrase ne sont gardés ou
-écrits dans les journaux.
+écrits dans les journaux. Seule exception, si tu l'as installé : le [cerveau](cerveau.md) reçoit le
+texte des phrases qu'Assist n'a pas comprises, pour que Claude y réponde (jamais le son).
 
 Depuis l'[étape 96](enchainer.md), après la réponse, le micro se rouvre quelques secondes pour une
 phrase de suite (« et la cuisine aussi », « éteins-la ») ; « merci » ou un toucher de l'écran

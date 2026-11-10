@@ -560,3 +560,90 @@ async fn assist_says_done_only_when_the_device_obeyed() {
     );
     assert!(took < Duration::from_secs(1), "{took:?}");
 }
+
+/// Un faux cerveau (docs/cerveau.md) : répond la même phrase à chaque
+/// demande et compte les demandes.
+async fn fake_cerveau() -> (String, Arc<std::sync::atomic::AtomicUsize>) {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = format!("http://{}", listener.local_addr().unwrap());
+    let count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let counted = Arc::clone(&count);
+    tokio::spawn(async move {
+        while let Ok((mut socket, _)) = listener.accept().await {
+            counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let mut seen = Vec::new();
+            let mut buffer = [0u8; 4096];
+            // La demande finit par le JSON de la phrase.
+            while !seen.ends_with(b"\"}") {
+                let n = socket.read(&mut buffer).await.unwrap();
+                if n == 0 {
+                    break;
+                }
+                seen.extend_from_slice(&buffer[..n]);
+            }
+            let body = r#"{"reponse":"Oui, il faut arroser ce soir."}"#;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            socket.write_all(response.as_bytes()).await.unwrap();
+        }
+    });
+    (address, count)
+}
+
+#[tokio::test]
+async fn assist_passes_what_it_does_not_understand_to_the_cerveau() {
+    let app = TestApp::new().await;
+    furnish(&app);
+    let (address, asked) = fake_cerveau().await;
+    app.state
+        .set_cerveau(&address, "une-cle-de-cerveau-assez-longue-pour-essai")
+        .unwrap();
+    let david = app.login().await;
+    let guest = app.login_as("visiteur", ha_auth::Role::Guest).await;
+    let say = |token: &String, text: &str| {
+        let token = token.clone();
+        let text = text.to_owned();
+        let app = &app;
+        async move {
+            let (status, body) = app
+                .request(
+                    "POST",
+                    "/api/conversation/process",
+                    Some(&token),
+                    Some(json!({"text": text})),
+                )
+                .await;
+            assert_eq!(status, StatusCode::OK, "{body}");
+            (
+                body["response"]["response_type"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned(),
+                body["response"]["speech"]["plain"]["speech"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned(),
+            )
+        }
+    };
+
+    let (kind, speech) = say(&david, "Raconte-moi une blague sur le jardin").await;
+    assert_eq!(kind, "query_answer");
+    assert_eq!(speech, "Oui, il faut arroser ce soir.");
+    assert_eq!(asked.load(std::sync::atomic::Ordering::SeqCst), 1);
+    // Une question sur rien de connu aussi.
+    let (kind, speech) = say(&david, "Est-ce que je dois arroser le jardin").await;
+    assert_eq!(kind, "query_answer");
+    assert_eq!(speech, "Oui, il faut arroser ce soir.");
+    assert_eq!(asked.load(std::sync::atomic::Ordering::SeqCst), 2);
+
+    // Un invité garde la réponse d'Assist, comme une phrase d'un mot.
+    let (kind, _) = say(&guest, "Raconte-moi une blague sur le jardin").await;
+    assert_eq!(kind, "error");
+    let (kind, _) = say(&david, "euh").await;
+    assert_eq!(kind, "error");
+    assert_eq!(asked.load(std::sync::atomic::Ordering::SeqCst), 2);
+}

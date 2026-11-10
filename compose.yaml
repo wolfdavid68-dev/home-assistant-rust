@@ -69,6 +69,11 @@ services:
       # ci-dessus (HA_PIPER et le service « piper ») et l'écoute (service
       # « ecoute » plus bas, avec « networks » ci-dessous) :
       # HA_ECOUTE: ws://ecoute:10350
+      # Le cerveau (voir docs/cerveau.md) : Claude répond aux phrases
+      # qu'Assist ne comprend pas, avec ton abonnement Claude (service
+      # « cerveau » plus bas, et « cerveau_cle » dans « secrets ») :
+      # HA_CERVEAU: http://cerveau:8790
+      # HA_CERVEAU_CLE_FILE: /run/secrets/cerveau_cle
       # Le mot d'appel des tablettes (voir docs/mot-appel.md), « Maison » si
       # rien n'est dit :
       # HA_MOT_APPEL: Maison
@@ -93,6 +98,7 @@ services:
     # secrets:
     #   - mqtt_password
     #   - meteofrance
+    #   - cerveau_cle
     # Alexa : la découverte (multicast) exige le réseau de la machine. La
     # ligne « ports » ci-dessus ne sert alors plus : mets HA_BIND sur
     # l'adresse voulue (voir docs/alexa.md).
@@ -163,6 +169,39 @@ services:
   #   cpus: 4
   #   pids_limit: 64
 
+  # Le cerveau (Claude Code, voir docs/cerveau.md) : enlève les « # » de ce
+  # service et de ses trois secrets tout en bas, et mets HA_CERVEAU dans
+  # ha-server. Construit sur cette machine avec « docker compose build
+  # cerveau » (Claude Code téléchargé une fois, vérifié par son empreinte).
+  # Il lui faut Internet (Claude) : il reste sur le réseau par défaut, sans
+  # port publié ; seul ha-server lui parle, avec la clé « cerveau_cle ».
+  # Pas avec « network_mode: host » (Alexa) : ha-server ne le joindrait pas.
+  # cerveau:
+  #   build: ./packaging/docker/cerveau
+  #   image: ha-maison-cerveau:local
+  #   restart: unless-stopped
+  #   environment:
+  #     CERVEAU_CLE_FILE: /run/secrets/cerveau_cle
+  #     CLAUDE_CODE_OAUTH_TOKEN_FILE: /run/secrets/claude_oauth
+  #     CERVEAU_MAISON_JETON_FILE: /run/secrets/cerveau_maison
+  #     CERVEAU_HUB: http://ha-server:8123/api/mcp
+  #     # Plus juste mais plus lent (haiku si rien n'est dit) :
+  #     # CERVEAU_MODELE: sonnet
+  #   secrets:
+  #     - cerveau_cle
+  #     - claude_oauth
+  #     - cerveau_maison
+  #   user: "65532:65532"
+  #   read_only: true
+  #   tmpfs:
+  #     - /tmp:size=64m,mode=1777
+  #   cap_drop:
+  #     - ALL
+  #   security_opt:
+  #     - no-new-privileges:true
+  #   mem_limit: 1g
+  #   pids_limit: 128
+
   # Outil de sauvegarde et de restauration de la base, lancé seulement à la
   # demande (voir le guide). Il ne démarre jamais avec « docker compose up ».
   sauvegarde:
@@ -186,6 +225,12 @@ volumes:
 #     file: ./secrets/mqtt_password
 #   meteofrance:
 #     file: ./secrets/meteofrance.txt
+#   cerveau_cle:
+#     file: ./secrets/cerveau_cle
+#   claude_oauth:
+#     file: ./secrets/claude_oauth
+#   cerveau_maison:
+#     file: ./secrets/cerveau_maison
 
 # Le réseau de l'écoute (voir le service « ecoute ») : interne, sans Internet.
 # networks:

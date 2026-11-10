@@ -149,11 +149,11 @@ use tracing_subscriber::EnvFilter;
 // Concept Rust : `pub(crate) use` remet ces fonctions à la racine du
 // programme : `crate::location()` (dans le module `cli`) marche comme avant.
 pub(crate) use settings::{
-    alexa_path, alexa_settings, automation_editor, bind_address, colis_mailbox, days_from_env,
-    derived_path, energy_path, history_days, iglou_endpoints, inputs_path, location, mqtt_config,
-    ntfy_config, parse_bind, persons_path, relay_key, relay_settings, smartthings_endpoint,
-    somfy_account, sonos_config, sonos_hosts, stt_config, teleinfo_config, thermostats_path,
-    timetree_api, tts_config, vigilance_config, weather_config, workday_settings,
+    alexa_path, alexa_settings, automation_editor, bind_address, cerveau_settings, colis_mailbox,
+    days_from_env, derived_path, energy_path, history_days, iglou_endpoints, inputs_path, location,
+    mqtt_config, ntfy_config, parse_bind, persons_path, relay_key, relay_settings,
+    smartthings_endpoint, somfy_account, sonos_config, sonos_hosts, stt_config, teleinfo_config,
+    thermostats_path, timetree_api, tts_config, vigilance_config, weather_config, workday_settings,
 };
 
 const DEFAULT_DB_PATH: &str = "ha.db";
@@ -553,6 +553,15 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         },
         Ok(None) => {}
         Err(error) => warn!("relais des notifications du téléphone : {error}"),
+    }
+    // Le cerveau (docs/cerveau.md) : sans lui, Assist répond seul.
+    match cerveau_settings() {
+        Ok(Some((address, key))) => match api_state.set_cerveau(&address, &key) {
+            Ok(()) => info!("cerveau : branché (les phrases non comprises lui sont passées)"),
+            Err(error) => warn!("cerveau : {error}"),
+        },
+        Ok(None) => {}
+        Err(error) => warn!("cerveau : {error}"),
     }
     let mut api = tokio::spawn({
         let state = Arc::clone(&api_state);
