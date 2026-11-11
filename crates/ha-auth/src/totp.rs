@@ -13,8 +13,7 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use hmac::{Hmac, Mac};
-use sha1::Sha1;
+use ring::hmac;
 use zeroize::Zeroizing;
 
 use crate::AuthError;
@@ -75,12 +74,11 @@ pub fn step_at(now: SystemTime) -> u64 {
 /// Le code d'un créneau (RFC 4226, « HOTP »).
 #[must_use]
 pub fn code_at(secret: &[u8], step: u64) -> u32 {
-    let Ok(mut mac) = <Hmac<Sha1> as Mac>::new_from_slice(secret) else {
-        // HMAC accepte des clés de toute taille : ce cas n'arrive pas.
-        return u32::MAX;
-    };
-    mac.update(&step.to_be_bytes());
-    let digest = mac.finalize().into_bytes();
+    // SHA-1 « pour l'ancien usage » : c'est l'algorithme du TOTP, celui
+    // que toutes les applis d'authentification connaissent.
+    let key = hmac::Key::new(hmac::HMAC_SHA1_FOR_LEGACY_USE_ONLY, secret);
+    let tag = hmac::sign(&key, &step.to_be_bytes());
+    let digest = tag.as_ref();
     // « Troncature dynamique » : les 4 bits de poids faible du dernier octet
     // disent où lire 4 octets dans l'empreinte.
     let offset = usize::from(digest.last().copied().unwrap_or(0) & 0x0f);

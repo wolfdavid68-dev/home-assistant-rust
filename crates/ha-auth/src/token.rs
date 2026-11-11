@@ -1,6 +1,5 @@
 //! Jetons d'accès : création et empreinte.
 
-use sha2::{Digest, Sha256};
 use zeroize::Zeroizing;
 
 use crate::error::AuthError;
@@ -42,7 +41,9 @@ pub fn generate_token() -> Result<Zeroizing<String>, AuthError> {
 /// retrouver le jeton à partir de l'empreinte, même avec beaucoup de calcul.
 #[must_use]
 pub fn hash_token(token: &str) -> [u8; 32] {
-    Sha256::digest(token.as_bytes()).into()
+    let mut hash = [0; 32];
+    hash.copy_from_slice(ring::digest::digest(&ring::digest::SHA256, token.as_bytes()).as_ref());
+    hash
 }
 
 fn hex_digit(value: u8) -> char {

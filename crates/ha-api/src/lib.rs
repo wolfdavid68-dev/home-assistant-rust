@@ -67,16 +67,16 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use axum::Router;
-use axum::extract::DefaultBodyLimit;
+use axum::extract::{DefaultBodyLimit, Request, State};
 use axum::http::{HeaderValue, StatusCode, header};
+use axum::middleware::Next;
+use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, post, put};
 use ha_auth::Auth;
 use ha_core::CancellationToken;
 use ha_core::Core;
 use ha_storage::Store;
 use tokio::net::TcpListener;
-use tower_http::set_header::SetResponseHeaderLayer;
-use tower_http::timeout::TimeoutLayer;
 
 pub use automations::{AutomationEditor, CONFIRMATION_LIFETIME};
 pub use cerveau::{DEFAULT_PER_DAY as CERVEAU_PER_DAY, MAX_PER_DAY as CERVEAU_MAX_PER_DAY};
@@ -92,6 +92,34 @@ const VOICE_TIMEOUT: Duration = Duration::from_secs(90);
 /// Une phrase tapée : Assist répond tout de suite, le cerveau (s'il est
 /// installé) en 40 s au plus.
 const ASSIST_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// Coupe une requête qui dure plus de `limit` : 408, sans corps.
+async fn timeout(State(limit): State<Duration>, request: Request, next: Next) -> Response {
+    match tokio::time::timeout(limit, next.run(request)).await {
+        Ok(response) => response,
+        Err(_) => StatusCode::REQUEST_TIMEOUT.into_response(),
+    }
+}
+
+/// Les en-têtes de sécurité, posés sur chaque réponse (ils remplacent
+/// ceux qu'une route aurait mis).
+async fn security_headers(mut response: Response) -> Response {
+    let headers = response.headers_mut();
+    headers.insert(
+        header::CONTENT_SECURITY_POLICY,
+        HeaderValue::from_static(web::CONTENT_SECURITY_POLICY),
+    );
+    headers.insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
+    headers.insert(header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY"));
+    headers.insert(
+        header::REFERRER_POLICY,
+        HeaderValue::from_static("no-referrer"),
+    );
+    response
+}
 
 /// Ce que les routes de l'API partagent.
 #[derive(Debug)]
@@ -286,9 +314,9 @@ pub fn router(state: Arc<ApiState>) -> Router {
         )
         // Tableau de bord web (compressé, avec empreinte).
         .merge(web::router())
-        .layer(TimeoutLayer::with_status_code(
-            StatusCode::REQUEST_TIMEOUT,
+        .layer(axum::middleware::from_fn_with_state(
             REQUEST_TIMEOUT,
+            timeout,
         ))
         // L'écoute et la voix prennent plus de temps (une autre phrase peut
         // passer avant) : leur propre délai, et une limite de taille pour le
@@ -297,25 +325,22 @@ pub fn router(state: Arc<ApiState>) -> Router {
             "/api/conversation/audio",
             post(voice::listen)
                 .layer::<_, std::convert::Infallible>(DefaultBodyLimit::max(ha_stt::MAX_WAV_BYTES))
-                .layer(TimeoutLayer::with_status_code(
-                    StatusCode::REQUEST_TIMEOUT,
-                    VOICE_TIMEOUT,
-                )),
+                .layer(axum::middleware::from_fn_with_state(VOICE_TIMEOUT, timeout)),
         )
         // Une phrase tapée : le cerveau peut prendre jusqu'à 40 s.
         .route(
             "/api/conversation/process",
-            post(assist::process).layer(TimeoutLayer::with_status_code(
-                StatusCode::REQUEST_TIMEOUT,
+            post(assist::process).layer(axum::middleware::from_fn_with_state(
                 ASSIST_TIMEOUT,
+                timeout,
             )),
         )
         // « Pourquoi ? » sur une ligne du journal : le cerveau aussi.
         .route(
             "/api/cerveau/explique",
-            post(cerveau_api::explain).layer(TimeoutLayer::with_status_code(
-                StatusCode::REQUEST_TIMEOUT,
+            post(cerveau_api::explain).layer(axum::middleware::from_fn_with_state(
                 ASSIST_TIMEOUT,
+                timeout,
             )),
         )
         // Le mot d'appel (étape 97) : des morceaux de 6 s au plus.
@@ -323,36 +348,15 @@ pub fn router(state: Arc<ApiState>) -> Router {
             "/api/conversation/wake",
             post(wake::wake)
                 .layer::<_, std::convert::Infallible>(DefaultBodyLimit::max(wake::MAX_BYTES))
-                .layer(TimeoutLayer::with_status_code(
-                    StatusCode::REQUEST_TIMEOUT,
-                    VOICE_TIMEOUT,
-                )),
+                .layer(axum::middleware::from_fn_with_state(VOICE_TIMEOUT, timeout)),
         )
         .route(
             "/api/conversation/speech",
-            post(voice::speak).layer(TimeoutLayer::with_status_code(
-                StatusCode::REQUEST_TIMEOUT,
-                VOICE_TIMEOUT,
-            )),
+            post(voice::speak).layer(axum::middleware::from_fn_with_state(VOICE_TIMEOUT, timeout)),
         )
         .layer(DefaultBodyLimit::max(MAX_BODY_SIZE))
         // En-têtes de sécurité sur toutes les réponses.
-        .layer(SetResponseHeaderLayer::overriding(
-            header::CONTENT_SECURITY_POLICY,
-            HeaderValue::from_static(web::CONTENT_SECURITY_POLICY),
-        ))
-        .layer(SetResponseHeaderLayer::overriding(
-            header::X_CONTENT_TYPE_OPTIONS,
-            HeaderValue::from_static("nosniff"),
-        ))
-        .layer(SetResponseHeaderLayer::overriding(
-            header::X_FRAME_OPTIONS,
-            HeaderValue::from_static("DENY"),
-        ))
-        .layer(SetResponseHeaderLayer::overriding(
-            header::REFERRER_POLICY,
-            HeaderValue::from_static("no-referrer"),
-        ))
+        .layer(axum::middleware::map_response(security_headers))
         // La durée de chaque requête, pour la page « Système ».
         .layer(axum::middleware::from_fn_with_state(
             Arc::clone(&state),

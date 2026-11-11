@@ -19,8 +19,7 @@ use std::sync::Arc;
 
 use chacha20poly1305::aead::{Aead, Payload};
 use chacha20poly1305::{KeyInit, XChaCha20Poly1305, XNonce};
-use hmac::{Hmac, Mac};
-use sha2::Sha256;
+use ring::hmac;
 use zeroize::Zeroizing;
 
 use crate::error::StorageError;
@@ -108,10 +107,12 @@ impl SecretKey {
             .map_err(|_| StorageError::Secret("taille de clé"))?;
         // Une clé par usage : la clé du journal est dérivée de la clé
         // principale (HMAC avec une étiquette), au lieu de la réutiliser.
-        let mut derive = <Hmac<Sha256> as Mac>::new_from_slice(bytes)
-            .map_err(|_| StorageError::Secret("taille de clé"))?;
-        derive.update(b"ha-rust audit log v1");
-        let audit = Zeroizing::new(derive.finalize().into_bytes().into());
+        let derive = hmac::sign(
+            &hmac::Key::new(hmac::HMAC_SHA256, bytes),
+            b"ha-rust audit log v1",
+        );
+        let mut audit = Zeroizing::new([0; 32]);
+        audit.copy_from_slice(derive.as_ref());
         Ok(Self(Arc::new(Keys { cipher, audit })))
     }
 
@@ -119,15 +120,15 @@ impl SecretKey {
     /// est précédé de sa longueur : « ab » + « c » et « a » + « bc » ne
     /// donnent pas la même signature.
     pub(crate) fn audit_mac(&self, fields: &[&[u8]]) -> [u8; 32] {
-        let Ok(mut mac) = <Hmac<Sha256> as Mac>::new_from_slice(self.0.audit.as_slice()) else {
-            // HMAC accepte des clés de toute taille : ce cas n'arrive pas.
-            return [0; 32];
-        };
+        let key = hmac::Key::new(hmac::HMAC_SHA256, self.0.audit.as_slice());
+        let mut mac = hmac::Context::with_key(&key);
         for field in fields {
             mac.update(&(field.len() as u64).to_be_bytes());
             mac.update(field);
         }
-        mac.finalize().into_bytes().into()
+        let mut signature = [0; 32];
+        signature.copy_from_slice(mac.sign().as_ref());
+        signature
     }
 
     /// Chiffre `plaintext`, pour l'usage `context` (par exemple

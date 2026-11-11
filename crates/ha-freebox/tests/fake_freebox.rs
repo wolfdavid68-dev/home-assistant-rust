@@ -15,7 +15,6 @@ use ha_core::Core;
 use ha_freebox::{Freebox, FreeboxError, pairing};
 use ha_storage::Store;
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio_rustls::TlsAcceptor;
@@ -41,7 +40,7 @@ type Handler = Arc<dyn Fn(&Request) -> (u16, String, Value) + Send + Sync>;
 async fn https_server(handler: Handler) -> (String, [u8; 32]) {
     let certified = rcgen::generate_simple_self_signed(vec!["localhost".to_owned()]).unwrap();
     let cert_der = certified.cert.der().clone();
-    let fingerprint: [u8; 32] = Sha256::digest(cert_der.as_ref()).into();
+    let fingerprint = ha_tls::sha256(cert_der.as_ref());
     let key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(
         certified.signing_key.serialize_der(),
     ));

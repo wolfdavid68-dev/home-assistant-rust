@@ -28,7 +28,6 @@ use rcgen::{
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use rustls::server::{ClientHello, ResolvesServerCert};
 use rustls::sign::CertifiedKey;
-use sha2::{Digest, Sha256};
 
 /// Le nom du fichier de l'autorité, tel qu'on le télécharge.
 pub const CA_FILE: &str = "maison-ca.crt";
@@ -226,7 +225,7 @@ impl LocalCa {
     /// Son empreinte SHA-256 (`AB:CD:…`), pour vérifier le fichier installé.
     #[must_use]
     pub fn fingerprint(&self) -> String {
-        crate::format_fingerprint(&Sha256::digest(&self.cert_der).into())
+        crate::format_fingerprint(&crate::sha256(&self.cert_der))
     }
 
     /// Un certificat de serveur pour ces noms, signé par l'autorité, avec

@@ -29,7 +29,6 @@ use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, Server
 use rustls::crypto::{CryptoProvider, verify_tls12_signature, verify_tls13_signature};
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 use rustls::{DigitallySignedStruct, SignatureScheme};
-use sha2::{Digest, Sha256};
 
 use rustls_platform_verifier::BuilderVerifierExt;
 
@@ -76,7 +75,7 @@ impl ServerCertVerifier for PinnedVerifier {
         _ocsp_response: &[u8],
         _now: UnixTime,
     ) -> Result<ServerCertVerified, rustls::Error> {
-        let fingerprint: Fingerprint = Sha256::digest(end_entity.as_ref()).into();
+        let fingerprint = sha256(end_entity.as_ref());
         *self.seen.lock().unwrap_or_else(PoisonError::into_inner) = Some(fingerprint);
         match self.expected {
             Some(expected) if expected != fingerprint => Err(rustls::Error::General(
@@ -204,6 +203,14 @@ pub fn is_valid_host(host: &str) -> bool {
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'-')
         && port.is_none_or(|port| port.parse::<u16>().is_ok_and(|p| p > 0))
+}
+
+/// L'empreinte SHA-256 de `data` (un certificat, une adresse…).
+#[must_use]
+pub fn sha256(data: &[u8]) -> Fingerprint {
+    let mut fingerprint = [0; 32];
+    fingerprint.copy_from_slice(ring::digest::digest(&ring::digest::SHA256, data).as_ref());
+    fingerprint
 }
 
 /// Empreinte au format lisible : `AB:CD:…`.

@@ -480,7 +480,6 @@ checksum = "9ed9a281f7bc9b7576e61468ba615a66a5c8cfdff42420a70aa82701a3b1e292"
 dependencies = [
  "block-buffer 0.10.4",
  "crypto-common 0.1.7",
- "subtle",
 ]
 
 [[package]]
@@ -810,16 +809,15 @@ dependencies = [
  "axum",
  "ha-core",
  "ha-storage",
+ "ring",
  "serde",
  "serde-saphyr",
  "serde_json",
- "sha2 0.10.9",
  "socket2",
  "sqlx",
  "thiserror",
  "tokio",
  "tower",
- "tower-http",
  "tracing",
 ]
 
@@ -844,15 +842,14 @@ dependencies = [
  "ha-tls",
  "ha-tts",
  "jiff",
+ "ring",
  "rustls",
  "serde",
  "serde_json",
- "sha2 0.10.9",
  "tokio",
  "tokio-rustls",
  "tokio-tungstenite",
  "tower",
- "tower-http",
  "tracing",
  "url",
  "zeroize",
@@ -883,9 +880,7 @@ dependencies = [
  "argon2",
  "getrandom 0.4.3",
  "ha-storage",
- "hmac 0.12.1",
- "sha1 0.10.7",
- "sha2 0.10.9",
+ "ring",
  "sqlx",
  "thiserror",
  "tokio",
@@ -914,7 +909,7 @@ dependencies = [
 name = "ha-colis"
 version = "0.1.0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "ha-core",
  "ha-storage",
  "ha-tls",
@@ -978,13 +973,11 @@ dependencies = [
  "ha-core",
  "ha-storage",
  "ha-tls",
- "hmac 0.12.1",
  "rcgen",
  "reqwest",
+ "ring",
  "serde",
  "serde_json",
- "sha1 0.10.7",
- "sha2 0.10.9",
  "sqlx",
  "thiserror",
  "tokio",
@@ -1005,7 +998,6 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "sha2 0.10.9",
  "sqlx",
  "thiserror",
  "tokio",
@@ -1085,7 +1077,7 @@ dependencies = [
 name = "ha-mqtt"
 version = "0.1.0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "ha-core",
  "jiff",
  "rumqttc",
@@ -1142,7 +1134,7 @@ dependencies = [
 name = "ha-push"
 version = "0.1.0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "ha-core",
  "ha-notices",
  "ha-storage",
@@ -1257,7 +1249,7 @@ name = "ha-smartthings"
 version = "0.1.0"
 dependencies = [
  "axum",
- "base64 0.22.1",
+ "base64 0.23.1",
  "getrandom 0.4.3",
  "ha-core",
  "ha-storage",
@@ -1283,7 +1275,6 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "sha2 0.10.9",
  "sqlx",
  "thiserror",
  "tokio",
@@ -1305,7 +1296,6 @@ dependencies = [
  "jiff",
  "reqwest",
  "serde_json",
- "sha2 0.10.9",
  "thiserror",
  "tokio",
  "tracing",
@@ -1319,10 +1309,9 @@ dependencies = [
  "chacha20poly1305",
  "getrandom 0.4.3",
  "ha-core",
- "hmac 0.12.1",
  "jiff",
+ "ring",
  "serde_json",
- "sha2 0.10.9",
  "sqlx",
  "thiserror",
  "tokio",
@@ -1388,9 +1377,9 @@ dependencies = [
  "jiff",
  "rcgen",
  "reqwest",
+ "ring",
  "rustls",
  "rustls-platform-verifier",
- "sha2 0.10.9",
  "thiserror",
  "tokio",
 ]
@@ -1479,16 +1468,7 @@ version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4aaa26c720c68b866f2c96ef5c1264b3e6f473fe5d4ce61cd44bbe913e553018"
 dependencies = [
- "hmac 0.13.0",
-]
-
-[[package]]
-name = "hmac"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c49c37c09c17a53d937dfbb742eb3a961d65a994e6bcdcf37e7399d0cc8ab5e"
-dependencies = [
- "digest 0.10.7",
+ "hmac",
 ]
 
 [[package]]
@@ -2896,7 +2876,7 @@ dependencies = [
  "futures-util",
  "hex",
  "hkdf",
- "hmac 0.13.0",
+ "hmac",
  "itoa",
  "log",
  "md-5",
@@ -3189,7 +3169,6 @@ dependencies = [
  "http",
  "http-body",
  "pin-project-lite",
- "tokio",
  "tower",
  "tower-layer",
  "tower-service",

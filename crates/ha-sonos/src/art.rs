@@ -18,7 +18,6 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use ha_core::covers::{KEY_LENGTH, MAX_COVER};
-use sha2::{Digest, Sha256};
 use url::{Host, Url};
 
 use crate::xml;
@@ -86,7 +85,7 @@ fn authority(url: &Url) -> Option<String> {
 #[must_use]
 pub fn key(url: &str) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
-    Sha256::digest(url.as_bytes())
+    ha_tls::sha256(url.as_bytes())
         .iter()
         .take(KEY_LENGTH / 2)
         .flat_map(|byte| [byte >> 4, byte & 0xF])

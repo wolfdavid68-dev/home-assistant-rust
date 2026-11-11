@@ -29,11 +29,10 @@ rustls.workspace = true
 ha-storage = { path = "../ha-storage" }
 serde.workspace = true
 serde_json.workspace = true
-sha2.workspace = true
+ring.workspace = true
 tokio = { workspace = true, features = ["sync", "rt", "macros", "time", "net", "io-util"] }
 # Le HTTPS de la maison (étape 79).
 tokio-rustls.workspace = true
-tower-http.workspace = true
 tracing.workspace = true
 # Le relais des notifications du téléphone lit les formulaires (étape 103).
 url.workspace = true
