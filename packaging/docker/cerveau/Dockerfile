@@ -10,7 +10,7 @@
 # Construit par compose.yaml (service « cerveau »). Pas de port publié :
 # seul ha-server lui parle, avec la clé partagée.
 
-FROM busybox:1.37@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e AS fichiers
+FROM busybox:1.37@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec AS fichiers
 ADD --checksum=sha256:25d2e2cae6d3d1d5ceeaf0da02e83c45c16455e45efa1ab305395dc05227ad0d \
   https://registry.npmjs.org/@anthropic-ai/claude-code-linux-x64/-/claude-code-linux-x64-2.1.220.tgz /t/claude.tgz
 RUN mkdir /cerveau \
