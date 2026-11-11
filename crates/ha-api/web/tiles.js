@@ -262,11 +262,15 @@ function renderScenes() {
 // L'heure, chaque minute (et la salutation avec). Les panneaux du tableau
 // sont refaits en entier : ce qui suit l'heure avance (la courbe qui glisse,
 // le prochain rendez-vous), et les courbes relisent leur historique.
-setInterval(() => {
-  if ($("#dashboard-view").hidden) return;
+// Onglet caché (téléphone en veille) : rien n'est redessiné, et tout est
+// remis à l'heure dès que la page revient.
+function refreshHome() {
+  if ($("#dashboard-view").hidden || document.hidden) return;
   forgetPanels();
   renderHome();
-}, 30_000);
+}
+setInterval(refreshHome, 30_000);
+document.addEventListener("visibilitychange", refreshHome);
 
 function renderTile(state) {
   const tile = renderTileContent(state);

@@ -94,6 +94,13 @@ lto = true
 codegen-units = 1
 strip = true
 
+# Pendant le développement et les tests : pas d'informations de débogage
+# pour les bibliothèques externes (on n'y met jamais de point d'arrêt).
+# Compilation et édition des liens plus rapides, dossier `target` bien plus
+# léger ; notre propre code les garde (numéros de ligne dans les erreurs).
+[profile.dev.package."*"]
+debug = false
+
 # Argon2 est volontairement coûteux : sans optimisation (mode debug), une
 # connexion prendrait plusieurs secondes pendant le développement et les tests.
 [profile.dev.package.argon2]
