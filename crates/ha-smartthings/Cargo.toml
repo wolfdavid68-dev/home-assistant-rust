@@ -10,7 +10,6 @@ repository.workspace = true
 
 [dependencies]
 base64.workspace = true
-getrandom.workspace = true
 ha-core = { path = "../ha-core" }
 ha-storage = { path = "../ha-storage" }
 ha-tls = { path = "../ha-tls" }

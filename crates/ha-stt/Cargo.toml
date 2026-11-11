@@ -16,7 +16,6 @@ serde_json.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["fs", "io-util", "net", "process", "rt", "sync", "time"] }
 tokio-tungstenite.workspace = true
-tracing.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["fs", "io-util", "macros", "net", "process", "rt", "rt-multi-thread", "sync", "time"] }

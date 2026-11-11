@@ -340,8 +340,10 @@ function renderMusic() {
   renderMusicFavorites(state, allowed && available);
 }
 
-/** La barre de progression et les temps (chaque seconde). */
+/** La barre de progression et les temps (chaque seconde, sauf onglet caché :
+ *  le retour sur la page la remet à jour). */
 function tickMusic() {
+  if (document.hidden) return;
   const ui = musicUi;
   const state = musicPlayer();
   if (state === null) return;
