@@ -312,7 +312,9 @@ $("#journal").addEventListener("toggle", (event) => {
 
 // ---------------------------------------------------------------- Journal de bord
 // Ce qui s'est passé, en phrases, et pourquoi (GET /api/logbook).
-const logbookView = { hours: 24, entityId: "", timer: null };
+// `answers` : les « Pourquoi ? » déjà demandés (numéro de ligne → texte),
+// gardés quand le journal se redessine.
+const logbookView = { hours: 24, entityId: "", timer: null, answers: new Map() };
 const dayFormat = new Intl.DateTimeFormat("fr", { weekday: "long", day: "numeric", month: "long" });
 
 function openLogbook(entityId = "") {
@@ -368,11 +370,39 @@ async function loadLogbook() {
       el("span", {}, el("strong", { text: entry.name }), " ", entry.message),
     );
     if (typeof entry.cause === "string") item.append(el("small", { text: entry.cause }));
+    if (account.cerveau && Number.isInteger(entry.id)) item.append(...whyParts(entry.id));
     groups.at(-1).items.push(item);
   }
   list.replaceChildren(
     ...groups.map(({ day, items }) => el("section", {}, el("h3", { text: day }), el("ol", { class: "journal-list" }, ...items))),
   );
+}
+
+/** « Pourquoi ? » (étape 106) : le cerveau explique une ligne avec ce qui
+ *  s'est passé autour. Le serveur relit lui-même le journal ; la page
+ *  n'envoie que le numéro de la ligne. */
+function whyParts(id) {
+  const answer = logbookView.answers.get(id);
+  if (answer !== undefined) {
+    return [el("p", { class: "logbook-why", role: "status", text: answer ?? "Claude réfléchit…" })];
+  }
+  const button = el("button", { class: "ghost small logbook-why-ask", type: "button", text: "Pourquoi ?" });
+  button.addEventListener("click", () => askWhy(id));
+  return [button];
+}
+
+async function askWhy(id) {
+  logbookView.answers.set(id, null);
+  loadLogbook();
+  const { status, data } = await api("POST", "/api/cerveau/explique", { id }).catch(() => ({ status: 0 }));
+  if (status === 200 && typeof data.reponse === "string") {
+    logbookView.answers.set(id, data.reponse);
+  } else {
+    // Le bouton revient, pour réessayer.
+    logbookView.answers.delete(id);
+    flash(status === 429 ? "Trop de questions à Claude pour l'instant. Réessaie plus tard." : "Claude n'a pas répondu.");
+  }
+  if ($("#logbook").open) loadLogbook();
 }
 
 // Pendant que le journal est ouvert, il se met à jour (une fois par seconde au plus).

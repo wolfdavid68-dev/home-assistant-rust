@@ -149,11 +149,12 @@ use tracing_subscriber::EnvFilter;
 // Concept Rust : `pub(crate) use` remet ces fonctions à la racine du
 // programme : `crate::location()` (dans le module `cli`) marche comme avant.
 pub(crate) use settings::{
-    alexa_path, alexa_settings, automation_editor, bind_address, cerveau_settings, colis_mailbox,
-    days_from_env, derived_path, energy_path, history_days, iglou_endpoints, inputs_path, location,
-    mqtt_config, ntfy_config, parse_bind, persons_path, relay_key, relay_settings,
-    smartthings_endpoint, somfy_account, sonos_config, sonos_hosts, stt_config, teleinfo_config,
-    thermostats_path, timetree_api, tts_config, vigilance_config, weather_config, workday_settings,
+    alexa_path, alexa_settings, automation_editor, bind_address, cerveau_morning, cerveau_per_day,
+    cerveau_settings, colis_mailbox, days_from_env, derived_path, energy_path, history_days,
+    iglou_endpoints, inputs_path, location, mqtt_config, ntfy_config, parse_bind, persons_path,
+    relay_key, relay_settings, smartthings_endpoint, somfy_account, sonos_config, sonos_hosts,
+    stt_config, teleinfo_config, thermostats_path, timetree_api, tts_config, vigilance_config,
+    weather_config, workday_settings,
 };
 
 const DEFAULT_DB_PATH: &str = "ha.db";
@@ -555,11 +556,30 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
         Err(error) => warn!("relais des notifications du téléphone : {error}"),
     }
     // Le cerveau (docs/cerveau.md) : sans lui, Assist répond seul.
+    let mut morning = None;
     match cerveau_settings() {
-        Ok(Some((address, key))) => match api_state.set_cerveau(&address, &key) {
-            Ok(()) => info!("cerveau : branché (les phrases non comprises lui sont passées)"),
-            Err(error) => warn!("cerveau : {error}"),
-        },
+        Ok(Some((address, key))) => {
+            let per_day = cerveau_per_day().unwrap_or_else(|error| {
+                warn!("cerveau : {error}");
+                ha_api::CERVEAU_PER_DAY
+            });
+            match api_state.set_cerveau(&address, &key, per_day) {
+                Ok(()) => info!(
+                    "cerveau : branché (les phrases non comprises lui sont passées,                      {per_day} questions par jour au plus)"
+                ),
+                Err(error) => warn!("cerveau : {error}"),
+            }
+            match cerveau_morning() {
+                Ok(Some(at)) => {
+                    morning = Some(tokio::spawn(ha_api::morning_summary(
+                        Arc::clone(&api_state),
+                        at,
+                    )));
+                }
+                Ok(None) => {}
+                Err(error) => warn!("cerveau : {error}"),
+            }
+        }
         Ok(None) => {}
         Err(error) => warn!("cerveau : {error}"),
     }
@@ -903,6 +923,9 @@ async fn run_server() -> Result<(), Box<dyn Error>> {
     // Plus aucun changement d'état après ce point.
     if let Some(simulation) = simulation {
         simulation.abort();
+    }
+    if let Some(morning) = morning {
+        morning.abort();
     }
     if let Some(alexa) = alexa {
         alexa.stop().await;

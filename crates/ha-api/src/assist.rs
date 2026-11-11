@@ -17,6 +17,7 @@
 
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Instant;
 
 use axum::Json;
 use axum::body::Bytes;
@@ -178,6 +179,9 @@ pub(crate) async fn converse_in(
     let user_id = auth.user.id;
     if is_goodbye(text) {
         state.conversations.end(conversation_id, user_id);
+        if let Some(cerveau) = state.cerveau.get() {
+            cerveau.forget(user_id);
+        }
         return Turn {
             kind: "action_done",
             speech: goodbye_reply(text).to_owned(),
@@ -199,13 +203,17 @@ pub(crate) async fn converse_in(
             } else {
                 None
             };
-            match helped {
-                Some(reply) => ("query_answer", reply, None),
-                None => ("query_answer", capitalized(&answer), next),
+            if let Some(reply) = helped {
+                ("query_answer", reply, None)
+            } else {
+                let answer = capitalized(&answer);
+                note(state, user_id, text, &answer);
+                ("query_answer", answer, next)
             }
         }
         Ok((Understood::Orders(orders), next)) => {
             let (kind, speech) = run(state, auth, client, orders, false).await;
+            note(state, user_id, text, &speech);
             (kind, speech, next)
         }
         Err(not_understood) => {
@@ -240,7 +248,25 @@ async fn ask_cerveau(
     if !crate::cerveau::eligible(auth.user.role, text, why) {
         return None;
     }
-    cerveau.ask(&auth.user.username, text.trim()).await
+    let preferences = crate::cerveau_api::saved_preferences(state).await;
+    let text = text.trim();
+    let question = crate::cerveau::Question {
+        texte: text,
+        avant: cerveau.recent(auth.user.id, Instant::now()),
+        preferences: &preferences,
+        contexte: "",
+    };
+    let reply = cerveau.ask(&auth.user.username, &question).await.ok()?;
+    cerveau.remember(auth.user.id, text, &reply, Instant::now());
+    Some(reply)
+}
+
+/// Une réponse d'Assist entre deux phrases au cerveau : il la saura (« et
+/// pareil dans la chambre » après « allume le salon »).
+fn note(state: &ApiState, user_id: i64, text: &str, reply: &str) {
+    if let Some(cerveau) = state.cerveau.get() {
+        cerveau.note(user_id, text.trim(), reply, Instant::now());
+    }
 }
 
 /// Comprend `text` et donne les ordres. Renvoie le type de réponse

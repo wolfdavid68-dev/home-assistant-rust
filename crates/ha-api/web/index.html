@@ -256,6 +256,16 @@
         </fieldset>
         <ul id="push-devices" class="push-devices" aria-label="Mes autres appareils"></ul>
       </section>
+      <!-- Les préférences de la maison (étape 106) : lues par le cerveau avant chaque réponse. -->
+      <section id="cerveau-prefs" class="push-option" aria-labelledby="cerveau-prefs-title" hidden>
+        <h3 id="cerveau-prefs-title">Préférences de la maison</h3>
+        <p class="account">Claude les lit avant de répondre, pour toute la famille : « cosy, c'est les lampes à 30 % », « les enfants se couchent à 20 h 30 ».</p>
+        <textarea id="cerveau-prefs-text" class="cerveau-prefs-text" rows="5" maxlength="2000" aria-labelledby="cerveau-prefs-title"></textarea>
+        <p id="cerveau-prefs-status" class="account" role="status"></p>
+        <div class="push-actions">
+          <button id="cerveau-prefs-save" class="primary small" type="button">Enregistrer</button>
+        </div>
+      </section>
       <!-- La santé des intégrations (étape 45) : réservée à ceux qui voient tout. -->
       <section id="integrations" class="integrations" aria-labelledby="integrations-title" hidden>
         <h3 id="integrations-title">Intégrations</h3>

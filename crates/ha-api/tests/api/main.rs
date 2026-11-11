@@ -15,6 +15,7 @@ mod common;
 mod assist;
 mod auth;
 mod automations;
+mod cerveau;
 mod dashboard;
 mod mcp;
 mod push;

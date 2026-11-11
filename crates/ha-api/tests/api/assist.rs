@@ -599,7 +599,11 @@ async fn assist_passes_what_it_does_not_understand_to_the_cerveau() {
     furnish(&app);
     let (address, asked) = fake_cerveau().await;
     app.state
-        .set_cerveau(&address, "une-cle-de-cerveau-assez-longue-pour-essai")
+        .set_cerveau(
+            &address,
+            "une-cle-de-cerveau-assez-longue-pour-essai",
+            ha_api::CERVEAU_PER_DAY,
+        )
         .unwrap();
     let david = app.login().await;
     let guest = app.login_as("visiteur", ha_auth::Role::Guest).await;

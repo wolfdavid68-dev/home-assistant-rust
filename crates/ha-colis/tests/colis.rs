@@ -25,8 +25,25 @@ struct Fake {
     commands: Vec<String>,
 }
 
+/// Un courriel daté de `ago` avant maintenant. Les courriels « du jour »
+/// (moins d'un jour, une heure au plus ici) restent aujourd'hui même juste
+/// après minuit : leurs écarts sont alors réduits d'autant, dans le même
+/// ordre.
 fn mail(subject: &str, auth: Option<&str>, ago: jiff::Span, text: &str) -> (String, String) {
-    let date = Zoned::now().checked_sub(ago).unwrap();
+    let now = Zoned::now();
+    let date = if ago.get_days() == 0 {
+        let since_midnight = now
+            .start_of_day()
+            .unwrap()
+            .duration_until(&now)
+            .as_secs_f64();
+        let scale = (since_midnight / 3601.0).min(1.0);
+        let ago = ago.total(jiff::Unit::Second).unwrap() * scale;
+        now.checked_sub(jiff::SignedDuration::from_secs_f64(ago))
+            .unwrap()
+    } else {
+        now.checked_sub(ago).unwrap()
+    };
     let mut headers = format!(
         "From: \"Amazon.fr\" <livraison@amazon.fr>\r\nSubject: {subject}\r\nDate: {}\r\n",
         jiff::fmt::rfc2822::to_string(&date).unwrap()

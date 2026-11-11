@@ -1025,6 +1025,9 @@ body.tablet .clock {
 .journal-list small { color: var(--muted); margin-left: auto; }
 .journal-list li.failed strong,
 .journal-list li.failed span { color: var(--alert); }
+.journal-list .logbook-why-ask { margin-left: auto; }
+.journal-list .logbook-why { flex-basis: 100%; margin: 0.2rem 0 0; padding: 0.5rem 0.75rem; border-radius: 10px; background: var(--line); text-wrap: pretty; }
+.cerveau-prefs-text { width: 100%; min-height: 7.5rem; resize: vertical; }
 
 /* ---------- Automatisations ---------- */
 
