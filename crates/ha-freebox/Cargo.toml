@@ -12,11 +12,10 @@ repository.workspace = true
 ha-core = { path = "../ha-core" }
 ha-storage = { path = "../ha-storage" }
 ha-tls = { path = "../ha-tls" }
-hmac.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-sha1.workspace = true
+ring.workspace = true
 sqlx.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["sync", "rt", "macros", "time"] }
@@ -25,7 +24,6 @@ zeroize.workspace = true
 
 [dev-dependencies]
 rcgen.workspace = true
-sha2.workspace = true
 tokio = { workspace = true, features = ["sync", "rt", "macros", "time", "net", "io-util"] }
 tokio-rustls.workspace = true
 

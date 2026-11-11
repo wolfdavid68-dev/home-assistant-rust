@@ -26,8 +26,6 @@ use axum::routing::{get, post, put};
 use ha_core::Core;
 use ha_storage::{AuditRecord, Store};
 use serde_json::{Map, Value, json};
-use sha2::{Digest, Sha256};
-use tower_http::timeout::TimeoutLayer;
 
 use crate::config::Device;
 use crate::hue;
@@ -81,7 +79,8 @@ pub struct Identity {
 impl Identity {
     #[must_use]
     pub fn new(ip: Ipv4Addr, port: u16) -> Self {
-        let hash = Sha256::digest(format!("ha-alexa {ip}").as_bytes());
+        let hash = ring::digest::digest(&ring::digest::SHA256, format!("ha-alexa {ip}").as_bytes());
+        let hash = hash.as_ref();
         Self {
             ip,
             port,
@@ -208,11 +207,16 @@ pub fn router(bridge: Arc<Bridge>) -> Router {
         .fallback(not_found)
         .layer(DefaultBodyLimit::max(MAX_BODY_SIZE))
         .layer(middleware::from_fn_with_state(Arc::clone(&bridge), guard))
-        .layer(TimeoutLayer::with_status_code(
-            StatusCode::REQUEST_TIMEOUT,
-            REQUEST_TIMEOUT,
-        ))
+        .layer(middleware::from_fn_with_state(REQUEST_TIMEOUT, timeout))
         .with_state(bridge)
+}
+
+/// Coupe une requête qui dure plus de `limit` : 408, sans corps.
+async fn timeout(State(limit): State<Duration>, request: Request, next: Next) -> Response {
+    match tokio::time::timeout(limit, next.run(request)).await {
+        Ok(response) => response,
+        Err(_) => StatusCode::REQUEST_TIMEOUT.into_response(),
+    }
 }
 
 /// Refuse les adresses non autorisées, **avant** toute autre chose.
@@ -285,13 +289,17 @@ async fn create_user(
     tracing::info!("Alexa : appareil inscrit depuis {}", client.ip());
     // Un nom fixe : il ne protège rien (n'importe quel nom est accepté),
     // c'est le filtre d'adresses qui protège.
-    let hash = Sha256::digest(bridge.identity.serial.as_bytes());
-    let username = hash.iter().take(16).fold(String::new(), |mut text, byte| {
-        // Concept Rust : `write!` dans une `String` évite de créer une
-        // petite chaîne par octet. Écrire dans une `String` ne peut pas échouer.
-        let _ = write!(text, "{byte:02x}");
-        text
-    });
+    let hash = ring::digest::digest(&ring::digest::SHA256, bridge.identity.serial.as_bytes());
+    let username = hash
+        .as_ref()
+        .iter()
+        .take(16)
+        .fold(String::new(), |mut text, byte| {
+            // Concept Rust : `write!` dans une `String` évite de créer une
+            // petite chaîne par octet. Écrire dans une `String` ne peut pas échouer.
+            let _ = write!(text, "{byte:02x}");
+            text
+        });
     hue_json(&json!([{ "success": { "username": username } }]))
 }
 

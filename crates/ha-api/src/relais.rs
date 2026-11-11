@@ -26,11 +26,17 @@ use axum::http::{HeaderMap, header};
 use ha_core::{Attributes, EntityId};
 use serde::Deserialize;
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
 
 use crate::ApiState;
 use crate::error::ApiError;
 use crate::json::format_timestamp;
+
+/// L'empreinte SHA-256 de `data`.
+fn sha256(data: &[u8]) -> [u8; 32] {
+    let mut digest = [0; 32];
+    digest.copy_from_slice(ring::digest::digest(&ring::digest::SHA256, data).as_ref());
+    digest
+}
 
 /// L'entité mise à jour par les notifications de la tondeuse.
 const MOWER_ENTITY: &str = "sensor.tondeuse";
@@ -68,7 +74,7 @@ impl Relay {
             return Err("clé du relais : ni espace ni caractère de contrôle".into());
         }
         Ok(Self {
-            key_digest: Sha256::digest(key.as_bytes()).into(),
+            key_digest: sha256(key.as_bytes()),
             window: Mutex::new((Instant::now(), 0)),
         })
     }
@@ -76,7 +82,7 @@ impl Relay {
     /// On compare les empreintes : la durée de la comparaison ne dit rien
     /// de la clé.
     fn accepts(&self, key: &str) -> bool {
-        let digest: [u8; 32] = Sha256::digest(key.trim().as_bytes()).into();
+        let digest = sha256(key.trim().as_bytes());
         digest == self.key_digest
     }
 

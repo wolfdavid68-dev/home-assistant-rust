@@ -7,7 +7,7 @@
 # Construit par compose.yaml (service « ecoute »). Pas de port publié : le
 # service vit dans le réseau de ha-server, qui le joint sur 127.0.0.1:10350.
 
-FROM busybox:1.37@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e AS fichiers
+FROM busybox:1.37@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec AS fichiers
 ADD --checksum=sha256:cb835b6fd48a1d74809bf327b01515ec94c93428203c858885e9b09f3fe63227 \
   https://files.pythonhosted.org/packages/py3/s/sherpa-onnx-bin/sherpa_onnx_bin-1.13.8-py3-none-manylinux2014_x86_64.whl /t/bin.whl
 ADD --checksum=sha256:4da90acf435373d7b2ba9cc0be806e7e274d28f63f5780880b5dea6721626e36 \
@@ -28,7 +28,7 @@ RUN cd /t \
   && chmod 0755 /ecoute/sherpa-onnx-offline-websocket-server \
   && chmod 0644 /ecoute/*.onnx /ecoute/tokens.txt /ecoute/libonnxruntime.so
 
-FROM debian:bookworm-slim@sha256:7ff6ba31527b9e336162fa061746c366c4b2032f4d2cff2078bea43f78efe3f8
+FROM debian:bookworm-slim@sha256:734a72b3d6142a71993b4bc580ca01d8ca687f77a2c422d96a961d3376b179bc
 COPY --from=fichiers /ecoute /ecoute
 ENV LD_LIBRARY_PATH=/ecoute
 # Aucun privilège : un compte sans nom, sans droit d'écrire.

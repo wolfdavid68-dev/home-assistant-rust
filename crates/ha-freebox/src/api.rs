@@ -14,11 +14,10 @@
 use std::fmt::Write as _;
 use std::time::Duration;
 
-use hmac::{Hmac, Mac};
+use ring::hmac;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
-use sha1::Sha1;
 use tokio::sync::Mutex;
 use zeroize::Zeroizing;
 
@@ -204,12 +203,10 @@ pub async fn authorization_status(
 /// Réponse au défi : `HMAC-SHA1(jeton, défi)`, en hexadécimal.
 #[must_use]
 pub fn challenge_password(app_token: &str, challenge: &str) -> String {
-    let Ok(mut mac) = <Hmac<Sha1> as Mac>::new_from_slice(app_token.as_bytes()) else {
-        // HMAC accepte des clés de toute taille : ce cas n'arrive pas.
-        return String::new();
-    };
-    mac.update(challenge.as_bytes());
-    let digest = mac.finalize().into_bytes();
+    // SHA-1 « pour l'ancien usage » : c'est ce que la Freebox demande.
+    let key = hmac::Key::new(hmac::HMAC_SHA1_FOR_LEGACY_USE_ONLY, app_token.as_bytes());
+    let tag = hmac::sign(&key, challenge.as_bytes());
+    let digest = tag.as_ref();
     let mut hex = String::with_capacity(digest.len() * 2);
     for byte in digest {
         // Écrire dans une `String` ne peut pas échouer.

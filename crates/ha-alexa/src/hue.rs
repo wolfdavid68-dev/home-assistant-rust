@@ -16,7 +16,6 @@
 
 use ha_core::{Attributes, EntityId, State};
 use serde_json::{Map, Value, json};
-use sha2::{Digest, Sha256};
 
 use crate::config::Device;
 
@@ -126,7 +125,8 @@ fn reachable(entity_id: &EntityId, state: Option<&State>) -> bool {
 /// un appareil donné.
 #[must_use]
 pub fn unique_id(entity_id: &EntityId) -> String {
-    let hash = Sha256::digest(entity_id.as_str().as_bytes());
+    let hash = ring::digest::digest(&ring::digest::SHA256, entity_id.as_str().as_bytes());
+    let hash = hash.as_ref();
     format!(
         "00:17:88:01:{:02x}:{:02x}:{:02x}:{:02x}-0b",
         hash[0], hash[1], hash[2], hash[3]

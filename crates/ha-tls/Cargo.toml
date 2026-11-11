@@ -14,9 +14,9 @@ jiff.workspace = true
 # serveur. `x509-parser` relit l'autorité rangée sur le disque.
 rcgen = { workspace = true, features = ["x509-parser"] }
 reqwest.workspace = true
+ring.workspace = true
 rustls.workspace = true
 rustls-platform-verifier = "0.7.1"
-sha2.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]

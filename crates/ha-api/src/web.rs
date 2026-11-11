@@ -30,7 +30,6 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use flate2::Compression;
 use flate2::write::GzEncoder;
-use sha2::{Digest, Sha256};
 
 /// Politique de sécurité du contenu (CSP) : le navigateur ne charge **que**
 /// des ressources venant de ce serveur, et refuse tout script écrit
@@ -248,9 +247,9 @@ fn versioned_index(index: &'static [u8]) -> Vec<u8> {
 /// L'empreinte d'un contenu : le début de son SHA-256 (16 octets), en
 /// hexadécimal. Sert aussi aux images du dessin (voir `drawing.rs`).
 pub(crate) fn fingerprint(body: &[u8]) -> String {
-    let digest = Sha256::digest(body);
+    let digest = ring::digest::digest(&ring::digest::SHA256, body);
     let mut hex = String::with_capacity(32);
-    for byte in &digest[..16] {
+    for byte in &digest.as_ref()[..16] {
         let _ = write!(hex, "{byte:02x}");
     }
     hex
