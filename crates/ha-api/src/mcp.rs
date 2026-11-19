@@ -119,7 +119,8 @@ fn tools() -> Value {
             "name": "get_house_state",
             "title": "État de la maison",
             "description": "Donne l'état des appareils de la maison (lumières, volets, chauffage, \
-                capteurs, personnes…), rangés par pièce, avec leur identifiant (entity_id). \
+                capteurs, personnes…), rangés par pièce, avec leur identifiant (entity_id), \
+                puis la météo : le temps actuel et les prévisions des prochains jours. \
                 À appeler avant de commander, pour connaître les noms et les identifiants.",
             "inputSchema": {"type": "object", "properties": {}, "additionalProperties": false},
             "annotations": {"readOnlyHint": true},
@@ -307,11 +308,93 @@ fn house_state(state: &ApiState, auth: &Authenticated) -> String {
             break;
         }
     }
+    // La météo (`weather.*`) n'est pas un appareil : à part, avec ses prévisions.
+    for entity in state.core.states.all() {
+        if entity.entity_id().domain() == "weather"
+            && roles::can_see(&auth.user, entity.entity_id(), Some(&*entity))
+        {
+            out.push_str(&weather_text(
+                entity.entity_id(),
+                entity.state(),
+                entity.attributes(),
+            ));
+        }
+    }
     if out.is_empty() {
         "Aucun appareil visible pour ce compte.".into()
     } else {
         out.trim_start().to_owned()
     }
+}
+
+/// Le temps en français (conditions de Home Assistant).
+fn condition(state: &str) -> &str {
+    match state {
+        "sunny" => "ensoleillé",
+        "clear-night" => "nuit claire",
+        "partlycloudy" => "éclaircies",
+        "cloudy" => "nuageux",
+        "fog" => "brouillard",
+        "rainy" => "pluie",
+        "pouring" => "fortes pluies",
+        "snowy" => "neige",
+        "snowy-rainy" => "pluie et neige",
+        "lightning-rainy" | "lightning" => "orages",
+        "windy" | "windy-variant" => "venteux",
+        "hail" => "grêle",
+        "exceptional" => "exceptionnel",
+        "unavailable" | "unknown" => "indisponible",
+        other => other,
+    }
+}
+
+/// Une entité météo : le temps actuel, puis une ligne par jour de prévision.
+fn weather_text(entity_id: &EntityId, state: &str, attributes: &Attributes) -> String {
+    let number = |value: Option<&Value>, unit: &str| {
+        value
+            .and_then(Value::as_f64)
+            .map(|value| format!("{} {unit}", (value * 10.0).round() / 10.0))
+    };
+    let name = attributes
+        .get("friendly_name")
+        .and_then(Value::as_str)
+        .unwrap_or(entity_id.as_str());
+    let mut out = format!("\n## Météo\n- {name} ({entity_id}) : {}", condition(state));
+    let now = [
+        number(attributes.get("temperature"), "°C"),
+        number(attributes.get("apparent_temperature"), "°C ressentis"),
+        number(attributes.get("humidity"), "% d'humidité"),
+        number(attributes.get("wind_speed"), "km/h de vent"),
+        number(attributes.get("precipitation"), "mm de pluie"),
+    ];
+    for part in now.into_iter().flatten() {
+        let _ = write!(out, ", {part}");
+    }
+    out.push('\n');
+    let days = attributes.get("forecast").and_then(Value::as_array);
+    for day in days.into_iter().flatten().take(7) {
+        let Some(date) = day.get("datetime").and_then(Value::as_str) else {
+            continue;
+        };
+        let date = date.get(..10).unwrap_or(date);
+        let sky = day.get("condition").and_then(Value::as_str).map(condition);
+        let mut line = format!("  - {date} : {}", sky.unwrap_or("?"));
+        if let (Some(low), Some(high)) = (
+            number(day.get("templow"), "°C"),
+            number(day.get("temperature"), "°C"),
+        ) {
+            let _ = write!(line, ", de {low} à {high}");
+        }
+        if let Some(chance) = number(day.get("precipitation_probability"), "%") {
+            let _ = write!(line, ", pluie {chance}");
+        }
+        if let Some(rain) = number(day.get("precipitation"), "mm") {
+            let _ = write!(line, " ({rain})");
+        }
+        out.push_str(&line);
+        out.push('\n');
+    }
+    out
 }
 
 /// Le nombre de jours demandé à `get_agenda` (1 par défaut).
@@ -524,6 +607,33 @@ mod tests {
 
     fn date(text: &str) -> jiff::civil::Date {
         text.parse().unwrap()
+    }
+
+    #[test]
+    fn the_weather_gives_the_forecast_in_french() {
+        let mut attributes = Attributes::new();
+        attributes.insert("friendly_name".into(), json!("Météo"));
+        attributes.insert("temperature".into(), json!(9.4));
+        attributes.insert("humidity".into(), json!(81));
+        attributes.insert(
+            "forecast".into(),
+            json!([
+                {"datetime": "2026-11-20T00:00:00+01:00", "condition": "rainy",
+                 "temperature": 11.2, "templow": 4.0,
+                 "precipitation": 3.5, "precipitation_probability": 80},
+                {"datetime": "2026-11-21", "condition": "partlycloudy",
+                 "temperature": 8.0, "templow": 1.5},
+                {"condition": "sunny"},
+            ]),
+        );
+        let entity_id: EntityId = "weather.maison".parse().unwrap();
+        let text = weather_text(&entity_id, "cloudy", &attributes);
+        assert_eq!(
+            text,
+            "\n## Météo\n- Météo (weather.maison) : nuageux, 9.4 °C, 81 % d'humidité\n  \
+             - 2026-11-20 : pluie, de 4 °C à 11.2 °C, pluie 80 % (3.5 mm)\n  \
+             - 2026-11-21 : éclaircies, de 1.5 °C à 8 °C\n"
+        );
     }
 
     #[test]
