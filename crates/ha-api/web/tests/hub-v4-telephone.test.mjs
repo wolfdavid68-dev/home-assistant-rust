@@ -14,6 +14,7 @@ const hubV4TelHeat = run("hubV4TelHeat");
 const hubV4TelNext = run("hubV4TelNext");
 const hubV4TelRoomsPage = run("hubV4TelRoomsPage");
 const hubV4CanPosition = run("hubV4CanPosition");
+const hubV4TelOrder = run("hubV4TelOrder");
 
 describe("hubV4TelApproval", () => {
   test("un, plusieurs, aucun ordre", () => {
@@ -100,5 +101,26 @@ describe("hubV4CanPosition", () => {
     assert.equal(hubV4CanPosition(cover({ current_position: 40 })), true);
     assert.equal(hubV4CanPosition(cover({})), false);
     assert.equal(hubV4CanPosition(undefined), false);
+  });
+});
+
+describe("hubV4TelOrder", () => {
+  const rooms = ["Salon", "Cuisine", "Chambre"];
+  test("pièce par pièce, dans l'ordre des pièces, puis par nom", () => {
+    const items = [
+      { id: "cover.chambre", name: "Volet chambre", area: "Chambre" },
+      { id: "cover.baie", name: "Volet baie", area: "Salon" },
+      { id: "cover.cuisine", name: "Volet cuisine", area: "Cuisine" },
+      { id: "cover.angle", name: "Volet angle", area: "Salon" },
+    ];
+    assert.deepEqual(plain(hubV4TelOrder(items, rooms)), ["cover.angle", "cover.baie", "cover.cuisine", "cover.chambre"]);
+  });
+  test("sans pièce : à la fin", () => {
+    const items = [
+      { id: "climate.maison", name: "Chauffage", area: "" },
+      { id: "climate.salon", name: "Chauffage salon", area: "Salon" },
+    ];
+    assert.deepEqual(plain(hubV4TelOrder(items, rooms)), ["climate.salon", "climate.maison"]);
+    assert.deepEqual(plain(hubV4TelOrder([], rooms)), []);
   });
 });
