@@ -3,7 +3,7 @@
 // Sur un écran étroit, quand la v4 est choisie (Mon compte → Style de
 // l'accueil), l'accueil v4 s'affiche aussi, mais en colonne : la date et
 // l'heure, le salut, l'ordre qui attend, le dessin de la maison et ses
-// lentilles, quatre cartes (météo, chauffage, Tempo, agenda), la musique en
+// lentilles (avec ses onglets : sur la tablette, #hub-views, caché ici), quatre cartes (météo, chauffage, Tempo, agenda), la musique en
 // bas, et cinq onglets. Le dessin n'est pas recopié : c'est le même #hub-house
 // que sur la tablette, déplacé ici puis remis à sa place. Toucher une pièce,
 // une carte ou la musique ouvre les mêmes incrustations que sur la tablette,
@@ -63,6 +63,15 @@ function hubV4TelNext(events, now) {
   }
   const day = events.find((e) => e.allDay && e.startDate < midnight);
   return day ? { value: "Aujourd'hui", sub: day.summary } : null;
+}
+
+/** L'onglet où se touchent les pièces : celui affiché s'il a des zones de
+ *  pièce, sinon le premier qui en a (une vue de dehors n'en a pas), sinon null. */
+function hubV4TelRoomsPage(pages, current) {
+  const rooms = (page) => (page?.zones ?? []).some((zone) => typeof zone.area === "string" && zone.area !== "");
+  const shown = pages.find((page) => page.id === current);
+  if (rooms(shown)) return shown.id;
+  return pages.find(rooms)?.id ?? null;
 }
 
 // ---------------------------------------------------------------- Les éléments
@@ -133,6 +142,12 @@ function hubV4TelBuild() {
       class: `min-h-9 px-4 rounded-full border-0 bg-[#ffbf5e] text-[13px] font-semibold text-[#1a1530] cursor-pointer ${HUB_V4_FOCUS}`,
     }, "Voir"),
     houseSlot: el("div", { class: "relative shrink-0" }),
+    // Les onglets du dessin (vue de dehors, étages) et « Toute la maison ».
+    pages: el("nav", {
+      class: "flex gap-2 px-4 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+      "aria-label": "Vue",
+    }),
+    pagesMark: "",
     lens: el("nav", {
       class: "flex gap-2 px-4 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
       "aria-label": "Ce que montre la maison",
@@ -169,6 +184,8 @@ function hubV4TelBuild() {
     }, lens.label);
     seg.addEventListener("click", () => {
       hubV3.lens = lens.id;
+      // Une lentille montre les pièces : depuis la vue de dehors, l'étage d'abord.
+      hubV4TelRoomsShown();
       hubV3RenderLens();
       hubV4TelRenderLens();
     });
@@ -178,8 +195,11 @@ function hubV4TelBuild() {
 
   ui.weather = hubV4TelCard(ICONS.cloud, "Météo", () => hubV4Weather());
   ui.heat = hubV4TelCard(ICONS.flame, "Chauffage", () => {
-    // Le chauffage se lit sur le dessin : sa lentille.
+    // Toutes les zones de chauffage, réglables : la page « Toute la maison ».
+    if (typeof hubV4Page === "function" && hubV4Page(HUB_V4_ALL)) return;
+    // Sans elle : la lentille du chauffage, sur un étage qui a ses pièces.
     hubV3.lens = "chauffage";
+    hubV4TelRoomsShown();
     hubV3RenderLens();
     hubV4TelRenderLens();
     hubV4Tel.ui.houseSlot.scrollIntoView({ block: "center", behavior: hubV4TelMotion() });
@@ -236,14 +256,16 @@ function hubV4TelBuild() {
   },
   el("header", { class: "flex items-center gap-2.5 px-5 text-[13px] font-medium" }, ui.when, ui.live, ui.bell, ui.avatar),
   el("div", { class: "px-5" }, ui.hello, ui.summary),
-  ui.approval, ui.houseSlot, ui.lens, ui.cards, ui.music, ui.tabs);
+  ui.approval, ui.pages, ui.houseSlot, ui.lens, ui.cards, ui.music, ui.tabs);
 
   // En colonne, l'accueil défile ; seule la vue téléphone s'y affiche.
   $("#hub").classList.add("[[data-hub-tel]_&]:block!", "[[data-hub-tel]_&]:p-0!", "[[data-hub-tel]_&]:overflow-y-auto!",
     "[[data-hub-tel]_&]:overscroll-contain", "[[data-hub-tel]_&>:not(.hub-v4-tel)]:hidden!");
   // Le dessin, dans la colonne : une hauteur fixe à la place du centre de la tablette.
   $("#hub-house").classList.add("[[data-hub-tel]_&]:relative!", "[[data-hub-tel]_&]:inset-auto!",
-    "[[data-hub-tel]_&]:h-[clamp(230px,34dvh,320px)]!", "[[data-hub-tel]_&]:mx-2");
+    "[[data-hub-tel]_&]:h-[clamp(230px,34dvh,320px)]!", "[[data-hub-tel]_&]:mx-2",
+    // La carte du lave-linge, plus petite : le dessin est bas, ses pièces restent à toucher.
+    "[[data-hub-tel]_&_.machine-live]:scale-75", "[[data-hub-tel]_&_.machine-live]:origin-bottom-left");
   $("#hub").prepend(ui.root);
   hubV4Tel.ui = ui;
   return ui;
@@ -275,6 +297,45 @@ function hubV4TelSync() {
 }
 
 // ---------------------------------------------------------------- Le rendu
+
+/** Affiche un étage qui a ses pièces, si le dessin montre la maison de dehors. */
+function hubV4TelRoomsShown() {
+  const pages = house.pages ?? [];
+  const id = hubV4TelRoomsPage(pages, house.config?.id);
+  if (id === null || id === house.config?.id) return;
+  selectPage(id);
+  hubV4TelRenderPages();
+}
+
+/** Les onglets du dessin : refaits seulement s'ils changent (un bouton refait
+ *  sous le doigt perd le toucher). */
+function hubV4TelRenderPages() {
+  const ui = hubV4Tel.ui;
+  const pages = house.pages ?? [];
+  const all = typeof hubV4Page === "function";
+  const current = house.config?.id;
+  const mark = JSON.stringify([all, current, ...pages.map((page) => [page.id, page.name])]);
+  if (mark === ui.pagesMark) return;
+  ui.pagesMark = mark;
+  ui.pages.hidden = pages.length < 2 && !all;
+  const pill = (text, pressed, run) => {
+    const node = el("button", {
+      type: "button",
+      class: `shrink-0 min-h-9 px-3.5 rounded-full border-0 bg-white/8 text-[13px] font-medium text-inherit cursor-pointer `
+        + `transition-colors aria-pressed:bg-[#f4f2fb] aria-pressed:text-[#1a1530] ${HUB_V4_FOCUS}`,
+      "aria-pressed": String(pressed),
+    }, text);
+    node.addEventListener("click", run);
+    return node;
+  };
+  const tabs = pages.length < 2 ? [] : pages.map((page) => pill(page.name, page.id === current, () => {
+    if (page.id === house.config?.id) return;
+    selectPage(page.id);
+    hubV4TelRenderPages();
+  }));
+  const whole = all ? [pill("Toute la maison", false, () => hubV4Page(HUB_V4_ALL))] : [];
+  swap(ui.pages, ...tabs, ...whole);
+}
 
 function hubV4TelRenderLens() {
   const ui = hubV4Tel.ui;
@@ -381,6 +442,7 @@ function renderHubV4Tel() {
   const now = new Date();
   hubV4TelRenderTop(now);
   hubV4TelRenderHello(now);
+  hubV4TelRenderPages();
   hubV4TelRenderLens();
   hubV4TelRenderCards(now);
   hubV4TelRenderMusic();

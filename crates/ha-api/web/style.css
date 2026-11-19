@@ -6401,6 +6401,9 @@
   .aria-pressed\:bg-\[\#9ad8ff\][aria-pressed="true"] {
     background-color: #9ad8ff;
   }
+  .aria-pressed\:bg-\[\#f4f2fb\][aria-pressed="true"] {
+    background-color: #f4f2fb;
+  }
   .aria-pressed\:bg-\[\#ffbf5e\][aria-pressed="true"] {
     background-color: #ffbf5e;
   }
@@ -13406,6 +13409,15 @@
   [data-hub-tel] .\[\[data-hub-tel\]_\&\]\:p-0\! {
     padding: 0px !important;
   }
+  [data-hub-tel] .\[\[data-hub-tel\]_\&_\.machine-live\]\:origin-bottom-left .machine-live {
+    transform-origin: 0 100%;
+  }
+  [data-hub-tel] .\[\[data-hub-tel\]_\&_\.machine-live\]\:scale-75 .machine-live {
+    --tw-scale-x: 75%;
+    --tw-scale-y: 75%;
+    --tw-scale-z: 75%;
+    scale: var(--tw-scale-x) var(--tw-scale-y);
+  }
   [data-hub-tel] .\[\[data-hub-tel\]_\&\>\:not\(\.hub-v4-tel\)\]\:hidden\! > :not(.hub-v4-tel) {
     display: none !important;
   }
@@ -14395,6 +14407,21 @@
   inherits: false;
   initial-value: solid;
 }
+@property --tw-scale-x {
+  syntax: "*";
+  inherits: false;
+  initial-value: 1;
+}
+@property --tw-scale-y {
+  syntax: "*";
+  inherits: false;
+  initial-value: 1;
+}
+@property --tw-scale-z {
+  syntax: "*";
+  inherits: false;
+  initial-value: 1;
+}
 @keyframes pulse {
   50% {
     opacity: 0.5;
@@ -14494,6 +14521,9 @@
       --tw-duration: initial;
       --tw-content: "";
       --tw-outline-style: solid;
+      --tw-scale-x: 1;
+      --tw-scale-y: 1;
+      --tw-scale-z: 1;
     }
   }
 }

@@ -35,6 +35,18 @@ function hubV4On() {
   return document.documentElement.dataset.hubV4 !== undefined;
 }
 
+/**
+ * Un volet se met-il à une position (« Mi-hauteur ») ? supported_features le
+ * dit (le bit 4 de Home Assistant, ou une liste de noms) ; sans lui, un volet
+ * qui donne sa position sait aussi la prendre (ha-mqtt annonce les deux ensemble).
+ */
+function hubV4CanPosition(state) {
+  const features = state?.attributes?.supported_features;
+  if (typeof features === "number") return (features & 4) !== 0;
+  if (Array.isArray(features)) return features.includes("set_position") || features.includes("set_cover_position");
+  return typeof state?.attributes?.current_position === "number";
+}
+
 /** Ce que disent les lumières d'une pièce : « 3 sur 5 allumées ». */
 function hubV4LightsText(lit, total) {
   if (total === 1) return lit === 1 ? "Allumée" : "Éteinte";
@@ -269,6 +281,12 @@ function hubV4TelSheet() {
 /** Ferme l'incrustation ouverte, s'il y en a une. */
 function hubV4Close() {
   if (hubV4.dialog?.open) hubV4.dialog.close();
+}
+
+/** L'accueil s'éteint ou quitte la v4 : ses fenêtres (incrustation, page) se ferment. */
+function hubV4Shut() {
+  hubV4Close();
+  if (typeof hubV4PageClose === "function") hubV4PageClose(false);
 }
 
 /** Appelé après chaque rendu de l'accueil (hub-v3.js) : l'incrustation suit la maison. */
@@ -782,7 +800,7 @@ function hubV4Cover(entityId, spot = null) {
       });
       return node;
     });
-  const positioned = first.attributes.current_position != null;
+  const positioned = hubV4CanPosition(first);
   const items = [["Ouvert", () => send("open_cover")]];
   if (positioned) items.push(["Mi-hauteur", () => send("set_cover_position", { position: 50 })]);
   items.push(["Fermé", () => send("close_cover")]);
@@ -1066,3 +1084,8 @@ function hubV4Approval() {
   });
   return true;
 }
+
+// Retour au style « Actuel » : rien de la v4 ne reste ouvert.
+document.querySelector?.("#hub-style")?.addEventListener("change", () => {
+  if (!hubV4On()) hubV4Shut();
+});
