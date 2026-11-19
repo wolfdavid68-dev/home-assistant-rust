@@ -156,7 +156,7 @@ function tempColor(value) {
 function renderTitleBlock() {
   const who = account.user ? `${account.user.charAt(0).toUpperCase()}${account.user.slice(1)}` : "";
   const cell = (term, value, wide = false) =>
-    el("div", { class: wide ? "wide" : "" }, el("dt", { text: term }), el("dd", { text: value }));
+    el("div", { class: wide ? "wide [@media(min-width:520px)]:[&.tile]:[grid-column:span_2] [:not(:where(.o068600)).title-block_dl>div&]:[grid-column:span_2] [.title-block_&_dd]:text-[1.05rem] [@media(max-width:520px)]:[:not(:where(.o069000)).title-block_dl>div&]:[grid-column:auto]" : "" }, el("dt", { text: term }), el("dd", { text: value }));
   const devices = [...entities.values()].filter((s) => !["persistent_notification", "zone", "sun"].includes(domainOf(s))).length;
   $("#title-block").replaceChildren(
     el("dl", {},
@@ -205,9 +205,9 @@ function actionChip(state) {
   const status = domain === "cover" ? coverText(state) : statusText(state);
   const active = ["on", "open", "opening", "unlocked"].includes(state.state);
   const command = actionCommand(state);
-  const chip = el("button", { type: "button", class: `house-action d-${garage ? "garage" : domain}${active ? " on" : ""}` },
-    el("span", { class: "house-action-icon" }, svgIcon(icon)),
-    el("span", { class: "house-action-text" }, el("b", { text: nameOf(state) }), el("span", { text: status })));
+  const chip = el("button", { type: "button", class: `house-action flex items-center gap-[0.6rem] min-w-0 [padding:0.5rem_0.6rem] [border:0] [border-radius:calc(var(--radius)_*_0.7)] bg-card [box-shadow:var(--shadow)] text-text [font:inherit] text-left cursor-pointer [:not(:where(.o072500)).house_&]:bg-card-2 [:not(:where(.o072501)).house_&]:[box-shadow:none] [&.readonly]:[cursor:default] [&:focus-visible]:[outline:3px_solid_var(--accent)] [&:focus-visible]:[outline-offset:2px] [&.pending]:[animation:pulse_1s_ease-in-out_infinite] [@media(min-width:1000px)]:[[data-layout=board]_&]:[padding:0.4rem_0.55rem] [:not(:where(.o079500))[data-theme|=plan]_&]:[border:1px_solid_var(--ink-line)] [:not(:where(.o079501))[data-theme|=plan]_&]:[box-shadow:none] [[data-theme|=plan]_&]:[border-radius:4px] [[data-theme|=plan]_.house_&]:bg-card [@media(min-width:1000px)]:[[data-theme=maquette][data-layout=board]_&]:[padding:0.5rem_0.7rem] [@media(min-width:1000px)]:[[data-theme=maquette][data-layout=board]_&]:min-h-[56px] [:not(:where(.o085200))[data-theme=maquette]_&]:bg-card [:not(:where(.o085201))[data-theme=maquette]_&]:[box-shadow:none] [:not(:where(.o085202))[data-theme=maquette]_&]:[border:0] d-${garage ? "garage" : domain}${active ? " on" : ""}` },
+    el("span", { class: "house-action-icon flex-none w-[34px] h-[34px] [border-radius:10px] grid [place-items:center] bg-card-2 text-text-2 [:not(:where(.o073000)).house_&]:bg-card [:not(:where(.o073100))&_svg]:w-[18px] [:not(:where(.o073101))&_svg]:h-[18px] [:not(:where(.o073500)).house-action.on_&]:bg-glow [:not(:where(.o073501)).house-action.on_&]:[color:#3b2a05] [:not(:where(.o073600)).cover-row.on_&]:bg-accent-soft [:not(:where(.o073601)).cover-row.on_&]:text-accent [@media(min-width:1000px)]:[[data-layout=board]_&]:w-[30px] [@media(min-width:1000px)]:[[data-layout=board]_&]:h-[30px] [@media(min-width:1000px)]:[:not(:where(.o078300))[data-layout=board]_&_svg]:w-[16px] [@media(min-width:1000px)]:[:not(:where(.o078301))[data-layout=board]_&_svg]:h-[16px] [:not(:where(.o079700))[data-theme|=plan]_&]:[background:transparent] [[data-theme|=plan]_&]:[border:1px_solid_var(--ink-line)] [:not(:where(.o079702))[data-theme|=plan]_&]:[border-radius:4px] [:not(:where(.o079703))[data-theme|=plan]_&]:[color:var(--ink)] [@media(min-width:1000px)]:[[data-theme=maquette][data-layout=board]_&]:w-[36px] [@media(min-width:1000px)]:[[data-theme=maquette][data-layout=board]_&]:h-[36px] [@media(min-width:1000px)]:[:not(:where(.o084300))[data-theme=maquette][data-layout=board]_&_svg]:w-[20px] [@media(min-width:1000px)]:[:not(:where(.o084301))[data-theme=maquette][data-layout=board]_&_svg]:h-[20px] [:not(:where(.o085600))[data-theme=maquette]_&]:[border-radius:50%] [:not(:where(.o085601))[data-theme=maquette]_&]:[background:transparent] [:not(:where(.o085602))[data-theme=maquette]_&]:[color:#8e8e98] [[data-theme=maquette]_.house-action.on_&]:[background:rgb(255_193_7_/_0.2)] [:not(:where(.o085701))[data-theme=maquette]_.house-action.on_&]:[color:var(--m-amber)] [[data-theme=maquette]_.house-action.on_&]:[box-shadow:none] [:not(:where(.o086000))[data-theme=maquette]_.house-action.d-garage:not(.on)_&]:[background:rgb(255_255_255_/_0.1)] [:not(:where(.o086001))[data-theme=maquette]_.house-action.d-garage:not(.on)_&]:[color:#c4c4cc] [:not(:where(.o086100))[data-theme=maquette]_.house-action.d-garage.on_&]:[background:rgb(255_87_34_/_0.2)] [:not(:where(.o086101))[data-theme=maquette]_.house-action.d-garage.on_&]:[color:var(--m-deep-orange)] [:not(:where(.o086800))[data-theme=maquette]_.cover-row_&]:[background:transparent] [:not(:where(.o086801))[data-theme=maquette]_.cover-row_&]:[color:var(--m-purple)] [:not(:where(.o086900))[data-theme=maquette]_.cover-row.on_&]:[color:var(--m-cyan)]" }, svgIcon(icon)),
+    el("span", { class: "house-action-text grid min-w-0 [line-height:1.25] [:not(:where(.o073300))&_b]:font-semibold [:not(:where(.o073301))&_b]:text-[0.86rem] [:not(:where(.o073302))&_b]:overflow-hidden [:not(:where(.o073303))&_b]:text-ellipsis [:not(:where(.o073304))&_b]:whitespace-nowrap [:not(:where(.o073400))&_span]:text-[0.74rem] [:not(:where(.o073401))&_span]:text-muted [:not(:where(.o073402))&_span]:overflow-hidden [:not(:where(.o073403))&_span]:text-ellipsis [:not(:where(.o073404))&_span]:whitespace-nowrap [.chart-card_&]:flex-1" }, el("b", { text: nameOf(state) }), el("span", { text: status })));
   chip.setAttribute("aria-label", `${nameOf(state)} : ${status}`);
   if (command === null || !canControl(state)) {
     chip.disabled = true;
@@ -255,10 +255,10 @@ function coverRow(state) {
       });
       return button;
     });
-  const row = el("div", { class: `cover-row${state.state === "open" ? " on" : ""}` },
-    el("span", { class: "house-action-icon" }, svgIcon(ICONS.blinds)),
-    el("span", { class: "house-action-text" }, el("b", { text: coverTitle(state) }), el("span", { text: coverText(state) })),
-    canControl(state) ? el("span", { class: "cover-row-buttons" }, ...buttons) : "");
+  const row = el("div", { class: `flex items-center gap-[0.6rem] min-w-0 [padding:0.5rem_0.6rem] [border:0] [border-radius:calc(var(--radius)_*_0.7)] bg-card [box-shadow:var(--shadow)] text-text [font:inherit] text-left [&.pending]:[animation:pulse_1s_ease-in-out_infinite] [@media(min-width:1000px)]:[[data-layout=board]_&]:[padding:0.4rem_0.55rem] [:not(:where(.o079500))[data-theme|=plan]_&]:[border:1px_solid_var(--ink-line)] [:not(:where(.o079501))[data-theme|=plan]_&]:[box-shadow:none] [[data-theme|=plan]_&]:[border-radius:4px] [@media(min-width:1000px)]:[[data-theme=maquette][data-layout=board]_&]:[padding:0.5rem_0.7rem] [@media(min-width:1000px)]:[[data-theme=maquette][data-layout=board]_&]:min-h-[56px] [[data-theme=maquette]_&]:bg-card [:not(:where(.o085201))[data-theme=maquette]_&]:[box-shadow:none] [:not(:where(.o085202))[data-theme=maquette]_&]:[border:0] cover-row${state.state === "open" ? " on" : ""}` },
+    el("span", { class: "house-action-icon flex-none w-[34px] h-[34px] [border-radius:10px] grid [place-items:center] bg-card-2 text-text-2 [:not(:where(.o073000)).house_&]:bg-card [:not(:where(.o073100))&_svg]:w-[18px] [:not(:where(.o073101))&_svg]:h-[18px] [:not(:where(.o073500)).house-action.on_&]:bg-glow [:not(:where(.o073501)).house-action.on_&]:[color:#3b2a05] [:not(:where(.o073600)).cover-row.on_&]:bg-accent-soft [:not(:where(.o073601)).cover-row.on_&]:text-accent [@media(min-width:1000px)]:[[data-layout=board]_&]:w-[30px] [@media(min-width:1000px)]:[[data-layout=board]_&]:h-[30px] [@media(min-width:1000px)]:[:not(:where(.o078300))[data-layout=board]_&_svg]:w-[16px] [@media(min-width:1000px)]:[:not(:where(.o078301))[data-layout=board]_&_svg]:h-[16px] [:not(:where(.o079700))[data-theme|=plan]_&]:[background:transparent] [[data-theme|=plan]_&]:[border:1px_solid_var(--ink-line)] [:not(:where(.o079702))[data-theme|=plan]_&]:[border-radius:4px] [:not(:where(.o079703))[data-theme|=plan]_&]:[color:var(--ink)] [@media(min-width:1000px)]:[[data-theme=maquette][data-layout=board]_&]:w-[36px] [@media(min-width:1000px)]:[[data-theme=maquette][data-layout=board]_&]:h-[36px] [@media(min-width:1000px)]:[:not(:where(.o084300))[data-theme=maquette][data-layout=board]_&_svg]:w-[20px] [@media(min-width:1000px)]:[:not(:where(.o084301))[data-theme=maquette][data-layout=board]_&_svg]:h-[20px] [:not(:where(.o085600))[data-theme=maquette]_&]:[border-radius:50%] [:not(:where(.o085601))[data-theme=maquette]_&]:[background:transparent] [:not(:where(.o085602))[data-theme=maquette]_&]:[color:#8e8e98] [[data-theme=maquette]_.house-action.on_&]:[background:rgb(255_193_7_/_0.2)] [:not(:where(.o085701))[data-theme=maquette]_.house-action.on_&]:[color:var(--m-amber)] [[data-theme=maquette]_.house-action.on_&]:[box-shadow:none] [:not(:where(.o086000))[data-theme=maquette]_.house-action.d-garage:not(.on)_&]:[background:rgb(255_255_255_/_0.1)] [:not(:where(.o086001))[data-theme=maquette]_.house-action.d-garage:not(.on)_&]:[color:#c4c4cc] [:not(:where(.o086100))[data-theme=maquette]_.house-action.d-garage.on_&]:[background:rgb(255_87_34_/_0.2)] [:not(:where(.o086101))[data-theme=maquette]_.house-action.d-garage.on_&]:[color:var(--m-deep-orange)] [:not(:where(.o086800))[data-theme=maquette]_.cover-row_&]:[background:transparent] [:not(:where(.o086801))[data-theme=maquette]_.cover-row_&]:[color:var(--m-purple)] [:not(:where(.o086900))[data-theme=maquette]_.cover-row.on_&]:[color:var(--m-cyan)]" }, svgIcon(ICONS.blinds)),
+    el("span", { class: "house-action-text grid min-w-0 [line-height:1.25] [:not(:where(.o073300))&_b]:font-semibold [:not(:where(.o073301))&_b]:text-[0.86rem] [:not(:where(.o073302))&_b]:overflow-hidden [:not(:where(.o073303))&_b]:text-ellipsis [:not(:where(.o073304))&_b]:whitespace-nowrap [:not(:where(.o073400))&_span]:text-[0.74rem] [:not(:where(.o073401))&_span]:text-muted [:not(:where(.o073402))&_span]:overflow-hidden [:not(:where(.o073403))&_span]:text-ellipsis [:not(:where(.o073404))&_span]:whitespace-nowrap [.chart-card_&]:flex-1" }, el("b", { text: coverTitle(state) }), el("span", { text: coverText(state) })),
+    canControl(state) ? el("span", { class: "cover-row-buttons ml-[auto] flex gap-[4px] flex-none [@media(min-width:1000px)]:[:not(:where(.o078800))[data-layout=board]_&_.round_svg]:w-[16px] [@media(min-width:1000px)]:[:not(:where(.o078801))[data-layout=board]_&_.round_svg]:h-[16px] [[data-theme=maquette]_&]:gap-[8px] [[data-theme=maquette]_&_.round_svg]:[stroke-width:2.2]" }, ...buttons) : "");
   return row;
 }
 
@@ -355,29 +355,29 @@ function heatingDial(state) {
   const warming = on && current !== null && target !== null && current < target - 0.05;
   const slug = id.replace(/[^a-z0-9]/gi, "-");
 
-  const arc = svg("svg", { class: "heat-arc", viewBox: "0 0 120 112", "aria-hidden": "true" });
+  const arc = svg("svg", { class: "heat-arc absolute [inset:0] w-full h-full [overflow:visible]", viewBox: "0 0 120 112", "aria-hidden": "true" });
   const gradient = svg("linearGradient", { id: `heat-grad-${slug}`, gradientUnits: "userSpaceOnUse", x1: 16, y1: 0, x2: 104, y2: 0 });
   gradient.append(
-    svg("stop", { offset: "0", class: "heat-stop-cold" }),
-    svg("stop", { offset: "0.55", class: "heat-stop-mild" }),
-    svg("stop", { offset: "1", class: "heat-stop-hot" }));
+    svg("stop", { offset: "0", class: "heat-stop-cold [stop-color:var(--heat-cold)]" }),
+    svg("stop", { offset: "0.55", class: "heat-stop-mild [stop-color:var(--heat-mild)]" }),
+    svg("stop", { offset: "1", class: "heat-stop-hot [stop-color:var(--heat-hot)]" }));
   const defs = svg("defs");
   defs.append(gradient);
-  arc.append(defs, svg("path", { class: "heat-track", d: HEAT_ARC, pathLength: 100 }));
+  arc.append(defs, svg("path", { class: "heat-track [fill:none] [stroke:color-mix(in_srgb,_var(--muted)_24%,_transparent)] [stroke-width:7] [stroke-linecap:round] [[data-theme|=plan]_&]:[stroke:var(--ink-line)] [[data-theme|=plan]_&]:[stroke-linecap:butt] [[data-theme|=plan]_&]:[stroke-dasharray:0.5_2.6]", d: HEAT_ARC, pathLength: 100 }));
   if (on && target !== null) {
     const fill = Math.max(0.5, ratio(target) * 100);
-    arc.append(svg("path", { class: "heat-fill", d: HEAT_ARC, pathLength: 100, stroke: `url(#heat-grad-${slug})`, "stroke-dasharray": `${fill.toFixed(1)} 100` }));
+    arc.append(svg("path", { class: "heat-fill [fill:none] [stroke-width:7] [stroke-linecap:round] [.heat-dial.warming_&]:[filter:drop-shadow(0_0_3px_color-mix(in_srgb,_var(--heat-hot)_70%,_transparent))] [[data-theme|=plan]_&]:[stroke:var(--ink)] [[data-theme|=plan]_&]:[stroke-width:3.5] [[data-theme|=plan]_.heat-dial.warming_&]:[filter:none]", d: HEAT_ARC, pathLength: 100, stroke: `url(#heat-grad-${slug})`, "stroke-dasharray": `${fill.toFixed(1)} 100` }));
   }
   if (current !== null) {
     const [x, y] = heatPoint(ratio(current));
-    arc.append(svg("circle", { class: "heat-now-dot", cx: x.toFixed(2), cy: y.toFixed(2), r: 4.2 }));
+    arc.append(svg("circle", { class: "heat-now-dot [fill:var(--card)] [stroke:var(--text)] [stroke-width:2.4] [[data-theme|=plan]_&]:[stroke:var(--ink)]", cx: x.toFixed(2), cy: y.toFixed(2), r: 4.2 }));
   }
 
   const button = (direction) => {
     const next = target === null ? null : target + direction * step;
     const b = el("button", {
       type: "button",
-      class: `heat-btn ${direction > 0 ? "plus" : "minus"}`,
+      class: `heat-btn absolute [bottom:0] w-[25cqi] h-[25cqi] min-w-[30px] min-h-[30px] grid [place-items:center] p-0 [border:0] [border-radius:50%] cursor-pointer bg-card-2 text-text [:not(:where(.o166714))&]:[font:inherit] [:not(:where(.o166715))&]:text-[15cqi] [:not(:where(.o166716))&]:font-semibold [:not(:where(.o166717))&]:[line-height:1] [transition:transform_0.12s_ease,_background_0.15s_ease] [:not(:where(.o166800))&.minus]:[left:3%] [:not(:where(.o166900))&.plus]:[right:3%] [&:active:not(:disabled)]:[transform:scale(0.9)] [&:disabled]:[opacity:0.35] [&:disabled]:[cursor:default] [&:focus-visible]:[outline:2px_solid_var(--accent)] [&:focus-visible]:[outline-offset:2px] [:not(:where(.o168100))[data-theme=maquette]_&]:[background:rgb(255_255_255_/_0.07)] [:not(:where(.o168101))[data-theme=maquette]_&]:[color:#d0d0d8] [[data-theme=maquette]_&:hover:not(:disabled)]:[background:rgb(255_255_255_/_0.13)] [[data-theme|=plan]_&]:[border-radius:4px] [:not(:where(.o169101))[data-theme|=plan]_&]:[background:none] [[data-theme|=plan]_&]:[box-shadow:inset_0_0_0_1px_var(--ink-line)] [:not(:where(.o169103))[data-theme|=plan]_&]:[color:var(--ink)] ${direction > 0 ? "plus" : "minus"}`,
       "aria-label": `${direction > 0 ? "Monter" : "Baisser"} la consigne de ${nameOf(state)}`,
       text: direction > 0 ? "+" : "−",
     });
@@ -386,22 +386,22 @@ function heatingDial(state) {
     return b;
   };
 
-  const center = el("div", { class: "heat-center" },
+  const center = el("div", { class: "heat-center absolute [inset:22%_18%_30%] grid [place-content:center] [justify-items:center] text-center [line-height:1]" },
     on && target !== null ? heatNumber(target) : el("strong", { class: "heat-set off", text: state.state === "off" ? "Arrêt" : "—" }),
     current !== null
-      ? el("span", { class: "heat-now", title: "Température mesurée", text: `${number.format(current)}°` })
-      : el("span", { class: "heat-now glyph" }, svgIcon(water ? ICONS.humidity : ICONS.flame)));
+      ? el("span", { class: "heat-now inline-flex items-center gap-[2.5cqi] mt-[3cqi] [:not(:where(.o166204))&]:text-[9cqi] text-muted whitespace-nowrap [:not(:where(.o166207))&]:[font-variant-numeric:tabular-nums] [&:not(.glyph)::before]:[content:''] [&:not(.glyph)::before]:w-[4.6cqi] [&:not(.glyph)::before]:h-[4.6cqi] [&:not(.glyph)::before]:[border-radius:50%] [&:not(.glyph)::before]:[box-sizing:border-box] [&:not(.glyph)::before]:[border:1.6px_solid_var(--text)] [&:not(.glyph)::before]:bg-card [:not(:where(.o166400))&.glyph_svg]:w-[12cqi] [:not(:where(.o166401))&.glyph_svg]:h-[12cqi] [:not(:where(.o166402))&.glyph_svg]:text-heat-ink [.heat-dial.water_&.glyph_svg]:[color:var(--heat-cold)]", title: "Température mesurée", text: `${number.format(current)}°` })
+      : el("span", { class: "heat-now glyph inline-flex items-center gap-[2.5cqi] mt-[3cqi] [:not(:where(.o166204))&]:text-[9cqi] text-muted whitespace-nowrap [:not(:where(.o166207))&]:[font-variant-numeric:tabular-nums] [&:not(.glyph)::before]:[content:''] [&:not(.glyph)::before]:w-[4.6cqi] [&:not(.glyph)::before]:h-[4.6cqi] [&:not(.glyph)::before]:[border-radius:50%] [&:not(.glyph)::before]:[box-sizing:border-box] [&:not(.glyph)::before]:[border:1.6px_solid_var(--text)] [&:not(.glyph)::before]:bg-card [:not(:where(.o166400))&.glyph_svg]:w-[12cqi] [:not(:where(.o166401))&.glyph_svg]:h-[12cqi] [:not(:where(.o166402))&.glyph_svg]:text-heat-ink [.heat-dial.water_&.glyph_svg]:[color:var(--heat-cold)]" }, svgIcon(water ? ICONS.humidity : ICONS.flame)));
 
   const label = [`${nameOf(state)} : ${heatMode(state)}`];
   if (on && target !== null) label.push(`consigne ${number.format(target)} °C`);
   if (current !== null) label.push(`${number.format(current)} °C mesurés`);
 
   return el("article", {
-    class: `heat-dial${on ? " on" : ""}${warming ? " warming" : ""}${water ? " water" : ""}${heatPending.has(id) ? " pending" : ""}`,
+    class: `grid [justify-items:center] gap-[2px] min-w-0 [padding:4px_2px_7px] [border-radius:calc(var(--radius)_-_4px)] [background:color-mix(in_srgb,_var(--card-2)_55%,_transparent)] [:not(:where(.o168000))[data-theme=maquette]_&]:[background:rgb(255_255_255_/_0.035)] [:not(:where(.o168600))[data-theme|=plan]_&]:[background:none] [[data-theme|=plan]_&]:[border-radius:4px] [[data-theme|=plan]_&]:[box-shadow:inset_0_0_0_1px_var(--ink-line)] heat-dial${on ? " on" : ""}${warming ? " warming" : ""}${water ? " water" : ""}${heatPending.has(id) ? " pending" : ""}`,
     "aria-label": label.join(", "),
   },
-  el("div", { class: "heat-face" }, arc, center, button(-1), button(1)),
-  el("div", { class: "heat-label" },
+  el("div", { class: "heat-face relative w-full max-w-[150px] [aspect-ratio:120_/_112] [container-type:inline-size]" }, arc, center, button(-1), button(1)),
+  el("div", { class: "heat-label grid [justify-items:center] gap-[1px] min-w-0 max-w-[100%] [padding:0_4px] text-center [:not(:where(.o167400))&_b]:inline-flex [&_b]:items-center [&_b]:gap-[3px] [:not(:where(.o167403))&_b]:text-[0.82rem] [:not(:where(.o167500))&_b_svg]:w-[12px] [:not(:where(.o167501))&_b_svg]:h-[12px] [&_b_svg]:[color:var(--heat-hot)] [&_b_svg]:[transform-origin:50%_90%] [:not(:where(.o167504))&_b_svg]:[animation:heat-flicker_1.6s_ease-in-out_infinite] [:not(:where(.o167600))&_span]:max-w-[100%] [:not(:where(.o167601))&_span]:overflow-hidden [:not(:where(.o167602))&_span]:text-ellipsis [:not(:where(.o167603))&_span]:whitespace-nowrap [:not(:where(.o167604))&_span]:text-[0.7rem] [:not(:where(.o167605))&_span]:text-muted [.heat-dial:not(.on)_&_b]:text-muted [@media(prefers-reduced-motion:reduce)]:[:not(:where(.o167800))&_b_svg]:[animation:none]" },
     el("b", {}, warming ? svgIcon(ICONS.flame) : "", nameOf(state)),
     el("span", { text: heatMode(state) })));
 }
@@ -413,13 +413,13 @@ function heatingHead() {
   if (pump && pump.state !== "unknown" && pump.state !== "unavailable") {
     const error = finite(pump.attributes.code_erreur);
     const text = error ? `PAC · erreur ${pump.attributes.code_erreur}` : `PAC · ${pump.state}`;
-    chips.push(el("span", { class: `heat-chip${error ? " alert" : pump.state === "chauffage" ? " running" : ""}`, text }));
+    chips.push(el("span", { class: `flex-none [padding:2px_8px] [border-radius:999px] bg-card-2 text-muted [:not(:where(.o164205))&]:text-[0.7rem] [:not(:where(.o164206))&]:font-semibold whitespace-nowrap [:not(:where(.o164208))&]:[font-variant-numeric:tabular-nums] [:not(:where(.o164300))&.running]:bg-heat-soft [:not(:where(.o164301))&.running]:text-heat-ink [&.running::before]:[content:''] [&.running::before]:inline-block [&.running::before]:w-[6px] [&.running::before]:h-[6px] [&.running::before]:mr-[5px] [&.running::before]:[vertical-align:1px] [&.running::before]:[border-radius:50%] [&.running::before]:[background:currentColor] [:not(:where(.o164408))&.running::before]:[animation:heat-breathe_2.4s_ease-in-out_infinite] [:not(:where(.o164500))&.alert]:bg-alert [:not(:where(.o164501))&.alert]:[color:#fff] [@media(prefers-reduced-motion:reduce)]:[:not(:where(.o167800))&.running::before]:[animation:none] [:not(:where(.o168300))[data-theme=maquette]_&]:[background:rgb(255_255_255_/_0.06)] [[data-theme=maquette]_&.running]:[background:rgb(255_122_89_/_0.16)] [[data-theme=maquette]_&.running]:[color:#ffb59a] [[data-theme|=plan]_&]:[border-radius:3px] [:not(:where(.o169201))[data-theme|=plan]_&]:[background:none] [[data-theme|=plan]_&]:[box-shadow:inset_0_0_0_1px_var(--ink-line)] heat-chip${error ? " alert" : pump.state === "chauffage" ? " running" : ""}`, text }));
   }
   const outside = entities.get("sensor.temperature_exterieure");
   if (outside && outside.state !== "" && Number.isFinite(Number(outside.state))) {
-    chips.push(el("span", { class: "heat-chip", text: `Dehors ${number.format(Number(outside.state))}°` }));
+    chips.push(el("span", { class: "heat-chip flex-none [padding:2px_8px] [border-radius:999px] bg-card-2 text-muted [:not(:where(.o164205))&]:text-[0.7rem] [:not(:where(.o164206))&]:font-semibold whitespace-nowrap [:not(:where(.o164208))&]:[font-variant-numeric:tabular-nums] [:not(:where(.o164300))&.running]:bg-heat-soft [:not(:where(.o164301))&.running]:text-heat-ink [&.running::before]:[content:''] [&.running::before]:inline-block [&.running::before]:w-[6px] [&.running::before]:h-[6px] [&.running::before]:mr-[5px] [&.running::before]:[vertical-align:1px] [&.running::before]:[border-radius:50%] [&.running::before]:[background:currentColor] [:not(:where(.o164408))&.running::before]:[animation:heat-breathe_2.4s_ease-in-out_infinite] [:not(:where(.o164500))&.alert]:bg-alert [:not(:where(.o164501))&.alert]:[color:#fff] [@media(prefers-reduced-motion:reduce)]:[:not(:where(.o167800))&.running::before]:[animation:none] [:not(:where(.o168300))[data-theme=maquette]_&]:[background:rgb(255_255_255_/_0.06)] [[data-theme=maquette]_&.running]:[background:rgb(255_122_89_/_0.16)] [[data-theme=maquette]_&.running]:[color:#ffb59a] [[data-theme|=plan]_&]:[border-radius:3px] [:not(:where(.o169201))[data-theme|=plan]_&]:[background:none] [[data-theme|=plan]_&]:[box-shadow:inset_0_0_0_1px_var(--ink-line)]", text: `Dehors ${number.format(Number(outside.state))}°` }));
   }
-  return el("div", { class: "heat-head" }, el("h2", { text: "Chauffage" }), el("span", { class: "heat-chips" }, ...chips));
+  return el("div", { class: "heat-head flex items-center justify-between gap-[8px] [padding:0_4px] min-w-0 [:not(:where(.o164000))&_h2]:m-0 [:not(:where(.o164001))&_h2]:text-[0.7rem] [:not(:where(.o164002))&_h2]:font-bold [:not(:where(.o164003))&_h2]:[letter-spacing:0.09em] [:not(:where(.o164004))&_h2]:uppercase [:not(:where(.o164005))&_h2]:text-muted" }, el("h2", { text: "Chauffage" }), el("span", { class: "heat-chips flex gap-[5px] min-w-0 overflow-hidden" }, ...chips));
 }
 
 /** Le chauffage piloté par la box Somfy (les entités `climate`), les zones
@@ -462,7 +462,7 @@ function renderHeating(heating = heatingShown()) {
     box.replaceChildren();
     return;
   }
-  swap(box, heatingHead(), el("div", { class: "heat-dials" }, ...heating.map(heatingDial)));
+  swap(box, heatingHead(), el("div", { class: "heat-dials grid [grid-auto-flow:column] [grid-auto-columns:minmax(0,_1fr)] gap-[6px]" }, ...heating.map(heatingDial)));
 }
 
 /** Les volets (pas les portes de garage ni les portails, ni ceux déjà en
@@ -478,7 +478,7 @@ function coverStates() {
 function renderCovers(covers = coverStates()) {
   const box = $("#board-covers");
   box.hidden = covers.length === 0;
-  box.replaceChildren(el("h2", { text: "Volets" }), el("div", { class: "cover-rows" }, ...covers.map(coverRow)));
+  box.replaceChildren(el("h2", { text: "Volets" }), el("div", { class: "cover-rows grid [grid-template-columns:repeat(auto-fill,_minmax(min(100%,_320px),_1fr))] gap-[8px] [@media(min-width:1000px)]:[[data-layout=board]_&]:[grid-template-columns:repeat(auto-fill,_minmax(min(100%,_270px),_1fr))] [@media(min-width:1000px)]:[[data-layout=board]_&]:gap-[8px]" }, ...covers.map(coverRow)));
 }
 
 // ---------------------------------------------------------------- Courbes
@@ -531,7 +531,7 @@ function seriesPoints(data) {
 function sparkline(chart, points) {
   const W = 300;
   const H = 64;
-  const box = svg("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none", class: "chart-line", "aria-hidden": "true" });
+  const box = svg("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none", class: "chart-line block w-full h-[64px] [color:var(--chart)] [.room-chart-card_&]:h-[56px]", "aria-hidden": "true" });
   const state = entities.get(chart.entity_id);
   const now = Date.now();
   const all = [...points];
@@ -567,13 +567,13 @@ function renderCharts() {
     const name = chart.name ?? (state ? nameOf(state) : chart.entity_id);
     const points = seriesFor(chart);
     const period = CHART_HOURS.find(([hours]) => hours === chart.hours)?.[1] ?? "";
-    const card = el("figure", { class: `chart-card chart-${chart.color}` },
+    const card = el("figure", { class: `chart-card [&[role=button]]:cursor-pointer [&:focus-visible]:[outline:3px_solid_var(--accent)] [&:focus-visible]:[outline-offset:2px] [&_figcaption]:flex [&_figcaption]:items-center [&_figcaption]:gap-[0.6rem] [&_figcaption]:min-w-0 [[data-theme|=plan]_&]:[border:1px_solid_var(--ink-line)] [:not(:where(.o093201))[data-theme|=plan]_&]:[box-shadow:none] [[data-theme|=plan]_&]:[border-radius:4px] [[data-theme=maquette]_&]:bg-card [:not(:where(.o093401))[data-theme=maquette]_&]:[box-shadow:none] chart-${chart.color}` },
       el("figcaption", {},
-        el("span", { class: "house-action-icon chart-icon" }, svgIcon(ICONS.chart)),
-        el("span", { class: "house-action-text" }, el("b", { text: name }), el("span", { text: labelValue(state) })),
-        el("span", { class: "chart-period", text: period })),
+        el("span", { class: "house-action-icon chart-icon flex-none w-[34px] h-[34px] [border-radius:10px] grid [place-items:center] bg-card-2 text-text-2 [:not(:where(.o073000)).house_&]:bg-card [:not(:where(.o073100))&_svg]:w-[18px] [:not(:where(.o073101))&_svg]:h-[18px] [:not(:where(.o073500)).house-action.on_&]:bg-glow [:not(:where(.o073501)).house-action.on_&]:[color:#3b2a05] [:not(:where(.o073600)).cover-row.on_&]:bg-accent-soft [:not(:where(.o073601)).cover-row.on_&]:text-accent [@media(min-width:1000px)]:[[data-layout=board]_&]:w-[30px] [@media(min-width:1000px)]:[[data-layout=board]_&]:h-[30px] [@media(min-width:1000px)]:[:not(:where(.o078300))[data-layout=board]_&_svg]:w-[16px] [@media(min-width:1000px)]:[:not(:where(.o078301))[data-layout=board]_&_svg]:h-[16px] [:not(:where(.o079700))[data-theme|=plan]_&]:[background:transparent] [[data-theme|=plan]_&]:[border:1px_solid_var(--ink-line)] [:not(:where(.o079702))[data-theme|=plan]_&]:[border-radius:4px] [:not(:where(.o079703))[data-theme|=plan]_&]:[color:var(--ink)] [@media(min-width:1000px)]:[[data-theme=maquette][data-layout=board]_&]:w-[36px] [@media(min-width:1000px)]:[[data-theme=maquette][data-layout=board]_&]:h-[36px] [@media(min-width:1000px)]:[:not(:where(.o084300))[data-theme=maquette][data-layout=board]_&_svg]:w-[20px] [@media(min-width:1000px)]:[:not(:where(.o084301))[data-theme=maquette][data-layout=board]_&_svg]:h-[20px] [:not(:where(.o085600))[data-theme=maquette]_&]:[border-radius:50%] [:not(:where(.o085601))[data-theme=maquette]_&]:[background:transparent] [:not(:where(.o085602))[data-theme=maquette]_&]:[color:#8e8e98] [[data-theme=maquette]_.house-action.on_&]:[background:rgb(255_193_7_/_0.2)] [:not(:where(.o085701))[data-theme=maquette]_.house-action.on_&]:[color:var(--m-amber)] [[data-theme=maquette]_.house-action.on_&]:[box-shadow:none] [:not(:where(.o086000))[data-theme=maquette]_.house-action.d-garage:not(.on)_&]:[background:rgb(255_255_255_/_0.1)] [:not(:where(.o086001))[data-theme=maquette]_.house-action.d-garage:not(.on)_&]:[color:#c4c4cc] [:not(:where(.o086100))[data-theme=maquette]_.house-action.d-garage.on_&]:[background:rgb(255_87_34_/_0.2)] [:not(:where(.o086101))[data-theme=maquette]_.house-action.d-garage.on_&]:[color:var(--m-deep-orange)] [:not(:where(.o086800))[data-theme=maquette]_.cover-row_&]:[background:transparent] [:not(:where(.o086801))[data-theme=maquette]_.cover-row_&]:[color:var(--m-purple)] [:not(:where(.o086900))[data-theme=maquette]_.cover-row.on_&]:[color:var(--m-cyan)] [:not(:where(.o092000)).chart-card_&]:[color:var(--chart)] [:not(:where(.o092001)).chart-card_&]:[background:color-mix(in_srgb,_var(--chart)_18%,_transparent)] [:not(:where(.o093300))[data-theme|=plan]_.chart-card_&]:[background:transparent] [[data-theme|=plan]_.chart-card_&]:[border:1px_solid_var(--ink-line)] [[data-theme|=plan]_.chart-card_&]:[border-radius:4px]" }, svgIcon(ICONS.chart)),
+        el("span", { class: "house-action-text grid min-w-0 [line-height:1.25] [:not(:where(.o073300))&_b]:font-semibold [:not(:where(.o073301))&_b]:text-[0.86rem] [:not(:where(.o073302))&_b]:overflow-hidden [:not(:where(.o073303))&_b]:text-ellipsis [:not(:where(.o073304))&_b]:whitespace-nowrap [:not(:where(.o073400))&_span]:text-[0.74rem] [:not(:where(.o073401))&_span]:text-muted [:not(:where(.o073402))&_span]:overflow-hidden [:not(:where(.o073403))&_span]:text-ellipsis [:not(:where(.o073404))&_span]:whitespace-nowrap [.chart-card_&]:flex-1" }, el("b", { text: name }), el("span", { text: labelValue(state) })),
+        el("span", { class: "chart-period flex-none text-[0.7rem] text-muted", text: period })),
       points === null && account.permissions.history === false
-        ? el("p", { class: "auto-meta", text: "Historique réservé" })
+        ? el("p", { class: "auto-meta text-muted text-[0.8rem] [&.run-loop]:text-alert [:not(:where(.o089100)).drawing-part>&]:m-0 [:not(:where(.o092300)).chart-card_&]:m-0", text: "Historique réservé" })
         : sparkline(chart, points ?? []));
     if (account.permissions.history !== false && state) {
       card.tabIndex = 0;
@@ -604,9 +604,9 @@ function renderPeople(people = peopleStates()) {
     const home = state.state === "home";
     const where = home ? "Maison" : state.state === "not_home" ? "Absent" : lookup(STATUS_LABELS, state.state) ?? state.state;
     const name = nameOf(state);
-    return el("div", { class: `person-chip${home ? " home" : ""}` },
-      el("span", { class: "person-avatar", text: name.charAt(0).toUpperCase(), "aria-hidden": "true" }),
-      el("span", { class: "house-action-text" }, el("b", { text: name }), el("span", { text: where })));
+    return el("div", { class: `flex items-center gap-[0.6rem] min-w-0 min-h-[58px] [padding:8px_10px] [border-radius:calc(var(--radius)_*_0.7)] bg-card [box-shadow:var(--shadow)] [:not(:where(.o070200))[data-theme|=plan]_&]:[border:1px_solid_var(--ink-line)] [:not(:where(.o070201))[data-theme|=plan]_&]:[box-shadow:none] [[data-theme|=plan]_&]:[border-radius:4px] [@media(min-width:1000px)]:[[data-layout=board]_&]:min-h-[50px] [@media(min-width:1000px)]:[[data-layout=board]_&]:[padding:6px_10px] [@media(min-width:1000px)]:[[data-theme=maquette][data-layout=board]_&]:min-h-[58px] [@media(min-width:1000px)]:[[data-theme=maquette][data-layout=board]_&]:[padding:8px_12px] [[data-theme=maquette]_&]:bg-card [:not(:where(.o085201))[data-theme=maquette]_&]:[box-shadow:none] [:not(:where(.o085202))[data-theme=maquette]_&]:[border:0] person-chip${home ? " home" : ""}` },
+      el("span", { class: "person-avatar flex-none w-[34px] h-[34px] [border-radius:50%] grid [place-items:center] [:not(:where(.o070006))&]:font-bold [:not(:where(.o070007))&]:text-[0.9rem] bg-card-2 text-text-2 [.person-chip.home_&]:bg-accent [.person-chip.home_&]:text-accent-ink [.person-chip.home_&]:[box-shadow:0_0_0_2px_var(--card),_0_0_0_3.5px_var(--ok)] [@media(min-width:1000px)]:[[data-layout=board]_&]:w-[30px] [@media(min-width:1000px)]:[[data-layout=board]_&]:h-[30px] [@media(min-width:1000px)]:[[data-theme=maquette][data-layout=board]_&]:w-[36px] [@media(min-width:1000px)]:[[data-theme=maquette][data-layout=board]_&]:h-[36px] [[data-theme=maquette]_&]:relative [[data-theme=maquette]_&]:[background:#3a3a44] [[data-theme=maquette]_&]:[color:#ffffff] [[data-theme=maquette]_&]:[box-shadow:none] [[data-theme=maquette]_.person-chip.home_&]:[background:#3a3a44] [[data-theme=maquette]_.person-chip.home_&]:[color:#ffffff] [[data-theme=maquette]_.person-chip.home_&]:[box-shadow:none] [[data-theme=maquette]_.person-chip.home_&::after]:[content:''] [[data-theme=maquette]_.person-chip.home_&::after]:absolute [:not(:where(.o086702))[data-theme=maquette]_.person-chip.home_&::after]:[top:-3px] [:not(:where(.o086703))[data-theme=maquette]_.person-chip.home_&::after]:[right:-3px] [[data-theme=maquette]_.person-chip.home_&::after]:w-[12px] [[data-theme=maquette]_.person-chip.home_&::after]:h-[12px] [[data-theme=maquette]_.person-chip.home_&::after]:[border-radius:50%] [[data-theme=maquette]_.person-chip.home_&::after]:[background:var(--m-green)] [[data-theme=maquette]_.person-chip.home_&::after]:[box-shadow:0_0_0_2px_#15131c]", text: name.charAt(0).toUpperCase(), "aria-hidden": "true" }),
+      el("span", { class: "house-action-text grid min-w-0 [line-height:1.25] [:not(:where(.o073300))&_b]:font-semibold [:not(:where(.o073301))&_b]:text-[0.86rem] [:not(:where(.o073302))&_b]:overflow-hidden [:not(:where(.o073303))&_b]:text-ellipsis [:not(:where(.o073304))&_b]:whitespace-nowrap [:not(:where(.o073400))&_span]:text-[0.74rem] [:not(:where(.o073401))&_span]:text-muted [:not(:where(.o073402))&_span]:overflow-hidden [:not(:where(.o073403))&_span]:text-ellipsis [:not(:where(.o073404))&_span]:whitespace-nowrap [.chart-card_&]:flex-1" }, el("b", { text: name }), el("span", { text: where })));
   }));
 }
 
@@ -728,28 +728,28 @@ function machineDuration(minutes) {
 function machineCard(entityId) {
   // L'anneau de progression, et dedans le hublot : le linge tourne pendant
   // le lavage, une coche se dessine à la fin.
-  const ring = svg("svg", { class: "ml-ring", viewBox: "0 0 48 48", "aria-hidden": "true" });
-  const fill = svg("circle", { class: "ml-fill", cx: 24, cy: 24, r: 21, pathLength: 100 });
-  const clothes = svg("g", { class: "ml-clothes" });
+  const ring = svg("svg", { class: "ml-ring relative w-full h-full [overflow:visible] [fill:none] [stroke-linecap:round]", viewBox: "0 0 48 48", "aria-hidden": "true" });
+  const fill = svg("circle", { class: "ml-fill [stroke:var(--ml-color)] [stroke-width:3.5] [stroke-dasharray:100] [stroke-dashoffset:calc(100_-_var(--ml-progress))] [transform:rotate(-90deg)] [transform-origin:24px_24px] [transition:stroke-dashoffset_1s_ease,_stroke_0.4s_ease] [.ml-card.ml-unknown[data-phase=running]_&]:[animation:ml-orbit_1.8s_linear_infinite]", cx: 24, cy: 24, r: 21, pathLength: 100 });
+  const clothes = svg("g", { class: "ml-clothes [fill:var(--ml-color)] [opacity:0.9] [transform-origin:24px_24px] [.ml-card[data-phase=running]_&]:[animation:ml-spin_1.6s_linear_infinite]" });
   clothes.append(
     svg("circle", { cx: 20.5, cy: 20.5, r: 2.2 }),
     svg("circle", { cx: 28, cy: 22.5, r: 1.5 }),
     svg("circle", { cx: 23, cy: 28.5, r: 1.2 }));
-  const porthole = svg("g", { class: "ml-porthole" });
+  const porthole = svg("g", { class: "ml-porthole [transform-origin:24px_24px] [transition:opacity_0.35s_ease,_transform_0.45s_ease] [.ml-card[data-phase=done]_&]:[opacity:0] [.ml-card[data-phase=done]_&]:[transform:scale(0.6)]" });
   porthole.append(
-    svg("circle", { class: "ml-glass", cx: 24, cy: 24, r: 12 }),
-    svg("path", { class: "ml-water", d: "M14 27c2.5-1.8 5-1.8 7.5 0s5 1.8 7.5 0 4-1.6 6.5 0" }),
+    svg("circle", { class: "ml-glass [fill:color-mix(in_srgb,_var(--ml-color)_14%,_transparent)] [stroke:color-mix(in_srgb,_var(--text)_30%,_transparent)] [stroke-width:1.4]", cx: 24, cy: 24, r: 12 }),
+    svg("path", { class: "ml-water [stroke:var(--ml-color)] [stroke-width:1.6] [opacity:0.85] [.ml-card[data-phase=running]_&]:[animation:ml-slosh_1.6s_ease-in-out_infinite_alternate]", d: "M14 27c2.5-1.8 5-1.8 7.5 0s5 1.8 7.5 0 4-1.6 6.5 0" }),
     clothes);
   ring.append(
-    svg("circle", { class: "ml-track", cx: 24, cy: 24, r: 21 }),
+    svg("circle", { class: "ml-track [stroke:color-mix(in_srgb,_var(--text)_12%,_transparent)] [stroke-width:3.5]", cx: 24, cy: 24, r: 21 }),
     fill,
     porthole,
-    svg("path", { class: "ml-check", d: "M17.5 24.5l4.5 4.5 8.5-9", pathLength: 1 }));
-  const name = el("small", { class: "ml-name" });
-  const main = el("strong", { class: "ml-main" });
-  const sub = el("span", { class: "ml-sub" });
-  const node = el("button", { type: "button", class: "ml-card", tabindex: "-1", "aria-hidden": "true" },
-    el("span", { class: "ml-dial" }, ring), el("span", { class: "ml-text" }, name, main, sub));
+    svg("path", { class: "ml-check [stroke:var(--ml-color)] [stroke-width:3] [stroke-linejoin:round] [stroke-dasharray:1] [stroke-dashoffset:1] [opacity:0] [.ml-card[data-phase=done]_&]:[opacity:1] [.ml-card[data-phase=done]_&]:[stroke-dashoffset:0] [.ml-card[data-phase=done]_&]:[transition:stroke-dashoffset_0.6s_ease_0.25s,_opacity_0.2s_ease_0.2s]", d: "M17.5 24.5l4.5 4.5 8.5-9", pathLength: 1 }));
+  const name = el("small", { class: "ml-name [:not(:where(.o152600))&]:text-[0.7rem] [:not(:where(.o152601))&]:font-semibold [letter-spacing:0.06em] uppercase text-muted" });
+  const main = el("strong", { class: "ml-main [:not(:where(.o152700))&]:[font:650_1.45rem/1.1_var(--font-display)] [:not(:where(.o152701))&]:[font-variant-numeric:tabular-nums] [letter-spacing:-0.01em] [.ml-card[data-phase=done]_&]:[color:var(--ml-color)]" });
+  const sub = el("span", { class: "ml-sub text-[0.82rem] text-muted whitespace-nowrap overflow-hidden text-ellipsis [&:empty]:hidden" });
+  const node = el("button", { type: "button", class: "ml-card [&.shown]:[opacity:1] [&.shown]:[visibility:visible] [&.shown]:[transform:none] [&.shown]:[pointer-events:auto] [&.shown]:[transition-delay:0s] [&:focus-visible]:[outline:2px_solid_var(--ml-color)] [&:focus-visible]:[outline-offset:3px] [[data-theme|=plan]_&]:[border-radius:6px] [[data-theme|=plan]_&]:[border-color:color-mix(in_srgb,_var(--ink)_40%,_transparent)] [.saver-house_&]:[zoom:1.25] [@media(prefers-reduced-motion:reduce)]:[transition:opacity_0.3s_ease,_visibility_0s_linear_0.3s] [@media(prefers-reduced-motion:reduce)]:[transform:none] [@media(prefers-reduced-motion:reduce)]:[&_*]:[animation:none]!", tabindex: "-1", "aria-hidden": "true" },
+    el("span", { class: "ml-dial relative flex-none w-[56px] h-[56px] grid [place-items:center] [&::before]:[content:''] [&::before]:absolute [&::before]:[inset:4px] [&::before]:[border-radius:50%] [&::before]:[background:var(--ml-color)] [&::before]:[opacity:0.16] [&::before]:[filter:blur(8px)] [:not(:where(.o151000)).ml-card[data-phase=running]_&::before]:[animation:ml-breathe_2.8s_ease-in-out_infinite] [:not(:where(.o152400)).ml-card[data-phase=done]_&::before]:[animation:ml-ping_1.6s_ease-out_3] [@media(prefers-reduced-motion:reduce)]:[&::before]:[animation:none]!" }, ring), el("span", { class: "ml-text grid gap-[1px] min-w-0" }, name, main, sub));
   node.addEventListener("click", () => {
     if (account.permissions.history !== false && entities.has(entityId)) openHistory(entityId);
   });
@@ -791,7 +791,7 @@ function renderMachineLive() {
   const stage = $("#house-stage");
   const host = stage?.parentElement;
   if (!host) return;
-  if (!machineLive.box) machineLive.box = el("div", { class: "machine-live", role: "group", "aria-label": "Machines en marche" });
+  if (!machineLive.box) machineLive.box = el("div", { class: "machine-live absolute [z-index:4] [:not(:where(.o150202))&]:[left:clamp(10px,_2.2cqw,_22px)] [:not(:where(.o150203))&]:[bottom:clamp(10px,_2.2cqh,_22px)] flex [flex-direction:column-reverse] items-start gap-[10px] [max-width:calc(100%_-_20px)] pointer-events-none", role: "group", "aria-label": "Machines en marche" });
   const box = machineLive.box;
   if (box.parentElement !== host) host.append(box);
   clearTimeout(machineLive.timer);
@@ -927,8 +927,8 @@ function renderRoom() {
   groups.push({ title: "Autres", items: states.filter((s) => !used.has(s.entity_id)) });
   const shown = groups.filter((group) => group.items.length > 0);
   $("#room-body").replaceChildren(...(shown.length > 0
-    ? shown.map(({ title, items }) => el("section", { class: "room-group" }, el("h3", { text: title }), el("div", { class: "grid" }, ...items.map(renderTile))))
-    : [el("p", { class: "auto-meta", text: "Aucun appareil dans cette pièce." })]));
+    ? shown.map(({ title, items }) => el("section", { class: "room-group [:not(:where(.o101900))&_h3]:[margin:0_0_0.5rem] [:not(:where(.o101901))&_h3]:text-[0.78rem] [:not(:where(.o101902))&_h3]:font-semibold [&_h3]:uppercase [&_h3]:[letter-spacing:0.08em] [:not(:where(.o101905))&_h3]:text-muted [break-inside:avoid] mb-4 [[data-theme|=plan]_&_h3]:[font-family:var(--font-mono)] [[data-theme|=plan]_&_h3]:[color:var(--ink)] [@media(min-width:1000px)]:[.room-view_&]:[break-inside:auto] [@media(min-width:1000px)]:[.room-view_&_h3]:[break-after:avoid]" }, el("h3", { text: title }), el("div", { class: "grid" }, ...items.map(renderTile))))
+    : [el("p", { class: "auto-meta text-muted text-[0.8rem] [&.run-loop]:text-alert [:not(:where(.o089100)).drawing-part>&]:m-0 [:not(:where(.o092300)).chart-card_&]:m-0", text: "Aucun appareil dans cette pièce." })]));
   renderRoomHead();
 }
 
@@ -946,7 +946,7 @@ function renderRoomHead() {
   if (info.open > 0) parts.push(`${info.open} ouverture${info.open > 1 ? "s" : ""}`);
   if (info.heating) parts.push("chauffe");
   $("#room-measures").textContent = parts.join(" · ") || `${states.length} appareil${states.length > 1 ? "s" : ""}`;
-  $("#room-icon").className = `room-icon${info.alert ? " alert" : info.lights > 0 ? " lit" : info.heating ? " heat" : ""}`;
+  $("#room-icon").className = `flex-none w-[34px] h-[34px] [border-radius:10px] grid [place-items:center] bg-card-2 text-text-2 [:not(:where(.o071600))&_svg]:w-[18px] [:not(:where(.o071601))&_svg]:h-[18px] [:not(:where(.o072100))[data-layout=board]_.room.lit_&]:bg-glow [:not(:where(.o072101))[data-layout=board]_.room.lit_&]:[color:#3b2a05] [:not(:where(.o072200))[data-layout=board]_.room.alert_&]:bg-alert [:not(:where(.o072201))[data-layout=board]_.room.alert_&]:[color:#ffffff] [@media(min-width:1000px)]:[:not(:where(.o078200))[data-layout=board]_&]:w-[30px] [@media(min-width:1000px)]:[:not(:where(.o078201))[data-layout=board]_&]:h-[30px] [@media(min-width:1000px)]:[:not(:where(.o078300))[data-layout=board]_&_svg]:w-[16px] [@media(min-width:1000px)]:[:not(:where(.o078301))[data-layout=board]_&_svg]:h-[16px] [:not(:where(.o079700))[data-theme|=plan]_&]:[background:transparent] [[data-theme|=plan]_&]:[border:1px_solid_var(--ink-line)] [:not(:where(.o079702))[data-theme|=plan]_&]:[border-radius:4px] [:not(:where(.o079703))[data-theme|=plan]_&]:[color:var(--ink)] [@media(min-width:1000px)]:[[data-theme=maquette][data-layout=board]_&]:w-[36px] [@media(min-width:1000px)]:[[data-theme=maquette][data-layout=board]_&]:h-[36px] [@media(min-width:1000px)]:[:not(:where(.o084300))[data-theme=maquette][data-layout=board]_&_svg]:w-[20px] [@media(min-width:1000px)]:[:not(:where(.o084301))[data-theme=maquette][data-layout=board]_&_svg]:h-[20px] [:not(:where(.o085600))[data-theme=maquette]_&]:[border-radius:50%] [:not(:where(.o085601))[data-theme=maquette]_&]:[background:transparent] [:not(:where(.o085602))[data-theme=maquette]_&]:[color:#8e8e98] [:not(:where(.o085700))[data-theme=maquette]_.room.lit_&]:[background:rgb(255_193_7_/_0.2)] [:not(:where(.o085701))[data-theme=maquette]_.room.lit_&]:[color:var(--m-amber)] [:not(:where(.o085702))[data-theme=maquette]_.room.lit_&]:[box-shadow:none] [:not(:where(.o085800))[data-theme=maquette]_.room.heat_&]:[background:rgb(255_152_0_/_0.2)] [:not(:where(.o085801))[data-theme=maquette]_.room.heat_&]:[color:var(--m-orange)] [:not(:where(.o085900))[data-theme=maquette]_.room.alert_&]:[background:rgb(244_67_54_/_0.22)] [:not(:where(.o085901))[data-theme=maquette]_.room.alert_&]:[color:var(--m-red)] [:not(:where(.o085902))[data-theme=maquette]_.room.alert_&]:[box-shadow:none] [:not(:where(.o100300)).room-top_&]:w-[44px] [:not(:where(.o100301)).room-top_&]:h-[44px] [:not(:where(.o100302)).room-top_&]:[border-radius:14px] [:not(:where(.o100400)).room-top_&_svg]:w-[22px] [:not(:where(.o100401)).room-top_&_svg]:h-[22px] [:not(:where(.o100500))&.lit]:bg-glow [:not(:where(.o100501))&.lit]:[color:#3b2a05] [:not(:where(.o100600))&.heat]:[background:color-mix(in_srgb,_var(--series-2)_22%,_transparent)] [:not(:where(.o100601))&.heat]:[color:var(--series-2)] [:not(:where(.o100700))&.alert]:bg-alert [:not(:where(.o100701))&.alert]:[color:#ffffff] [[data-theme|=plan]_.room-top_&]:[border-radius:4px] [[data-theme|=plan]_.room-top_&]:[border:1px_solid_var(--ink-line)] [:not(:where(.o104600))[data-theme=maquette]_&.lit]:[background:rgb(255_193_7_/_0.2)] [:not(:where(.o104601))[data-theme=maquette]_&.lit]:[color:var(--m-amber)] [:not(:where(.o104700))[data-theme=maquette]_&.heat]:[background:rgb(255_152_0_/_0.2)] [:not(:where(.o104701))[data-theme=maquette]_&.heat]:[color:var(--m-orange)] [:not(:where(.o104800))[data-theme=maquette]_&.alert]:[background:rgb(244_67_54_/_0.22)] [:not(:where(.o104801))[data-theme=maquette]_&.alert]:[color:var(--m-red)] room-icon${info.alert ? " alert" : info.lights > 0 ? " lit" : info.heating ? " heat" : ""}`;
 
   // La température sur 24 heures.
   const box = $("#room-chart");
@@ -954,8 +954,8 @@ function renderRoomHead() {
   box.hidden = thermometer === null || account.permissions.history === false;
   if (!box.hidden) {
     const chart = { entity_id: thermometer.entity_id, hours: 24, color: "orange" };
-    const card = el("button", { type: "button", class: "room-chart-card chart-orange", "aria-label": `${nameOf(thermometer)} : ${labelValue(thermometer)}. Ouvrir l'historique.` },
-      el("span", { class: "room-chart-label" }, el("b", { text: "Température" }), el("span", { text: "24 heures" })),
+    const card = el("button", { type: "button", class: "room-chart-card chart-orange [&:focus-visible]:[outline:3px_solid_var(--accent)] [&:focus-visible]:[outline-offset:2px] [[data-theme|=plan]_&]:bg-card [[data-theme|=plan]_&]:[border:1px_solid_var(--ink-line)] [[data-theme|=plan]_&]:[border-radius:4px]", "aria-label": `${nameOf(thermometer)} : ${labelValue(thermometer)}. Ouvrir l'historique.` },
+      el("span", { class: "room-chart-label flex justify-between text-[0.78rem] text-muted [:not(:where(.o101400))&_b]:text-text [:not(:where(.o101401))&_b]:font-semibold" }, el("b", { text: "Température" }), el("span", { text: "24 heures" })),
       sparkline(chart, seriesFor(chart) ?? []));
     card.addEventListener("click", () => openHistory(thermometer.entity_id));
     box.replaceChildren(card);

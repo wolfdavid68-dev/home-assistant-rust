@@ -258,7 +258,7 @@ let sky = null;
 
 function skyInit() {
   const layer = () => { const canvas = document.createElement("canvas"); return { canvas, ctx: canvas.getContext("2d") }; };
-  const shown = el("canvas", { class: "g-sky", "aria-hidden": "true" });
+  const shown = el("canvas", { class: "g-sky hidden absolute [:not(:where(.o099302))&]:[left:-12px] [:not(:where(.o099303))&]:[top:-8px] [width:calc(100%_+_24px)] [height:calc(100%_+_16px)] pointer-events-none [:root:not([data-theme|=plan])_.gauge.g-outside.sky_&]:block", "aria-hidden": "true" });
   const scene = layer();
   sky = {
     shown, view: shown.getContext("2d"), scene, cut: layer(), edge: layer(), haze: layer(),
@@ -504,9 +504,9 @@ function outsideGauge(value) {
   const said = [`Dehors : ${number.format(value)} °C`];
   if (trend) said.push(trend.text);
   const classes = ["gauge", "g-outside", trend?.way, value <= 0 ? "frost" : null].filter(Boolean).join(" ");
-  const temp = el("strong", { class: "g-temp" }, number.format(value), el("sup", { text: "°" }));
+  const temp = el("strong", { class: "g-temp [&_sup]:relative [&_sup]:[top:0.14em] [&_sup]:ml-[1px] [:not(:where(.o098703))&_sup]:text-[0.5em] [&_sup]:[vertical-align:top] [:not(:where(.o098705))&_sup]:[line-height:1] [:not(:where(.o098900)).g-outside.up_&]:[animation:g-rise_3.6s_ease-in-out_infinite] [:not(:where(.o099000)).g-outside.down_&]:[animation:g-fall_3.6s_ease-in-out_infinite] [@media(prefers-reduced-motion:reduce)]:[.g-outside_&]:[animation:none]! [.gauge.g-outside_&]:relative [:root:not([data-theme|=plan])_.gauge.g-outside.sky_&]:text-[1.75rem] [:root:not([data-theme|=plan])_.gauge.g-outside.sky_&]:[background:none] [:root:not([data-theme|=plan])_.gauge.g-outside.sky_&]:[filter:none] [:root:not([data-theme|=plan])_.gauge.g-outside.sky_&]:[animation:none]" }, number.format(value), el("sup", { text: "°" }));
   const chip = el("span", { class: classes, title: said.join(", "), "aria-label": said.join(", ") },
-    el("b", { class: "g-now" }, el("small", { text: value <= 0 ? "Dehors · gel" : "Dehors" }), temp));
+    el("b", { class: "g-now grid gap-[1px] [:not(:where(.o098402))&]:font-normal [:not(:where(.o098403))&]:[line-height:1] [:not(:where(.o098500))&_small]:text-[0.56rem] [:not(:where(.o098501))&_small]:font-bold [:not(:where(.o098502))&_small]:[letter-spacing:0.12em] [:not(:where(.o098503))&_small]:uppercase [:not(:where(.o098504))&_small]:text-muted" }, el("small", { text: value <= 0 ? "Dehors · gel" : "Dehors" }), temp));
   chip.style.setProperty("--temp", tempColor(value));
   skyMount(chip, temp, value);
   if (history) {

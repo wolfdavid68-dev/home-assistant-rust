@@ -431,7 +431,7 @@ function renderCanvas() {
     const tone = outputs(from).length > 1 ? ` tone-${portTone(wire.port)}` : "";
     const path = svg("path", { d, class: `wire${tone}${index === canvas.selectedWire ? " selected" : ""}${reached ? " reached" : ""}` });
     // Une zone plus large, invisible, pour viser le fil au doigt.
-    const hit = svg("path", { d, class: "wire-hit", "data-wire": String(index) });
+    const hit = svg("path", { d, class: "wire-hit [fill:none] [stroke:transparent] [stroke-width:18] [pointer-events:stroke] cursor-pointer", "data-wire": String(index) });
     wires.append(path, hit);
   });
   const lines = $("#canvas-wires");
@@ -457,22 +457,22 @@ function renderCanvas() {
     Object.assign(box.style, { left: `${node.x}px`, top: `${node.y}px`, width: `${NODE_W}px`, height: `${nodeHeight(node)}px` });
     const body = el(
       "button",
-      { type: "button", class: "node-body", "data-node": node.key, "aria-label": `${label} : ${kind}. ${nodeText(node)}` },
-      el("span", { class: "node-icon" }, svgIcon(nodeIcon(node))),
+      { type: "button", class: "node-body w-full h-full grid [grid-template-columns:44px_minmax(0,_1fr)] items-center gap-[0.8rem] [padding:0.75rem_1.4rem_0.75rem_0.95rem] [border:0] [border-radius:18px] [background:none] [color:inherit] [font:inherit] text-left [cursor:grab] [&:active]:[cursor:grabbing] [&:focus-visible]:[outline:3px_solid_var(--accent)] [&:focus-visible]:[outline-offset:3px] [.node-ports_&]:pr-24", "data-node": node.key, "aria-label": `${label} : ${kind}. ${nodeText(node)}` },
+      el("span", { class: "node-icon flex-none w-[44px] h-[44px] [border-radius:13px] grid [place-items:center] [color:#fff] [background:linear-gradient(140deg,_color-mix(in_srgb,_var(--cat)_88%,_#fff),_color-mix(in_srgb,_var(--cat)_72%,_#000))] [box-shadow:inset_0_1px_0_rgb(255_255_255_/_0.28),_0_4px_10px_-4px_color-mix(in_srgb,_var(--cat)_70%,_transparent)] [:not(:where(.o052500))&_svg]:w-[21px] [:not(:where(.o052501))&_svg]:h-[21px] [:not(:where(.o052502))&_svg]:[stroke-width:2.2] [.canvas-menu-item_&]:w-[30px] [.canvas-menu-item_&]:h-[30px] [.canvas-menu-item_&]:[border-radius:9px] [:not(:where(.o058700)).canvas-menu-item_&_svg]:w-[16px] [:not(:where(.o058701)).canvas-menu-item_&_svg]:h-[16px]" }, svgIcon(nodeIcon(node))),
       el(
         "span",
-        { class: "node-titles" },
+        { class: "node-titles grid gap-[0.2rem] min-w-0" },
         // La famille (Quand, Si, Alors) est dite par la couleur, l'icône et
         // le nom pour les lecteurs d'écran : ici, la sorte seulement.
-        el("span", { class: "node-kind", text: kind }),
-        el("span", { class: `node-text${nodeText(node) ? "" : " empty"}`, text: nodeText(node) || "À compléter" }),
+        el("span", { class: "node-kind [:not(:where(.o052700))&]:text-[0.66rem] [:not(:where(.o052701))&]:font-bold [letter-spacing:0.05em] uppercase text-muted whitespace-nowrap overflow-hidden text-ellipsis", text: kind }),
+        el("span", { class: `[:not(:where(.o052800))&]:text-[0.93rem] [:not(:where(.o052801))&]:font-semibold [:not(:where(.o052802))&]:[line-height:1.28] text-text overflow-hidden [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] [overflow-wrap:anywhere] [:not(:where(.o052900))&.empty]:font-medium [:not(:where(.o052901))&.empty]:[font-style:italic] [&.empty]:text-muted node-text${nodeText(node) ? "" : " empty"}`, text: nodeText(node) || "À compléter" }),
       ),
     );
     box.append(body);
     if (status) {
       // Le résultat est écrit (et pas seulement donné par la couleur).
       const mark = status.status === "done" ? "✓" : "✕";
-      box.append(el("span", { class: "node-run", text: `${mark} ${status.detail || (status.status === "done" ? "fait" : "arrêté")}` }));
+      box.append(el("span", { class: "node-run absolute [:not(:where(.o054601))&]:[left:16px] [:not(:where(.o054602))&]:[bottom:-12px] [max-width:calc(100%_-_32px)] [padding:0.12rem_0.6rem] [border-radius:999px] [:not(:where(.o054606))&]:text-[0.7rem] [:not(:where(.o054607))&]:font-bold whitespace-nowrap overflow-hidden text-ellipsis bg-ok [color:#fff] [box-shadow:0_4px_10px_-4px_color-mix(in_srgb,_var(--ok)_60%,_transparent)] [:not(:where(.o054700)).run-failed_&]:bg-alert [:not(:where(.o054701)).run-failed_&]:[box-shadow:0_4px_10px_-4px_color-mix(in_srgb,_var(--alert)_60%,_transparent)] [:not(:where(.o054700)).run-stopped_&]:bg-alert [:not(:where(.o054701)).run-stopped_&]:[box-shadow:0_4px_10px_-4px_color-mix(in_srgb,_var(--alert)_60%,_transparent)]", text: `${mark} ${status.detail || (status.status === "done" ? "fait" : "arrêté")}` }));
     }
     if (hasInput(node)) box.append(el("span", { class: "port port-in", "data-in": node.key, title: "Entrée" }));
     const list = outputs(node);
@@ -490,7 +490,7 @@ function renderCanvas() {
       }
       // « + » au bout d'une sortie libre : ajouter un bloc relié, comme n8n.
       if (!canvas.readOnly && !wireFrom(node.key, port)) {
-        const add = el("button", { type: "button", class: "port-add", "data-add": node.key, "data-port": port, "aria-label": `Ajouter un bloc après « ${kind} »${text ? ` (${text})` : ""}`, text: "+" });
+        const add = el("button", { type: "button", class: "port-add absolute [left:calc(100%_+_22px)] [transform:translateY(-50%)] w-[28px] h-[28px] p-0 [border:1.5px_dashed_color-mix(in_srgb,_var(--muted)_80%,_transparent)] [border-radius:50%] bg-card text-muted [font:700_1rem/1_var(--font)] cursor-pointer [:not(:where(.o054012))&]:[transition:background_0.15s_ease,_color_0.15s_ease,_border-color_0.15s_ease,_transform_0.15s_ease] [&::before]:[content:''] [&::before]:absolute [:not(:where(.o054102))&::before]:[right:calc(100%_+_1px)] [:not(:where(.o054103))&::before]:[top:50%] [&::before]:w-[15px] [&::before]:[border-top:2px_dashed_color-mix(in_srgb,_var(--muted)_60%,_transparent)] [:not(:where(.o054200))&:hover]:[border-style:solid] [:not(:where(.o054201))&:hover]:border-accent [:not(:where(.o054202))&:hover]:bg-accent [:not(:where(.o054203))&:hover]:text-accent-ink [:not(:where(.o054204))&:hover]:[transform:translateY(-50%)_scale(1.08)] [:not(:where(.o054200))&:focus-visible]:[border-style:solid] [:not(:where(.o054201))&:focus-visible]:border-accent [:not(:where(.o054202))&:focus-visible]:bg-accent [:not(:where(.o054203))&:focus-visible]:text-accent-ink [:not(:where(.o054204))&:focus-visible]:[transform:translateY(-50%)_scale(1.08)] [@media(prefers-reduced-motion:reduce)]:[:not(:where(.o059400))&]:[transition:none]", "data-add": node.key, "data-port": port, "aria-label": `Ajouter un bloc après « ${kind} »${text ? ` (${text})` : ""}`, text: "+" });
         add.style.top = `${top}px`;
         box.append(add);
       }
@@ -501,7 +501,7 @@ function renderCanvas() {
   canvas.fresh.clear();
   $("#canvas-empty").hidden = canvas.nodes.size > 0 || canvas.readOnly;
   applyView();
-  $("#canvas-errors").replaceChildren(...errors.map((error) => el("li", {}, el("span", { class: "canvas-error-mark", "aria-hidden": "true", text: "!" }), error)));
+  $("#canvas-errors").replaceChildren(...errors.map((error) => el("li", {}, el("span", { class: "canvas-error-mark flex-none w-[18px] h-[18px] [border-radius:50%] grid [place-items:center] bg-alert [color:#fff] [:not(:where(.o056608))&]:text-[0.72rem] [:not(:where(.o056609))&]:font-extrabold", "aria-hidden": "true", text: "!" }), error)));
   $("#canvas-wire-delete").hidden = canvas.selectedWire === null || canvas.readOnly;
   $("#canvas-add").hidden = canvas.readOnly;
   $("#canvas-tidy").hidden = canvas.readOnly;
@@ -523,23 +523,23 @@ function openPanel(key) {
   const [label, kind] = nodeTitle(node);
   const refresh = () => openPanel(key);
   const fields = panelFields(node, refresh);
-  const box = el("div", { class: "auto-fields" }, ...fields);
+  const box = el("div", { class: "auto-fields grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_170px),_1fr))] gap-[0.6rem] [&_input:not([type=checkbox])]:bg-card [&_input:not([type=checkbox])]:min-w-0 [&_input:not([type=checkbox])]:w-full [&_select]:bg-card [:not(:where(.o036401))&_select]:min-w-0 [:not(:where(.o036402))&_select]:w-full [:not(:where(.o036600))&>label]:[grid-template-rows:1fr_auto] [.canvas-panel>&]:[grid-template-columns:minmax(0,_1fr)] [.canvas-panel>&]:[align-content:start] [.canvas-panel>&]:p-[0.9rem]" }, ...fields);
   const remove = el("button", { type: "button", class: "ghost danger small", text: "Supprimer le bloc" });
   remove.addEventListener("click", () => removeNode(key));
-  const close = el("button", { type: "button", class: "canvas-panel-close", "aria-label": "Fermer les réglages du bloc", text: "×" });
+  const close = el("button", { type: "button", class: "canvas-panel-close flex-none w-[34px] h-[34px] [border:1px_solid_var(--line)] [border-radius:50%] bg-card text-text [font:400_1.3rem/1_var(--font)] cursor-pointer [&:hover]:bg-card-2", "aria-label": "Fermer les réglages du bloc", text: "×" });
   close.addEventListener("click", () => openPanel(null));
-  panel.className = `canvas-panel cat-${nodeCategory(node)}`;
+  panel.className = `canvas-panel absolute [z-index:3] [:not(:where(.o057202))&]:[top:12px] [:not(:where(.o057203))&]:[right:12px] [:not(:where(.o057204))&]:[bottom:12px] [:not(:where(.o057205))&]:[width:min(400px,_calc(100%_-_24px))] overflow-auto grid [grid-template-rows:auto_1fr_auto] [border:1px_solid_var(--line)] [border-radius:20px] bg-card [box-shadow:var(--shadow-float)] [user-select:text] [-webkit-user-select:text] [touch-action:auto] [:not(:where(.o057216))&]:[animation:panel-in_0.24s_cubic-bezier(0.2,_0.8,_0.2,_1)] [@media(prefers-reduced-motion:reduce)]:[:not(:where(.o059200))&]:[animation:none] [@media(max-width:700px)]:[:not(:where(.o059700))&]:[top:auto] [@media(max-width:700px)]:[:not(:where(.o059701))&]:[left:8px] [@media(max-width:700px)]:[:not(:where(.o059702))&]:[right:8px] [@media(max-width:700px)]:[:not(:where(.o059703))&]:[bottom:8px] [@media(max-width:700px)]:[:not(:where(.o059704))&]:w-[auto] [@media(max-width:700px)]:max-h-[56%] [@media(max-width:700px)]:[:not(:where(.o059706))&]:[animation-name:sheet-in] [[data-theme=maquette]_&]:[background:#1c1b22] cat-${nodeCategory(node)}`;
   panel.replaceChildren(
     el(
       "div",
-      { class: "canvas-panel-head" },
-      el("span", { class: "node-icon" }, svgIcon(nodeIcon(node))),
-      el("span", { class: "canvas-panel-titles" }, el("small", { text: label }), el("strong", { text: kind })),
+      { class: "canvas-panel-head sticky [top:0] [z-index:1] flex items-center gap-3 [padding:0.9rem_0.9rem_0.8rem] [border-bottom:1px_solid_var(--line)] [background:linear-gradient(180deg,_color-mix(in_srgb,_var(--cat)_8%,_var(--card)),_var(--card))]" },
+      el("span", { class: "node-icon flex-none w-[44px] h-[44px] [border-radius:13px] grid [place-items:center] [color:#fff] [background:linear-gradient(140deg,_color-mix(in_srgb,_var(--cat)_88%,_#fff),_color-mix(in_srgb,_var(--cat)_72%,_#000))] [box-shadow:inset_0_1px_0_rgb(255_255_255_/_0.28),_0_4px_10px_-4px_color-mix(in_srgb,_var(--cat)_70%,_transparent)] [:not(:where(.o052500))&_svg]:w-[21px] [:not(:where(.o052501))&_svg]:h-[21px] [:not(:where(.o052502))&_svg]:[stroke-width:2.2] [.canvas-menu-item_&]:w-[30px] [.canvas-menu-item_&]:h-[30px] [.canvas-menu-item_&]:[border-radius:9px] [:not(:where(.o058700)).canvas-menu-item_&_svg]:w-[16px] [:not(:where(.o058701)).canvas-menu-item_&_svg]:h-[16px]" }, svgIcon(nodeIcon(node))),
+      el("span", { class: "canvas-panel-titles grid min-w-0 mr-[auto] [:not(:where(.o057500))&_small]:text-[0.68rem] [:not(:where(.o057501))&_small]:font-bold [:not(:where(.o057502))&_small]:[letter-spacing:0.05em] [:not(:where(.o057503))&_small]:uppercase [:not(:where(.o057504))&_small]:text-muted [:not(:where(.o057600))&_strong]:[font-family:var(--font-display)] [:not(:where(.o057601))&_strong]:text-[1.05rem] [:not(:where(.o057602))&_strong]:[line-height:1.25]" }, el("small", { text: label }), el("strong", { text: kind })),
       close,
     ),
     box,
   );
-  if (!canvas.readOnly) panel.append(el("div", { class: "canvas-panel-foot" }, remove));
+  if (!canvas.readOnly) panel.append(el("div", { class: "canvas-panel-foot sticky [bottom:0] [padding:0.75rem_0.9rem] [border-top:1px_solid_var(--line)] bg-card" }, remove));
   else for (const control of box.querySelectorAll("input, select, button, textarea")) control.disabled = true;
   panel.hidden = false;
   renderCanvas();
@@ -640,7 +640,7 @@ function panelFields(node, refresh) {
       const how = mode === "count"
         ? numberField("Nombre de fois (1 à 100)", r, "count")
         : nested(itemsBlock(mode === "while" ? "Tant que…" : "Jusqu'à ce que…", "Toutes doivent être vraies.", r, mode, CONDITION_KINDS, "condition", conditionFields));
-      return [kind, how, el("p", { class: "journal-hint", text: "Les actions à répéter partent de la sortie « à répéter »." })];
+      return [kind, how, el("p", { class: "journal-hint text-muted text-[0.85rem] [margin:0_0_0.75rem] [:not(:where(.o035900)).auto-block_&]:m-0 [.auto-fields_&]:[grid-column:1_/_-1] [:not(:where(.o036501)).auto-fields_&]:m-0 [.auto-fields_&]:[overflow-wrap:anywhere]", text: "Les actions à répéter partent de la sortie « à répéter »." })];
     }
     default:
       return actionFields(a, refresh);
@@ -669,9 +669,9 @@ function openAddMenu(screenX, screenY, at, from = null) {
   if (!fromNode) groups.push(["Quand… (déclencheur)", "trigger", TRIGGER_KINDS]);
   groups.push(["Si… (condition)", "condition", CONDITION_KINDS]);
   groups.push(["Alors… (action)", "action", ACTION_KINDS]);
-  const list = el("div", { class: "canvas-menu-list", role: "menu" });
-  const none = el("p", { class: "canvas-menu-none", text: "Aucun bloc ne correspond.", hidden: "" });
-  const search = el("input", { type: "search", class: "canvas-menu-search", placeholder: "Chercher un bloc…", "aria-label": "Chercher un bloc", autocomplete: "off" });
+  const list = el("div", { class: "canvas-menu-list grid gap-[1px]", role: "menu" });
+  const none = el("p", { class: "canvas-menu-none [margin:0.4rem_0.5rem] text-muted text-[0.9rem]", text: "Aucun bloc ne correspond.", hidden: "" });
+  const search = el("input", { type: "search", class: "canvas-menu-search w-full", placeholder: "Chercher un bloc…", "aria-label": "Chercher un bloc", autocomplete: "off" });
   search.addEventListener("input", () => {
     const words = search.value.trim().toLowerCase();
     for (const item of list.querySelectorAll(".canvas-menu-item")) item.hidden = words !== "" && !item.textContent.toLowerCase().includes(words);
@@ -704,8 +704,8 @@ function openAddMenu(screenX, screenY, at, from = null) {
       const sample = { kind, item: make() };
       const item = el(
         "button",
-        { type: "button", role: "menuitem", class: `canvas-menu-item cat-${nodeCategory(sample)}` },
-        el("span", { class: "node-icon" }, svgIcon(nodeIcon(sample))),
+        { type: "button", role: "menuitem", class: `canvas-menu-item flex items-center gap-[0.65rem] w-full [padding:0.4rem_0.5rem] [border:0] [border-radius:10px] [background:none] [color:inherit] [font:inherit] text-left cursor-pointer [:not(:where(.o058800))&:hover]:bg-card-2 [:not(:where(.o058801))&:hover]:[outline:none] [:not(:where(.o058800))&:focus-visible]:bg-card-2 [:not(:where(.o058801))&:focus-visible]:[outline:none] cat-${nodeCategory(sample)}` },
+        el("span", { class: "node-icon flex-none w-[44px] h-[44px] [border-radius:13px] grid [place-items:center] [color:#fff] [background:linear-gradient(140deg,_color-mix(in_srgb,_var(--cat)_88%,_#fff),_color-mix(in_srgb,_var(--cat)_72%,_#000))] [box-shadow:inset_0_1px_0_rgb(255_255_255_/_0.28),_0_4px_10px_-4px_color-mix(in_srgb,_var(--cat)_70%,_transparent)] [:not(:where(.o052500))&_svg]:w-[21px] [:not(:where(.o052501))&_svg]:h-[21px] [:not(:where(.o052502))&_svg]:[stroke-width:2.2] [.canvas-menu-item_&]:w-[30px] [.canvas-menu-item_&]:h-[30px] [.canvas-menu-item_&]:[border-radius:9px] [:not(:where(.o058700)).canvas-menu-item_&_svg]:w-[16px] [:not(:where(.o058701)).canvas-menu-item_&_svg]:h-[16px]" }, svgIcon(nodeIcon(sample))),
         el("span", { text }),
       );
       item.addEventListener("click", () => {
@@ -844,10 +844,10 @@ function renderMinimap() {
   const at = (x, y) => [ox + (x - all.minX) * k, oy + (y - all.minY) * k];
   const shapes = [...canvas.nodes.values()].map((node) => {
     const [x, y] = at(node.x, node.y);
-    return svg("rect", { x, y, width: Math.max(3, NODE_W * k), height: Math.max(2, nodeHeight(node) * k), rx: 2, class: `mm-node cat-${nodeCategory(node)}` });
+    return svg("rect", { x, y, width: Math.max(3, NODE_W * k), height: Math.max(2, nodeHeight(node) * k), rx: 2, class: `mm-node [fill:var(--cat)] [opacity:0.85] cat-${nodeCategory(node)}` });
   });
   const [vx, vy] = at(view.minX, view.minY);
-  shapes.push(svg("rect", { x: vx, y: vy, width: (view.maxX - view.minX) * k, height: (view.maxY - view.minY) * k, rx: 4, class: "mm-view" }));
+  shapes.push(svg("rect", { x: vx, y: vy, width: (view.maxX - view.minX) * k, height: (view.maxY - view.minY) * k, rx: 4, class: "mm-view [fill:color-mix(in_srgb,_var(--accent)_10%,_transparent)] [stroke:var(--accent)] [stroke-width:1.5]" }));
   map.replaceChildren(...shapes);
 }
 

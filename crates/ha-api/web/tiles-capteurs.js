@@ -18,7 +18,7 @@ function inputBooleanTile(state) {
   const on = state.state === "on";
   const toggle = el(
     "button",
-    { class: "tile-toggle", type: "button", "aria-pressed": String(on) },
+    { class: "tile-toggle [:where(&)]:[all:unset] block cursor-pointer [border-radius:14px] [&:focus-visible]:[outline:3px_solid_var(--accent)] [&:focus-visible]:[outline-offset:4px] [.tile.readonly_&]:[cursor:default]", type: "button", "aria-pressed": String(on) },
     tileHead(state, ICONS.toggle, on ? "Activé" : state.state === "off" ? "Désactivé" : statusText(state), knob()),
   );
   toggle.addEventListener("click", () => inputCommand(state, "toggle"));
@@ -44,7 +44,7 @@ function inputNumberTile(state) {
         : inputCommand(state, service)));
       return button;
     };
-    children.push(el("div", { class: "setpoint" }, adjust("decrement", "−", "Diminuer"), shown, adjust("increment", "+", "Augmenter")));
+    children.push(el("div", { class: "setpoint flex items-center justify-between gap-[4px] [.tile.readonly_&]:justify-center" }, adjust("decrement", "−", "Diminuer"), shown, adjust("increment", "+", "Augmenter")));
   } else {
     const slider = el("input", {
       type: "range", min: String(min), max: String(max), step: String(step),
@@ -64,7 +64,7 @@ function inputNumberTile(state) {
 function inputSelectTile(state) {
   const options = (Array.isArray(state.attributes.options) ? state.attributes.options : [])
     .filter((option) => typeof option === "string");
-  const select = el("select", { class: "tile-select", "aria-label": `Choix pour ${nameOf(state)}` });
+  const select = el("select", { class: "tile-select w-full max-w-[100%]", "aria-label": `Choix pour ${nameOf(state)}` });
   for (const option of options) select.append(el("option", { value: option, text: option }));
   select.value = state.state;
   select.addEventListener("change", () => inputCommand(state, "select_option", { option: select.value }));
@@ -80,7 +80,7 @@ function inputButtonTile(state) {
   const pressed = !Number.isNaN(Date.parse(state.state));
   const head = tileHead(state, ICONS.button, pressed ? "" : "Jamais appuyé");
   if (pressed) markAgo(head.querySelector(".sub"), state.state, "Appuyé il y a ");
-  const button = el("button", { type: "button", class: "action-button", text: "Appuyer" });
+  const button = el("button", { type: "button", class: "action-button [justify-self:start] min-h-[40px] [padding:0.45rem_1.1rem] [border-radius:999px] [border:0] bg-card-2 font-semibold [&:active]:[transform:scale(0.97)] [[data-theme|=plan]_&]:[border:1.25px_solid_var(--ink)] [[data-theme|=plan]_&]:[box-shadow:none] [[data-theme|=plan]_&]:[border-radius:var(--radius)]", text: "Appuyer" });
   button.addEventListener("click", () => inputCommand(state, "press"));
   return el("div", { id: tileId(state.entity_id), class: "tile action" }, head, button);
 }
@@ -99,12 +99,12 @@ function alertTile(state) {
     if (!Number.isNaN(next)) parts.push(`${sent === 0 ? "premier message" : "prochain"} à ${hourMinute.format(new Date(next))}`);
     subtitle = parts.join(" · ");
     if (a.acquittable !== false) {
-      button = el("button", { type: "button", class: "action-button", text: "Compris" });
+      button = el("button", { type: "button", class: "action-button [justify-self:start] min-h-[40px] [padding:0.45rem_1.1rem] [border-radius:999px] [border:0] bg-card-2 font-semibold [&:active]:[transform:scale(0.97)] [[data-theme|=plan]_&]:[border:1.25px_solid_var(--ink)] [[data-theme|=plan]_&]:[box-shadow:none] [[data-theme|=plan]_&]:[border-radius:var(--radius)]", text: "Compris" });
       button.addEventListener("click", () => inputCommand(state, "turn_off"));
     }
   } else if (state.state === "off") {
     subtitle = typeof a.compris_par === "string" ? `Compris par ${a.compris_par}` : "Compris";
-    button = el("button", { type: "button", class: "action-button", text: "Reprendre" });
+    button = el("button", { type: "button", class: "action-button [justify-self:start] min-h-[40px] [padding:0.45rem_1.1rem] [border-radius:999px] [border:0] bg-card-2 font-semibold [&:active]:[transform:scale(0.97)] [[data-theme|=plan]_&]:[border:1.25px_solid_var(--ink)] [[data-theme|=plan]_&]:[box-shadow:none] [[data-theme|=plan]_&]:[border-radius:var(--radius)]", text: "Reprendre" });
     button.addEventListener("click", () => inputCommand(state, "turn_on"));
   } else {
     subtitle = state.state === "idle" ? "Rien à signaler" : statusText(state);
@@ -142,7 +142,7 @@ function timerTile(state) {
     startCountdowns();
   }
   const button = (service, text) => {
-    const b = el("button", { type: "button", class: "period", text });
+    const b = el("button", { type: "button", class: "period [:not(:where(.o014400)).presets_&]:[border:0] [:not(:where(.o014401)).presets_&]:[background:transparent] [.presets_&]:text-[0.8rem] [.presets_&]:min-h-[36px] [.presets_&]:[padding:0.3rem_0.1rem] [.presets_&]:min-w-0 [.presets_&]:overflow-hidden [.presets_&]:text-ellipsis [.presets_&]:whitespace-nowrap [:not(:where(.o014500)).presets_&[aria-pressed=true]]:bg-card [:not(:where(.o014501)).presets_&[aria-pressed=true]]:text-text [.presets_&[aria-pressed=true]]:[box-shadow:0_1px_3px_rgb(0_0_0_/_0.12)] min-h-[36px] [padding:0.35rem_0.9rem] [border-radius:999px] [border:1px_solid_var(--line)] bg-card text-text [:not(:where(.o022400))&[aria-pressed=true]]:bg-text [&[aria-pressed=true]]:text-bg [:not(:where(.o022402))&[aria-pressed=true]]:border-text [[data-theme|=plan]_&]:[border-radius:4px] [:not(:where(.o082700))[data-theme=maquette]_&]:[background:rgb(0_0_0_/_0.3)] [:not(:where(.o082701))[data-theme=maquette]_&]:[border-color:rgb(255_255_255_/_0.1)] [:not(:where(.o082800))[data-theme=maquette]_&[aria-pressed=true]]:bg-text [:not(:where(.o082801))[data-theme=maquette]_&[aria-pressed=true]]:text-bg [[data-theme=maquette]_&[aria-pressed=true]]:border-text [:not(:where(.o082900))[data-theme=maquette]_.presets_&]:[background:transparent] [[data-theme=maquette]_.presets_&[aria-pressed=true]]:[background:rgb(255_255_255_/_0.12)] [[data-theme=maquette]_.presets_&[aria-pressed=true]]:text-text", text });
     b.addEventListener("click", () => inputCommand(state, service));
     return b;
   };
@@ -157,8 +157,8 @@ function timerTile(state) {
     "div",
     { id: tileId(state.entity_id), class: `tile sensor${state.state === "active" ? " on" : ""}` },
     tileHead(state, ICONS.timer, subtitle),
-    el("div", { class: "timer-row" }, ring(total, left ?? 0, active ? a.finishes_at : null), remaining),
-    el("div", { class: "presets", role: "group", "aria-label": `Commandes de ${nameOf(state)}` }, ...buttons),
+    el("div", { class: "timer-row flex items-center gap-[12px]" }, ring(total, left ?? 0, active ? a.finishes_at : null), remaining),
+    el("div", { class: "presets grid [grid-auto-flow:column] [grid-auto-columns:minmax(0,_1fr)] gap-[3px] p-[3px] [border-radius:14px] bg-card-2 [.tile.readonly_&]:hidden [[data-theme|=plan]_&]:[border:1.25px_solid_var(--ink)] [[data-theme|=plan]_&]:[box-shadow:none] [[data-theme|=plan]_&]:[border-radius:var(--radius)]", role: "group", "aria-label": `Commandes de ${nameOf(state)}` }, ...buttons),
   );
 }
 
@@ -169,15 +169,15 @@ function dial(target, measured, min, max) {
   const full = 2 * Math.PI * r;
   const part = (value) => Math.min(1, Math.max(0, (value - min) / Math.max(1e-9, max - min)));
   const picture = svg("svg", { viewBox: "0 0 132 132", role: "img", "aria-label": target === null ? "Consigne inconnue" : `Consigne ${number.format(target)} degrés` });
-  picture.append(svg("circle", { cx: 66, cy: 66, r, class: "track", "stroke-dasharray": `${sweep} ${full}`, transform: "rotate(135 66 66)" }));
+  picture.append(svg("circle", { cx: 66, cy: 66, r, class: "track [:not(:where(.o013600)).dial_&]:[stroke:var(--card-2)] [:not(:where(.o013601)).dial_&]:[stroke-width:12] [:not(:where(.o018400)).gauge-ring_&]:[stroke:var(--card-2)] [:not(:where(.o018401)).gauge-ring_&]:[stroke-width:5]", "stroke-dasharray": `${sweep} ${full}`, transform: "rotate(135 66 66)" }));
   if (target !== null) {
-    picture.append(svg("circle", { cx: 66, cy: 66, r, class: "arc", "stroke-dasharray": `${sweep * part(target)} ${full}`, transform: "rotate(135 66 66)" }));
+    picture.append(svg("circle", { cx: 66, cy: 66, r, class: "arc [:not(:where(.o013700)).dial_&]:[stroke:var(--heat)] [:not(:where(.o013701)).dial_&]:[stroke-width:12] [.tile.climate.stopped_.dial_&]:[stroke:var(--muted)] [:not(:where(.o018500)).gauge-ring_&]:[stroke:var(--accent)] [:not(:where(.o018501)).gauge-ring_&]:[stroke-width:5]", "stroke-dasharray": `${sweep * part(target)} ${full}`, transform: "rotate(135 66 66)" }));
   }
   if (measured !== null) {
     const angle = ((135 + 270 * part(measured)) * Math.PI) / 180;
     picture.append(svg("circle", { cx: 66 + r * Math.cos(angle), cy: 66 + r * Math.sin(angle), r: 5, class: "now" }));
   }
-  return el("div", { class: "dial" }, picture,
+  return el("div", { class: "dial relative w-[132px] h-[116px] flex-none [&_svg]:absolute [&_svg]:[inset:0] [:not(:where(.o013502))&_svg]:w-[132px] [:not(:where(.o013503))&_svg]:h-[132px]" }, picture,
     el("div", { class: "value", text: target === null ? "—" : `${number.format(target)}°` }));
 }
 
@@ -190,9 +190,9 @@ function seconds(hms) {
 /** Un anneau qui se vide pendant que le minuteur tourne. */
 function ring(totalSeconds, leftSeconds, finishesAt) {
   const full = 2 * Math.PI * 20;
-  const picture = svg("svg", { viewBox: "0 0 48 48", class: "gauge-ring", "aria-hidden": "true" });
-  picture.append(svg("circle", { cx: 24, cy: 24, r: 20, class: "track" }));
-  const arc = svg("circle", { cx: 24, cy: 24, r: 20, class: "arc", "stroke-dasharray": full });
+  const picture = svg("svg", { viewBox: "0 0 48 48", class: "gauge-ring w-[48px] h-[48px] flex-none [transform:rotate(-90deg)]", "aria-hidden": "true" });
+  picture.append(svg("circle", { cx: 24, cy: 24, r: 20, class: "track [:not(:where(.o013600)).dial_&]:[stroke:var(--card-2)] [:not(:where(.o013601)).dial_&]:[stroke-width:12] [:not(:where(.o018400)).gauge-ring_&]:[stroke:var(--card-2)] [:not(:where(.o018401)).gauge-ring_&]:[stroke-width:5]" }));
+  const arc = svg("circle", { cx: 24, cy: 24, r: 20, class: "arc [:not(:where(.o013700)).dial_&]:[stroke:var(--heat)] [:not(:where(.o013701)).dial_&]:[stroke-width:12] [.tile.climate.stopped_.dial_&]:[stroke:var(--muted)] [:not(:where(.o018500)).gauge-ring_&]:[stroke:var(--accent)] [:not(:where(.o018501)).gauge-ring_&]:[stroke-width:5]", "stroke-dasharray": full });
   const share = totalSeconds ? Math.min(1, Math.max(0, leftSeconds / totalSeconds)) : 0;
   arc.setAttribute("stroke-dashoffset", String(full * (1 - share)));
   if (finishesAt && totalSeconds) {
@@ -257,13 +257,13 @@ function climateTile(state) {
     });
     return button;
   };
-  const power = el("button", { type: "button", class: "action-button", text: on ? "Éteindre" : "Allumer" });
+  const power = el("button", { type: "button", class: "action-button [justify-self:start] min-h-[40px] [padding:0.45rem_1.1rem] [border-radius:999px] [border:0] bg-card-2 font-semibold [&:active]:[transform:scale(0.97)] [[data-theme|=plan]_&]:[border:1.25px_solid_var(--ink)] [[data-theme|=plan]_&]:[box-shadow:none] [[data-theme|=plan]_&]:[border-radius:var(--radius)]", text: on ? "Éteindre" : "Allumer" });
   power.addEventListener("click", () => command("set_hvac_mode", { hvac_mode: on ? "off" : "heat" }));
   const presets = (Array.isArray(a.preset_modes) ? a.preset_modes : [])
     .filter((preset) => typeof preset === "string")
     .map((preset) => {
       const label = lookup(PRESET_LABELS, preset) ?? preset.replaceAll("_", " ");
-      const button = el("button", { type: "button", class: "period", text: label, "aria-pressed": String(a.preset_mode === preset) });
+      const button = el("button", { type: "button", class: "period [:not(:where(.o014400)).presets_&]:[border:0] [:not(:where(.o014401)).presets_&]:[background:transparent] [.presets_&]:text-[0.8rem] [.presets_&]:min-h-[36px] [.presets_&]:[padding:0.3rem_0.1rem] [.presets_&]:min-w-0 [.presets_&]:overflow-hidden [.presets_&]:text-ellipsis [.presets_&]:whitespace-nowrap [:not(:where(.o014500)).presets_&[aria-pressed=true]]:bg-card [:not(:where(.o014501)).presets_&[aria-pressed=true]]:text-text [.presets_&[aria-pressed=true]]:[box-shadow:0_1px_3px_rgb(0_0_0_/_0.12)] min-h-[36px] [padding:0.35rem_0.9rem] [border-radius:999px] [border:1px_solid_var(--line)] bg-card text-text [:not(:where(.o022400))&[aria-pressed=true]]:bg-text [&[aria-pressed=true]]:text-bg [:not(:where(.o022402))&[aria-pressed=true]]:border-text [[data-theme|=plan]_&]:[border-radius:4px] [:not(:where(.o082700))[data-theme=maquette]_&]:[background:rgb(0_0_0_/_0.3)] [:not(:where(.o082701))[data-theme=maquette]_&]:[border-color:rgb(255_255_255_/_0.1)] [:not(:where(.o082800))[data-theme=maquette]_&[aria-pressed=true]]:bg-text [:not(:where(.o082801))[data-theme=maquette]_&[aria-pressed=true]]:text-bg [[data-theme=maquette]_&[aria-pressed=true]]:border-text [:not(:where(.o082900))[data-theme=maquette]_.presets_&]:[background:transparent] [[data-theme=maquette]_.presets_&[aria-pressed=true]]:[background:rgb(255_255_255_/_0.12)] [[data-theme=maquette]_.presets_&[aria-pressed=true]]:text-text", text: label, "aria-pressed": String(a.preset_mode === preset) });
       button.addEventListener("click", () => command("set_preset_mode", { preset_mode: preset }));
       return button;
     });
@@ -271,13 +271,13 @@ function climateTile(state) {
   const max = finite(a.max_temp) ? a.max_temp : 30;
   const children = [
     tileHead(state, ICONS.flame, subtitle),
-    el("div", { class: "setpoint" },
+    el("div", { class: "setpoint flex items-center justify-between gap-[4px] [.tile.readonly_&]:justify-center" },
       adjust(-step, "Baisser"),
       dial(target, finite(a.current_temperature) ? a.current_temperature : null, min, max),
       adjust(step, "Monter")),
   ];
   if (typeof a.info === "string") children.push(el("p", { class: "error climate-info", text: a.info }));
-  if (presets.length > 0) children.push(el("div", { class: "presets", role: "group", "aria-label": "Préréglages" }, ...presets));
+  if (presets.length > 0) children.push(el("div", { class: "presets grid [grid-auto-flow:column] [grid-auto-columns:minmax(0,_1fr)] gap-[3px] p-[3px] [border-radius:14px] bg-card-2 [.tile.readonly_&]:hidden [[data-theme|=plan]_&]:[border:1.25px_solid_var(--ink)] [[data-theme|=plan]_&]:[box-shadow:none] [[data-theme|=plan]_&]:[border-radius:var(--radius)]", role: "group", "aria-label": "Préréglages" }, ...presets));
   children.push(power);
   return el(
     "div",
@@ -392,7 +392,7 @@ function machineTile(state) {
     el("div", { class: "value small-value", text: running && Number.isFinite(a.reste_minutes) ? `${state.state} · ${a.reste_minutes} min` : state.state }),
   );
   if (running && Number.isFinite(a.progression)) {
-    const bar = el("div", { class: "machine-progress", role: "progressbar", "aria-valuenow": String(a.progression), "aria-valuemin": "0", "aria-valuemax": "100" }, el("span"));
+    const bar = el("div", { class: "machine-progress [:not(:where(.o150000))&_span]:block [&_span]:h-full [&_span]:w-[var(--progress)] [:not(:where(.o150003))&_span]:bg-accent [:not(:where(.o150004))&_span]:[border-radius:inherit]", role: "progressbar", "aria-valuenow": String(a.progression), "aria-valuemin": "0", "aria-valuemax": "100" }, el("span"));
     bar.style.setProperty("--progress", `${Math.min(100, Math.max(0, a.progression))}%`);
     tile.append(bar);
   }

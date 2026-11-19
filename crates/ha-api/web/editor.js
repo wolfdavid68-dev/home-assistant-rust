@@ -115,51 +115,51 @@ async function showAutoList(notice = "") {
   // Les automatisations toutes prêtes (pretes.js, étape 85).
   if (typeof renderPresets === "function") renderPresets().catch(() => {});
   const list = $("#auto-list");
-  list.replaceChildren(el("li", { class: "auto-empty", text: "Chargement…" }));
+  list.replaceChildren(el("li", { class: "auto-empty text-muted [padding:1rem_0]", text: "Chargement…" }));
   const { status, data } = await api("GET", "/api/automations");
-  if (status !== 200) return list.replaceChildren(el("li", { class: "auto-empty", text: "Automatisations indisponibles." }));
+  if (status !== 200) return list.replaceChildren(el("li", { class: "auto-empty text-muted [padding:1rem_0]", text: "Automatisations indisponibles." }));
   auto.list = data.automations ?? [];
   auto.editable = data.editable === true;
   $("#auto-readonly").hidden = auto.editable;
   $("#auto-new").hidden = !auto.editable;
   list.replaceChildren(...auto.list.map(autoCard));
   if (auto.list.length === 0) {
-    list.replaceChildren(el("li", { class: "auto-empty", text: "Aucune automatisation pour l'instant." }));
+    list.replaceChildren(el("li", { class: "auto-empty text-muted [padding:1rem_0]", text: "Aucune automatisation pour l'instant." }));
   }
 }
 
 function autoCard(entry) {
-  const badges = el("div", { class: "badges" }, el("span", { class: "badge", text: entry.source === "file" ? "fichier" : "éditeur" }));
+  const badges = el("div", { class: "badges flex gap-[0.35rem]" }, el("span", { class: "badge", text: entry.source === "file" ? "fichier" : "éditeur" }));
   if (entry.source === "editor" && entry.id.startsWith("pret_")) badges.append(el("span", { class: "badge", text: "toute prête" }));
   if (entry.error) badges.append(el("span", { class: "badge bad", text: "invalide" }));
   else if (!entry.enabled) badges.append(el("span", { class: "badge off", text: "désactivée" }));
   const card = el(
     "li",
-    { class: "auto-card" },
-    el("div", { class: "auto-card-head" }, el("strong", { text: entry.alias }), badges),
-    el("p", { class: "auto-summary", text: entry.config ? describe(entry.config) : "" }),
+    { class: "auto-card bg-card-2 [border-radius:18px] [padding:0.9rem_1rem] grid gap-[0.45rem]" },
+    el("div", { class: "auto-card-head flex flex-wrap gap-2 items-center justify-between [:not(:where(.o034600))&_strong]:[overflow-wrap:anywhere]" }, el("strong", { text: entry.alias }), badges),
+    el("p", { class: "auto-summary m-0 text-text-2 text-[0.88rem] [overflow-wrap:anywhere]", text: entry.config ? describe(entry.config) : "" }),
   );
   if (entry.error) card.append(el("p", { class: "error", text: entry.error }));
   if (entry.updated_by && entry.updated_at) {
-    card.append(el("small", { class: "auto-meta", text: `Modifiée par ${entry.updated_by} le ${dateTime.format(new Date(entry.updated_at))}` }));
+    card.append(el("small", { class: "auto-meta text-muted text-[0.8rem] [&.run-loop]:text-alert [:not(:where(.o089100)).drawing-part>&]:m-0 [:not(:where(.o092300)).chart-card_&]:m-0", text: `Modifiée par ${entry.updated_by} le ${dateTime.format(new Date(entry.updated_at))}` }));
   }
   if (entry.last_run) {
     card.append(el("small", {
-      class: `auto-meta run-${entry.last_run.outcome}`,
+      class: `auto-meta text-muted text-[0.8rem] [&.run-loop]:text-alert [:not(:where(.o089100)).drawing-part>&]:m-0 [:not(:where(.o092300)).chart-card_&]:m-0 run-${entry.last_run.outcome}`,
       text: `Dernière exécution il y a ${ago(entry.last_run.started)} · ${outcomeLabel(entry.last_run.outcome)}`,
     }));
   }
-  const buttons = el("div", { class: "auto-card-buttons" });
-  const open = el("button", { type: "button", class: "action-button", text: entry.source === "editor" && auto.editable ? "Modifier" : "Voir" });
+  const buttons = el("div", { class: "auto-card-buttons flex flex-wrap gap-2" });
+  const open = el("button", { type: "button", class: "action-button [justify-self:start] min-h-[40px] [padding:0.45rem_1.1rem] [border-radius:999px] [border:0] bg-card-2 font-semibold [&:active]:[transform:scale(0.97)] [[data-theme|=plan]_&]:[border:1.25px_solid_var(--ink)] [[data-theme|=plan]_&]:[box-shadow:none] [[data-theme|=plan]_&]:[border-radius:var(--radius)]", text: entry.source === "editor" && auto.editable ? "Modifier" : "Voir" });
   open.addEventListener("click", () => openAutoEditor(entry));
   buttons.append(open);
   if (!entry.error) {
-    const history = el("button", { type: "button", class: "action-button", text: "Historique" });
+    const history = el("button", { type: "button", class: "action-button [justify-self:start] min-h-[40px] [padding:0.45rem_1.1rem] [border-radius:999px] [border:0] bg-card-2 font-semibold [&:active]:[transform:scale(0.97)] [[data-theme|=plan]_&]:[border:1.25px_solid_var(--ink)] [[data-theme|=plan]_&]:[box-shadow:none] [[data-theme|=plan]_&]:[border-radius:var(--radius)]", text: "Historique" });
     history.addEventListener("click", () => openTraces(entry));
     buttons.append(history);
   }
   if (entry.source === "editor" && auto.editable && entry.config) {
-    const toggle = el("button", { type: "button", class: "action-button", text: entry.enabled ? "Désactiver" : "Activer" });
+    const toggle = el("button", { type: "button", class: "action-button [justify-self:start] min-h-[40px] [padding:0.45rem_1.1rem] [border-radius:999px] [border:0] bg-card-2 font-semibold [&:active]:[transform:scale(0.97)] [[data-theme|=plan]_&]:[border:1.25px_solid_var(--ink)] [[data-theme|=plan]_&]:[box-shadow:none] [[data-theme|=plan]_&]:[border-radius:var(--radius)]", text: entry.enabled ? "Désactiver" : "Activer" });
     toggle.addEventListener("click", () => {
       const config = structuredClone(entry.config);
       if (entry.enabled) config.enabled = false;
@@ -324,7 +324,7 @@ function renderAutoEditor() {
     // Nom, identifiant, mode : repliés, sauf pour une nouvelle automatisation
     // (il faut lui donner un nom). Le schéma garde ainsi toute la place.
     const meta = $("#auto-canvas-meta");
-    const details = el("details", { class: "canvas-meta" }, el("summary", { text: `${auto.config.alias || auto.config.id || "Nouvelle automatisation"} · nom et réglages` }), ...metaFields(auto.config, true));
+    const details = el("details", { class: "canvas-meta [:not(:where(.o048900))&_summary]:cursor-pointer [:not(:where(.o048901))&_summary]:font-semibold [:not(:where(.o048902))&_summary]:[padding:0.3rem_0] [&[open]_summary]:mb-2" }, el("summary", { text: `${auto.config.alias || auto.config.id || "Nouvelle automatisation"} · nom et réglages` }), ...metaFields(auto.config, true));
     details.open = auto.existingId === null;
     meta.replaceChildren(details);
     if (ro) for (const control of meta.querySelectorAll("input, select")) control.disabled = true;
@@ -423,7 +423,7 @@ function setAutoStatus(text, kind = "", append = false, warnings = []) {
   const status = $("#auto-status");
   if (append && status.textContent) status.append(el("br"), text);
   else status.textContent = text;
-  status.className = `auto-status ${kind}`;
+  status.className = `auto-status text-[0.9rem] [margin:0.8rem_0_0.3rem] [white-space:pre-wrap] [overflow-wrap:anywhere] [:not(:where(.o037900))&.ok]:text-ok [:not(:where(.o038000))&.error]:text-alert ${kind}`;
   $("#auto-warnings").replaceChildren(...(warnings ?? []).map((w) => el("li", { text: `⚠ ${w}` })));
 }
 
@@ -467,8 +467,8 @@ function metaFields(c, compact = false) {
     scheduleCheck();
   });
   const modeLabel = el("label", {}, el("span", { class: "label", text: compact ? "Si elle se redéclenche" : "Si elle se redéclenche pendant qu'elle tourne encore" }), mode);
-  if (compact) return [el("div", { class: "auto-row canvas-meta-row" }, alias, id, modeLabel, el("label", { class: "check" }, enabled, "Activée"))];
-  return [el("div", { class: "auto-row" }, alias, id), el("label", { class: "check" }, enabled, "Activée"), modeLabel];
+  if (compact) return [el("div", { class: "auto-row canvas-meta-row grid gap-[0.8rem] [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_190px),_1fr))] [align-items:end] [:not(:where(.o036600))&>label]:[grid-template-rows:1fr_auto]" }, alias, id, modeLabel, el("label", { class: "check [.preset-form_&]:text-[0.9rem] [label&]:flex [label&]:items-center [label&]:gap-[0.45rem] [label&]:text-text" }, enabled, "Activée"))];
+  return [el("div", { class: "auto-row grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_220px),_1fr))] gap-[0.8rem] [:not(:where(.o036600))&>label]:[grid-template-rows:1fr_auto]" }, alias, id), el("label", { class: "check [.preset-form_&]:text-[0.9rem] [label&]:flex [label&]:items-center [label&]:gap-[0.45rem] [label&]:text-text" }, enabled, "Activée"), modeLabel];
 }
 
 function renderAutoForm() {
@@ -489,7 +489,7 @@ function renderAutoForm() {
 /** Un bloc « Quand / Si / Alors » : la liste, et un bouton pour ajouter. */
 function itemsBlock(title, hint, config, key, kinds, tag, fields) {
   const items = config[key] ?? [];
-  const block = el("fieldset", { class: "auto-block" }, el("legend", { text: title }), el("p", { class: "journal-hint", text: hint }));
+  const block = el("fieldset", { class: "auto-block [border:1px_solid_var(--line)] [border-radius:18px] [padding:0.6rem_0.9rem_0.9rem] m-0 grid [grid-template-columns:minmax(0,_1fr)] gap-[0.6rem] min-w-0 [:not(:where(.o035800))&_legend]:font-semibold [:not(:where(.o035801))&_legend]:[padding:0_0.3rem] [&>select]:[justify-self:start] [:not(:where(.o036801))&>select]:max-w-[100%] [&.nested]:[grid-column:1_/_-1] [&.nested]:bg-card" }, el("legend", { text: title }), el("p", { class: "journal-hint text-muted text-[0.85rem] [margin:0_0_0.75rem] [:not(:where(.o035900)).auto-block_&]:m-0 [.auto-fields_&]:[grid-column:1_/_-1] [:not(:where(.o036501)).auto-fields_&]:m-0 [.auto-fields_&]:[overflow-wrap:anywhere]", text: hint }));
   items.forEach((item, index) => {
     const kind = tag ? item[tag] : actionKind(item);
     const label = lookup(kinds, kind)?.[0] ?? kind;
@@ -501,7 +501,7 @@ function itemsBlock(title, hint, config, key, kinds, tag, fields) {
       renderAutoForm();
       scheduleCheck();
     });
-    const head = el("div", { class: "auto-item-head" }, el("strong", { text: label }));
+    const head = el("div", { class: "auto-item-head flex items-center gap-2 [&_strong]:mr-[auto] [:not(:where(.o036201))&_strong]:text-[0.9rem]" }, el("strong", { text: label }));
     if (["actions", "then", "else", "sequence"].includes(key) && index > 0) {
       const up = el("button", { type: "button", class: "ghost small", text: "↑", "aria-label": "Monter" });
       up.addEventListener("click", () => {
@@ -514,7 +514,7 @@ function itemsBlock(title, hint, config, key, kinds, tag, fields) {
     head.append(remove);
     // Seule cette ligne est redessinée quand un champ change sa forme (autre
     // appareil, autre commande) : les autres gardent le focus et le curseur.
-    const box = el("div", { class: "auto-fields" });
+    const box = el("div", { class: "auto-fields grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_170px),_1fr))] gap-[0.6rem] [&_input:not([type=checkbox])]:bg-card [&_input:not([type=checkbox])]:min-w-0 [&_input:not([type=checkbox])]:w-full [&_select]:bg-card [:not(:where(.o036401))&_select]:min-w-0 [:not(:where(.o036402))&_select]:w-full [:not(:where(.o036600))&>label]:[grid-template-rows:1fr_auto] [.canvas-panel>&]:[grid-template-columns:minmax(0,_1fr)] [.canvas-panel>&]:[align-content:start] [.canvas-panel>&]:p-[0.9rem]" });
     let busy = false;
     const refresh = () => {
       // Retirer le champ qui a le focus déclenche son événement « change »,
@@ -528,7 +528,7 @@ function itemsBlock(title, hint, config, key, kinds, tag, fields) {
       busy = false;
     };
     refresh();
-    block.append(el("div", { class: "auto-item" }, head, box));
+    block.append(el("div", { class: "auto-item bg-card-2 [border-radius:14px] p-3 grid gap-[0.55rem] [.auto-block.nested_&]:bg-card-2" }, head, box));
   });
   const add = el("select", { "aria-label": `Ajouter (${title})` }, el("option", { value: "", text: "+ Ajouter…" }));
   for (const [value, [text]] of Object.entries(kinds)) {
@@ -650,7 +650,7 @@ function actionFields(a, refresh) {
         nested(itemsBlock("Sinon… (facultatif)", "Si c'est faux.", a, "else", ACTION_KINDS, null, actionFields)),
       ];
     case "choose":
-      return [el("p", { class: "journal-hint", text: `Bloc « selon le cas » (${(a.choose ?? []).length} option(s)) : il se modifie dans l'onglet YAML.` })];
+      return [el("p", { class: "journal-hint text-muted text-[0.85rem] [margin:0_0_0.75rem] [:not(:where(.o035900)).auto-block_&]:m-0 [.auto-fields_&]:[grid-column:1_/_-1] [:not(:where(.o036501)).auto-fields_&]:m-0 [.auto-fields_&]:[overflow-wrap:anywhere]", text: `Bloc « selon le cas » (${(a.choose ?? []).length} option(s)) : il se modifie dans l'onglet YAML.` })];
     case "repeat": {
       a.repeat ??= { count: 3, sequence: [] };
       const r = a.repeat;
@@ -803,7 +803,7 @@ function actionFields(a, refresh) {
     delete extra.priority;
   }
   if (Object.keys(extra).length > 0) {
-    fields.push(el("p", { class: "journal-hint", text: `Autres paramètres, conservés : ${JSON.stringify(extra)}` }));
+    fields.push(el("p", { class: "journal-hint text-muted text-[0.85rem] [margin:0_0_0.75rem] [:not(:where(.o035900)).auto-block_&]:m-0 [.auto-fields_&]:[grid-column:1_/_-1] [:not(:where(.o036501)).auto-fields_&]:m-0 [.auto-fields_&]:[overflow-wrap:anywhere]", text: `Autres paramètres, conservés : ${JSON.stringify(extra)}` }));
   }
   return fields;
 }
@@ -921,7 +921,7 @@ function durationField(label, object, key, optional) {
   };
   number.addEventListener("input", update);
   select.addEventListener("change", update);
-  return el("label", {}, el("span", { class: "label", text: label }), el("span", { class: "inline-fields" }, number, select));
+  return el("label", {}, el("span", { class: "label", text: label }), el("span", { class: "inline-fields flex gap-[0.4rem] [:not(:where(.o037200))&_input]:[flex:1_1_4rem] [:not(:where(.o037300))&_select]:[flex:1_1_6rem]" }, number, select));
 }
 
 /** `5min` → 300 ; `00:05:00` → 300 ; illisible → null. */
@@ -960,12 +960,12 @@ function offsetField(object, key) {
   };
   number.addEventListener("input", update);
   select.addEventListener("change", update);
-  return el("label", {}, el("span", { class: "label", text: "Décalage en min (facultatif)" }), el("span", { class: "inline-fields" }, number, select));
+  return el("label", {}, el("span", { class: "label", text: "Décalage en min (facultatif)" }), el("span", { class: "inline-fields flex gap-[0.4rem] [:not(:where(.o037200))&_input]:[flex:1_1_4rem] [:not(:where(.o037300))&_select]:[flex:1_1_6rem]" }, number, select));
 }
 
 function weekdayField(c) {
   const days = new Set(asList(c.weekday));
-  const box = el("div", { class: "weekdays", role: "group", "aria-label": "Jours" });
+  const box = el("div", { class: "weekdays flex flex-wrap [gap:0.25rem_0.8rem]", role: "group", "aria-label": "Jours" });
   for (const [en, fr] of WEEKDAYS) {
     const input = el("input", { type: "checkbox" });
     input.checked = days.has(en) || days.has(fr);
@@ -976,9 +976,9 @@ function weekdayField(c) {
       else c.weekday = chosen;
       changed();
     });
-    box.append(el("label", { class: "check" }, input, fr));
+    box.append(el("label", { class: "check [.preset-form_&]:text-[0.9rem] [label&]:flex [label&]:items-center [label&]:gap-[0.45rem] [label&]:text-text" }, input, fr));
   }
-  return el("div", { class: "weekdays-field" }, el("span", { class: "label", text: "Jours (aucun = tous)" }), box);
+  return el("div", { class: "weekdays-field grid gap-[0.35rem] [grid-column:1_/_-1] text-[0.9rem] text-muted" }, el("span", { class: "label", text: "Jours (aucun = tous)" }), box);
 }
 
 /** « Volets au coucher ! » → « volets_au_coucher » (identifiant valide). */
@@ -1117,7 +1117,7 @@ async function loadTraces() {
   const { status, data } = await api("GET", `/api/automations/${encodeURIComponent(trace.entry.id)}/traces`);
   if (status !== 200) {
     $("#trace-runs").replaceChildren();
-    return detail.replaceChildren(el("p", { class: "auto-empty", text: "Historique indisponible." }));
+    return detail.replaceChildren(el("p", { class: "auto-empty text-muted [padding:1rem_0]", text: "Historique indisponible." }));
   }
   trace.runs = data.traces ?? [];
   trace.selected = Math.min(trace.selected, Math.max(0, trace.runs.length - 1));
@@ -1129,15 +1129,15 @@ function renderTraces() {
   if (trace.runs.length === 0) {
     runs.replaceChildren();
     return $("#trace-detail").replaceChildren(
-      el("p", { class: "auto-empty", text: "Pas encore d'exécution depuis le démarrage du serveur." }),
+      el("p", { class: "auto-empty text-muted [padding:1rem_0]", text: "Pas encore d'exécution depuis le démarrage du serveur." }),
     );
   }
   runs.replaceChildren(
     ...trace.runs.map((run, index) => {
       const button = el(
         "button",
-        { type: "button", class: `trace-run run-${run.outcome}`, "aria-pressed": String(index === trace.selected) },
-        el("span", { class: "trace-dot", "aria-hidden": "true" }),
+        { type: "button", class: `trace-run inline-flex items-center gap-[0.4rem] min-h-[36px] [padding:0.25rem_0.7rem] [border-radius:999px] [border:1px_solid_var(--line)] bg-card text-text [:not(:where(.o040409))&]:[font-family:var(--font-mono)] [:not(:where(.o040410))&]:text-[0.8rem] [&[aria-pressed=true]]:bg-text [&[aria-pressed=true]]:text-bg [&[aria-pressed=true]]:border-text run-${run.outcome}`, "aria-pressed": String(index === trace.selected) },
+        el("span", { class: "trace-dot w-[8px] h-[8px] [border-radius:50%] bg-ok flex-none [:not(:where(.o040700)).run-running_&]:bg-accent [:not(:where(.o040800)).run-conditions\_failed_&]:bg-muted [:not(:where(.o040800)).run-already\_running_&]:bg-muted [:not(:where(.o040800)).run-too\_many_&]:bg-muted [:not(:where(.o040800)).run-aborted_&]:bg-muted [:not(:where(.o040900)).run-stopped_&]:[background:var(--glow-bar)] [:not(:where(.o041000)).run-loop_&]:bg-alert", "aria-hidden": "true" }),
         el("span", { text: timeOnly.format(new Date(run.started)) }),
       );
       button.title = outcomeLabel(run.outcome);
@@ -1164,15 +1164,15 @@ function traceDetail(run) {
   const length = run.finished ? ` · ${shortDuration(Date.parse(run.finished) - started.getTime())}` : "";
   const summary = el(
     "div",
-    { class: "trace-summary" },
+    { class: "trace-summary flex flex-wrap gap-[0.6rem] items-center mb-[0.6rem] text-muted" },
     el("span", { class: `badge trace-outcome run-${run.outcome}`, text: outcomeLabel(run.outcome) }),
     el("small", { text: `${dateTime.format(started)}${length}` }),
   );
   const steps = el("ol", { class: "trace" });
   const step = (kind, title, detail, extra = "") =>
-    el("li", { class: `trace-step ${kind}` },
-      el("span", { class: "trace-mark", "aria-hidden": "true" }),
-      el("div", {}, el("p", { text: title }), ...(detail ? [el("small", { text: detail })] : []), ...(extra ? [el("small", { class: "trace-path", text: extra })] : [])),
+    el("li", { class: `trace-step grid [grid-template-columns:18px_minmax(0,_1fr)] gap-[0.7rem] relative pb-[0.8rem] [&::before]:[content:''] [&::before]:absolute [:not(:where(.o041702))&::before]:[left:8px] [:not(:where(.o041703))&::before]:[top:18px] [:not(:where(.o041704))&::before]:[bottom:0] [&::before]:w-[2px] [&::before]:bg-line [&:last-child::before]:hidden [:not(:where(.o042500))&_p]:m-0 [:not(:where(.o042501))&_p]:[overflow-wrap:anywhere] [&_small]:block [:not(:where(.o042601))&_small]:text-muted [:not(:where(.o042602))&_small]:[overflow-wrap:anywhere] [&.failed_small:first-of-type]:text-alert ${kind}` },
+      el("span", { class: "trace-mark w-[18px] h-[18px] [border-radius:50%] [border:2px_solid_var(--ok)] bg-card mt-[2px] [:not(:where(.o042000)).trace-step.trigger_&]:border-accent [:not(:where(.o042001)).trace-step.trigger_&]:bg-accent [:not(:where(.o042100)).trace-step.done_&]:bg-ok [:not(:where(.o042200)).trace-step.stopped_&]:[border-color:var(--glow-bar)] [:not(:where(.o042201)).trace-step.stopped_&]:bg-glow-soft [:not(:where(.o042300)).trace-step.failed_&]:border-alert [:not(:where(.o042301)).trace-step.failed_&]:bg-alert [:not(:where(.o042400)).trace-step.running_&]:border-accent", "aria-hidden": "true" }),
+      el("div", {}, el("p", { text: title }), ...(detail ? [el("small", { text: detail })] : []), ...(extra ? [el("small", { class: "trace-path [:not(:where(.o042800))&]:[font-family:var(--font-mono)] [:not(:where(.o042801))&]:text-[0.75rem]", text: extra })] : [])),
     );
   steps.append(step("trigger", "Déclenchée", run.trigger ?? "lancée à la main"));
   for (const check of run.conditions) {
