@@ -132,7 +132,10 @@ async fn an_ai_assistant_plugs_in_through_mcp_under_the_guard() {
         .iter()
         .map(|t| t["name"].as_str().unwrap())
         .collect();
-    assert_eq!(names, ["get_house_state", "assist", "call_service"]);
+    assert_eq!(
+        names,
+        ["get_house_state", "get_agenda", "assist", "call_service"]
+    );
 
     let (_, body) = mcp(&app, Some(&claude), &[], tool("get_house_state", json!({}))).await;
     let (text, error) = tool_text(&body);
@@ -289,4 +292,49 @@ async fn an_assistant_token_only_opens_mcp() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
+}
+
+#[tokio::test]
+async fn the_agenda_is_read_through_mcp_but_not_by_a_guest() {
+    let app = TestApp::new().await;
+    let today = jiff::Zoned::now().date();
+    let Value::Object(attributes) = json!({
+        "friendly_name": "Agenda de la maison",
+        "events": [{"summary": "Dentiste", "start": format!("{today}T18:30:00"),
+                    "end": format!("{today}T19:00:00"), "all_day": false}],
+    }) else {
+        panic!("un objet est attendu")
+    };
+    app.state
+        .core
+        .states
+        .set("calendar.maison".parse().unwrap(), "off", attributes)
+        .unwrap();
+
+    let family = app.login_as("alice", ha_auth::Role::Family).await;
+    let (_, body) = mcp(&app, Some(&family), &[], tool("get_agenda", json!({}))).await;
+    let (text, error) = tool_text(&body);
+    assert!(!error, "{text}");
+    assert!(
+        text.contains(&format!(
+            "- {today} 18:30 → 19:00 · Dentiste (Agenda de la maison)"
+        )),
+        "{text}"
+    );
+    let (_, body) = mcp(
+        &app,
+        Some(&family),
+        &[],
+        tool("get_agenda", json!({"days": 30})),
+    )
+    .await;
+    assert!(tool_text(&body).1);
+
+    // L'agenda dit quand la maison est vide : un invité ne le voit pas.
+    let guest = app.login_as("visiteur", ha_auth::Role::Guest).await;
+    let (_, body) = mcp(&app, Some(&guest), &[], tool("get_agenda", json!({}))).await;
+    let (text, error) = tool_text(&body);
+    assert!(!error, "{text}");
+    assert!(text.starts_with("Aucun agenda visible"), "{text}");
+    assert!(!text.contains("Dentiste"), "{text}");
 }
