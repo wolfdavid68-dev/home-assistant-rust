@@ -4124,3 +4124,58 @@ label.check { display: flex; align-items: center; gap: 0.45rem; color: var(--tex
   .music-title { font-size: 2.6rem; }
   .music-artist { font-size: 1.15rem; }
 }
+
+/* ---------------------------------------------------------------- Réglages
+   La refonte du dialogue du compte (settings.js) : un menu en trois groupes à
+   gauche, une rubrique à la fois à droite ; sur un téléphone, l'un puis l'autre.
+   Seulement les variables du thème : clair, sombre, plan et maquette suivent. */
+.account-dialog.settings { width: min(980px, calc(100vw - 2rem)); }
+.set-layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 1.5rem; min-height: min(70vh, 620px); }
+.set-nav { display: flex; flex-direction: column; gap: 2px; align-self: start; padding: 0.75rem; background: var(--card-2); border-radius: calc(var(--radius) - 6px); }
+.set-me { margin: 0 0 0.25rem; padding: 0.25rem 0.5rem 0.75rem; border-bottom: 1px solid var(--line); }
+.set-group { margin: 0.9rem 0.5rem 0.3rem; color: var(--muted); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.set-group[hidden], .set-link[hidden], .set-pane[hidden], .set-pane > [hidden] { display: none; }
+.set-link { padding: 0.6rem 0.75rem; border: 0; border-radius: 12px; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.set-link:hover { background: var(--card); }
+.set-link:focus-visible, .theme-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.set-link[aria-current="page"] { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.set-nav #logout { margin-top: 1rem; }
+.set-panes { display: grid; align-content: start; gap: 0.9rem; min-width: 0; }
+.set-pane { display: grid; align-content: start; gap: 0.9rem; }
+.set-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
+.set-head h3 { margin: 0; font-family: var(--font-display); font-size: 1.4rem; }
+.set-head h3:focus { outline: none; }
+.set-scope { padding: 0.15rem 0.65rem; border-radius: 99px; background: var(--glow-soft); color: var(--glow-ink); font-size: 0.75rem; font-weight: 600; }
+.set-scope.all { background: var(--accent-soft); color: var(--accent); }
+.set-scope.admin { background: var(--alert-soft); color: var(--alert-ink); }
+.set-inner-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.settings .set-pane > .theme-option,
+.settings .set-pane > .tablet-option,
+.settings .set-pane > .push-option,
+.settings .set-pane > .integrations { padding: 1rem 1.1rem; border: 1px solid var(--line); border-radius: 16px; background: var(--card); }
+.set-back { display: none; justify-self: start; }
+
+/* Des interrupteurs à la place des cases à cocher, le texte d'abord. */
+.settings label.check { display: flex; align-items: center; gap: 0.75rem; font-weight: 600; }
+.settings label.check input[type="checkbox"] { position: relative; flex: none; order: 2; width: 2.6rem; height: 1.5rem; margin: 0 0 0 auto; border-radius: 99px; background: var(--line); appearance: none; cursor: pointer; transition: background 0.15s; }
+.settings label.check input[type="checkbox"]::after { content: ""; position: absolute; top: 3px; left: 3px; width: calc(1.5rem - 6px); height: calc(1.5rem - 6px); border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / 0.25); transition: transform 0.15s; }
+.settings label.check input[type="checkbox"]:checked { background: var(--ok); }
+.settings label.check input[type="checkbox"]:checked::after { transform: translateX(1.1rem); }
+.settings label.check input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Le thème en vignettes. */
+.theme-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 0.6rem; width: 100%; }
+.theme-tile { overflow: hidden; padding: 0; border: 2px solid var(--line); border-radius: 12px; background: var(--card); color: var(--text); font: inherit; font-size: 0.8rem; cursor: pointer; }
+.theme-tile i { display: block; height: 52px; }
+.theme-tile span { display: block; padding: 0.35rem 0.25rem; }
+.theme-tile[aria-checked="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); font-weight: 600; }
+
+@media (max-width: 720px) {
+  .set-layout { grid-template-columns: minmax(0, 1fr); min-height: 0; }
+  .set-link { padding: 0.8rem 0.75rem; }
+  .settings.set-detail .set-nav, .settings:not(.set-detail) .set-panes { display: none; }
+  .settings.set-detail .set-back { display: inline-flex; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .settings label.check input[type="checkbox"], .settings label.check input[type="checkbox"]::after { transition: none; }
+}

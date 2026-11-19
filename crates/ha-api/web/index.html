@@ -28,6 +28,7 @@
   <script src="/dialogs.js" defer></script>
   <script src="/editor.js" defer></script>
   <script src="/account.js" defer></script>
+  <script src="/settings.js" defer></script>
   <script src="/start.js" defer></script>
   <script src="/canvas.js" defer></script>
   <script src="/house.js" defer></script>
@@ -187,107 +188,174 @@
       <button id="dock-energy" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg><span>Énergie</span></button>
       <button id="dock-account" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a4 4 0 1 0 0 8 4 4 0 1 0 0-8z"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span>Compte</span></button>
     </nav>
-    <dialog id="account-dialog" class="history-dialog account-dialog" aria-labelledby="account-title">
+    <!-- Les réglages (refonte) : un menu en trois groupes (cet appareil, la maison,
+         l'administration) et une rubrique à la fois. Les blocs gardent leurs id :
+         account.js les remplit et les montre comme avant ; settings.js ne cache
+         une rubrique que si tout son contenu est caché. -->
+    <dialog id="account-dialog" class="history-dialog account-dialog settings" aria-labelledby="account-title">
       <div class="history-top">
-        <h2 id="account-title">Mon compte</h2>
+        <h2 id="account-title">Réglages</h2>
         <button id="account-close" class="ghost" type="button">Fermer</button>
       </div>
-      <p id="account" class="account"></p>
-      <div class="theme-option">
-        <label>
-          Apparence
-          <select id="theme">
-            <option value="auto">Automatique (clair ou sombre, comme l'appareil)</option>
-            <option value="light">Clair</option>
-            <option value="dark">Sombre</option>
-            <option value="plan">Plan d'architecte</option>
-            <option value="plan-nuit">Plan d'architecte, de nuit (bleu)</option>
-            <option value="maquette">Maquette (fond sombre, comme une maquette 3D)</option>
-          </select>
-        </label>
-        <p class="account">Sur cet appareil seulement : la télé peut être en plan, le téléphone en sombre.</p>
-        <button id="open-drawing" class="ghost" type="button" hidden>Dessin de la maison…</button>
-      </div>
-      <div class="tablet-option">
-        <label class="check"><input id="tablet-mode" type="checkbox"> Mode tablette murale</label>
-        <p class="account">Sur cet appareil seulement : l'écran reste allumé, en plein écran, et revient à l'accueil après 2 minutes sans contact.</p>
-        <label class="check"><input id="hub-mode" type="checkbox" checked> Vue hub, la maison au centre</label>
-        <p class="account">À l'horizontale : l'heure, la météo et l'agenda, les scènes et les pièces, autour du dessin de la maison.</p>
-        <label class="hub-style-pick">
-          Style de l'accueil
-          <select id="hub-style">
-            <option value="">Actuel</option>
-            <option value="v3">v3, la maison en vedette (essai)</option>
-          </select>
-        </label>
-        <p class="account">Sur cet appareil seulement. « Actuel » remet l'accueil d'avant, à tout moment.</p>
-        <details id="hub-pick" class="hub-pick">
-          <summary>Les scènes du hub (6 au plus)</summary>
-          <p class="account">Sans choix, les 6 premières par ordre alphabétique.</p>
-          <div id="hub-pick-list" class="hub-pick-list"></div>
-        </details>
-        <label class="check"><input id="saver-mode" type="checkbox" checked> Écran de veille après 5 minutes</label>
-        <p class="account">L'heure, la météo et la maison en grand, plus sombre la nuit. Un contact pour revenir.</p>
-      </div>
-      <!-- Parler à la maison (étape 96) : montré quand l'écoute est installée. -->
-      <div id="voice-options" class="tablet-option" hidden>
-        <label class="check"><input id="voice-follow" type="checkbox" checked> Enchaîner les phrases à la voix</label>
-        <p class="account">Sur cet appareil seulement : après la réponse, le micro se rouvre 6 secondes pour une phrase de suite (« et la cuisine aussi »). « Merci » ou un toucher de l'écran l'arrête.</p>
-        <!-- Le mot d'appel (étape 97) : montré quand le service d'écoute est là. -->
-        <div id="voice-wake-option" hidden>
-          <label class="check"><input id="voice-wake" type="checkbox"> Écouter le mot « <span id="voice-wake-word">Maison</span> »</label>
-          <p class="account">Sur cet appareil seulement : la tablette écoute en continu et se réveille quand une phrase commence par ce mot (« Maison, allume la cuisine »). Ce qui est dit près d'elle part vers le mini-PC de la maison, jamais sur Internet, et rien n'est gardé. Un signe reste affiché tant que c'est coché.</p>
+      <div class="set-layout">
+        <nav class="set-nav" aria-label="Rubriques des réglages">
+          <p id="account" class="account set-me"></p>
+          <p class="set-group">Cet appareil</p>
+          <button class="set-link" type="button" data-pane="apparence">Apparence</button>
+          <button class="set-link" type="button" data-pane="accueil">Tablette murale et accueil</button>
+          <button class="set-link" type="button" data-pane="voix">Voix</button>
+          <button class="set-link" type="button" data-pane="notifications">Notifications</button>
+          <p class="set-group">La maison, pour tous</p>
+          <button class="set-link" type="button" data-pane="cerveau">Préférences du Cerveau</button>
+          <button class="set-link" type="button" data-pane="dessin">Dessin de la maison</button>
+          <p class="set-group">Administration</p>
+          <button class="set-link" type="button" data-pane="integrations">Intégrations</button>
+          <button class="set-link" type="button" data-pane="piles">Piles</button>
+          <button class="set-link" type="button" data-pane="tablettes">Tablettes murales</button>
+          <button class="set-link" type="button" data-pane="systeme">Système</button>
+          <button id="logout" class="ghost danger" type="button">Se déconnecter</button>
+        </nav>
+        <div class="set-panes">
+          <button class="set-back ghost" type="button">‹ Réglages</button>
+          <section class="set-pane" data-pane="apparence" aria-labelledby="set-apparence" hidden>
+            <header class="set-head"><h3 id="set-apparence">Apparence</h3><span class="set-scope">Sur cet appareil</span></header>
+            <div class="theme-option">
+              <label hidden>
+                Apparence
+                <select id="theme">
+                  <option value="auto">Automatique (clair ou sombre, comme l'appareil)</option>
+                  <option value="light">Clair</option>
+                  <option value="dark">Sombre</option>
+                  <option value="plan">Plan d'architecte</option>
+                  <option value="plan-nuit">Plan d'architecte, de nuit (bleu)</option>
+                  <option value="maquette">Maquette (fond sombre, comme une maquette 3D)</option>
+                </select>
+              </label>
+              <div class="theme-tiles" role="radiogroup" aria-label="Thème">
+                <button class="theme-tile" type="button" role="radio" data-theme="auto"><i style="background:linear-gradient(135deg,#f4f2ee 50%,#24201c 50%)"></i><span>Automatique</span></button>
+                <button class="theme-tile" type="button" role="radio" data-theme="light"><i style="background:#e8e5df"></i><span>Clair</span></button>
+                <button class="theme-tile" type="button" role="radio" data-theme="dark"><i style="background:#1d1a17"></i><span>Sombre</span></button>
+                <button class="theme-tile" type="button" role="radio" data-theme="plan"><i style="background:repeating-linear-gradient(0deg,#f7f5ef 0 9px,#c9d3e3 9px 10px)"></i><span>Plan</span></button>
+                <button class="theme-tile" type="button" role="radio" data-theme="plan-nuit"><i style="background:repeating-linear-gradient(0deg,#16305c 0 9px,#3d5d94 9px 10px)"></i><span>Plan de nuit</span></button>
+                <button class="theme-tile" type="button" role="radio" data-theme="maquette"><i style="background:radial-gradient(circle at 50% 70%,#6b5a48,#1b1714)"></i><span>Maquette</span></button>
+              </div>
+              <p class="account">Automatique suit le réglage clair ou sombre de l'appareil. La télé peut être en plan, le téléphone en sombre.</p>
+            </div>
+          </section>
+          <section class="set-pane" data-pane="accueil" aria-labelledby="set-accueil" hidden>
+            <header class="set-head"><h3 id="set-accueil">Tablette murale et accueil</h3><span class="set-scope">Sur cet appareil</span></header>
+            <div class="tablet-option">
+              <label class="check"><input id="tablet-mode" type="checkbox"> Mode tablette murale</label>
+              <p class="account">L'écran reste allumé, en plein écran, et revient à l'accueil après 2 minutes sans contact.</p>
+              <label class="check"><input id="hub-mode" type="checkbox" checked> Vue hub, la maison au centre</label>
+              <p class="account">À l'horizontale : l'heure, la météo et l'agenda, les scènes et les pièces, autour du dessin de la maison.</p>
+              <label class="check"><input id="saver-mode" type="checkbox" checked> Écran de veille après 5 minutes</label>
+              <p class="account">L'heure, la météo et la maison en grand, plus sombre la nuit. Un contact pour revenir.</p>
+            </div>
+            <div class="tablet-option">
+              <label class="hub-style-pick">
+                Style de l'accueil
+                <select id="hub-style">
+                  <option value="">Actuel</option>
+                  <option value="v3">v3, la maison en vedette (essai)</option>
+                </select>
+              </label>
+              <p class="account">« Actuel » remet l'accueil d'avant, à tout moment.</p>
+              <details id="hub-pick" class="hub-pick">
+                <summary>Les scènes du hub (6 au plus)</summary>
+                <p class="account">Sans choix, les 6 premières par ordre alphabétique.</p>
+                <div id="hub-pick-list" class="hub-pick-list"></div>
+              </details>
+            </div>
+          </section>
+          <section class="set-pane" data-pane="voix" aria-labelledby="set-voix" hidden>
+            <header class="set-head"><h3 id="set-voix">Voix</h3><span class="set-scope">Sur cet appareil</span></header>
+            <!-- Parler à la maison (étape 96) : montré quand l'écoute est installée. -->
+            <div id="voice-options" class="tablet-option" hidden>
+              <label class="check"><input id="voice-follow" type="checkbox" checked> Enchaîner les phrases à la voix</label>
+              <p class="account">Après la réponse, le micro se rouvre 6 secondes pour une phrase de suite (« et la cuisine aussi »). « Merci » ou un toucher de l'écran l'arrête.</p>
+              <!-- Le mot d'appel (étape 97) : montré quand le service d'écoute est là. -->
+              <div id="voice-wake-option" hidden>
+                <label class="check"><input id="voice-wake" type="checkbox"> Écouter le mot « <span id="voice-wake-word">Maison</span> »</label>
+                <p class="account">La tablette écoute en continu et se réveille quand une phrase commence par ce mot (« Maison, allume la cuisine »). Ce qui est dit près d'elle part vers le mini-PC de la maison, jamais sur Internet, et rien n'est gardé. Un signe reste affiché tant que c'est coché.</p>
+              </div>
+            </div>
+          </section>
+          <section class="set-pane" data-pane="notifications" aria-labelledby="set-notifications" hidden>
+            <header class="set-head"><h3 id="set-notifications">Notifications</h3><span class="set-scope">Sur cet appareil</span></header>
+            <!-- Les notifications du navigateur (étape 50) : famille et administrateur. -->
+            <section id="push" class="push-option" aria-labelledby="push-title" hidden>
+              <h3 id="push-title" class="set-inner-title">Notifications sur cet appareil</h3>
+              <p id="push-status" class="account" role="status"></p>
+              <div class="push-actions">
+                <button id="push-enable" class="primary small" type="button" hidden>Activer</button>
+                <button id="push-test" class="ghost small" type="button" hidden>Envoyer un essai</button>
+                <button id="push-disable" class="ghost small" type="button" hidden>Désactiver</button>
+              </div>
+              <fieldset id="push-categories" class="push-categories" hidden>
+                <legend>Recevoir sur cet appareil</legend>
+                <label class="check"><input type="checkbox" data-bit="1"> Les ordres à valider</label>
+                <label class="check"><input type="checkbox" data-bit="2"> Les alertes du serveur</label>
+                <label class="check"><input type="checkbox" data-bit="4"> Les messages des automatisations</label>
+              </fieldset>
+              <ul id="push-devices" class="push-devices" aria-label="Mes autres appareils"></ul>
+            </section>
+          </section>
+          <section class="set-pane" data-pane="cerveau" aria-labelledby="set-cerveau" hidden>
+            <header class="set-head"><h3 id="set-cerveau">Préférences du Cerveau</h3><span class="set-scope all">Pour toute la maison</span></header>
+            <!-- Les préférences de la maison (étape 106) : lues par le cerveau avant chaque réponse. -->
+            <section id="cerveau-prefs" class="push-option" aria-labelledby="cerveau-prefs-title" hidden>
+              <h3 id="cerveau-prefs-title" class="set-inner-title">Préférences de la maison</h3>
+              <p class="account">Claude les lit avant de répondre, pour toute la famille : « cosy, c'est les lampes à 30 % », « les enfants se couchent à 20 h 30 ».</p>
+              <textarea id="cerveau-prefs-text" class="cerveau-prefs-text" rows="5" maxlength="2000" aria-labelledby="cerveau-prefs-title"></textarea>
+              <p id="cerveau-prefs-status" class="account" role="status"></p>
+              <div class="push-actions">
+                <button id="cerveau-prefs-save" class="primary small" type="button">Enregistrer</button>
+              </div>
+            </section>
+          </section>
+          <section class="set-pane" data-pane="dessin" aria-labelledby="set-dessin" hidden>
+            <header class="set-head"><h3 id="set-dessin">Dessin de la maison</h3><span class="set-scope all">Pour toute la maison</span></header>
+            <div class="push-option" data-follow="open-drawing">
+              <p class="account">Le fond (de jour, et de nuit), les calques qui suivent l'état des appareils et les valeurs posées sur le dessin. Sur tous les écrans.</p>
+              <div class="push-actions"><button id="open-drawing" class="primary small" type="button" hidden>Modifier le dessin…</button></div>
+            </div>
+          </section>
+          <section class="set-pane" data-pane="integrations" aria-labelledby="set-integrations" hidden>
+            <header class="set-head"><h3 id="set-integrations">Intégrations</h3><span class="set-scope admin">Administration</span></header>
+            <!-- La santé des intégrations (étape 45) : réservée à ceux qui voient tout. -->
+            <section id="integrations" class="integrations" aria-labelledby="integrations-title" hidden>
+              <h3 id="integrations-title" class="set-inner-title">Intégrations</h3>
+              <ul id="integration-list" class="integration-list"></ul>
+            </section>
+          </section>
+          <section class="set-pane" data-pane="piles" aria-labelledby="set-piles" hidden>
+            <header class="set-head"><h3 id="set-piles">Piles</h3><span class="set-scope admin">Administration</span></header>
+            <!-- Les piles de la maison, la plus faible d'abord (étape 61). -->
+            <section id="batteries" class="integrations" aria-labelledby="batteries-title" hidden>
+              <h3 id="batteries-title" class="set-inner-title">Piles</h3>
+              <ul id="battery-list" class="integration-list"></ul>
+            </section>
+          </section>
+          <section class="set-pane" data-pane="tablettes" aria-labelledby="set-tablettes" hidden>
+            <header class="set-head"><h3 id="set-tablettes">Tablettes murales</h3><span class="set-scope admin">Administration</span></header>
+            <!-- Les tablettes murales connectées (étape 78) : réservé à l'administrateur. -->
+            <section id="tablets" class="push-option" aria-labelledby="tablets-title" hidden>
+              <h3 id="tablets-title" class="set-inner-title">Tablettes murales</h3>
+              <p class="account">Elles restent connectées tant qu'elles servent. Pour en ajouter une : sur la tablette, coche « Tablette murale » à la connexion, avec un compte famille ou invité.</p>
+              <ul id="tablet-list" class="push-devices"></ul>
+            </section>
+          </section>
+          <section class="set-pane" data-pane="systeme" aria-labelledby="set-systeme" hidden>
+            <header class="set-head"><h3 id="set-systeme">Système</h3><span class="set-scope admin">Administration</span></header>
+            <!-- Ce que le serveur consomme (étape 47) : réservé à l'administrateur. -->
+            <section id="system" class="integrations" aria-labelledby="system-title" hidden>
+              <h3 id="system-title" class="set-inner-title">Système</h3>
+              <dl id="system-list" class="system-list"></dl>
+            </section>
+          </section>
         </div>
       </div>
-      <!-- Les notifications du navigateur (étape 50) : famille et administrateur. -->
-      <section id="push" class="push-option" aria-labelledby="push-title" hidden>
-        <h3 id="push-title">Notifications sur cet appareil</h3>
-        <p id="push-status" class="account" role="status"></p>
-        <div class="push-actions">
-          <button id="push-enable" class="primary small" type="button" hidden>Activer</button>
-          <button id="push-test" class="ghost small" type="button" hidden>Envoyer un essai</button>
-          <button id="push-disable" class="ghost small" type="button" hidden>Désactiver</button>
-        </div>
-        <fieldset id="push-categories" class="push-categories" hidden>
-          <legend>Recevoir sur cet appareil</legend>
-          <label class="check"><input type="checkbox" data-bit="1"> Les ordres à valider</label>
-          <label class="check"><input type="checkbox" data-bit="2"> Les alertes du serveur</label>
-          <label class="check"><input type="checkbox" data-bit="4"> Les messages des automatisations</label>
-        </fieldset>
-        <ul id="push-devices" class="push-devices" aria-label="Mes autres appareils"></ul>
-      </section>
-      <!-- Les préférences de la maison (étape 106) : lues par le cerveau avant chaque réponse. -->
-      <section id="cerveau-prefs" class="push-option" aria-labelledby="cerveau-prefs-title" hidden>
-        <h3 id="cerveau-prefs-title">Préférences de la maison</h3>
-        <p class="account">Claude les lit avant de répondre, pour toute la famille : « cosy, c'est les lampes à 30 % », « les enfants se couchent à 20 h 30 ».</p>
-        <textarea id="cerveau-prefs-text" class="cerveau-prefs-text" rows="5" maxlength="2000" aria-labelledby="cerveau-prefs-title"></textarea>
-        <p id="cerveau-prefs-status" class="account" role="status"></p>
-        <div class="push-actions">
-          <button id="cerveau-prefs-save" class="primary small" type="button">Enregistrer</button>
-        </div>
-      </section>
-      <!-- La santé des intégrations (étape 45) : réservée à ceux qui voient tout. -->
-      <section id="integrations" class="integrations" aria-labelledby="integrations-title" hidden>
-        <h3 id="integrations-title">Intégrations</h3>
-        <ul id="integration-list" class="integration-list"></ul>
-      </section>
-      <!-- Les piles de la maison, la plus faible d'abord (étape 61). -->
-      <section id="batteries" class="integrations" aria-labelledby="batteries-title" hidden>
-        <h3 id="batteries-title">Piles</h3>
-        <ul id="battery-list" class="integration-list"></ul>
-      </section>
-      <!-- Ce que le serveur consomme (étape 47) : réservé à l'administrateur. -->
-      <section id="system" class="integrations" aria-labelledby="system-title" hidden>
-        <h3 id="system-title">Système</h3>
-        <dl id="system-list" class="system-list"></dl>
-      </section>
-      <!-- Les tablettes murales connectées (étape 78) : réservé à l'administrateur. -->
-      <section id="tablets" class="push-option" aria-labelledby="tablets-title" hidden>
-        <h3 id="tablets-title">Tablettes murales</h3>
-        <p class="account">Elles restent connectées tant qu'elles servent. Pour en ajouter une : sur la tablette, coche « Tablette murale » à la connexion, avec un compte famille ou invité.</p>
-        <ul id="tablet-list" class="push-devices"></ul>
-      </section>
-      <button id="logout" class="ghost danger" type="button">Se déconnecter</button>
     </dialog>
     <dialog id="history" class="history-dialog" aria-labelledby="history-title">
       <div class="history-top">
