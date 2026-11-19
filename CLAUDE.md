@@ -42,3 +42,10 @@ explicite de David : la version est publique et téléchargée telle quelle. Voi
 
 La vérification Windows (`windows.yml`) tourne sur chaque PR prête, comme la
 CI Linux : plus besoin d'étiquette.
+
+## Tableau de bord : le style en Tailwind CSS
+
+- Le style s'écrit en classes **Tailwind v4** dans le HTML et le JS (`crates/ha-api/web/`). La source est `web/css/app.css` ; `web/style.css`, servi par le hub, en est **produit** par `scripts/tailwind.sh` (outil autonome, sans Node) : ne pas le modifier à la main, le reconstruire et le committer avec le changement. La CI (`web.yml`) vérifie qu'il est à jour.
+- Couleurs, polices, ombres : les jetons des thèmes (`bg-card`, `text-muted`, `bg-accent`, `font-titre`, `shadow-carte`…), jamais une couleur en dur, pour que clair, sombre, plan et maquette suivent.
+- Migration en cours : l'ancien CSS est dans `web/css/legacy.css`, une couche que les classes Tailwind remplacent toujours. Convertir une partie à la fois, puis retirer ses règles de `legacy.css`. Ne pas y ajouter de règles nouvelles.
+- Une classe construite dans le JS doit y être écrite en entier (`"bg-ok"`, pas `"bg-" + état`) : Tailwind ne trouve que les noms complets.

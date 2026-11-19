@@ -5,7 +5,9 @@
 //
 // account.js remplit et montre les blocs comme avant (mêmes id) ; ici, une
 // rubrique n'est cachée que si tout son contenu l'est, et un groupe que si
-// toutes ses rubriques le sont. Pas d'innerHTML.
+// toutes ses rubriques le sont. Le style est en classes Tailwind (css/app.css) :
+// data-view="list" ou "detail" sur le dialogue choisit ce que montre un
+// téléphone. Pas d'innerHTML.
 (() => {
   const dialog = document.getElementById("account-dialog");
   if (!dialog) return;
@@ -14,9 +16,24 @@
   const narrow = matchMedia("(max-width: 720px)");
   const paneOf = (name) => panes.find((p) => p.dataset.pane === name);
 
+  // Les cases à cocher en interrupteurs, le texte d'abord. Écrit en entier
+  // ici pour que Tailwind trouve les classes ; posé aussi sur les cases
+  // ajoutées plus tard (les scènes du hub).
+  const SWITCH = [
+    "relative", "order-2", "ml-auto", "shrink-0", "w-[2.6rem]", "h-6", "m-0", "rounded-full",
+    "bg-line", "appearance-none", "cursor-pointer", "transition-colors", "checked:bg-ok",
+    "after:absolute", "after:top-[3px]", "after:left-[3px]", "after:size-[18px]",
+    "after:rounded-full", "after:bg-white", "after:shadow", "after:transition-transform",
+    "checked:after:translate-x-[1.1rem]", "motion-reduce:transition-none",
+    "motion-reduce:after:transition-none",
+  ];
+  const switches = () => {
+    for (const input of dialog.querySelectorAll('label.check input[type="checkbox"]')) input.classList.add(...SWITCH);
+  };
+
   // Un bloc compte s'il n'est pas caché (ni le bouton qu'il accompagne).
   const shown = (block) => {
-    if (block.hidden || block.classList.contains("set-head")) return false;
+    if (block.hidden || block.tagName === "HEADER") return false;
     const follow = block.dataset.follow && document.getElementById(block.dataset.follow);
     return !follow || !follow.hidden;
   };
@@ -38,7 +55,7 @@
       if (link.dataset.pane === name) link.setAttribute("aria-current", "page");
       else link.removeAttribute("aria-current");
     }
-    dialog.classList.toggle("set-detail", detail);
+    dialog.dataset.view = detail ? "detail" : "list";
   }
 
   function current() {
@@ -48,6 +65,7 @@
 
   // À l'ouverture : la liste sur un téléphone, la rubrique en cours ailleurs.
   function opened() {
+    switches();
     refresh();
     show(current(), !narrow.matches);
   }
@@ -60,7 +78,7 @@
     });
   }
   dialog.querySelector(".set-back").addEventListener("click", () => {
-    dialog.classList.remove("set-detail");
+    dialog.dataset.view = "list";
     const link = links.find((l) => l.getAttribute("aria-current") === "page");
     if (link) link.focus();
   });
@@ -89,5 +107,5 @@
   }
   select.addEventListener("change", syncTiles);
   syncTiles();
-  for (const h of dialog.querySelectorAll(".set-head h3")) h.tabIndex = -1;
+  switches();
 })();

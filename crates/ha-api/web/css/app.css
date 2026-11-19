@@ -1,0 +1,58 @@
+/* Le tableau de bord en Tailwind CSS (v4).
+ *
+ * Ce fichier est la source : `web/style.css`, servi par le hub, en est tiré par
+ * `scripts/tailwind.sh` (outil autonome, sans Node). Ne pas modifier style.css
+ * à la main ; la CI vérifie qu'il est à jour.
+ *
+ * Migration : l'ancien CSS (`legacy.css`) est rangé dans une couche qui passe
+ * AVANT les classes Tailwind, qui l'emportent donc toujours. On convertit une
+ * partie de l'interface à la fois en classes dans le HTML/JS, puis on retire
+ * ses règles de legacy.css, jusqu'à le vider.
+ *
+ * Pas de « preflight » : legacy.css a sa propre remise à zéro. Les couleurs
+ * viennent des variables des thèmes (clair, sombre, plan, maquette) : une
+ * classe `bg-card` suit donc le thème sans variante `dark:`. */
+@layer theme, legacy, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "./legacy.css" layer(legacy);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+@source "../*.html";
+@source "../*.js";
+
+/* Les thèmes choisis dans les Réglages (attribut data-theme de <html>). */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, [data-theme="maquette"], [data-theme="maquette"] *));
+@custom-variant plan (&:where([data-theme|="plan"], [data-theme|="plan"] *));
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-card: var(--card);
+  --color-card-2: var(--card-2);
+  --color-line: var(--line);
+  --color-text: var(--text);
+  --color-text-2: var(--text-2);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-glow: var(--glow);
+  --color-glow-ink: var(--glow-ink);
+  --color-glow-soft: var(--glow-soft);
+  --color-heat: var(--heat);
+  --color-heat-ink: var(--heat-ink);
+  --color-heat-soft: var(--heat-soft);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-alert: var(--alert);
+  --color-alert-ink: var(--alert-ink);
+  --color-alert-soft: var(--alert-soft);
+  /* Noms distincts des variables de l'app (--font-display, --font-mono,
+     --shadow-float) : les mêmes noms se référenceraient eux-mêmes. */
+  --font-*: initial;
+  --font-sans: var(--font);
+  --font-titre: var(--font-display);
+  --font-code: var(--font-mono);
+  --radius-carte: var(--radius);
+  --shadow-carte: var(--shadow);
+  --shadow-flottant: var(--shadow-float);
+}

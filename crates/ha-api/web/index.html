@@ -188,38 +188,40 @@
       <button id="dock-energy" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg><span>Énergie</span></button>
       <button id="dock-account" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a4 4 0 1 0 0 8 4 4 0 1 0 0-8z"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span>Compte</span></button>
     </nav>
-    <!-- Les réglages (refonte) : un menu en trois groupes (cet appareil, la maison,
-         l'administration) et une rubrique à la fois. Les blocs gardent leurs id :
-         account.js les remplit et les montre comme avant ; settings.js ne cache
-         une rubrique que si tout son contenu est caché. -->
-    <dialog id="account-dialog" class="history-dialog account-dialog settings" aria-labelledby="account-title">
+    <!-- Les réglages : un menu en trois groupes (cet appareil, la maison,
+         l'administration) et une rubrique à la fois. En classes Tailwind
+         (css/app.css). Les blocs gardent leurs id : account.js les remplit et
+         les montre comme avant ; settings.js ne cache une rubrique que si tout
+         son contenu est caché. data-view (list / detail) : sur un téléphone,
+         le menu puis la rubrique. -->
+    <dialog id="account-dialog" class="history-dialog group/set w-[min(980px,calc(100vw-2rem))] open:grid open:grid-cols-1 gap-4" data-view="detail" aria-labelledby="account-title">
       <div class="history-top">
         <h2 id="account-title">Réglages</h2>
         <button id="account-close" class="ghost" type="button">Fermer</button>
       </div>
-      <div class="set-layout">
-        <nav class="set-nav" aria-label="Rubriques des réglages">
-          <p id="account" class="account set-me"></p>
-          <p class="set-group">Cet appareil</p>
-          <button class="set-link" type="button" data-pane="apparence">Apparence</button>
-          <button class="set-link" type="button" data-pane="accueil">Tablette murale et accueil</button>
-          <button class="set-link" type="button" data-pane="voix">Voix</button>
-          <button class="set-link" type="button" data-pane="notifications">Notifications</button>
-          <p class="set-group">La maison, pour tous</p>
-          <button class="set-link" type="button" data-pane="cerveau">Préférences du Cerveau</button>
-          <button class="set-link" type="button" data-pane="dessin">Dessin de la maison</button>
-          <p class="set-group">Administration</p>
-          <button class="set-link" type="button" data-pane="integrations">Intégrations</button>
-          <button class="set-link" type="button" data-pane="piles">Piles</button>
-          <button class="set-link" type="button" data-pane="tablettes">Tablettes murales</button>
-          <button class="set-link" type="button" data-pane="systeme">Système</button>
-          <button id="logout" class="ghost danger" type="button">Se déconnecter</button>
+      <div class="grid grid-cols-[250px_minmax(0,1fr)] gap-6 min-h-[min(70vh,620px)] max-[720px]:grid-cols-1 max-[720px]:min-h-0">
+        <nav class="flex flex-col gap-0.5 self-start p-3 rounded-2xl bg-card-2 max-[720px]:group-data-[view=detail]/set:hidden" aria-label="Rubriques des réglages">
+          <p id="account" class="account m-0 mb-1 px-2 pt-1 pb-3 border-b border-line"></p>
+          <p class="set-group mx-2 mt-3.5 mb-1 text-xs font-bold uppercase tracking-[0.08em] text-muted">Cet appareil</p>
+          <button class="set-link px-3 py-2.5 max-[720px]:py-3 rounded-xl border-0 bg-transparent text-left text-text cursor-pointer hover:bg-card aria-[current=page]:bg-accent aria-[current=page]:text-accent-ink aria-[current=page]:font-semibold" type="button" data-pane="apparence">Apparence</button>
+          <button class="set-link px-3 py-2.5 max-[720px]:py-3 rounded-xl border-0 bg-transparent text-left text-text cursor-pointer hover:bg-card aria-[current=page]:bg-accent aria-[current=page]:text-accent-ink aria-[current=page]:font-semibold" type="button" data-pane="accueil">Tablette murale et accueil</button>
+          <button class="set-link px-3 py-2.5 max-[720px]:py-3 rounded-xl border-0 bg-transparent text-left text-text cursor-pointer hover:bg-card aria-[current=page]:bg-accent aria-[current=page]:text-accent-ink aria-[current=page]:font-semibold" type="button" data-pane="voix">Voix</button>
+          <button class="set-link px-3 py-2.5 max-[720px]:py-3 rounded-xl border-0 bg-transparent text-left text-text cursor-pointer hover:bg-card aria-[current=page]:bg-accent aria-[current=page]:text-accent-ink aria-[current=page]:font-semibold" type="button" data-pane="notifications">Notifications</button>
+          <p class="set-group mx-2 mt-3.5 mb-1 text-xs font-bold uppercase tracking-[0.08em] text-muted">La maison, pour tous</p>
+          <button class="set-link px-3 py-2.5 max-[720px]:py-3 rounded-xl border-0 bg-transparent text-left text-text cursor-pointer hover:bg-card aria-[current=page]:bg-accent aria-[current=page]:text-accent-ink aria-[current=page]:font-semibold" type="button" data-pane="cerveau">Préférences du Cerveau</button>
+          <button class="set-link px-3 py-2.5 max-[720px]:py-3 rounded-xl border-0 bg-transparent text-left text-text cursor-pointer hover:bg-card aria-[current=page]:bg-accent aria-[current=page]:text-accent-ink aria-[current=page]:font-semibold" type="button" data-pane="dessin">Dessin de la maison</button>
+          <p class="set-group mx-2 mt-3.5 mb-1 text-xs font-bold uppercase tracking-[0.08em] text-muted">Administration</p>
+          <button class="set-link px-3 py-2.5 max-[720px]:py-3 rounded-xl border-0 bg-transparent text-left text-text cursor-pointer hover:bg-card aria-[current=page]:bg-accent aria-[current=page]:text-accent-ink aria-[current=page]:font-semibold" type="button" data-pane="integrations">Intégrations</button>
+          <button class="set-link px-3 py-2.5 max-[720px]:py-3 rounded-xl border-0 bg-transparent text-left text-text cursor-pointer hover:bg-card aria-[current=page]:bg-accent aria-[current=page]:text-accent-ink aria-[current=page]:font-semibold" type="button" data-pane="piles">Piles</button>
+          <button class="set-link px-3 py-2.5 max-[720px]:py-3 rounded-xl border-0 bg-transparent text-left text-text cursor-pointer hover:bg-card aria-[current=page]:bg-accent aria-[current=page]:text-accent-ink aria-[current=page]:font-semibold" type="button" data-pane="tablettes">Tablettes murales</button>
+          <button class="set-link px-3 py-2.5 max-[720px]:py-3 rounded-xl border-0 bg-transparent text-left text-text cursor-pointer hover:bg-card aria-[current=page]:bg-accent aria-[current=page]:text-accent-ink aria-[current=page]:font-semibold" type="button" data-pane="systeme">Système</button>
+          <button id="logout" class="ghost danger mt-4" type="button">Se déconnecter</button>
         </nav>
-        <div class="set-panes">
-          <button class="set-back ghost" type="button">‹ Réglages</button>
-          <section class="set-pane" data-pane="apparence" aria-labelledby="set-apparence" hidden>
-            <header class="set-head"><h3 id="set-apparence">Apparence</h3><span class="set-scope">Sur cet appareil</span></header>
-            <div class="theme-option">
+        <div class="set-panes grid content-start gap-3.5 min-w-0 max-[720px]:group-data-[view=list]/set:hidden">
+          <button class="set-back ghost hidden justify-self-start max-[720px]:inline-flex" type="button">‹ Réglages</button>
+          <section class="set-pane grid content-start gap-3.5" data-pane="apparence" aria-labelledby="set-apparence" hidden>
+            <header class="flex flex-wrap items-center gap-2.5"><h3 id="set-apparence" class="m-0 font-titre text-[1.4rem] focus:outline-none" tabindex="-1">Apparence</h3><span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-glow-soft text-glow-ink">Sur cet appareil</span></header>
+            <div class="grid gap-2 p-4 border border-line rounded-2xl bg-card">
               <label hidden>
                 Apparence
                 <select id="theme">
@@ -231,126 +233,126 @@
                   <option value="maquette">Maquette (fond sombre, comme une maquette 3D)</option>
                 </select>
               </label>
-              <div class="theme-tiles" role="radiogroup" aria-label="Thème">
-                <button class="theme-tile" type="button" role="radio" data-theme="auto"><i style="background:linear-gradient(135deg,#f4f2ee 50%,#24201c 50%)"></i><span>Automatique</span></button>
-                <button class="theme-tile" type="button" role="radio" data-theme="light"><i style="background:#e8e5df"></i><span>Clair</span></button>
-                <button class="theme-tile" type="button" role="radio" data-theme="dark"><i style="background:#1d1a17"></i><span>Sombre</span></button>
-                <button class="theme-tile" type="button" role="radio" data-theme="plan"><i style="background:repeating-linear-gradient(0deg,#f7f5ef 0 9px,#c9d3e3 9px 10px)"></i><span>Plan</span></button>
-                <button class="theme-tile" type="button" role="radio" data-theme="plan-nuit"><i style="background:repeating-linear-gradient(0deg,#16305c 0 9px,#3d5d94 9px 10px)"></i><span>Plan de nuit</span></button>
-                <button class="theme-tile" type="button" role="radio" data-theme="maquette"><i style="background:radial-gradient(circle at 50% 70%,#6b5a48,#1b1714)"></i><span>Maquette</span></button>
+              <div class="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-2.5" role="radiogroup" aria-label="Thème">
+                <button class="theme-tile overflow-hidden p-0 border-2 border-line rounded-xl bg-card text-text text-[0.8rem] cursor-pointer aria-checked:border-accent aria-checked:ring-3 aria-checked:ring-accent-soft aria-checked:font-semibold" type="button" role="radio" data-theme="auto"><i class="block h-13 bg-[linear-gradient(135deg,#f4f2ee_50%,#24201c_50%)]"></i><span class="block px-1 py-1.5">Automatique</span></button>
+                <button class="theme-tile overflow-hidden p-0 border-2 border-line rounded-xl bg-card text-text text-[0.8rem] cursor-pointer aria-checked:border-accent aria-checked:ring-3 aria-checked:ring-accent-soft aria-checked:font-semibold" type="button" role="radio" data-theme="light"><i class="block h-13 bg-[#e8e5df]"></i><span class="block px-1 py-1.5">Clair</span></button>
+                <button class="theme-tile overflow-hidden p-0 border-2 border-line rounded-xl bg-card text-text text-[0.8rem] cursor-pointer aria-checked:border-accent aria-checked:ring-3 aria-checked:ring-accent-soft aria-checked:font-semibold" type="button" role="radio" data-theme="dark"><i class="block h-13 bg-[#1d1a17]"></i><span class="block px-1 py-1.5">Sombre</span></button>
+                <button class="theme-tile overflow-hidden p-0 border-2 border-line rounded-xl bg-card text-text text-[0.8rem] cursor-pointer aria-checked:border-accent aria-checked:ring-3 aria-checked:ring-accent-soft aria-checked:font-semibold" type="button" role="radio" data-theme="plan"><i class="block h-13 bg-[repeating-linear-gradient(0deg,#f7f5ef_0_9px,#c9d3e3_9px_10px)]"></i><span class="block px-1 py-1.5">Plan</span></button>
+                <button class="theme-tile overflow-hidden p-0 border-2 border-line rounded-xl bg-card text-text text-[0.8rem] cursor-pointer aria-checked:border-accent aria-checked:ring-3 aria-checked:ring-accent-soft aria-checked:font-semibold" type="button" role="radio" data-theme="plan-nuit"><i class="block h-13 bg-[repeating-linear-gradient(0deg,#16305c_0_9px,#3d5d94_9px_10px)]"></i><span class="block px-1 py-1.5">Plan de nuit</span></button>
+                <button class="theme-tile overflow-hidden p-0 border-2 border-line rounded-xl bg-card text-text text-[0.8rem] cursor-pointer aria-checked:border-accent aria-checked:ring-3 aria-checked:ring-accent-soft aria-checked:font-semibold" type="button" role="radio" data-theme="maquette"><i class="block h-13 bg-[radial-gradient(circle_at_50%_70%,#6b5a48,#1b1714)]"></i><span class="block px-1 py-1.5">Maquette</span></button>
               </div>
-              <p class="account">Automatique suit le réglage clair ou sombre de l'appareil. La télé peut être en plan, le téléphone en sombre.</p>
+              <p class="account text-[0.85rem]">Automatique suit le réglage clair ou sombre de l'appareil. La télé peut être en plan, le téléphone en sombre.</p>
             </div>
           </section>
-          <section class="set-pane" data-pane="accueil" aria-labelledby="set-accueil" hidden>
-            <header class="set-head"><h3 id="set-accueil">Tablette murale et accueil</h3><span class="set-scope">Sur cet appareil</span></header>
-            <div class="tablet-option">
-              <label class="check"><input id="tablet-mode" type="checkbox"> Mode tablette murale</label>
-              <p class="account">L'écran reste allumé, en plein écran, et revient à l'accueil après 2 minutes sans contact.</p>
-              <label class="check"><input id="hub-mode" type="checkbox" checked> Vue hub, la maison au centre</label>
-              <p class="account">À l'horizontale : l'heure, la météo et l'agenda, les scènes et les pièces, autour du dessin de la maison.</p>
-              <label class="check"><input id="saver-mode" type="checkbox" checked> Écran de veille après 5 minutes</label>
-              <p class="account">L'heure, la météo et la maison en grand, plus sombre la nuit. Un contact pour revenir.</p>
+          <section class="set-pane grid content-start gap-3.5" data-pane="accueil" aria-labelledby="set-accueil" hidden>
+            <header class="flex flex-wrap items-center gap-2.5"><h3 id="set-accueil" class="m-0 font-titre text-[1.4rem] focus:outline-none" tabindex="-1">Tablette murale et accueil</h3><span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-glow-soft text-glow-ink">Sur cet appareil</span></header>
+            <div class="grid gap-2 p-4 border border-line rounded-2xl bg-card">
+              <label class="check flex items-center gap-3 font-semibold"><input id="tablet-mode" type="checkbox"> Mode tablette murale</label>
+              <p class="account text-[0.85rem]">L'écran reste allumé, en plein écran, et revient à l'accueil après 2 minutes sans contact.</p>
+              <label class="check flex items-center gap-3 font-semibold"><input id="hub-mode" type="checkbox" checked> Vue hub, la maison au centre</label>
+              <p class="account text-[0.85rem]">À l'horizontale : l'heure, la météo et l'agenda, les scènes et les pièces, autour du dessin de la maison.</p>
+              <label class="check flex items-center gap-3 font-semibold"><input id="saver-mode" type="checkbox" checked> Écran de veille après 5 minutes</label>
+              <p class="account text-[0.85rem]">L'heure, la météo et la maison en grand, plus sombre la nuit. Un contact pour revenir.</p>
             </div>
-            <div class="tablet-option">
-              <label class="hub-style-pick">
+            <div class="grid gap-2 p-4 border border-line rounded-2xl bg-card">
+              <label class="grid gap-1 font-semibold">
                 Style de l'accueil
-                <select id="hub-style">
+                <select id="hub-style" class="max-w-full min-w-0 font-normal">
                   <option value="">Actuel</option>
                   <option value="v3">v3, la maison en vedette (essai)</option>
                 </select>
               </label>
-              <p class="account">« Actuel » remet l'accueil d'avant, à tout moment.</p>
+              <p class="account text-[0.85rem]">« Actuel » remet l'accueil d'avant, à tout moment.</p>
               <details id="hub-pick" class="hub-pick">
                 <summary>Les scènes du hub (6 au plus)</summary>
-                <p class="account">Sans choix, les 6 premières par ordre alphabétique.</p>
+                <p class="account text-[0.85rem]">Sans choix, les 6 premières par ordre alphabétique.</p>
                 <div id="hub-pick-list" class="hub-pick-list"></div>
               </details>
             </div>
           </section>
-          <section class="set-pane" data-pane="voix" aria-labelledby="set-voix" hidden>
-            <header class="set-head"><h3 id="set-voix">Voix</h3><span class="set-scope">Sur cet appareil</span></header>
+          <section class="set-pane grid content-start gap-3.5" data-pane="voix" aria-labelledby="set-voix" hidden>
+            <header class="flex flex-wrap items-center gap-2.5"><h3 id="set-voix" class="m-0 font-titre text-[1.4rem] focus:outline-none" tabindex="-1">Voix</h3><span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-glow-soft text-glow-ink">Sur cet appareil</span></header>
             <!-- Parler à la maison (étape 96) : montré quand l'écoute est installée. -->
-            <div id="voice-options" class="tablet-option" hidden>
-              <label class="check"><input id="voice-follow" type="checkbox" checked> Enchaîner les phrases à la voix</label>
-              <p class="account">Après la réponse, le micro se rouvre 6 secondes pour une phrase de suite (« et la cuisine aussi »). « Merci » ou un toucher de l'écran l'arrête.</p>
+            <div id="voice-options" class="grid gap-2 p-4 border border-line rounded-2xl bg-card" hidden>
+              <label class="check flex items-center gap-3 font-semibold"><input id="voice-follow" type="checkbox" checked> Enchaîner les phrases à la voix</label>
+              <p class="account text-[0.85rem]">Après la réponse, le micro se rouvre 6 secondes pour une phrase de suite (« et la cuisine aussi »). « Merci » ou un toucher de l'écran l'arrête.</p>
               <!-- Le mot d'appel (étape 97) : montré quand le service d'écoute est là. -->
-              <div id="voice-wake-option" hidden>
-                <label class="check"><input id="voice-wake" type="checkbox"> Écouter le mot « <span id="voice-wake-word">Maison</span> »</label>
-                <p class="account">La tablette écoute en continu et se réveille quand une phrase commence par ce mot (« Maison, allume la cuisine »). Ce qui est dit près d'elle part vers le mini-PC de la maison, jamais sur Internet, et rien n'est gardé. Un signe reste affiché tant que c'est coché.</p>
+              <div id="voice-wake-option" class="grid gap-2" hidden>
+                <label class="check flex items-center gap-3 font-semibold"><input id="voice-wake" type="checkbox"> Écouter le mot « <span id="voice-wake-word">Maison</span> »</label>
+                <p class="account text-[0.85rem]">La tablette écoute en continu et se réveille quand une phrase commence par ce mot (« Maison, allume la cuisine »). Ce qui est dit près d'elle part vers le mini-PC de la maison, jamais sur Internet, et rien n'est gardé. Un signe reste affiché tant que c'est coché.</p>
               </div>
             </div>
           </section>
-          <section class="set-pane" data-pane="notifications" aria-labelledby="set-notifications" hidden>
-            <header class="set-head"><h3 id="set-notifications">Notifications</h3><span class="set-scope">Sur cet appareil</span></header>
+          <section class="set-pane grid content-start gap-3.5" data-pane="notifications" aria-labelledby="set-notifications" hidden>
+            <header class="flex flex-wrap items-center gap-2.5"><h3 id="set-notifications" class="m-0 font-titre text-[1.4rem] focus:outline-none" tabindex="-1">Notifications</h3><span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-glow-soft text-glow-ink">Sur cet appareil</span></header>
             <!-- Les notifications du navigateur (étape 50) : famille et administrateur. -->
-            <section id="push" class="push-option" aria-labelledby="push-title" hidden>
-              <h3 id="push-title" class="set-inner-title">Notifications sur cet appareil</h3>
-              <p id="push-status" class="account" role="status"></p>
-              <div class="push-actions">
+            <section id="push" class="grid gap-2 p-4 border border-line rounded-2xl bg-card" aria-labelledby="push-title" hidden>
+              <h3 id="push-title" class="sr-only">Notifications sur cet appareil</h3>
+              <p id="push-status" class="account text-[0.85rem]" role="status"></p>
+              <div class="flex flex-wrap gap-2 [&:not(:has(button:not([hidden])))]:hidden">
                 <button id="push-enable" class="primary small" type="button" hidden>Activer</button>
                 <button id="push-test" class="ghost small" type="button" hidden>Envoyer un essai</button>
                 <button id="push-disable" class="ghost small" type="button" hidden>Désactiver</button>
               </div>
-              <fieldset id="push-categories" class="push-categories" hidden>
-                <legend>Recevoir sur cet appareil</legend>
-                <label class="check"><input type="checkbox" data-bit="1"> Les ordres à valider</label>
-                <label class="check"><input type="checkbox" data-bit="2"> Les alertes du serveur</label>
-                <label class="check"><input type="checkbox" data-bit="4"> Les messages des automatisations</label>
+              <fieldset id="push-categories" class="grid gap-2 m-0 px-3 py-2.5 border border-line rounded-xl" hidden>
+                <legend class="px-1 text-[0.82rem] text-muted">Recevoir sur cet appareil</legend>
+                <label class="check flex items-center gap-3 font-semibold"><input type="checkbox" data-bit="1"> Les ordres à valider</label>
+                <label class="check flex items-center gap-3 font-semibold"><input type="checkbox" data-bit="2"> Les alertes du serveur</label>
+                <label class="check flex items-center gap-3 font-semibold"><input type="checkbox" data-bit="4"> Les messages des automatisations</label>
               </fieldset>
               <ul id="push-devices" class="push-devices" aria-label="Mes autres appareils"></ul>
             </section>
           </section>
-          <section class="set-pane" data-pane="cerveau" aria-labelledby="set-cerveau" hidden>
-            <header class="set-head"><h3 id="set-cerveau">Préférences du Cerveau</h3><span class="set-scope all">Pour toute la maison</span></header>
+          <section class="set-pane grid content-start gap-3.5" data-pane="cerveau" aria-labelledby="set-cerveau" hidden>
+            <header class="flex flex-wrap items-center gap-2.5"><h3 id="set-cerveau" class="m-0 font-titre text-[1.4rem] focus:outline-none" tabindex="-1">Préférences du Cerveau</h3><span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-accent-soft text-accent">Pour toute la maison</span></header>
             <!-- Les préférences de la maison (étape 106) : lues par le cerveau avant chaque réponse. -->
-            <section id="cerveau-prefs" class="push-option" aria-labelledby="cerveau-prefs-title" hidden>
-              <h3 id="cerveau-prefs-title" class="set-inner-title">Préférences de la maison</h3>
-              <p class="account">Claude les lit avant de répondre, pour toute la famille : « cosy, c'est les lampes à 30 % », « les enfants se couchent à 20 h 30 ».</p>
-              <textarea id="cerveau-prefs-text" class="cerveau-prefs-text" rows="5" maxlength="2000" aria-labelledby="cerveau-prefs-title"></textarea>
-              <p id="cerveau-prefs-status" class="account" role="status"></p>
-              <div class="push-actions">
+            <section id="cerveau-prefs" class="grid gap-2 p-4 border border-line rounded-2xl bg-card" aria-labelledby="cerveau-prefs-title" hidden>
+              <h3 id="cerveau-prefs-title" class="sr-only">Préférences de la maison</h3>
+              <p class="account text-[0.85rem]">Claude les lit avant de répondre, pour toute la famille : « cosy, c'est les lampes à 30 % », « les enfants se couchent à 20 h 30 ».</p>
+              <textarea id="cerveau-prefs-text" class="w-full min-h-30 resize-y" rows="5" maxlength="2000" aria-labelledby="cerveau-prefs-title"></textarea>
+              <p id="cerveau-prefs-status" class="account text-[0.85rem]" role="status"></p>
+              <div class="flex flex-wrap gap-2 [&:not(:has(button:not([hidden])))]:hidden">
                 <button id="cerveau-prefs-save" class="primary small" type="button">Enregistrer</button>
               </div>
             </section>
           </section>
-          <section class="set-pane" data-pane="dessin" aria-labelledby="set-dessin" hidden>
-            <header class="set-head"><h3 id="set-dessin">Dessin de la maison</h3><span class="set-scope all">Pour toute la maison</span></header>
-            <div class="push-option" data-follow="open-drawing">
-              <p class="account">Le fond (de jour, et de nuit), les calques qui suivent l'état des appareils et les valeurs posées sur le dessin. Sur tous les écrans.</p>
-              <div class="push-actions"><button id="open-drawing" class="primary small" type="button" hidden>Modifier le dessin…</button></div>
+          <section class="set-pane grid content-start gap-3.5" data-pane="dessin" aria-labelledby="set-dessin" hidden>
+            <header class="flex flex-wrap items-center gap-2.5"><h3 id="set-dessin" class="m-0 font-titre text-[1.4rem] focus:outline-none" tabindex="-1">Dessin de la maison</h3><span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-accent-soft text-accent">Pour toute la maison</span></header>
+            <div class="grid gap-2 p-4 border border-line rounded-2xl bg-card" data-follow="open-drawing">
+              <p class="account text-[0.85rem]">Le fond (de jour, et de nuit), les calques qui suivent l'état des appareils et les valeurs posées sur le dessin. Sur tous les écrans.</p>
+              <div class="flex flex-wrap gap-2 [&:not(:has(button:not([hidden])))]:hidden"><button id="open-drawing" class="primary small" type="button" hidden>Modifier le dessin…</button></div>
             </div>
           </section>
-          <section class="set-pane" data-pane="integrations" aria-labelledby="set-integrations" hidden>
-            <header class="set-head"><h3 id="set-integrations">Intégrations</h3><span class="set-scope admin">Administration</span></header>
+          <section class="set-pane grid content-start gap-3.5" data-pane="integrations" aria-labelledby="set-integrations" hidden>
+            <header class="flex flex-wrap items-center gap-2.5"><h3 id="set-integrations" class="m-0 font-titre text-[1.4rem] focus:outline-none" tabindex="-1">Intégrations</h3><span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-alert-soft text-alert-ink">Administration</span></header>
             <!-- La santé des intégrations (étape 45) : réservée à ceux qui voient tout. -->
-            <section id="integrations" class="integrations" aria-labelledby="integrations-title" hidden>
-              <h3 id="integrations-title" class="set-inner-title">Intégrations</h3>
+            <section id="integrations" class="grid gap-2 p-4 border border-line rounded-2xl bg-card" aria-labelledby="integrations-title" hidden>
+              <h3 id="integrations-title" class="sr-only">Intégrations</h3>
               <ul id="integration-list" class="integration-list"></ul>
             </section>
           </section>
-          <section class="set-pane" data-pane="piles" aria-labelledby="set-piles" hidden>
-            <header class="set-head"><h3 id="set-piles">Piles</h3><span class="set-scope admin">Administration</span></header>
+          <section class="set-pane grid content-start gap-3.5" data-pane="piles" aria-labelledby="set-piles" hidden>
+            <header class="flex flex-wrap items-center gap-2.5"><h3 id="set-piles" class="m-0 font-titre text-[1.4rem] focus:outline-none" tabindex="-1">Piles</h3><span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-alert-soft text-alert-ink">Administration</span></header>
             <!-- Les piles de la maison, la plus faible d'abord (étape 61). -->
-            <section id="batteries" class="integrations" aria-labelledby="batteries-title" hidden>
-              <h3 id="batteries-title" class="set-inner-title">Piles</h3>
+            <section id="batteries" class="grid gap-2 p-4 border border-line rounded-2xl bg-card" aria-labelledby="batteries-title" hidden>
+              <h3 id="batteries-title" class="sr-only">Piles</h3>
               <ul id="battery-list" class="integration-list"></ul>
             </section>
           </section>
-          <section class="set-pane" data-pane="tablettes" aria-labelledby="set-tablettes" hidden>
-            <header class="set-head"><h3 id="set-tablettes">Tablettes murales</h3><span class="set-scope admin">Administration</span></header>
+          <section class="set-pane grid content-start gap-3.5" data-pane="tablettes" aria-labelledby="set-tablettes" hidden>
+            <header class="flex flex-wrap items-center gap-2.5"><h3 id="set-tablettes" class="m-0 font-titre text-[1.4rem] focus:outline-none" tabindex="-1">Tablettes murales</h3><span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-alert-soft text-alert-ink">Administration</span></header>
             <!-- Les tablettes murales connectées (étape 78) : réservé à l'administrateur. -->
-            <section id="tablets" class="push-option" aria-labelledby="tablets-title" hidden>
-              <h3 id="tablets-title" class="set-inner-title">Tablettes murales</h3>
-              <p class="account">Elles restent connectées tant qu'elles servent. Pour en ajouter une : sur la tablette, coche « Tablette murale » à la connexion, avec un compte famille ou invité.</p>
+            <section id="tablets" class="grid gap-2 p-4 border border-line rounded-2xl bg-card" aria-labelledby="tablets-title" hidden>
+              <h3 id="tablets-title" class="sr-only">Tablettes murales</h3>
+              <p class="account text-[0.85rem]">Elles restent connectées tant qu'elles servent. Pour en ajouter une : sur la tablette, coche « Tablette murale » à la connexion, avec un compte famille ou invité.</p>
               <ul id="tablet-list" class="push-devices"></ul>
             </section>
           </section>
-          <section class="set-pane" data-pane="systeme" aria-labelledby="set-systeme" hidden>
-            <header class="set-head"><h3 id="set-systeme">Système</h3><span class="set-scope admin">Administration</span></header>
+          <section class="set-pane grid content-start gap-3.5" data-pane="systeme" aria-labelledby="set-systeme" hidden>
+            <header class="flex flex-wrap items-center gap-2.5"><h3 id="set-systeme" class="m-0 font-titre text-[1.4rem] focus:outline-none" tabindex="-1">Système</h3><span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-alert-soft text-alert-ink">Administration</span></header>
             <!-- Ce que le serveur consomme (étape 47) : réservé à l'administrateur. -->
-            <section id="system" class="integrations" aria-labelledby="system-title" hidden>
-              <h3 id="system-title" class="set-inner-title">Système</h3>
+            <section id="system" class="grid gap-2 p-4 border border-line rounded-2xl bg-card" aria-labelledby="system-title" hidden>
+              <h3 id="system-title" class="sr-only">Système</h3>
               <dl id="system-list" class="system-list"></dl>
             </section>
           </section>
