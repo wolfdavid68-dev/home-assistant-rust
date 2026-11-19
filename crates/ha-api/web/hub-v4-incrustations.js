@@ -129,9 +129,15 @@ function hubV4Music() {
   });
 
   const speakers = el("div", { class: "flex flex-col gap-1.5", role: "group", "aria-label": "Enceintes" });
+  // Redessinées seulement si quelque chose change : refresh tourne chaque
+  // seconde, et un bouton refait sous le doigt perd le toucher.
+  let speakersMark = "";
   const paintSpeakers = () => {
     const list = musicPlayers();
     speakers.hidden = list.length < 2;
+    const mark = JSON.stringify([id, ...list.map((player) => [player.entity_id, player.state, nameOf(player)])]);
+    if (mark === speakersMark) return;
+    speakersMark = mark;
     swap(speakers, ...list.map((player) => {
       const playing = player.state === "playing";
       const node = el("button", {
