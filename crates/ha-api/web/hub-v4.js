@@ -1017,7 +1017,9 @@ function hubV4Approval() {
     busy = true;
     deny.disabled = true;
     approve.disabled = true;
-    const { status, data } = await api("POST", `/api/approvals/${shown}`, { approve: yes });
+    // Sans réseau, api() lève une erreur : les boutons ne doivent pas rester bloqués.
+    const { status, data } = await api("POST", `/api/approvals/${shown}`, { approve: yes })
+      .catch(() => ({ status: 0, data: {} }));
     busy = false;
     deny.disabled = false;
     approve.disabled = false;
