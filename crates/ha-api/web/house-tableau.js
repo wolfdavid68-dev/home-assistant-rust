@@ -899,6 +899,8 @@ function roomThermometer(states) {
 }
 
 function openRoom(name) {
+  // Accueil v4 : la pièce a sa page plein écran (hub-v4-pieces.js).
+  if (typeof hubV4Page === "function" && hubV4Page(name)) return;
   // Le tableau : la pièce s'ouvre dans son onglet. La vue hub garde la fenêtre.
   if (isBoard() && document.documentElement.dataset.hub !== "on") return openRoomTab(name);
   closeRoomTab();

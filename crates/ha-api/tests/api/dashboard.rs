@@ -39,6 +39,7 @@ async fn dashboard_files_are_served_with_security_headers() {
         ("/musique.js", "text/javascript; charset=utf-8"),
         ("/hub-v3.js", "text/javascript; charset=utf-8"),
         ("/hub-v4.js", "text/javascript; charset=utf-8"),
+        ("/hub-v4-pieces.js", "text/javascript; charset=utf-8"),
         ("/ecoute.js", "text/javascript; charset=utf-8"),
         ("/house.svg", "image/svg+xml"),
         ("/style.css", "text/css; charset=utf-8"),
@@ -174,6 +175,10 @@ fn dashboard_never_uses_inner_html() {
         ("musique.js", include_str!("../../web/musique.js")),
         ("hub-v3.js", include_str!("../../web/hub-v3.js")),
         ("hub-v4.js", include_str!("../../web/hub-v4.js")),
+        (
+            "hub-v4-pieces.js",
+            include_str!("../../web/hub-v4-pieces.js"),
+        ),
         ("ecoute.js", include_str!("../../web/ecoute.js")),
         ("sw.js", include_str!("../../web/sw.js")),
     ];
