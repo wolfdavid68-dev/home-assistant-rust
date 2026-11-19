@@ -143,12 +143,18 @@ function hubV4Doorbell(state, at = doorbellRang(state)) {
     body: [photo, el("div", { class: "flex gap-2" }, ignore, look)],
     spot: hubV4DoorbellSpot(id),
     refresh,
+    // L'événement « close » arrive après coup : si une autre fenêtre de la
+    // sonnette s'est ouverte entre-temps, son minuteur et sa caméra restent.
     onClose: () => {
+      if (doorbell.owner !== mine) return;
+      doorbell.owner = null;
       clearTimeout(doorbell.closeTimer);
       if (doorbell.current === id) doorbell.current = null;
     },
   });
   // Après hubV4Overlay : il ferme d'abord la fenêtre d'avant (qui oublie la sonnette).
+  const mine = {};
+  doorbell.owner = mine;
   doorbell.current = id;
   hubV4DoorbellTimer();
   return true;
@@ -278,9 +284,14 @@ function hubV4Camera(entityId) {
   dialog.addEventListener("pointerdown", hubV4DoorbellTimer);
   dialog.addEventListener("keydown", hubV4DoorbellTimer);
   const focusBack = document.activeElement;
+  const mine = {};
   dialog.addEventListener("close", () => {
-    clearTimeout(doorbell.closeTimer);
-    if (doorbell.current === entityId) doorbell.current = null;
+    // Comme pour la fenêtre « On sonne » : seulement si elle est encore la dernière.
+    if (doorbell.owner === mine) {
+      doorbell.owner = null;
+      clearTimeout(doorbell.closeTimer);
+      if (doorbell.current === entityId) doorbell.current = null;
+    }
     dialog.remove();
     if (hubV4.dialog === dialog) {
       hubV4.dialog = null;
@@ -290,6 +301,7 @@ function hubV4Camera(entityId) {
   });
   hubV4.dialog = dialog;
   hubV4.refresh = refresh;
+  doorbell.owner = mine;
   doorbell.current = entityId;
   refresh();
   document.body.append(dialog);

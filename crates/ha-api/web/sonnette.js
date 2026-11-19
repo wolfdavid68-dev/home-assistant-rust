@@ -24,6 +24,8 @@ const DOORBELL_RECENT = 15 * 60_000;
 const doorbell = {
   /** La sonnette qui a sonné (son identifiant), tant que la fenêtre est ouverte. */
   current: null,
+  /** La fenêtre v4 de la sonnette qui tient le minuteur (hub-v4-sonnette.js). */
+  owner: null,
   at: 0,
   closeTimer: null,
   /** Les images déjà lues : « camera.x@<image_at> » → adresse blob:. */
