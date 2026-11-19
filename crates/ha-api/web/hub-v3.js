@@ -835,6 +835,8 @@ function hubV3Action(lens) {
     if (!player || !canControl(player) || player.state === "unavailable" || player.state === "unknown") return null;
     return player.state === "playing" ? "Pause" : "Lecture";
   }
+  // En v4, la sécurité s'ouvre en détail (hub-v4-incrustations.js).
+  if (lens === "securite" && typeof hubV4Security === "function" && hubV4On()) return "En détail";
   return null;
 }
 
@@ -857,6 +859,8 @@ function hubV3ActionRun(lens) {
     musicCommand(player, player.state === "playing" ? "media_pause" : "media_play");
     return true;
   }
+  // Une fenêtre s'ouvre : pas de commande partie, donc pas d'attente sur le bouton.
+  if (lens === "securite" && typeof hubV4Security === "function") hubV4Security();
   return false;
 }
 
