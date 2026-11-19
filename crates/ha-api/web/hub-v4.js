@@ -109,7 +109,7 @@ function hubV4Place(room, pop, screen) {
  * rectangle (écran) à entourer de lumière, ou null. `more` : { label, run }
  * pour aller plus loin. `refresh` remet les réglages à jour : appelé avant
  * l'ouverture, puis à chaque rendu de l'accueil. `tone` : la couleur de
- * l'icône (amber, sky, violet). `onClose` : appelé à la fermeture.
+ * l'icône (amber, sky, violet, green). `onClose` : appelé à la fermeture.
  */
 function hubV4Overlay({ icon, tone = "amber", title, sub, body, more, spot, refresh, onClose }) {
   hubV4Close();
@@ -151,7 +151,8 @@ function hubV4Overlay({ icon, tone = "amber", title, sub, body, more, spot, refr
     el("span", {
       class: "grid place-items-center size-11 shrink-0 rounded-2xl bg-[rgb(255_191_94/0.16)] text-[#ffbf5e] [&_svg]:size-[22px] "
         + "data-[tone=sky]:bg-[rgb(154_216_255/0.16)] data-[tone=sky]:text-[#9ad8ff] "
-        + "data-[tone=violet]:bg-[rgb(185_163_255/0.16)] data-[tone=violet]:text-[#b9a3ff]",
+        + "data-[tone=violet]:bg-[rgb(185_163_255/0.16)] data-[tone=violet]:text-[#b9a3ff] "
+        + "data-[tone=green]:bg-[rgb(111_220_156/0.16)] data-[tone=green]:text-[#6fdc9c]",
       "data-tone": tone,
       "aria-hidden": "true",
     }, svgIcon(icon)),
@@ -175,14 +176,13 @@ function hubV4Overlay({ icon, tone = "amber", title, sub, body, more, spot, refr
     pop.append(go);
   }
   // La flèche vers la pièce : un carré tourné, sur le bord qui lui fait face.
+  // Hors de la fenêtre (qui défile) : dedans, elle ferait une barre de défilement.
   const arrow = el("span", {
-    class: "absolute top-(--ay) -mt-[7px] size-3.5 rotate-45 bg-[rgb(16_18_42/0.8)] "
-      + "data-[side=right]:-left-[7px] data-[side=left]:-right-[7px] max-sm:hidden",
+    class: "absolute left-(--ax) top-(--ay) size-3.5 rotate-45 bg-[rgb(16_18_42/0.8)] max-sm:hidden",
     "aria-hidden": "true",
   });
   arrow.hidden = true;
-  pop.append(arrow);
-  parts.push(pop);
+  parts.push(pop, arrow);
   dialog.append(...parts);
 
   veil.addEventListener("click", () => hubV4Close());
@@ -196,8 +196,8 @@ function hubV4Overlay({ icon, tone = "amber", title, sub, body, more, spot, refr
     pop.style.setProperty("--y", `${at.y}px`);
     arrow.hidden = at.side === "";
     if (at.side) {
-      arrow.dataset.side = at.side;
-      arrow.style.setProperty("--ay", `${at.ay}px`);
+      arrow.style.setProperty("--ax", `${(at.side === "right" ? at.x : at.x + box.width) - 7}px`);
+      arrow.style.setProperty("--ay", `${at.y + at.ay - 7}px`);
     }
   };
   // Un écran qui change de taille : la pièce n'est plus au même endroit.
@@ -232,6 +232,7 @@ function hubV4Close() {
 /** Appelé après chaque rendu de l'accueil (hub-v3.js) : l'incrustation suit la maison. */
 function renderHubV4() {
   if (typeof renderHubV4Page === "function") renderHubV4Page();
+  if (typeof renderHubV4Incr === "function") renderHubV4Incr();
   if (!hubV4.dialog) return;
   if (!hubV4On() || !hub.on || hub.away) {
     hubV4Close();
