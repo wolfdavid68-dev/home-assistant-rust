@@ -18,11 +18,13 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - "crates/ha-api/web/**"
+      - "scripts/tailwind.sh"
       - ".github/workflows/web.yml"
   push:
     branches: [main]
     paths:
       - "crates/ha-api/web/**"
+      - "scripts/tailwind.sh"
       - ".github/workflows/web.yml"
   workflow_dispatch:
 
@@ -43,6 +45,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: La feuille de style Tailwind est à jour
+        run: scripts/tailwind.sh --check
 
       - name: Les scripts compilent ensemble
         run: node crates/ha-api/web/tests/check-scripts.mjs
