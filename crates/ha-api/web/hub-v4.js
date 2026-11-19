@@ -231,6 +231,7 @@ function hubV4Close() {
 
 /** Appelé après chaque rendu de l'accueil (hub-v3.js) : l'incrustation suit la maison. */
 function renderHubV4() {
+  if (typeof renderHubV4Page === "function") renderHubV4Page();
   if (!hubV4.dialog) return;
   if (!hubV4On() || !hub.on || hub.away) {
     hubV4Close();
