@@ -64,8 +64,10 @@
   --animate-v4-fade: v4-fade 0.3s ease-out both;
   --animate-v4-breathe: v4-breathe 2.4s ease-in-out infinite;
   --animate-v4-count: v4-count 3s linear both;
+  --animate-v4-sheet: v4-sheet 0.4s cubic-bezier(0.2, 0, 0, 1) both;
   @keyframes v4-pop { from { opacity: 0; transform: translateY(10px) scale(0.98); } }
   @keyframes v4-fade { from { opacity: 0; } }
   @keyframes v4-breathe { 50% { opacity: 0.5; } }
   @keyframes v4-count { to { stroke-dashoffset: 100; } }
+  @keyframes v4-sheet { from { transform: translateY(100%); } }
 }

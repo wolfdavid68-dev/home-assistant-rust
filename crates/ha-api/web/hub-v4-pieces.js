@@ -396,7 +396,8 @@ function hubV4PageNav(name) {
     }, true));
   }
   return el("nav", {
-    class: "absolute inset-x-0 top-0 z-20 flex items-center gap-3 px-5 pt-4 pb-2 overflow-x-auto [scrollbar-width:none]",
+    class: "absolute inset-x-0 top-0 z-20 flex items-center gap-3 px-5 pt-4 pb-2 overflow-x-auto [scrollbar-width:none] "
+      + "max-lg:bg-[rgb(11_13_34/0.88)] max-lg:backdrop-blur-[16px]",
     "aria-label": "Pièces",
   }, back, el("div", { class: "flex items-center gap-1 p-1 rounded-full bg-[rgb(16_18_42/0.6)] backdrop-blur-[14px]" }, ...links));
 }
@@ -770,7 +771,8 @@ function hubV4Page(name) {
     : name === HUB_V4_ALL ? hubV4HouseBody() : hubV4RoomBody(name);
   const stage = hubV4PageStage(name);
   const column = (nodes, side) => el("div", {
-    class: `flex flex-col gap-3 min-h-0 overflow-y-auto pb-6 [scrollbar-width:thin] ${side === "right" ? "lg:col-start-3 lg:row-start-1" : ""}`,
+    // Sur la tablette, chaque colonne défile ; plus étroit, c'est la page entière.
+    class: `flex flex-col gap-3 lg:min-h-0 lg:overflow-y-auto lg:pb-6 [scrollbar-width:thin] ${side === "right" ? "lg:col-start-3 lg:row-start-1" : ""}`,
   }, ...nodes);
   // Au milieu, sous le dessin : une phrase (l'énergie), s'il y en a une.
   const middle = body.middle ? [el("div", {
@@ -785,7 +787,8 @@ function hubV4Page(name) {
   stage.node,
   hubV4PageNav(name),
   el("div", {
-    class: "relative z-10 grid h-full gap-5 px-6 pt-[76px] grid-cols-1 overflow-y-auto "
+    class: "relative z-10 grid h-full gap-5 px-6 pt-[76px] grid-cols-1 max-lg:content-start overflow-y-auto "
+      + "max-lg:px-4 max-lg:pb-[max(24px,env(safe-area-inset-bottom))] "
       + "lg:grid-cols-[minmax(0,390px)_minmax(0,1fr)_minmax(0,350px)] lg:overflow-hidden",
   }, column(body.left, "left"), ...middle, column(body.right, "right")));
   dialog.addEventListener("close", () => hubV4PageClose(true, dialog));

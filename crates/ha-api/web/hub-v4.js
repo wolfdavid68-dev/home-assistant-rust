@@ -164,8 +164,15 @@ function hubV4Overlay({ icon, tone = "amber", title, sub, body, more, spot, refr
       + "flex flex-col gap-2.5 p-3 rounded-[28px] bg-[rgb(16_18_42/0.8)] backdrop-blur-[20px] backdrop-saturate-150 "
       + "shadow-[inset_0_1px_0_rgb(255_255_255/0.09),inset_0_0_0_1px_rgb(255_255_255/0.06),0_18px_40px_-18px_rgb(0_0_0/0.65)] "
       + "animate-v4-pop motion-reduce:animate-none "
-      + "max-sm:left-2 max-sm:right-2 max-sm:top-auto max-sm:bottom-2 max-sm:w-auto",
-  }, head, ...body);
+      // Sur le téléphone, une feuille qui monte du bas, qu'on tire vers le bas pour la fermer.
+      + "max-sm:inset-x-0 max-sm:top-auto max-sm:bottom-0 max-sm:w-auto max-sm:max-h-[88dvh] max-sm:rounded-b-none "
+      + "max-sm:pt-2 max-sm:pb-[max(12px,env(safe-area-inset-bottom))] max-sm:animate-v4-sheet translate-y-(--dy)",
+  }, el("span", {
+    class: "hidden max-sm:block shrink-0 mx-auto w-10 h-1.5 rounded-full bg-white/25 touch-none",
+    "aria-hidden": "true",
+  }), head, ...body);
+  pop.style.setProperty("--dy", "0px");
+  hubV4Drag(pop, [pop.firstElementChild, head]);
   if (more) {
     const go = el("button", { type: "button", class: `${HUB_V4_BTN} justify-between` },
       el("span", { text: more.label }), svgIcon(HUB_V4_ICONS.go));
@@ -200,8 +207,12 @@ function hubV4Overlay({ icon, tone = "amber", title, sub, body, more, spot, refr
       arrow.style.setProperty("--ay", `${at.y + at.ay - 7}px`);
     }
   };
-  // Un écran qui change de taille : la pièce n'est plus au même endroit.
-  const resize = () => hubV4Close();
+  // Un écran qui change de largeur : la pièce n'est plus au même endroit. Sur le
+  // téléphone, la barre d'adresse qui se replie change seulement la hauteur.
+  const width = innerWidth;
+  const resize = () => {
+    if (innerWidth !== width) hubV4Close();
+  };
   dialog.addEventListener("close", () => {
     removeEventListener("resize", resize);
     onClose?.();
@@ -224,6 +235,37 @@ function hubV4Overlay({ icon, tone = "amber", title, sub, body, more, spot, refr
   addEventListener("resize", resize);
 }
 
+/** La feuille du téléphone suit le doigt vers le bas ; assez loin, elle se ferme. */
+function hubV4Drag(pop, grips) {
+  let from = null;
+  const move = (event) => {
+    if (from === null) return;
+    pop.style.setProperty("--dy", `${Math.max(0, event.clientY - from)}px`);
+  };
+  const end = (event) => {
+    if (from === null) return;
+    const far = event.type === "pointerup" && event.clientY - from > 90;
+    from = null;
+    if (far) hubV4Close();
+    else pop.style.setProperty("--dy", "0px");
+  };
+  for (const grip of grips) {
+    grip.addEventListener("pointerdown", (event) => {
+      if (!hubV4TelSheet() || event.target.closest("button")) return;
+      from = event.clientY;
+      grip.setPointerCapture?.(event.pointerId);
+    });
+    grip.addEventListener("pointermove", move);
+    grip.addEventListener("pointerup", end);
+    grip.addEventListener("pointercancel", end);
+  }
+}
+
+/** Les incrustations montent du bas (écran étroit, comme max-sm). */
+function hubV4TelSheet() {
+  return matchMedia("(max-width: 639px)").matches;
+}
+
 /** Ferme l'incrustation ouverte, s'il y en a une. */
 function hubV4Close() {
   if (hubV4.dialog?.open) hubV4.dialog.close();
@@ -233,6 +275,7 @@ function hubV4Close() {
 function renderHubV4() {
   if (typeof renderHubV4Page === "function") renderHubV4Page();
   if (typeof renderHubV4Incr === "function") renderHubV4Incr();
+  if (typeof renderHubV4Tel === "function") renderHubV4Tel();
   if (!hubV4.dialog) return;
   if (!hubV4On() || !hub.on || hub.away) {
     hubV4Close();
