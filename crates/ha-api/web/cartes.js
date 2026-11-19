@@ -99,21 +99,21 @@ function cardEntity(label) {
 
 /** Une carte : la source en petit, la valeur en grand, le reste dessous. */
 function cardElement(card) {
-  const node = el("article", { class: "glass-card" }, el("p", { class: "glass-source", text: card.label }));
+  const node = el("article", { class: "glass-card [&::before]:[content:''] [&::before]:absolute [&::before]:[inset:0] [&::before]:[background:linear-gradient(115deg,_transparent_30%,_rgb(255_255_255_/_0.22)_45%,_transparent_60%)] [&::before]:pointer-events-none [&:first-child]:[grid-column:1_/_-1] [&:first-child]:[padding:0.8rem_1rem_0.85rem] [&.is-leaving]:[opacity:0] [:not(:where(.o110801))&.is-leaving]:[transform:translateY(-6px)_scale(0.96)] [:not(:where(.o110802))&.is-leaving]:[filter:blur(4px)] [@media(prefers-reduced-motion:reduce)]:[animation:glass-fade_0.3s_ease_both] [@media(prefers-reduced-motion:reduce)]:[transition:opacity_0.3s_ease] [@media(prefers-reduced-motion:reduce)]:[:not(:where(.o112200))&.is-leaving]:[transform:none] [@media(prefers-reduced-motion:reduce)]:[:not(:where(.o112201))&.is-leaving]:[filter:none]" }, el("p", { class: "glass-source m-0 text-muted [:not(:where(.o110902))&]:text-[0.78rem] [:not(:where(.o110903))&]:font-semibold [letter-spacing:0.02em] whitespace-nowrap overflow-hidden text-ellipsis [&::before]:[content:''] [&::before]:inline-block [&::before]:w-[7px] [&::before]:h-[7px] [&::before]:mr-[0.4em] [&::before]:[border-radius:50%] [&::before]:[background:var(--tint)] [&::before]:[vertical-align:0.08em] [&::before]:[box-shadow:0_0_6px_var(--tint)]", text: card.label }));
   if (card.chips) {
     node.classList.add("is-list");
-    node.append(el("ul", { class: "glass-chips" }, ...card.chips.map((chip) => el("li", { text: chip }))));
+    node.append(el("ul", { class: "glass-chips flex flex-wrap gap-[0.35rem] [margin:0.25rem_0_0] p-0 list-none [:not(:where(.o111900))&_li]:[padding:0.2rem_0.6rem] [:not(:where(.o111901))&_li]:[border:1px_solid_color-mix(in_srgb,_var(--tint)_30%,_transparent)] [:not(:where(.o111902))&_li]:[border-radius:999px] [:not(:where(.o111903))&_li]:[background:color-mix(in_srgb,_var(--tint)_14%,_transparent)] [:not(:where(.o111904))&_li]:text-text [:not(:where(.o111905))&_li]:text-[0.9rem] [.glass-card:first-child_&_li]:text-[1rem]" }, ...card.chips.map((chip) => el("li", { text: chip }))));
   } else {
-    const figure = el("p", { class: "glass-value" }, el("span", { class: "glass-number", text: card.big }));
-    if (card.unit) figure.append(el("span", { class: "glass-unit", text: card.unit }));
+    const figure = el("p", { class: "glass-value flex items-baseline gap-[0.2rem] m-0 text-text [:not(:where(.o111105))&]:[font-family:var(--font-display)] [:not(:where(.o111106))&]:[line-height:1.05] [:not(:where(.o111107))&]:[font-variant-numeric:tabular-nums]" }, el("span", { class: "glass-number [:not(:where(.o111200))&]:text-[1.7rem] [:not(:where(.o111201))&]:[font-weight:650] [letter-spacing:-0.02em] [.glass-card:first-child_&]:text-[2.6rem]", text: card.big }));
+    if (card.unit) figure.append(el("span", { class: "glass-unit text-text-2 [:not(:where(.o111401))&]:text-[0.95rem] [:not(:where(.o111402))&]:font-medium [.glass-card:first-child_&]:text-[1.15rem]", text: card.unit }));
     node.append(figure);
-    if (card.rest) node.append(el("p", { class: "glass-sub", text: card.rest }));
+    if (card.rest) node.append(el("p", { class: "glass-sub m-0 text-text-2 [:not(:where(.o111602))&]:text-[0.85rem] [:not(:where(.o111603))&]:[line-height:1.3] [overflow-wrap:anywhere]", text: card.rest }));
   }
   const state = cardEntity(card.label);
   // L'âge de la donnée (étape 101) : « relevé à 08:15 », ou en ambre si elle est vieille.
   if (state && typeof freshness === "function") {
     const { text, stale } = freshness(state.last_updated ?? state.last_changed, staleAfter(state));
-    if (text) node.append(el("p", { class: `glass-when${stale ? " is-stale" : ""}`, text }));
+    if (text) node.append(el("p", { class: `[margin:0.1rem_0_0] text-muted [:not(:where(.o111702))&]:text-[0.75rem] [:not(:where(.o111703))&]:[font-variant-numeric:tabular-nums] [&.is-stale]:[color:color-mix(in_srgb,_var(--tint-alertes)_70%,_var(--text))] [&.is-stale::before]:[content:''] [&.is-stale::before]:inline-block [&.is-stale::before]:w-[0.45em] [&.is-stale::before]:h-[0.45em] [&.is-stale::before]:mr-[0.35em] [&.is-stale::before]:[border-radius:50%] [&.is-stale::before]:[background:var(--tint-alertes)] [&.is-stale::before]:[vertical-align:0.1em] glass-when${stale ? " is-stale" : ""}`, text }));
   }
   // Teinte par famille (étape 100) : l'appareil s'il est connu, sinon la phrase.
   const family = state ? familyOfState(state) : familyOf({ text: `${card.label} ${card.value}`, unit: card.unit ?? "" });

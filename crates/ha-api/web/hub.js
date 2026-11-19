@@ -132,7 +132,7 @@ function renderHubPeople() {
     const name = nameOf(state);
     const home = state.state === "home";
     const avatar = el("span", {
-      class: home ? "hub-avatar" : "hub-avatar away",
+      class: home ? "hub-avatar w-[34px] h-[34px] [border-radius:50%] grid [place-items:center] [:not(:where(.o134005))&]:font-bold [:not(:where(.o134006))&]:text-[0.9rem] [color:#fff] [background:var(--person)] [box-shadow:0_0_0_2px_var(--bg)] [&.away]:[opacity:0.35]" : "hub-avatar away w-[34px] h-[34px] [border-radius:50%] grid [place-items:center] [:not(:where(.o134005))&]:font-bold [:not(:where(.o134006))&]:text-[0.9rem] [color:#fff] [background:var(--person)] [box-shadow:0_0_0_2px_var(--bg)] [&.away]:[opacity:0.35]",
       title: `${name} : ${home ? "à la maison" : "absent"}`,
       text: name.charAt(0).toUpperCase(),
     });
@@ -157,7 +157,7 @@ function renderHubAlert() {
   const waiting = noticeStates().filter((s) => s.state === "notifying" && s.attributes.kind === "approval").length;
   pill.hidden = found.length === 0 && waiting === 0;
   if (waiting > 0) {
-    const open = el("button", { type: "button", class: "hub-alert-action", text: "Voir" });
+    const open = el("button", { type: "button", class: "hub-alert-action [border:0] [border-radius:999px] [padding:5px_14px] [background:rgb(255_255_255_/_0.16)] font-semibold cursor-pointer", text: "Voir" });
     open.addEventListener("click", () => $("#open-notices").click());
     swap(pill, svgIcon(HUB_ICONS.warn),
       el("b", { text: waiting === 1 ? "1 ordre attend ta validation" : `${waiting} ordres attendent ta validation` }), open);
@@ -168,7 +168,7 @@ function renderHubAlert() {
   const parts = [svgIcon(HUB_ICONS.warn), el("b", { text: `${nameOf(state)} : ${text}` })];
   if (found.length > 1) parts.push(el("span", { text: ` et ${found.length - 1} de plus` }));
   if (domainOf(state) === "cover" && canControl(state)) {
-    const close = el("button", { type: "button", class: "hub-alert-action", text: "Fermer" });
+    const close = el("button", { type: "button", class: "hub-alert-action [border:0] [border-radius:999px] [padding:5px_14px] [background:rgb(255_255_255_/_0.16)] font-semibold cursor-pointer", text: "Fermer" });
     close.addEventListener("click", () => callService("cover", "close_cover", { entity_id: state.entity_id }));
     parts.push(close);
   }
@@ -209,11 +209,11 @@ function renderHubWeather() {
   const range = today && finite(today.templow) && finite(today.temperature)
     ? `min ${Math.round(today.templow)}° · max ${Math.round(today.temperature)}°` : "";
   swap(card,
-    el("div", { class: "hub-weather-now" },
+    el("div", { class: "hub-weather-now flex items-center gap-[12px] [:not(:where(.o135800))&_svg]:w-[42px] [:not(:where(.o135801))&_svg]:h-[42px] [:not(:where(.o135802))&_svg]:[color:#ffb74d] [:not(:where(.o135803))&_svg]:[stroke-width:1.5] [:not(:where(.o135804))&_svg]:flex-none [:not(:where(.o135900))&_strong]:[font-family:var(--font-display)] [:not(:where(.o135901))&_strong]:[font-weight:300] [:not(:where(.o135902))&_strong]:text-[2.6rem] [:not(:where(.o136000))&_span]:grid [:not(:where(.o136001))&_span]:text-[0.92rem] [:not(:where(.o136100))&_small]:text-muted" },
       svgIcon(weatherIcon(weather.state)),
       el("strong", { text: finite(a.temperature) ? `${number.format(a.temperature)}°` : "—" }),
       el("span", {}, el("b", { text: label }), el("small", { text: range }))),
-    el("ol", { class: "hub-forecast", "aria-label": "Prévisions" }, ...days.slice(1, 5).map((day) =>
+    el("ol", { class: "hub-forecast list-none [margin:12px_0_0] p-0 grid [grid-template-columns:repeat(4,_1fr)] gap-[6px] [&:empty]:hidden [:not(:where(.o136400))&_li]:grid [:not(:where(.o136401))&_li]:[justify-items:center] [:not(:where(.o136402))&_li]:gap-[3px] [:not(:where(.o136403))&_li]:[padding:7px_0] [:not(:where(.o136404))&_li]:[border-radius:12px] [:not(:where(.o136405))&_li]:bg-card-2 [:not(:where(.o136406))&_li]:text-[0.75rem] [:not(:where(.o136407))&_li]:text-muted [&_li::first-letter]:uppercase [:not(:where(.o136600))&_svg]:w-[18px] [:not(:where(.o136601))&_svg]:h-[18px] [:not(:where(.o136700))&_b]:text-text [:not(:where(.o136701))&_b]:text-[0.95rem]", "aria-label": "Prévisions" }, ...days.slice(1, 5).map((day) =>
       el("li", {},
         el("span", { text: dayName.format(new Date(`${day.datetime}T12:00`)) }),
         svgIcon(weatherIcon(day.condition)),
@@ -240,9 +240,9 @@ function renderHubAgenda(now) {
     // Pas le nom de l'agenda : sa couleur, sur la barre, suffit.
     const sub = [later ? "demain" : "", e.location || ""].filter(Boolean).join(" · ");
     const row = el("button", { type: "button", class: e === next ? "hub-event next" : "hub-event" },
-      el("span", { class: "hub-event-bar" }),
-      el("span", { class: "hub-event-time", text: e.allDay ? "jour" : hourMinute.format(e.startDate) }),
-      el("span", { class: "hub-event-text" }, el("b", { text: e.summary }), el("small", { text: sub })),
+      el("span", { class: "hub-event-bar w-[4px] [align-self:stretch] [border-radius:4px] [background:var(--ev)] flex-none" }),
+      el("span", { class: "hub-event-time w-[44px] flex-none [:not(:where(.o137202))&]:[font-family:var(--font-mono,_monospace)] [:not(:where(.o137203))&]:text-[0.85rem] text-muted", text: e.allDay ? "jour" : hourMinute.format(e.startDate) }),
+      el("span", { class: "hub-event-text grid min-w-0 [:not(:where(.o137400))&_b]:font-semibold [:not(:where(.o137401))&_b]:overflow-hidden [:not(:where(.o137402))&_b]:text-ellipsis [:not(:where(.o137403))&_b]:whitespace-nowrap [:not(:where(.o137500))&_small]:text-muted [:not(:where(.o137501))&_small]:text-[0.78rem] [:not(:where(.o137502))&_small]:overflow-hidden [:not(:where(.o137503))&_small]:text-ellipsis [:not(:where(.o137504))&_small]:whitespace-nowrap [:not(:where(.o137600))&_small:empty]:hidden [.hub-event:has(.hub-event-when)_&]:flex-1 [:not(:where(.o137800)).hub-event:has(.hub-event-when)_&_b]:[white-space:normal] [.hub-event:has(.hub-event-when)_&_b]:[display:-webkit-box] [.hub-event:has(.hub-event-when)_&_b]:[-webkit-box-orient:vertical] [.hub-event:has(.hub-event-when)_&_b]:[-webkit-line-clamp:2] [.hub-event:has(.hub-event-when)_&_b]:[line-clamp:2]" }, el("b", { text: e.summary }), el("small", { text: sub })),
       hubEventWhen(e, next, later, now));
     row.style.setProperty("--ev", e.color);
     row.addEventListener("click", () => openEventDetails(e));
@@ -250,7 +250,7 @@ function renderHubAgenda(now) {
   });
   swap(card,
     el("h2", {}, "Agenda", el("small", { text: "aujourd'hui et demain" })),
-    ...(rows.length > 0 ? rows : [el("p", { class: "hub-empty", text: "Rien de prévu d'ici demain soir." })]),
+    ...(rows.length > 0 ? rows : [el("p", { class: "hub-empty m-[4px] text-muted text-[0.9rem]", text: "Rien de prévu d'ici demain soir." })]),
   );
 }
 
@@ -351,8 +351,8 @@ function renderHubScenes() {
     const isScript = domainOf(state) === "script";
     const running = isScript && state.state === "on";
     const look = hubSceneLook(state, index);
-    const button = el("button", { type: "button", class: `hub-scene t-${look.tone}${running ? " on" : ""}` },
-      el("span", { class: "hub-scene-icon" }, svgIcon(running ? ICONS.stop : look.icon)),
+    const button = el("button", { type: "button", class: `hub-scene [.hub-scenes.narrow_&]:min-h-[74px] [.hub-scenes.narrow_&]:p-[11px] [:not(:where(.o140300)).hub-scenes.narrow_&_b]:text-[0.92rem] [:not(:where(.o140301)).hub-scenes.narrow_&_b]:[line-height:1.2] grid gap-[8px] justify-items-start min-h-[82px] p-[13px] [border:0] [border-radius:18px] bg-card text-left cursor-pointer [:not(:where(.o140500))&_b]:text-[1rem] [:not(:where(.o140501))&_b]:font-semibold [&.pending]:[opacity:0.6] [&.on]:[box-shadow:inset_0_0_0_2px_#03a9f4] t-${look.tone}${running ? " on" : ""}` },
+      el("span", { class: "hub-scene-icon w-[38px] h-[38px] [border-radius:12px] grid [place-items:center] [:not(:where(.o140700))&_svg]:w-[20px] [:not(:where(.o140701))&_svg]:h-[20px] [:not(:where(.o140800)).hub-scene.t-go_&]:[background:rgb(3_169_244_/_0.2)] [:not(:where(.o140801)).hub-scene.t-go_&]:[color:#03a9f4] [:not(:where(.o140900)).hub-scene.t-home_&]:[background:rgb(102_187_106_/_0.2)] [:not(:where(.o140901)).hub-scene.t-home_&]:[color:#66bb6a] [:not(:where(.o141000)).hub-scene.t-night_&]:[background:rgb(149_117_205_/_0.25)] [:not(:where(.o141001)).hub-scene.t-night_&]:[color:#b39ddb] [:not(:where(.o141100)).hub-scene.t-cine_&]:[background:rgb(255_183_77_/_0.2)] [:not(:where(.o141101)).hub-scene.t-cine_&]:[color:#ffb74d] [:not(:where(.o141200)).hub-scene.t-morning_&]:[background:rgb(255_213_79_/_0.2)] [:not(:where(.o141201)).hub-scene.t-morning_&]:[color:#f9a825]" }, svgIcon(running ? ICONS.stop : look.icon)),
       el("b", { text: nameOf(state) }));
     button.addEventListener("click", () => {
       button.classList.add("pending");
@@ -382,10 +382,10 @@ function renderHubRooms() {
     if (info.alert) classes.push("alert");
     else if (info.lights > 0) classes.push("lit");
     const room = el("button", { type: "button", class: classes.join(" "), title: [area.name, detail].filter(Boolean).join(" : ") },
-      el("span", { class: "hub-room-icon" }, svgIcon(roomIcon(area.name))),
-      el("span", { class: "hub-room-text" }, el("b", { text: area.name }),
+      el("span", { class: "hub-room-icon w-[38px] h-[38px] [border-radius:50%] grid [place-items:center] flex-none bg-card-2 text-muted [:not(:where(.o141800))&_svg]:w-[20px] [:not(:where(.o141801))&_svg]:h-[20px] [:not(:where(.o141900)).hub-room.lit_&]:[background:#ffb74d] [:not(:where(.o141901)).hub-room.lit_&]:[color:#1a1205] [.hub-room.lit_&]:[box-shadow:0_0_18px_rgb(255_183_77_/_0.45)] [:not(:where(.o142000)).hub-room.alert_&]:[background:rgb(255_152_0_/_0.25)] [:not(:where(.o142001)).hub-room.alert_&]:[color:#ffb74d] [.hub-rooms.compact_&]:w-[32px] [.hub-rooms.compact_&]:h-[32px] [:not(:where(.o143000)).hub-rooms.compact_&_svg]:w-[17px] [:not(:where(.o143001)).hub-rooms.compact_&_svg]:h-[17px]" }, svgIcon(roomIcon(area.name))),
+      el("span", { class: "hub-room-text grid min-w-0 [:not(:where(.o142300))&_b]:font-semibold [:not(:where(.o142400))&_small]:text-muted [:not(:where(.o142401))&_small]:text-[0.8rem] [:not(:where(.o142500))&_small:empty]:hidden [:not(:where(.o143100)).hub-rooms.compact_&_b]:text-[0.92rem] [:not(:where(.o143101)).hub-rooms.compact_&_b]:overflow-hidden [:not(:where(.o143102)).hub-rooms.compact_&_b]:text-ellipsis [:not(:where(.o143103)).hub-rooms.compact_&_b]:whitespace-nowrap [:not(:where(.o143200)).hub-rooms.compact_&_small]:text-[0.74rem] [:not(:where(.o143201)).hub-rooms.compact_&_small]:overflow-hidden [:not(:where(.o143202)).hub-rooms.compact_&_small]:text-ellipsis [:not(:where(.o143203)).hub-rooms.compact_&_small]:whitespace-nowrap" }, el("b", { text: area.name }),
         el("small", { text: compact ? [temperature, detail].filter(Boolean).join(" · ") : detail })),
-      compact ? "" : el("span", { class: "hub-room-temp", text: temperature }));
+      compact ? "" : el("span", { class: "hub-room-temp ml-[auto] [:not(:where(.o142601))&]:[font-family:var(--font-mono,_monospace)] [:not(:where(.o142602))&]:text-[0.95rem] text-muted", text: temperature }));
     room.addEventListener("click", () => openRoom(area.name));
     return room;
   }));
@@ -450,7 +450,7 @@ function renderHubList(state) {
     : iglou ? "La liste de l'appli Iglou. Coche ce qui est dans le panier ; on range dans l'appli." : "";
   $("#hub-list-items").replaceChildren(...(items.length > 0
     ? todoRows(state, items)
-    : [el("li", { class: "hub-list-empty", text: "Rien à acheter." })]));
+    : [el("li", { class: "hub-list-empty [padding:1.2rem_0.4rem] text-muted", text: "Rien à acheter." })]));
 }
 
 $("#hub-courses").addEventListener("click", () => {
@@ -530,13 +530,13 @@ function renderHubPick() {
   const full = chosen.size >= HUB_SCENES_MAX;
   const choices = hubSceneChoices();
   $("#hub-pick-list").replaceChildren(...(choices.length === 0
-    ? [el("p", { class: "account", text: "Aucune scène ni script pour l'instant." })]
+    ? [el("p", { class: "account m-0 text-muted [:not(:where(.o024100))&_strong]:text-text [.assist-dialog_&]:m-0 [.assist-dialog_&]:text-[0.82rem]", text: "Aucune scène ni script pour l'instant." })]
     : choices.map((state) => {
       const box = el("input", { type: "checkbox", value: state.entity_id });
       box.checked = chosen.has(state.entity_id);
       box.disabled = full && !box.checked;
       box.addEventListener("change", saveHubPick);
-      return el("label", { class: "check" }, box, ` ${nameOf(state)}`);
+      return el("label", { class: "check [.preset-form_&]:text-[0.9rem] [label&]:flex [label&]:items-center [label&]:gap-[0.45rem] [label&]:text-text" }, box, ` ${nameOf(state)}`);
     })));
 }
 

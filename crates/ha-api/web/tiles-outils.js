@@ -10,16 +10,16 @@
 function tileHead(state, icon, subtitle, extra) {
   const head = el(
     "div",
-    { class: "tile-head" },
+    { class: "tile-head flex items-center gap-3 pr-[1.9rem] min-w-0 [&>div]:min-w-0 [&>div]:flex-1 [:not(:where(.o010000)).tile-toggle_&]:pr-0 [:not(:where(.o010500)).has-knob_&]:pr-[1.9rem]" },
     el("span", { class: "icon" }, svgIcon(icon)),
-    el("div", {}, el("div", { class: "name", text: nameOf(state), title: state.entity_id }), el("div", { class: "sub", text: subtitle })),
+    el("div", {}, el("div", { class: "name", text: nameOf(state), title: state.entity_id }), el("div", { class: "sub text-[0.82rem] text-muted [.tile.light.on_&]:[color:inherit] [.tile.light.on_&]:[opacity:0.85] [&.is-stale]:[color:color-mix(in_srgb,_var(--tint-alertes)_70%,_var(--text))] [&.is-stale::before]:[content:''] [&.is-stale::before]:inline-block [&.is-stale::before]:w-[0.45em] [&.is-stale::before]:h-[0.45em] [&.is-stale::before]:mr-[0.35em] [&.is-stale::before]:[border-radius:50%] [&.is-stale::before]:[background:var(--tint-alertes)] [&.is-stale::before]:[vertical-align:0.1em]", text: subtitle })),
   );
   if (extra) head.append(extra);
   return head;
 }
 
 /** L'interrupteur dessiné à droite d'une tuile qu'on allume d'un toucher. */
-const knob = () => el("span", { class: "knob", "aria-hidden": "true" });
+const knob = () => el("span", { class: "knob flex-none w-[50px] h-[30px] [border-radius:15px] bg-line p-[3px] flex [transition:background_0.2s] [&::after]:[content:''] [&::after]:w-[24px] [&::after]:h-[24px] [&::after]:[border-radius:50%] [&::after]:[background:#ffffff] [&::after]:[box-shadow:0_1px_3px_rgb(0_0_0_/_0.2)] [&::after]:[transition:transform_0.2s] [.tile.on_&]:bg-accent [.tile.on_&::after]:[transform:translateX(20px)] [.tile.readonly_&]:hidden [[data-theme|=plan]_&]:[border-radius:4px] [[data-theme|=plan]_&]:bg-card-2 [[data-theme|=plan]_&]:[box-shadow:inset_0_0_0_1px_var(--ink-line)] [[data-theme|=plan]_&::after]:[border-radius:2px] [[data-theme|=plan]_&::after]:[box-shadow:0_0_0_1px_var(--ink-line)] [[data-theme|=plan]_.tile.on_&]:bg-accent [[data-theme|=plan]_.tile.on_&]:[box-shadow:none]", "aria-hidden": "true" });
 
 /** Un curseur se remplit jusqu'à sa valeur (et suit le doigt). */
 function fillSlider(slider) {

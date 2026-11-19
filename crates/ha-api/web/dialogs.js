@@ -25,7 +25,7 @@ const ACTIVE_STATES = new Set(["on", "home", "open", "above_horizon", "playing",
 function historyButton(state) {
   const button = el(
     "button",
-    { class: "history-button", type: "button", title: "Historique", "aria-label": `Historique de ${nameOf(state)}` },
+    { class: "history-button [:where(&)]:[all:unset] absolute [:not(:where(.o019102))&]:[top:10px] [:not(:where(.o019103))&]:[right:10px] w-[32px] h-[32px] grid [place-items:center] [border-radius:10px] text-muted cursor-pointer [:not(:where(.o019200))&_svg]:w-[17px] [:not(:where(.o019201))&_svg]:h-[17px] [&:hover]:bg-card-2 [&:hover]:text-text [&:focus-visible]:[outline:3px_solid_var(--accent)] [&:focus-visible]:[outline-offset:1px] [.tile.light.on_&]:text-glow-ink", type: "button", title: "Historique", "aria-label": `Historique de ${nameOf(state)}` },
     svgIcon(ICONS.chart),
   );
   button.addEventListener("click", (event) => {
@@ -105,22 +105,22 @@ function drawConsumption(points, since, until) {
   const x = (time) => CHART.left + ((time - since) / Math.max(1, until - since)) * (CHART.width - CHART.left - CHART.right);
   const chart = svg("svg", { viewBox: `0 0 ${CHART.width} ${CHART.height}`, role: "img", "aria-label": `Consommation de ${$("#history-title").textContent}` });
   for (const [time, anchor] of [[since, "start"], [(since + until) / 2, "middle"], [until, "end"]]) {
-    const label = svg("text", { x: x(time), y: CHART.height - 8, class: "axis", "text-anchor": anchor });
+    const label = svg("text", { x: x(time), y: CHART.height - 8, class: "axis [.history-chart_&]:[fill:var(--muted)] [.history-chart_&]:[stroke:none] [:not(:where(.o022602)).history-chart_&]:text-[11px] [:not(:where(.o022603)).history-chart_&]:[font-family:var(--font-mono)]", "text-anchor": anchor });
     label.textContent = shortDay.format(new Date(time));
     chart.append(label);
   }
   const high = Math.max(...points.map((p) => p.change ?? 0), 1e-9) * 1.1;
   const y = (value) => CHART.top + ((high - value) / high) * (CHART.height - CHART.top - CHART.bottom);
   for (const value of [high / 1.1, high / 2.2]) {
-    chart.append(svg("line", { x1: CHART.left, x2: CHART.width - CHART.right, y1: y(value), y2: y(value), class: "chart-grid" }));
-    const label = svg("text", { x: CHART.left - 6, y: y(value) + 4, class: "axis", "text-anchor": "end" });
+    chart.append(svg("line", { x1: CHART.left, x2: CHART.width - CHART.right, y1: y(value), y2: y(value), class: "chart-grid [.history-chart_&]:[stroke:var(--line)] [.history-chart_&]:[stroke-width:1]" }));
+    const label = svg("text", { x: CHART.left - 6, y: y(value) + 4, class: "axis [.history-chart_&]:[fill:var(--muted)] [.history-chart_&]:[stroke:none] [:not(:where(.o022602)).history-chart_&]:text-[11px] [:not(:where(.o022603)).history-chart_&]:[font-family:var(--font-mono)]", "text-anchor": "end" });
     label.textContent = `${number.format(value)}${unit ? ` ${unit}` : ""}`;
     chart.append(label);
   }
   const width = Math.max(1, ((CHART.width - CHART.left - CHART.right) * 86400000) / Math.max(1, until - since) * 0.75);
   for (const p of points) {
     const value = p.change ?? 0;
-    const bar = svg("rect", { x: x(Date.parse(p.at)), y: y(value), width, height: Math.max(0, y(0) - y(value)), class: "bar", rx: 2 });
+    const bar = svg("rect", { x: x(Date.parse(p.at)), y: y(value), width, height: Math.max(0, y(0) - y(value)), class: "bar [.history-chart_&]:[fill:var(--accent)] [.history-chart_&]:[stroke:none]", rx: 2 });
     const title = svg("title");
     title.textContent = `${dayFormat.format(new Date(p.at))} : ${number.format(value)} ${unit}`;
     bar.append(title);
@@ -154,7 +154,7 @@ function drawHistory(data) {
   // Graduations du temps : début, milieu, fin.
   const format = historyView.hours > LONG_TERM_HOURS ? shortDay : historyView.hours > 24 ? dayTime : shortTime;
   for (const [time, anchor] of [[since, "start"], [(since + until) / 2, "middle"], [until, "end"]]) {
-    const label = svg("text", { x: x(time), y: CHART.height - 8, class: "axis", "text-anchor": anchor });
+    const label = svg("text", { x: x(time), y: CHART.height - 8, class: "axis [.history-chart_&]:[fill:var(--muted)] [.history-chart_&]:[stroke:none] [:not(:where(.o022602)).history-chart_&]:text-[11px] [:not(:where(.o022603)).history-chart_&]:[font-family:var(--font-mono)]", "text-anchor": anchor });
     label.textContent = format.format(new Date(time));
     chart.append(label);
   }
@@ -201,16 +201,16 @@ function drawCurve(chart, points, x, unit) {
   const y = (value) => CHART.top + ((high - value) / (high - low)) * (CHART.height - CHART.top - CHART.bottom);
 
   for (const value of [high - margin, (high + low) / 2, low + margin]) {
-    chart.append(svg("line", { x1: CHART.left, x2: CHART.width - CHART.right, y1: y(value), y2: y(value), class: "chart-grid" }));
-    const label = svg("text", { x: CHART.left - 6, y: y(value) + 4, class: "axis", "text-anchor": "end" });
+    chart.append(svg("line", { x1: CHART.left, x2: CHART.width - CHART.right, y1: y(value), y2: y(value), class: "chart-grid [.history-chart_&]:[stroke:var(--line)] [.history-chart_&]:[stroke-width:1]" }));
+    const label = svg("text", { x: CHART.left - 6, y: y(value) + 4, class: "axis [.history-chart_&]:[fill:var(--muted)] [.history-chart_&]:[stroke:none] [:not(:where(.o022602)).history-chart_&]:text-[11px] [:not(:where(.o022603)).history-chart_&]:[font-family:var(--font-mono)]", "text-anchor": "end" });
     label.textContent = `${number.format(value)}${unit ? ` ${unit}` : ""}`;
     chart.append(label);
   }
   // Bande min–max, puis la courbe des moyennes.
   const top = points.map((p) => `${x(Date.parse(p.at))},${y(p.max)}`);
   const bottom = points.map((p) => `${x(Date.parse(p.at))},${y(p.min)}`).reverse();
-  chart.append(svg("polygon", { points: [...top, ...bottom].join(" "), class: "band" }));
-  chart.append(svg("polyline", { points: points.map((p) => `${x(Date.parse(p.at))},${y(p.mean)}`).join(" "), class: "curve" }));
+  chart.append(svg("polygon", { points: [...top, ...bottom].join(" "), class: "band [.history-chart_&]:[fill:var(--accent-soft)] [.history-chart_&]:[stroke:none]" }));
+  chart.append(svg("polyline", { points: points.map((p) => `${x(Date.parse(p.at))},${y(p.mean)}`).join(" "), class: "curve [.history-chart_&]:[fill:none] [.history-chart_&]:[stroke:var(--accent)] [.history-chart_&]:[stroke-width:2.5]" }));
 }
 
 function drawTimeline(chart, changes, x, until) {
@@ -354,7 +354,7 @@ async function loadLogbook() {
   }
   const entries = Array.isArray(data.entries) ? data.entries : [];
   if (entries.length === 0) {
-    list.replaceChildren(el("p", { class: "journal-hint", text: "Rien de noté sur cette période." }));
+    list.replaceChildren(el("p", { class: "journal-hint text-muted text-[0.85rem] [margin:0_0_0.75rem] [:not(:where(.o035900)).auto-block_&]:m-0 [.auto-fields_&]:[grid-column:1_/_-1] [:not(:where(.o036501)).auto-fields_&]:m-0 [.auto-fields_&]:[overflow-wrap:anywhere]", text: "Rien de noté sur cette période." }));
     return;
   }
   const groups = [];
@@ -365,7 +365,7 @@ async function loadLogbook() {
     const domain = typeof entry.entity_id === "string" ? entry.entity_id.split(".")[0] : "";
     const item = el(
       "li",
-      { class: domain === "" ? "logbook-system" : "" },
+      { class: domain === "" ? "logbook-system [:not(:where(.o028700)).logbook-list_li&_strong]:text-accent" : "" },
       el("time", { datetime: entry.at, text: shortTime.format(at) }),
       el("span", {}, el("strong", { text: entry.name }), " ", entry.message),
     );
@@ -374,7 +374,7 @@ async function loadLogbook() {
     groups.at(-1).items.push(item);
   }
   list.replaceChildren(
-    ...groups.map(({ day, items }) => el("section", {}, el("h3", { text: day }), el("ol", { class: "journal-list" }, ...items))),
+    ...groups.map(({ day, items }) => el("section", {}, el("h3", { text: day }), el("ol", { class: "journal-list list-none m-0 p-0 bg-card [border-radius:18px] [box-shadow:var(--shadow)] overflow-hidden [:not(:where(.o029500))&_li]:flex [:not(:where(.o029501))&_li]:flex-wrap [:not(:where(.o029502))&_li]:[gap:0.25rem_0.75rem] [:not(:where(.o029503))&_li]:items-baseline [:not(:where(.o029504))&_li]:[padding:0.7rem_1rem] [:not(:where(.o029505))&_li]:[border-top:1px_solid_var(--line)] [:not(:where(.o029506))&_li]:text-[0.9rem] [&_li:first-child]:[border-top:0] [:not(:where(.o029700))&_time]:text-muted [:not(:where(.o029701))&_time]:[font-family:var(--font-mono)] [:not(:where(.o029702))&_time]:text-[0.82rem] [:not(:where(.o029900))&_small]:text-muted [&_small]:ml-[auto] [:not(:where(.o030000))&_li.failed_strong]:text-alert [:not(:where(.o030000))&_li.failed_span]:text-alert" }, ...items))),
   );
 }
 
@@ -384,7 +384,7 @@ async function loadLogbook() {
 function whyParts(id) {
   const answer = logbookView.answers.get(id);
   if (answer !== undefined) {
-    return [el("p", { class: "logbook-why", role: "status", text: answer ?? "Claude réfléchit…" })];
+    return [el("p", { class: "logbook-why [.journal-list_&]:[flex-basis:100%] [.journal-list_&]:[margin:0.2rem_0_0] [.journal-list_&]:[padding:0.5rem_0.75rem] [.journal-list_&]:[border-radius:10px] [.journal-list_&]:bg-line [.journal-list_&]:[text-wrap:pretty]", role: "status", text: answer ?? "Claude réfléchit…" })];
   }
   const button = el("button", { class: "ghost small logbook-why-ask", type: "button", text: "Pourquoi ?" });
   button.addEventListener("click", () => askWhy(id));
@@ -455,7 +455,7 @@ function renderNotices() {
   if (!$("#notices").open) return;
   const list = $("#notice-list");
   list.replaceChildren(...active.map(noticeItem));
-  if (active.length === 0) list.replaceChildren(el("li", { class: "auto-empty", text: "Rien à signaler." }));
+  if (active.length === 0) list.replaceChildren(el("li", { class: "auto-empty text-muted [padding:1rem_0]", text: "Rien à signaler." }));
   const ignored = all.filter((state) => state.state === "ignored").length;
   $("#notice-ignored").hidden = ignored === 0;
   $("#notice-ignored").textContent = ignored === 1
@@ -467,10 +467,10 @@ function noticeItem(state) {
   const repair = state.attributes.kind === "repair";
   const approval = state.attributes.kind === "approval";
   const severity = repair ? String(state.attributes.severity ?? "warning") : approval ? "approval" : "info";
-  const head = el("div", { class: "notice-head" }, el("strong", { text: String(state.attributes.title ?? "Notification") }));
+  const head = el("div", { class: "notice-head flex flex-wrap gap-2 items-center justify-between [:not(:where(.o039900))&_strong]:[overflow-wrap:anywhere]" }, el("strong", { text: String(state.attributes.title ?? "Notification") }));
   if (repair) head.append(el("span", { class: `badge ${severity === "error" ? "bad" : ""}`, text: "à réparer" }));
-  const item = el("li", { class: `notice-item sev-${severity}` }, head, el("p", { class: "notice-message", text: String(state.attributes.message ?? "") }));
-  const meta = el("div", { class: "notice-meta" });
+  const item = el("li", { class: `notice-item bg-card-2 [border-radius:16px] [padding:0.8rem_1rem] grid gap-[0.35rem] [border-left:4px_solid_var(--accent)] [:not(:where(.o039300))&.sev-warning]:[border-left-color:var(--glow-bar)] [:not(:where(.o039400))&.sev-error]:[border-left-color:var(--alert)] [:not(:where(.o039500))&.sev-approval]:[border-left-color:var(--alert)] sev-${severity}` }, head, el("p", { class: "notice-message m-0 [white-space:pre-line] [overflow-wrap:anywhere] text-text-2", text: String(state.attributes.message ?? "") }));
+  const meta = el("div", { class: "notice-meta flex gap-[0.6rem] items-center justify-between text-muted" });
   if (typeof state.attributes.created_at === "string") {
     meta.append(el("small", { text: `il y a ${ago(state.attributes.created_at)}` }));
   }
@@ -502,7 +502,7 @@ function approvalButtons(id) {
   };
   approve.addEventListener("click", () => answer(true));
   deny.addEventListener("click", () => answer(false));
-  return el("span", { class: "approval-actions" }, deny, approve);
+  return el("span", { class: "approval-actions flex gap-2" }, deny, approve);
 }
 
 $("#open-notices").addEventListener("click", () => {
@@ -535,7 +535,7 @@ async function loadEnergy() {
   const days = energyView.range === "year" ? 1 : Number(energyView.range);
   const { status, data } = await api("GET", `/api/energy?days=${days}`);
   if (status !== 200) {
-    $("#energy-chart").replaceChildren(el("p", { class: "auto-empty", text: "Bilan indisponible." }));
+    $("#energy-chart").replaceChildren(el("p", { class: "auto-empty text-muted [padding:1rem_0]", text: "Bilan indisponible." }));
     return;
   }
   energyView.report = data;
@@ -558,13 +558,13 @@ function renderEnergyNow() {
   const box = $("#energy-now");
   const parts = [];
   if (power && Number.isFinite(Number(power.state))) {
-    parts.push(el("span", { class: "energy-power" }, el("strong", { text: kwhFormat.format(Number(power.state)) }), " VA en ce moment"));
+    parts.push(el("span", { class: "energy-power [:not(:where(.o043200))&_strong]:[font-family:var(--font-display)] [:not(:where(.o043201))&_strong]:text-[1.4rem] [:not(:where(.o043202))&_strong]:text-text [:not(:where(.o043203))&_strong]:[font-variant-numeric:tabular-nums]" }, el("strong", { text: kwhFormat.format(Number(power.state)) }), " VA en ce moment"));
   }
   if (period && period.state !== "unavailable") parts.push(el("span", { class: "badge", text: period.state }));
   const tempo = entities.get(TEMPO_TODAY);
   if (tempo && lookup(TEMPO_COLORS, tempo.state)) parts.push(tempoBadge(tempo.state));
   const tomorrow = entities.get(TEMPO_TOMORROW);
-  if (tempo && tomorrow) parts.push(el("span", { class: "sub", text: tempoTomorrowText(tomorrow) }));
+  if (tempo && tomorrow) parts.push(el("span", { class: "sub text-[0.82rem] text-muted [.tile.light.on_&]:[color:inherit] [.tile.light.on_&]:[opacity:0.85] [&.is-stale]:[color:color-mix(in_srgb,_var(--tint-alertes)_70%,_var(--text))] [&.is-stale::before]:[content:''] [&.is-stale::before]:inline-block [&.is-stale::before]:w-[0.45em] [&.is-stale::before]:h-[0.45em] [&.is-stale::before]:mr-[0.35em] [&.is-stale::before]:[border-radius:50%] [&.is-stale::before]:[background:var(--tint-alertes)] [&.is-stale::before]:[vertical-align:0.1em]", text: tempoTomorrowText(tomorrow) }));
   box.hidden = parts.length === 0;
   box.replaceChildren(...parts);
 }
@@ -593,7 +593,7 @@ function energyPeriods(report) {
 const known = (value) => value !== null && value !== undefined;
 
 function totalTile(title, total) {
-  const tile = el("div", { class: "energy-total" }, el("span", { class: "label", text: title }),
+  const tile = el("div", { class: "energy-total bg-card-2 [border-radius:16px] [padding:0.7rem_0.85rem] grid gap-[0.15rem] min-w-0 [:not(:where(.o043700))&_strong]:[font-family:var(--font-display)] [:not(:where(.o043701))&_strong]:text-[1.25rem] [:not(:where(.o043702))&_strong]:[font-variant-numeric:tabular-nums] [:not(:where(.o043703))&_strong]:[overflow-wrap:anywhere] [:not(:where(.o043800))&_small]:text-text-2 [:not(:where(.o043801))&_small]:text-[0.78rem]" }, el("span", { class: "label", text: title }),
     el("strong", { text: `${kwhFormat.format(total.consumed_kwh)} kWh` }));
   if (known(total.cost)) tile.append(el("small", { text: `≈ ${euros.format(total.cost)}` }));
   if (total.produced_kwh > 0) {
@@ -611,7 +611,7 @@ function renderEnergy() {
   for (const id of ["#energy-totals", "#energy-legend", "#energy-details"]) $(id).hidden = empty;
   if (empty) {
     $("#energy-chart").replaceChildren(
-      el("p", { class: "auto-empty", text: "Aucun compteur d'énergie pour l'instant. Branche le Linky (HA_TELEINFO), ou indique tes compteurs et leurs prix dans energy.yaml." }),
+      el("p", { class: "auto-empty text-muted [padding:1rem_0]", text: "Aucun compteur d'énergie pour l'instant. Branche le Linky (HA_TELEINFO), ou indique tes compteurs et leurs prix dans energy.yaml." }),
     );
     $("#energy-note").textContent = "";
     return;
@@ -641,18 +641,18 @@ function renderEnergy() {
   const chart = svg("svg", { viewBox: `0 0 ${C.width} ${C.height}`, role: "img", "aria-label": "Consommation par période, en kWh" });
 
   for (const v of [high, high / 2, ...(low > 0 ? [-low] : [])]) {
-    chart.append(svg("line", { x1: C.left, x2: C.width - C.right, y1: y(v), y2: y(v), class: "chart-grid" }));
-    const label = svg("text", { x: C.left - 6, y: y(v) + 4, class: "axis", "text-anchor": "end" });
+    chart.append(svg("line", { x1: C.left, x2: C.width - C.right, y1: y(v), y2: y(v), class: "chart-grid [.history-chart_&]:[stroke:var(--line)] [.history-chart_&]:[stroke-width:1]" }));
+    const label = svg("text", { x: C.left - 6, y: y(v) + 4, class: "axis [.history-chart_&]:[fill:var(--muted)] [.history-chart_&]:[stroke:none] [:not(:where(.o022602)).history-chart_&]:text-[11px] [:not(:where(.o022603)).history-chart_&]:[font-family:var(--font-mono)]", "text-anchor": "end" });
     label.textContent = `${axisFormat.format(Math.abs(v))} kWh`;
     chart.append(label);
   }
-  chart.append(svg("line", { x1: C.left, x2: C.width - C.right, y1: y(0), y2: y(0), class: "baseline" }));
+  chart.append(svg("line", { x1: C.left, x2: C.width - C.right, y1: y(0), y2: y(0), class: "baseline [.energy-chart_&]:[stroke:var(--muted)] [.energy-chart_&]:[stroke-width:1]" }));
   const labelAt = new Set([0, Math.floor((periods.length - 1) / 2), periods.length - 1]);
   periods.forEach((period, index) => {
     if (labelAt.has(index)) {
       const anchor = index === 0 ? "start" : index === periods.length - 1 ? "end" : "middle";
       const at = anchor === "start" ? x(index) : anchor === "end" ? x(index) + width : x(index) + width / 2;
-      const label = svg("text", { x: at, y: C.height - 8, class: "axis", "text-anchor": anchor });
+      const label = svg("text", { x: at, y: C.height - 8, class: "axis [.history-chart_&]:[fill:var(--muted)] [.history-chart_&]:[stroke:none] [:not(:where(.o022602)).history-chart_&]:text-[11px] [:not(:where(.o022603)).history-chart_&]:[font-family:var(--font-mono)]", "text-anchor": anchor });
       label.textContent = period.label;
       chart.append(label);
     }
@@ -671,7 +671,7 @@ function renderEnergy() {
           y: direction > 0 ? Math.min(from, to) : Math.min(from, to) + gap,
           height: Math.max(1, Math.abs(to - from) - gap),
           rx: Math.min(3, width / 2),
-          class: `energy-bar series-${(i % SERIES) + 1}`,
+          class: `energy-bar [stroke:none] [:not(:where(.o044300))&.series-1]:[fill:var(--series-1)] [:not(:where(.o044301))&.series-1]:[background:var(--series-1)] [:not(:where(.o044400))&.series-2]:[fill:var(--series-2)] [:not(:where(.o044401))&.series-2]:[background:var(--series-2)] [:not(:where(.o044500))&.series-3]:[fill:var(--series-3)] [:not(:where(.o044501))&.series-3]:[background:var(--series-3)] [:not(:where(.o044600))&.series-4]:[fill:var(--series-4)] [:not(:where(.o044601))&.series-4]:[background:var(--series-4)] [:not(:where(.o044700))&.series-5]:[fill:var(--series-5)] [:not(:where(.o044701))&.series-5]:[background:var(--series-5)] [:not(:where(.o044800))&.series-6]:[fill:var(--series-6)] [:not(:where(.o044801))&.series-6]:[background:var(--series-6)] series-${(i % SERIES) + 1}`,
         });
         const title = svg("title");
         title.textContent = `${period.label} · ${source.name} : ${kwhFormat.format(v)} kWh`;
@@ -697,7 +697,7 @@ function renderEnergy() {
       const total = periods.reduce((t, p) => t + value(p, i), 0);
       const cost = known(source.price) ? ` · ${euros.format(total * source.price)}` : "";
       return el("li", {},
-        el("span", { class: `swatch series-${(i % SERIES) + 1}`, "aria-hidden": "true" }),
+        el("span", { class: `swatch [:not(:where(.o044300))&.series-1]:[fill:var(--series-1)] [:not(:where(.o044301))&.series-1]:[background:var(--series-1)] [:not(:where(.o044400))&.series-2]:[fill:var(--series-2)] [:not(:where(.o044401))&.series-2]:[background:var(--series-2)] [:not(:where(.o044500))&.series-3]:[fill:var(--series-3)] [:not(:where(.o044501))&.series-3]:[background:var(--series-3)] [:not(:where(.o044600))&.series-4]:[fill:var(--series-4)] [:not(:where(.o044601))&.series-4]:[background:var(--series-4)] [:not(:where(.o044700))&.series-5]:[fill:var(--series-5)] [:not(:where(.o044701))&.series-5]:[background:var(--series-5)] [:not(:where(.o044800))&.series-6]:[fill:var(--series-6)] [:not(:where(.o044801))&.series-6]:[background:var(--series-6)] w-[12px] h-[12px] [border-radius:4px] series-${(i % SERIES) + 1}`, "aria-hidden": "true" }),
         el("span", { text: source.name }),
         el("small", { text: `${kwhFormat.format(total)} kWh${source.kind === "production" ? " produits" : ""}${cost}` }),
       );

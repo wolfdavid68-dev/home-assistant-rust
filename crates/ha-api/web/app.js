@@ -473,7 +473,7 @@ function renderAll() {
     (a, b) => first(a) - first(b) || nameOf(a).localeCompare(nameOf(b), "fr"),
   );
   const section = (title, items) =>
-    el("section", {}, el("h2", { text: title }), el("div", { class: "tile-grid" }, ...items.map(renderTile)));
+    el("section", {}, el("h2", { text: title }), el("div", { class: "tile-grid grid [grid-template-columns:repeat(auto-fill,_minmax(min(100%,_200px),_1fr))] [align-items:start] gap-[12px] [@media(min-width:1000px)]:[:not(:where(.o079300))[data-layout=board]_&]:[grid-template-columns:repeat(auto-fill,_minmax(260px,_1fr))] [:not(:where(.o102200)).room-body_&]:[grid-template-columns:1fr] [.room-body_&>*]:[grid-column:1_/_-1] [@media(min-width:1000px)]:[.room-view_.room-body_&>*]:[break-inside:avoid]" }, ...items.map(renderTile)));
 
   // Une seule pièce : son nom, un bouton retour, ses appareils.
   const room = view.room === null ? undefined : areas.find((area) => area.name === view.room);
@@ -483,8 +483,8 @@ function renderAll() {
     back.addEventListener("click", () => showRoom(null));
     container.replaceChildren(
       el("section", {},
-        el("div", { class: "room-view-head" }, back, el("h2", { text: room.name })),
-        el("div", { class: "tile-grid" }, ...items.map(renderTile)),
+        el("div", { class: "room-view-head flex items-center gap-3 [:not(:where(.o008200))&_h2]:[font-family:var(--font-display)] [:not(:where(.o008201))&_h2]:text-[1.6rem] [:not(:where(.o008202))&_h2]:font-semibold [:not(:where(.o008203))&_h2]:[letter-spacing:-0.02em] [:not(:where(.o008204))&_h2]:[text-transform:none] [:not(:where(.o008205))&_h2]:text-text" }, back, el("h2", { text: room.name })),
+        el("div", { class: "tile-grid grid [grid-template-columns:repeat(auto-fill,_minmax(min(100%,_200px),_1fr))] [align-items:start] gap-[12px] [@media(min-width:1000px)]:[:not(:where(.o079300))[data-layout=board]_&]:[grid-template-columns:repeat(auto-fill,_minmax(260px,_1fr))] [:not(:where(.o102200)).room-body_&]:[grid-template-columns:1fr] [.room-body_&>*]:[grid-column:1_/_-1] [@media(min-width:1000px)]:[.room-view_.room-body_&>*]:[break-inside:avoid]" }, ...items.map(renderTile)),
       ),
     );
     $("#empty").hidden = true;

@@ -139,7 +139,7 @@ function assistRemember(data) {
 
 function assistSay(from, text, kind = "") {
   const log = $("#assist-log");
-  log.append(el("li", { class: `assist-line from-${from}${kind ? ` ${kind}` : ""}` }, el("p", { text })));
+  log.append(el("li", { class: `assist-line flex [:not(:where(.o106200))&_p]:m-0 [&_p]:[padding:0.55rem_0.8rem] [&_p]:[border-radius:14px] [&_p]:max-w-[85%] [:not(:where(.o106204))&_p]:[overflow-wrap:anywhere] [&_p]:[line-height:1.4] [&.from-me]:justify-end [:not(:where(.o106400))&.from-me_p]:bg-accent [:not(:where(.o106401))&.from-me_p]:[color:var(--accent-ink,_#fff)] [:not(:where(.o106402))&.from-me_p]:[border-bottom-right-radius:4px] [:not(:where(.o106500))&.from-home_p]:bg-card-2 [:not(:where(.o106501))&.from-home_p]:text-text [:not(:where(.o106502))&.from-home_p]:[border-bottom-left-radius:4px] [&.is-error_p]:[box-shadow:inset_3px_0_0_var(--alert)] from-${from}${kind ? ` ${kind}` : ""}` }, el("p", { text })));
   while (log.children.length > ASSIST_KEEP) log.firstElementChild.remove();
   log.lastElementChild.scrollIntoView({ block: "end" });
   // Une réponse en erreur : l'orbe de la voix rougit un instant (orbe.js).
@@ -321,7 +321,7 @@ function renderPush(blocker) {
       await api("DELETE", `/api/push/subscriptions/${device.id}`);
     }));
     const seen = device.last_success ? `prévenu il y a ${ago(device.last_success)}` : "jamais prévenu";
-    return el("li", { class: "push-device" },
+    return el("li", { class: "push-device flex items-center justify-between gap-[0.7rem] [padding:0.5rem_0.75rem] [border-radius:12px] bg-card-2 [:not(:where(.o114700))&_span]:grid [&_span]:min-w-0 [:not(:where(.o114800))&_strong]:[overflow-wrap:anywhere] [:not(:where(.o114900))&_small]:text-muted" },
       el("span", {}, el("strong", { text: device.name }), el("small", { text: device.failures > 0 ? `${seen} · ${device.failures} échec(s)` : seen })),
       remove);
   }));
@@ -430,12 +430,12 @@ async function loadIntegrations() {
     if (item.restarts > 0) lines.push(`relancée ${item.restarts} fois`);
     const plural = item.entities > 1 ? "s" : "";
     const devices = `${item.entities} appareil${plural}${item.unavailable && item.entities > 0 ? ` indisponible${plural}` : ""}`;
-    return el("li", { class: `integration i-${kind}` },
-      el("span", { class: "integration-dot", "aria-hidden": "true" }),
-      el("span", { class: "integration-text" },
+    return el("li", { class: `integration flex items-center gap-[0.7rem] [padding:0.55rem_0.75rem] [border-radius:12px] bg-card-2 i-${kind}` },
+      el("span", { class: "integration-dot flex-none w-[10px] h-[10px] [border-radius:50%] bg-muted [:not(:where(.o115300)).i-connected_&]:bg-ok [.i-connected_&]:[box-shadow:0_0_0_3px_var(--ok-soft)] [:not(:where(.o115400)).i-retrying_&]:[background:var(--glow-bar,_#d9a00d)] [:not(:where(.o115400)).i-starting_&]:[background:var(--glow-bar,_#d9a00d)] [:not(:where(.o115500)).i-crashed_&]:bg-alert [@media(prefers-reduced-motion:no-preference)]:[.i-starting_&]:[animation:pulse_1s_ease-in-out_infinite]", "aria-hidden": "true" }),
+      el("span", { class: "integration-text flex-1 grid min-w-0 [line-height:1.3] [:not(:where(.o115700))&_b]:text-[0.9rem] [:not(:where(.o115800))&_span]:text-[0.78rem] [:not(:where(.o115801))&_span]:text-muted [&_span]:[overflow-wrap:anywhere] [:not(:where(.o115900)).i-crashed_&_span]:text-text-2 [:not(:where(.o115900)).i-retrying_&_span]:text-text-2" },
         el("b", { text: String(item.name ?? item.id) }),
         el("span", { text: `${lookup(INTEGRATION_LABELS, kind) ?? kind} ${lines.length > 0 ? "· " : ""}${lines.join(" · ")}` })),
-      el("span", { class: "integration-count", text: devices }));
+      el("span", { class: "integration-count flex-none [:not(:where(.o116001))&]:text-[0.76rem] text-muted [:not(:where(.o116003))&]:[font-variant-numeric:tabular-nums]", text: devices }));
   }));
 }
 
@@ -473,12 +473,12 @@ function renderBatteries() {
     const kind = numeric && level <= BATTERY_EMPTY ? "crashed"
       : level === "low" || (numeric && level <= BATTERY_LOW) ? "retrying" : "connected";
     const advice = kind === "crashed" ? "à changer tout de suite" : kind === "retrying" ? "à changer bientôt" : "bonne";
-    return el("li", { class: `integration i-${kind}` },
-      el("span", { class: "integration-dot", "aria-hidden": "true" }),
-      el("span", { class: "integration-text" },
+    return el("li", { class: `integration flex items-center gap-[0.7rem] [padding:0.55rem_0.75rem] [border-radius:12px] bg-card-2 i-${kind}` },
+      el("span", { class: "integration-dot flex-none w-[10px] h-[10px] [border-radius:50%] bg-muted [:not(:where(.o115300)).i-connected_&]:bg-ok [.i-connected_&]:[box-shadow:0_0_0_3px_var(--ok-soft)] [:not(:where(.o115400)).i-retrying_&]:[background:var(--glow-bar,_#d9a00d)] [:not(:where(.o115400)).i-starting_&]:[background:var(--glow-bar,_#d9a00d)] [:not(:where(.o115500)).i-crashed_&]:bg-alert [@media(prefers-reduced-motion:no-preference)]:[.i-starting_&]:[animation:pulse_1s_ease-in-out_infinite]", "aria-hidden": "true" }),
+      el("span", { class: "integration-text flex-1 grid min-w-0 [line-height:1.3] [:not(:where(.o115700))&_b]:text-[0.9rem] [:not(:where(.o115800))&_span]:text-[0.78rem] [:not(:where(.o115801))&_span]:text-muted [&_span]:[overflow-wrap:anywhere] [:not(:where(.o115900)).i-crashed_&_span]:text-text-2 [:not(:where(.o115900)).i-retrying_&_span]:text-text-2" },
         el("b", { text: nameOf(state) }),
         el("span", { text: level === "low" ? "Pile faible : à changer bientôt" : `Pile ${advice}` })),
-      el("span", { class: "integration-count", text: numeric ? `${Math.round(level)}\u202f%` : "" }));
+      el("span", { class: "integration-count flex-none [:not(:where(.o116001))&]:text-[0.76rem] text-muted [:not(:where(.o116003))&]:[font-variant-numeric:tabular-nums]", text: numeric ? `${Math.round(level)}\u202f%` : "" }));
   }));
 }
 
@@ -518,13 +518,13 @@ async function loadTablets() {
       if (done !== 204 && done !== 404) flash("Déconnexion impossible.");
       loadTablets();
     });
-    return el("li", { class: "push-device" },
+    return el("li", { class: "push-device flex items-center justify-between gap-[0.7rem] [padding:0.5rem_0.75rem] [border-radius:12px] bg-card-2 [:not(:where(.o114700))&_span]:grid [&_span]:min-w-0 [:not(:where(.o114800))&_strong]:[overflow-wrap:anywhere] [:not(:where(.o114900))&_small]:text-muted" },
       el("span", {},
         el("strong", { text: tablet.label }),
         el("small", { text: `compte ${tablet.user} · active ${daysAgo(tablet.last_used_at)}` })),
       forget);
   }));
-  if (data.length === 0) $("#tablet-list").append(el("li", { class: "push-device" }, el("small", { text: "Aucune tablette murale pour l'instant." })));
+  if (data.length === 0) $("#tablet-list").append(el("li", { class: "push-device flex items-center justify-between gap-[0.7rem] [padding:0.5rem_0.75rem] [border-radius:12px] bg-card-2 [:not(:where(.o114700))&_span]:grid [&_span]:min-w-0 [:not(:where(.o114800))&_strong]:[overflow-wrap:anywhere] [:not(:where(.o114900))&_small]:text-muted" }, el("small", { text: "Aucune tablette murale pour l'instant." })));
 }
 
 // ---------------------------------------------------------------- Système
