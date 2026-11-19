@@ -680,6 +680,8 @@ function zoneTouch(zone, node) {
   });
   node.addEventListener("click", () => {
     if (long) { long = false; return; }
+    // En v4, la pièce s'ouvre d'abord en incrustation sur l'accueil (hub-v4.js).
+    if (zone.area && typeof hubV4Room === "function" && hubV4Room(zone.area)) return;
     if (zone.area) return openRoom(zone.area);
     const state = entities.get(zone.entity_id);
     if (!state) return;

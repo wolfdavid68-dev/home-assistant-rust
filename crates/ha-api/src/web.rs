@@ -95,7 +95,7 @@ macro_rules! asset {
 
 /// Tous les fichiers servis. Le JavaScript est découpé par thème ; l'ordre
 /// de chargement est donné par `index.html` (voir l'en-tête de `app.js`).
-static ASSETS: [Asset; 42] = [
+static ASSETS: [Asset; 43] = [
     asset!("/", "index.html", "text/html; charset=utf-8", REVALIDATE),
     asset!("/utils.js", "utils.js", JS, REVALIDATE),
     asset!("/app.js", "app.js", JS, REVALIDATE),
@@ -125,6 +125,8 @@ static ASSETS: [Asset; 42] = [
     asset!("/musique.js", "musique.js", JS, REVALIDATE),
     // L'accueil v3 (essai), choisi appareil par appareil dans Compte.
     asset!("/hub-v3.js", "hub-v3.js", JS, REVALIDATE),
+    // L'accueil v4 (essai) : les écrans de la maquette, par-dessus la v3.
+    asset!("/hub-v4.js", "hub-v4.js", JS, REVALIDATE),
     // Le micro (étape 84) : chargé par voix.js dans le fil audio.
     asset!("/ecoute.js", "ecoute.js", JS, REVALIDATE),
     asset!(

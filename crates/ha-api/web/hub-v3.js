@@ -152,10 +152,19 @@ function hubV3On() {
   return document.documentElement.dataset.hubStyle === "v3";
 }
 
-/** Pose ou retire l'attribut qui active le style v3 (CSS). */
-function hubV3Apply(on) {
-  if (on) document.documentElement.dataset.hubStyle = "v3";
-  else delete document.documentElement.dataset.hubStyle;
+/** Le style enregistré : "v3", "v4" ou "" (l'accueil actuel). */
+function hubV3Style(saved) {
+  return saved === "v3" || saved === "v4" ? saved : "";
+}
+
+/** Pose ou retire les attributs qui activent le style (CSS). La v4 reprend
+ *  l'accueil v3 et y ajoute ses écrans : elle pose les deux. */
+function hubV3Apply(style) {
+  const root = document.documentElement;
+  if (style === "v3" || style === "v4") root.dataset.hubStyle = "v3";
+  else delete root.dataset.hubStyle;
+  if (style === "v4") root.dataset.hubV4 = "";
+  else delete root.dataset.hubV4;
 }
 
 /** Au chargement : le réglage enregistré, puis le choix dans Mon compte. */
@@ -166,18 +175,19 @@ function hubV3Init() {
   } catch {
     // Stockage bloqué : le réglage par défaut.
   }
-  hubV3Apply(saved === "v3");
+  hubV3Apply(hubV3Style(saved));
   const pick = $("#hub-style");
   if (pick) {
-    pick.value = hubV3On() ? "v3" : "";
+    pick.value = hubV3Style(saved);
     pick.addEventListener("change", () => {
+      const style = hubV3Style(pick.value);
       try {
-        if (pick.value === "v3") localStorage.setItem(HUB_V3_KEY, "v3");
+        if (style) localStorage.setItem(HUB_V3_KEY, style);
         else localStorage.removeItem(HUB_V3_KEY);
       } catch {
         // Stockage bloqué : le choix ne durera que le temps de la page.
       }
-      hubV3Apply(pick.value === "v3");
+      hubV3Apply(style);
       renderHubV3();
       updateHub();
     });
@@ -331,6 +341,8 @@ function renderHubV3() {
   hubV3RenderTempo();
   hubV3RenderHeating();
   hubV3RenderLens();
+  // Les écrans de la v4 (hub-v4.js) suivent l'état de la maison.
+  if (typeof renderHubV4 === "function") renderHubV4();
 }
 
 /** Les compteurs de la maison : lumières et volets. */
@@ -787,6 +799,8 @@ function hubV3MoveCovers(covers) {
 /** Toucher une pastille. Vrai si une commande est partie (la pastille attend la réponse).
  *  Chauffage et Sécurité ouvrent la pièce : jamais de déverrouillage d'un seul geste. */
 function hubV3Tap(lens, name) {
+  // En v4, une pièce touchée s'ouvre en incrustation (hub-v4.js).
+  if (lens === "lumieres" && typeof hubV4Room === "function" && hubV4Room(name)) return false;
   if (lens === "lumieres") return hubV3ToggleRoom(name);
   const area = areas.find((a) => a.name === name);
   if (!area) return false;
@@ -853,8 +867,11 @@ function hubV3PaintRoom(item, name, lights) {
   setText(item.count, String(lit));
   item.node.classList.toggle("zero", lit === 0);
   setAttr(item.node, "aria-pressed", String(lit > 0));
-  setAttr(item.node, "aria-label", hubV3PinLabel(name, lit, lights.length, allowed));
-  item.node.disabled = !allowed;
+  // En v4, toucher la pièce ouvre ses réglages (hub-v4.js) au lieu de la basculer.
+  const v4 = typeof hubV4On === "function" && hubV4On();
+  setAttr(item.node, "aria-label", v4 ? `${hubV3PinLabel(name, lit, lights.length, false)} Toucher pour régler.`
+    : hubV3PinLabel(name, lit, lights.length, allowed));
+  item.node.disabled = !allowed && !v4;
   // Le nombre a changé : la réponse est arrivée, le bouton redevient vif.
   if (item.node.dataset.lit !== String(lit)) {
     item.node.dataset.lit = String(lit);
