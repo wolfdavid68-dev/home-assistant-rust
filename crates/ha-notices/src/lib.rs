@@ -423,13 +423,14 @@ fn approvals(core: &Core) {
             || "Un ordre".to_owned(),
             |by| format!("Un ordre donné {by}"),
         );
+        let summary = order_summary(states, &order);
+        let expires = Timestamp::try_from(order.held_since + ha_core::guard::HELD_TTL).ok();
         let message = format!(
-            "{who} attend ta validation : {}. Il est retenu parce que {}. \
+            "{who} attend ta validation : {summary}. Il est retenu parce que {}. \
              Sans réponse, il sera oublié à {}.",
-            order_summary(states, &order),
             order.reason,
-            Timestamp::try_from(order.held_since + ha_core::guard::HELD_TTL).map_or_else(
-                |_| "un moment".to_owned(),
+            expires.map_or_else(
+                || "un moment".to_owned(),
                 |t| t.to_zoned(zone.clone()).strftime("%H:%M").to_string()
             )
         );
@@ -443,6 +444,18 @@ fn approvals(core: &Core) {
             &created_at,
         );
         attributes.insert("approval_id".into(), order.id.into());
+        // Les morceaux du message, pour l'accueil v4 qui les affiche à part.
+        attributes.insert("order".into(), clean(&summary, MAX_MESSAGE_CHARS).into());
+        attributes.insert(
+            "reason".into(),
+            clean(&order.reason, MAX_MESSAGE_CHARS).into(),
+        );
+        if let Some(by) = order.origin.describe() {
+            attributes.insert("origin".into(), clean(&by, MAX_MESSAGE_CHARS).into());
+        }
+        if let Some(expires) = expires {
+            attributes.insert("expires_at".into(), expires.to_string().into());
+        }
         info!("garde : {}", order.reason);
         if let Err(error) = states.set(entity_id, NOTIFYING, attributes) {
             warn!("ordre à valider : notification refusée ({error})");
@@ -1109,6 +1122,19 @@ mod tests {
             ),
             "{message}"
         );
+        assert_eq!(
+            text(state.attributes(), "order"),
+            Some("allumer Lampe de chevet")
+        );
+        assert_eq!(
+            text(state.attributes(), "reason"),
+            Some("« Chambre » est une pièce protégée")
+        );
+        assert_eq!(
+            text(state.attributes(), "origin"),
+            Some("à la voix (Alexa)")
+        );
+        assert!(text(state.attributes(), "expires_at").is_some());
         // Personne ne peut fabriquer une fausse demande de validation.
         assert_eq!(
             notify(

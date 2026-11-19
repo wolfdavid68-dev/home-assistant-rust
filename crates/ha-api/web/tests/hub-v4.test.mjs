@@ -13,6 +13,15 @@ const hubV4ShortName = run("hubV4ShortName");
 const hubV4RoomSub = run("hubV4RoomSub");
 const hubV4CoverWord = run("hubV4CoverWord");
 const hubV4Place = run("hubV4Place");
+const hubV4Percent = run("hubV4Percent");
+const hubV4Brightness = run("hubV4Brightness");
+const hubV4Dimmable = run("hubV4Dimmable");
+const hubV4WhiteRange = run("hubV4WhiteRange");
+const hubV4ClosedPart = run("hubV4ClosedPart");
+const hubV4CoverLabel = run("hubV4CoverLabel");
+const hubV4MomentRows = run("hubV4MomentRows");
+const hubV4Expiry = run("hubV4Expiry");
+const hubV4AskedBy = run("hubV4AskedBy");
 
 const cover = (state, attributes = {}) => ({ entity_id: "cover.salon", state, attributes });
 
@@ -103,5 +112,103 @@ describe("hubV4Place", () => {
     const at = hubV4Place({ left: 10, top: 300, width: 340, height: 100 }, pop, { w: 360, h: 800 });
     assert.equal(at.side, "");
     assert.equal(at.x, 20);
+  });
+});
+
+const lamp = (state, attributes = {}) => ({ entity_id: "light.salon", state, attributes });
+
+describe("hubV4Percent et hubV4Brightness", () => {
+  test("éteinte : 0 ; allumée sans luminosité : 100", () => {
+    assert.equal(hubV4Percent(lamp("off", { brightness: 200 })), 0);
+    assert.equal(hubV4Percent(lamp("on")), 100);
+  });
+  test("la luminosité en pour cent, jamais 0 pour une lampe allumée", () => {
+    assert.equal(hubV4Percent(lamp("on", { brightness: 255 })), 100);
+    assert.equal(hubV4Percent(lamp("on", { brightness: 128 })), 50);
+    assert.equal(hubV4Percent(lamp("on", { brightness: 1 })), 1);
+  });
+  test("pour cent → 1 à 255", () => {
+    assert.equal(hubV4Brightness(100), 255);
+    assert.equal(hubV4Brightness(50), 127);
+    assert.equal(hubV4Brightness(5), 13);
+    assert.equal(hubV4Brightness(0), 1);
+  });
+});
+
+describe("hubV4Dimmable et hubV4WhiteRange", () => {
+  test("une lampe seulement allumée ou éteinte ne varie pas", () => {
+    assert.equal(hubV4Dimmable(lamp("on", { supported_color_modes: ["onoff"] })), false);
+    assert.equal(hubV4Dimmable(lamp("on", { supported_color_modes: ["brightness"] })), true);
+    assert.equal(hubV4Dimmable(lamp("on", { brightness: 80 })), true);
+    assert.equal(hubV4Dimmable(lamp("on")), false);
+  });
+  test("le blanc, seulement si la lampe le règle", () => {
+    assert.equal(hubV4WhiteRange(lamp("on", { supported_color_modes: ["brightness"] })), null);
+    assert.deepEqual(plain(hubV4WhiteRange(lamp("on", { supported_color_modes: ["color_temp"] }))), { min: 2000, max: 6500 });
+    assert.deepEqual(plain(hubV4WhiteRange(lamp("on", {
+      supported_color_modes: ["color_temp"], min_color_temp_kelvin: 2700, max_color_temp_kelvin: 5000,
+    }))), { min: 2700, max: 5000 });
+  });
+});
+
+describe("hubV4ClosedPart et hubV4CoverLabel", () => {
+  test("la position connue d'abord, sinon l'état", () => {
+    assert.equal(hubV4ClosedPart(cover("open", { current_position: 40 })), 60);
+    assert.equal(hubV4ClosedPart(cover("closed")), 100);
+    assert.equal(hubV4ClosedPart(cover("open")), 0);
+    assert.equal(hubV4ClosedPart(cover("unknown")), 50);
+  });
+  test("ce qu'affiche la fenêtre", () => {
+    assert.deepEqual(plain(hubV4CoverLabel(cover("open", { current_position: 40 }))), { big: "40 %", small: "ouvert" });
+    assert.deepEqual(plain(hubV4CoverLabel(cover("closed", { current_position: 0 }))), { big: "Fermé", small: "" });
+    assert.deepEqual(plain(hubV4CoverLabel(cover("open"))), { big: "Ouvert", small: "" });
+  });
+});
+
+describe("hubV4MomentRows", () => {
+  const house = new Map([
+    ["light.salon", { entity_id: "light.salon", state: "on", attributes: { brightness: 255 } }],
+    ["light.coin", { entity_id: "light.coin", state: "off", attributes: {} }],
+    ["cover.salon", { entity_id: "cover.salon", state: "open", attributes: { current_position: 100 } }],
+    ["switch.tele", { entity_id: "switch.tele", state: "off", attributes: {} }],
+  ]);
+  const get = (id) => house.get(id);
+
+  test("maintenant → après, par sorte d'appareil", () => {
+    const rows = plain(hubV4MomentRows({
+      "light.salon": { state: "on", brightness: 77 },
+      "light.coin": { state: "on", brightness: 77 },
+      "cover.salon": { state: "closed" },
+    }, get));
+    assert.deepEqual(rows, [
+      { domain: "light", label: "Lumières", now: "1 sur 2 allumée", then: "toutes allumées à 30 %", done: false },
+      { domain: "cover", label: "Volets", now: "ouvert", then: "fermé", done: false },
+    ]);
+  });
+  test("ce qui est déjà fait le dit", () => {
+    const rows = plain(hubV4MomentRows({ "switch.tele": { state: "off" }, "light.salon": { state: "on", brightness: 255 } }, get));
+    assert.deepEqual(rows, [
+      { domain: "light", label: "Lumières", now: "allumée", then: "déjà allumée", done: true },
+      { domain: "switch", label: "Prises", now: "éteinte", then: "déjà éteinte", done: true },
+    ]);
+  });
+  test("une scène qui ne dit rien ne donne aucune ligne", () => {
+    assert.deepEqual(plain(hubV4MomentRows(undefined, get)), []);
+    assert.deepEqual(plain(hubV4MomentRows({ "media_player.radio": { state: "on" } }, get)), []);
+  });
+});
+
+describe("hubV4Expiry et hubV4AskedBy", () => {
+  const now = Date.parse("2026-11-19T20:00:00Z");
+  test("le temps qu'il reste avant le refus", () => {
+    assert.equal(hubV4Expiry("2026-11-19T20:10:00Z", now), "Sans réponse, il est refusé dans 10 min.");
+    assert.equal(hubV4Expiry("2026-11-19T20:00:30Z", now), "Sans réponse, il est refusé dans moins d'une minute.");
+    assert.equal(hubV4Expiry(undefined, now), "");
+  });
+  test("qui a demandé, et à quelle heure (locale)", () => {
+    const at = new Date(2026, 10, 19, 21, 42).toISOString();
+    assert.equal(hubV4AskedBy("à la voix (Alexa)", at), "Demandé à la voix (Alexa) · 21:42");
+    assert.equal(hubV4AskedBy("", at), "Demandé à 21:42");
+    assert.equal(hubV4AskedBy("", "n'importe quoi"), "Demandé");
   });
 });

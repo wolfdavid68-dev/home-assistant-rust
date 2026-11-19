@@ -531,6 +531,16 @@ async fn scripts_and_scenes_run_from_a_service_call() {
         core.states.get(&id("scene.cinema")).unwrap().attributes()["friendly_name"],
         "Soirée cinéma"
     );
+    // Elle dit ce qu'elle règle, pour que l'accueil le montre avant de la lancer.
+    let cinema = core.states.get(&id("scene.cinema")).unwrap();
+    assert_eq!(
+        cinema.attributes()["entity_id"],
+        serde_json::json!(["light.salon"])
+    );
+    assert_eq!(
+        cinema.attributes()["targets"],
+        serde_json::json!({"light.salon": {"state": "on", "brightness": 50}})
+    );
 
     // Lancer le script : ses actions s'enchaînent, il est « on » pendant ce temps.
     core.call_service("script", "turn_on", id("script.depart"), Attributes::new())

@@ -686,6 +686,8 @@ function zoneTouch(zone, node) {
     const state = entities.get(zone.entity_id);
     if (!state) return;
     if (isDoorbell(state)) return openDoorbell(state);
+    // En v4, une lampe qui varie ou un volet se règle en incrustation (hub-v4.js).
+    if (typeof hubV4Device === "function" && hubV4Device(state.entity_id, node)) return;
     const command = actionCommand(state);
     // Un capteur, ou un appareil que ce compte ne commande pas : l'historique.
     if (command === null || !canControl(state)) return zoneHistory(zone);

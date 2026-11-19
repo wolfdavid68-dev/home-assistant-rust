@@ -160,7 +160,7 @@ impl Library {
             set_entity(core, script.entity_id(), "off", &script.alias);
         }
         for scene in &scenes {
-            set_entity(core, scene.entity_id(), "unknown", &scene.name);
+            set_scene(core, scene, "unknown");
         }
         let running = scripts.iter().map(|_| None).collect();
         Self {
@@ -249,12 +249,7 @@ impl Library {
         info!("scène « {} » activée", scene.name);
         // Comme Home Assistant : l'état d'une scène est la date de sa
         // dernière activation.
-        set_entity(
-            core,
-            scene.entity_id(),
-            &jiff::Timestamp::now().to_string(),
-            &scene.name,
-        );
+        set_scene(core, scene, &jiff::Timestamp::now().to_string());
         let context = Context {
             alias: scene.name.clone().into(),
             core: Arc::clone(core),
@@ -277,9 +272,52 @@ impl Library {
 }
 
 fn set_entity(core: &Core, entity_id: Option<EntityId>, state: &str, name: &str) {
-    let Some(entity_id) = entity_id else { return };
     let mut attributes = Attributes::new();
     attributes.insert("friendly_name".into(), name.into());
+    set_with(core, entity_id, state, attributes);
+}
+
+/// Une scène dit aussi ce qu'elle règle : `entity_id` (la liste, comme
+/// Home Assistant) et `targets`, l'état visé pour chaque appareil, que
+/// l'accueil montre avant de la lancer.
+fn set_scene(core: &Core, scene: &Scene, state: &str) {
+    let mut attributes = Attributes::new();
+    attributes.insert("friendly_name".into(), scene.name.as_str().into());
+    let mut ids = Vec::new();
+    let mut targets = Attributes::new();
+    for action in &scene.actions {
+        let Action::Service {
+            service,
+            entity_ids,
+            data,
+            ..
+        } = action
+        else {
+            continue;
+        };
+        let mut target = data.clone();
+        let word = match (
+            service.as_str(),
+            data.get("position").and_then(serde_json::Value::as_u64),
+        ) {
+            ("turn_off", _) => "off",
+            ("close_cover", _) | ("set_cover_position", Some(0)) => "closed",
+            ("open_cover" | "set_cover_position", _) => "open",
+            _ => "on",
+        };
+        target.insert("state".into(), word.into());
+        for entity_id in entity_ids {
+            ids.push(serde_json::Value::from(entity_id.to_string()));
+            targets.insert(entity_id.to_string(), target.clone().into());
+        }
+    }
+    attributes.insert("entity_id".into(), ids.into());
+    attributes.insert("targets".into(), targets.into());
+    set_with(core, scene.entity_id(), state, attributes);
+}
+
+fn set_with(core: &Core, entity_id: Option<EntityId>, state: &str, attributes: Attributes) {
+    let Some(entity_id) = entity_id else { return };
     if let Err(error) = core.states.set(entity_id, state, attributes) {
         warn!("état refusé : {error}");
     }
