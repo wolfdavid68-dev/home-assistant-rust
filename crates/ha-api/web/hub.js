@@ -158,7 +158,10 @@ function renderHubAlert() {
   pill.hidden = found.length === 0 && waiting === 0;
   if (waiting > 0) {
     const open = el("button", { type: "button", class: "hub-alert-action [border:0] [border-radius:999px] [padding:5px_14px] [background:rgb(255_255_255_/_0.16)] font-semibold cursor-pointer", text: "Voir" });
-    open.addEventListener("click", () => $("#open-notices").click());
+    open.addEventListener("click", () => {
+      if (typeof hubV4Approval === "function" && hubV4Approval()) return;
+      $("#open-notices").click();
+    });
     swap(pill, svgIcon(HUB_ICONS.warn),
       el("b", { text: waiting === 1 ? "1 ordre attend ta validation" : `${waiting} ordres attendent ta validation` }), open);
     return;
@@ -355,6 +358,7 @@ function renderHubScenes() {
       el("span", { class: "hub-scene-icon w-[38px] h-[38px] [border-radius:12px] grid [place-items:center] [:not(:where(.o140700))&_svg]:w-[20px] [:not(:where(.o140701))&_svg]:h-[20px] [:not(:where(.o140800)).hub-scene.t-go_&]:[background:rgb(3_169_244_/_0.2)] [:not(:where(.o140801)).hub-scene.t-go_&]:[color:#03a9f4] [:not(:where(.o140900)).hub-scene.t-home_&]:[background:rgb(102_187_106_/_0.2)] [:not(:where(.o140901)).hub-scene.t-home_&]:[color:#66bb6a] [:not(:where(.o141000)).hub-scene.t-night_&]:[background:rgb(149_117_205_/_0.25)] [:not(:where(.o141001)).hub-scene.t-night_&]:[color:#b39ddb] [:not(:where(.o141100)).hub-scene.t-cine_&]:[background:rgb(255_183_77_/_0.2)] [:not(:where(.o141101)).hub-scene.t-cine_&]:[color:#ffb74d] [:not(:where(.o141200)).hub-scene.t-morning_&]:[background:rgb(255_213_79_/_0.2)] [:not(:where(.o141201)).hub-scene.t-morning_&]:[color:#f9a825]" }, svgIcon(running ? ICONS.stop : look.icon)),
       el("b", { text: nameOf(state) }));
     button.addEventListener("click", () => {
+      if (!running && typeof hubV4Moment === "function" && hubV4Moment(state)) return;
       button.classList.add("pending");
       setTimeout(() => button.classList.remove("pending"), 5000);
       callService(domainOf(state), running ? "turn_off" : "turn_on", { entity_id: state.entity_id });
