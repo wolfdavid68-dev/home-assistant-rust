@@ -473,7 +473,7 @@ function renderAll() {
     (a, b) => first(a) - first(b) || nameOf(a).localeCompare(nameOf(b), "fr"),
   );
   const section = (title, items) =>
-    el("section", {}, el("h2", { text: title }), el("div", { class: "grid" }, ...items.map(renderTile)));
+    el("section", {}, el("h2", { text: title }), el("div", { class: "tile-grid" }, ...items.map(renderTile)));
 
   // Une seule pièce : son nom, un bouton retour, ses appareils.
   const room = view.room === null ? undefined : areas.find((area) => area.name === view.room);
@@ -484,7 +484,7 @@ function renderAll() {
     container.replaceChildren(
       el("section", {},
         el("div", { class: "room-view-head" }, back, el("h2", { text: room.name })),
-        el("div", { class: "grid" }, ...items.map(renderTile)),
+        el("div", { class: "tile-grid" }, ...items.map(renderTile)),
       ),
     );
     $("#empty").hidden = true;

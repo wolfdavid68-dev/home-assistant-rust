@@ -95,7 +95,7 @@ macro_rules! asset {
 
 /// Tous les fichiers servis. Le JavaScript est découpé par thème ; l'ordre
 /// de chargement est donné par `index.html` (voir l'en-tête de `app.js`).
-static ASSETS: [Asset; 41] = [
+static ASSETS: [Asset; 42] = [
     asset!("/", "index.html", "text/html; charset=utf-8", REVALIDATE),
     asset!("/utils.js", "utils.js", JS, REVALIDATE),
     asset!("/app.js", "app.js", JS, REVALIDATE),
@@ -107,6 +107,7 @@ static ASSETS: [Asset; 41] = [
     asset!("/dialogs.js", "dialogs.js", JS, REVALIDATE),
     asset!("/editor.js", "editor.js", JS, REVALIDATE),
     asset!("/account.js", "account.js", JS, REVALIDATE),
+    asset!("/settings.js", "settings.js", JS, REVALIDATE),
     asset!("/start.js", "start.js", JS, REVALIDATE),
     asset!("/canvas.js", "canvas.js", JS, REVALIDATE),
     asset!("/house.js", "house.js", JS, REVALIDATE),

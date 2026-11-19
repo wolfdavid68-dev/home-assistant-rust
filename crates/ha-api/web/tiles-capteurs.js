@@ -190,7 +190,7 @@ function seconds(hms) {
 /** Un anneau qui se vide pendant que le minuteur tourne. */
 function ring(totalSeconds, leftSeconds, finishesAt) {
   const full = 2 * Math.PI * 20;
-  const picture = svg("svg", { viewBox: "0 0 48 48", class: "ring", "aria-hidden": "true" });
+  const picture = svg("svg", { viewBox: "0 0 48 48", class: "gauge-ring", "aria-hidden": "true" });
   picture.append(svg("circle", { cx: 24, cy: 24, r: 20, class: "track" }));
   const arc = svg("circle", { cx: 24, cy: 24, r: 20, class: "arc", "stroke-dasharray": full });
   const share = totalSeconds ? Math.min(1, Math.max(0, leftSeconds / totalSeconds)) : 0;

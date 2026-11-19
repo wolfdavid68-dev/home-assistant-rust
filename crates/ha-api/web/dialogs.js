@@ -112,7 +112,7 @@ function drawConsumption(points, since, until) {
   const high = Math.max(...points.map((p) => p.change ?? 0), 1e-9) * 1.1;
   const y = (value) => CHART.top + ((high - value) / high) * (CHART.height - CHART.top - CHART.bottom);
   for (const value of [high / 1.1, high / 2.2]) {
-    chart.append(svg("line", { x1: CHART.left, x2: CHART.width - CHART.right, y1: y(value), y2: y(value), class: "grid" }));
+    chart.append(svg("line", { x1: CHART.left, x2: CHART.width - CHART.right, y1: y(value), y2: y(value), class: "chart-grid" }));
     const label = svg("text", { x: CHART.left - 6, y: y(value) + 4, class: "axis", "text-anchor": "end" });
     label.textContent = `${number.format(value)}${unit ? ` ${unit}` : ""}`;
     chart.append(label);
@@ -201,7 +201,7 @@ function drawCurve(chart, points, x, unit) {
   const y = (value) => CHART.top + ((high - value) / (high - low)) * (CHART.height - CHART.top - CHART.bottom);
 
   for (const value of [high - margin, (high + low) / 2, low + margin]) {
-    chart.append(svg("line", { x1: CHART.left, x2: CHART.width - CHART.right, y1: y(value), y2: y(value), class: "grid" }));
+    chart.append(svg("line", { x1: CHART.left, x2: CHART.width - CHART.right, y1: y(value), y2: y(value), class: "chart-grid" }));
     const label = svg("text", { x: CHART.left - 6, y: y(value) + 4, class: "axis", "text-anchor": "end" });
     label.textContent = `${number.format(value)}${unit ? ` ${unit}` : ""}`;
     chart.append(label);
@@ -641,7 +641,7 @@ function renderEnergy() {
   const chart = svg("svg", { viewBox: `0 0 ${C.width} ${C.height}`, role: "img", "aria-label": "Consommation par période, en kWh" });
 
   for (const v of [high, high / 2, ...(low > 0 ? [-low] : [])]) {
-    chart.append(svg("line", { x1: C.left, x2: C.width - C.right, y1: y(v), y2: y(v), class: "grid" }));
+    chart.append(svg("line", { x1: C.left, x2: C.width - C.right, y1: y(v), y2: y(v), class: "chart-grid" }));
     const label = svg("text", { x: C.left - 6, y: y(v) + 4, class: "axis", "text-anchor": "end" });
     label.textContent = `${axisFormat.format(Math.abs(v))} kWh`;
     chart.append(label);

@@ -921,7 +921,7 @@ function durationField(label, object, key, optional) {
   };
   number.addEventListener("input", update);
   select.addEventListener("change", update);
-  return el("label", {}, el("span", { class: "label", text: label }), el("span", { class: "inline" }, number, select));
+  return el("label", {}, el("span", { class: "label", text: label }), el("span", { class: "inline-fields" }, number, select));
 }
 
 /** `5min` → 300 ; `00:05:00` → 300 ; illisible → null. */
@@ -960,7 +960,7 @@ function offsetField(object, key) {
   };
   number.addEventListener("input", update);
   select.addEventListener("change", update);
-  return el("label", {}, el("span", { class: "label", text: "Décalage en min (facultatif)" }), el("span", { class: "inline" }, number, select));
+  return el("label", {}, el("span", { class: "label", text: "Décalage en min (facultatif)" }), el("span", { class: "inline-fields" }, number, select));
 }
 
 function weekdayField(c) {
