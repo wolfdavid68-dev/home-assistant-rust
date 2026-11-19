@@ -11,7 +11,7 @@ IA. La maison en offre quatre :
 
 | Outil | Ce que l'assistant peut faire |
 |-------|-------------------------------|
-| `get_house_state` | lire l'état des appareils que son compte voit, rangés par pièce |
+| `get_house_state` | lire l'état des appareils que son compte voit, rangés par pièce, et la météo (`weather.*` : temps actuel et prévisions des prochains jours, en français) |
 | `get_agenda` | lire l'agenda de la maison (agenda de la famille, agendas partagés) : aujourd'hui, ou jusqu'à 14 jours (`days`) |
 | `assist` | demander en français, comme dans [Assist](assist.md) : « ferme le volet de la chambre » |
 | `call_service` | donner un ordre précis : `cover.set_cover_position` sur `cover.chambre`, position 40 |

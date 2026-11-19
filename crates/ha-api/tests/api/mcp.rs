@@ -137,10 +137,27 @@ async fn an_ai_assistant_plugs_in_through_mcp_under_the_guard() {
         ["get_house_state", "get_agenda", "assist", "call_service"]
     );
 
+    // La météo et ses prévisions, à part des appareils.
+    let Value::Object(weather) = json!({
+        "temperature": 9.4,
+        "forecast": [{"datetime": "2026-11-20", "condition": "rainy",
+                      "temperature": 11.0, "templow": 4.0, "precipitation_probability": 80}],
+    }) else {
+        unreachable!()
+    };
+    app.state
+        .core
+        .states
+        .set("weather.maison".parse().unwrap(), "cloudy", weather)
+        .unwrap();
     let (_, body) = mcp(&app, Some(&claude), &[], tool("get_house_state", json!({}))).await;
     let (text, error) = tool_text(&body);
     assert!(!error);
     assert!(text.contains("(cover.salon) : ouvert"), "{text}");
+    assert!(
+        text.contains("(weather.maison) : nuageux, 9.4 °C\n  - 2026-11-20 : pluie, de 4 °C à 11 °C, pluie 80 %"),
+        "{text}"
+    );
 
     // Un ordre précis : passe, au nom de l'assistant.
     let mut events = core.bus.subscribe();
