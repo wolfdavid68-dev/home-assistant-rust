@@ -7,11 +7,12 @@ clés. C'est l'idée centrale de Moli OS (des agents qui pilotent la maison sans
 Home Assistant propose la même chose avec son « serveur MCP ».
 
 **MCP** (Model Context Protocol) est la façon standard de brancher des outils sur un assistant
-IA. La maison en offre trois :
+IA. La maison en offre quatre :
 
 | Outil | Ce que l'assistant peut faire |
 |-------|-------------------------------|
 | `get_house_state` | lire l'état des appareils que son compte voit, rangés par pièce |
+| `get_agenda` | lire l'agenda de la maison (agenda de la famille, agendas partagés) : aujourd'hui, ou jusqu'à 14 jours (`days`) |
 | `assist` | demander en français, comme dans [Assist](assist.md) : « ferme le volet de la chambre » |
 | `call_service` | donner un ordre précis : `cover.set_cover_position` sur `cover.chambre`, position 40 |
 
@@ -70,6 +71,11 @@ compris ; `ha-server user delete claude` supprime le compte.
 - **Ce que l'assistant lit part chez son fournisseur.** L'état de la maison (qui est là, quelles
   portes sont ouvertes, les températures) est envoyé au service d'IA (Anthropic pour Claude) pour
   qu'il puisse répondre. Le compte « invité » limite ce qu'il voit.
+- **L'agenda n'est lu que par un compte « famille ».** Un invité ne le voit pas (l'agenda dit
+  quand la maison est vide) : `get_agenda` lui répond qu'aucun agenda n'est visible. Pour un
+  assistant qui fait le résumé du jour, crée-lui un compte « famille » à part
+  (`ha-server user add resume famille`), avec son propre jeton, et donne-lui seulement les
+  outils de lecture (`get_agenda`, `get_house_state`).
 - Un assistant IA peut se tromper. La garde et les vérifications l'empêchent de faire quelque
   chose de grave, pas de faire quelque chose de bête (éteindre la lumière du salon pendant que tu
   lis). Commence avec un compte invité.
@@ -86,7 +92,7 @@ ne peut pas s'en servir.
 
 | Fichier | Rôle |
 |---------|------|
-| [ha-api/src/mcp.rs](../crates/ha-api/src/mcp.rs) (nouveau) | Le protocole, les trois outils, la limite d'appels |
+| [ha-api/src/mcp.rs](../crates/ha-api/src/mcp.rs) (nouveau) | Le protocole, les quatre outils, la limite d'appels |
 | [ha-api/src/rest.rs](../crates/ha-api/src/rest.rs) | `execute` : un ordre d'assistant IA est retenu par la garde quel que soit son rôle, et ne touche jamais à ce qui ferme la maison |
 | [ha-auth/src/lib.rs](../crates/ha-auth/src/lib.rs) | Les jetons d'assistant (`program`, migration `0019`) : refusés par `authenticate`, acceptés par `authenticate_program` (MCP seulement) |
 | [ha-core/src/origin.rs](../crates/ha-core/src/origin.rs) | `Origin::Agent` : « par l'assistant IA « claude » » |
