@@ -11,8 +11,10 @@
 // d'innerHTML, les positions passent par des variables CSS (CSP).
 "use strict";
 
-// La page ouverte : `name` est une pièce, ou HUB_V4_ALL pour toute la maison.
+// La page ouverte : `name` est une pièce, HUB_V4_ALL pour toute la maison, ou
+// HUB_V4_ENERGY pour l'énergie (son contenu est dans hub-v4-energie.js).
 const HUB_V4_ALL = "*";
+const HUB_V4_ENERGY = "*énergie";
 const hubV4Pg = { dialog: null, name: null, back: null, refresh: null, place: null, timer: null };
 
 // Une tuile : le verre sombre de la maquette.
@@ -338,6 +340,11 @@ function hubV4PageImage(page) {
   return houseUrl(name) ?? houseUrl(page.background);
 }
 
+/** Une page sans pièce : toute la maison ou l'énergie. */
+function hubV4Whole(name) {
+  return name === HUB_V4_ALL || name === HUB_V4_ENERGY;
+}
+
 /** La barre du haut : retour, les pièces de l'étage, l'autre étage, toute la maison. */
 function hubV4PageNav(name) {
   const pages = house.pages ?? [];
@@ -351,7 +358,9 @@ function hubV4PageNav(name) {
     return node;
   };
   const links = [];
-  if (name === HUB_V4_ALL) {
+  if (name === HUB_V4_ENERGY) {
+    links.push(pill("Énergie", true, () => {}));
+  } else if (name === HUB_V4_ALL) {
     for (const page of pages) {
       const first = hubV4FloorRooms(page).find((room) => areas.some((a) => a.name === room));
       if (first) links.push(pill(page.name, false, () => hubV4Page(first)));
@@ -375,6 +384,10 @@ function hubV4PageNav(name) {
     }
   }
   links.push(pill("Toute la maison", name === HUB_V4_ALL, () => hubV4Page(HUB_V4_ALL)));
+  // Depuis l'énergie : le bilan détaillé (graphique jour par jour), comme avant.
+  if (name === HUB_V4_ENERGY && typeof openEnergy === "function") {
+    links.push(pill("Bilan détaillé", false, () => openEnergy(), true));
+  }
   // Depuis « Toute la maison » : le tableau de bord complet, comme avant.
   if (name === HUB_V4_ALL && typeof leaveHub === "function") {
     links.push(pill("Tableau complet", false, () => {
@@ -391,7 +404,7 @@ function hubV4PageNav(name) {
 /** Le fond : le dessin de l'étage, zoomé sur la pièce (ou entier pour toute la maison). */
 function hubV4PageStage(name) {
   const pages = house.pages ?? [];
-  const page = name === HUB_V4_ALL ? pages[0] : hubV4PageOf(pages, name);
+  const page = hubV4Whole(name) ? pages[0] : hubV4PageOf(pages, name);
   const url = hubV4PageImage(page);
   const stage = el("div", { class: "absolute inset-0 overflow-hidden pointer-events-none", "aria-hidden": "true" });
   if (!url) return { node: stage, place: () => {} };
@@ -402,7 +415,7 @@ function hubV4PageStage(name) {
   });
   stage.append(image);
   let ring = null;
-  const zone = name === HUB_V4_ALL ? null
+  const zone = hubV4Whole(name) ? null
     : page.zones.filter((z) => z.area === name).sort((a, b) => b.w * b.h - a.w * a.h)[0];
   if (zone) {
     ring = el("div", {
@@ -747,16 +760,22 @@ function hubV4HouseBody() {
  */
 function hubV4Page(name) {
   if (!hubV4On() || !hub.on || hub.away) return false;
-  if (name !== HUB_V4_ALL && !areas.some((a) => a.name === name)) return false;
+  if (name === HUB_V4_ENERGY ? typeof hubV4EnergyBody !== "function"
+    : name !== HUB_V4_ALL && !areas.some((a) => a.name === name)) return false;
   hubV4Close();
   const back = hubV4Pg.dialog ? hubV4Pg.back : document.activeElement;
   hubV4PageClose(false);
 
-  const body = name === HUB_V4_ALL ? hubV4HouseBody() : hubV4RoomBody(name);
+  const body = name === HUB_V4_ENERGY ? hubV4EnergyBody()
+    : name === HUB_V4_ALL ? hubV4HouseBody() : hubV4RoomBody(name);
   const stage = hubV4PageStage(name);
   const column = (nodes, side) => el("div", {
-    class: `flex flex-col gap-3 min-h-0 overflow-y-auto pb-6 [scrollbar-width:thin] ${side === "right" ? "lg:col-start-3" : ""}`,
+    class: `flex flex-col gap-3 min-h-0 overflow-y-auto pb-6 [scrollbar-width:thin] ${side === "right" ? "lg:col-start-3 lg:row-start-1" : ""}`,
   }, ...nodes);
+  // Au milieu, sous le dessin : une phrase (l'énergie), s'il y en a une.
+  const middle = body.middle ? [el("div", {
+    class: "hidden lg:flex lg:col-start-2 lg:row-start-1 flex-col justify-end items-center pb-24 min-h-0 pointer-events-none",
+  }, ...body.middle)] : [];
   const dialog = el("dialog", {
     class: "hub-v4-page fixed inset-0 m-0 p-0 w-screen h-dvh max-w-none max-h-none border-0 bg-[#0b0d22] overflow-hidden "
       + "text-[#f4f2fb] font-sans [color-scheme:dark] [font-variant-numeric:tabular-nums] backdrop:bg-[#0b0d22] "
@@ -768,7 +787,7 @@ function hubV4Page(name) {
   el("div", {
     class: "relative z-10 grid h-full gap-5 px-6 pt-[76px] grid-cols-1 overflow-y-auto "
       + "lg:grid-cols-[minmax(0,390px)_minmax(0,1fr)_minmax(0,350px)] lg:overflow-hidden",
-  }, column(body.left, "left"), column(body.right, "right")));
+  }, column(body.left, "left"), ...middle, column(body.right, "right")));
   dialog.addEventListener("close", () => hubV4PageClose(true, dialog));
 
   hubV4Pg.dialog = dialog;
@@ -810,7 +829,7 @@ function renderHubV4Page() {
     hubV4PageClose();
     return;
   }
-  if (hubV4Pg.name !== HUB_V4_ALL && !areas.some((a) => a.name === hubV4Pg.name)) {
+  if (!hubV4Whole(hubV4Pg.name) && !areas.some((a) => a.name === hubV4Pg.name)) {
     hubV4PageClose();
     return;
   }
