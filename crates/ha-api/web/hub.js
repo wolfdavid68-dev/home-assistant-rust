@@ -41,10 +41,11 @@ function hubWanted() {
 }
 
 function hubShouldShow() {
+  if ($("#dashboard-view").hidden || hub.away) return false;
+  // L'accueil v4 s'affiche aussi sur le téléphone, en colonne (hub-v4-telephone.js).
+  if (typeof hubV4Phone === "function" && hubV4Phone()) return true;
   return document.body.classList.contains("tablet")
     && $("#hub-mode").checked
-    && !$("#dashboard-view").hidden
-    && !hub.away
     && hubWide.matches;
 }
 
