@@ -24,6 +24,8 @@ const DOORBELL_RECENT = 15 * 60_000;
 const doorbell = {
   /** La sonnette qui a sonné (son identifiant), tant que la fenêtre est ouverte. */
   current: null,
+  /** La fenêtre v4 de la sonnette qui tient le minuteur (hub-v4-sonnette.js). */
+  owner: null,
   at: 0,
   closeTimer: null,
   /** Les images déjà lues : « camera.x@<image_at> » → adresse blob:. */
@@ -145,6 +147,8 @@ function doorbellChanged(entityId, oldState, newState) {
   if (doorbell.current && newState && domainOf(newState) === "camera" && $("#doorbell").open) {
     renderDoorbellPhoto();
   }
+  // En v4 (hub-v4-sonnette.js), la fenêtre ouverte se met à jour elle-même.
+  if (doorbell.current && newState && domainOf(newState) === "camera" && typeof hubV4 !== "undefined") hubV4.refresh?.();
 }
 
 function ringDoorbell(state) {
@@ -158,6 +162,9 @@ function ringDoorbell(state) {
  *  sur le dessin (alors la dernière photo, sans attendre de nouvelle). */
 function openDoorbell(state, at = doorbellRang(state)) {
   const live = state.state === "on";
+  // Sur l'accueil v4 : la fenêtre posée à côté de la porte quand on sonne,
+  // sinon la caméra en grand (hub-v4-sonnette.js).
+  if (typeof hubV4Doorbell === "function" && (live ? hubV4Doorbell(state, at) : hubV4Camera(state.entity_id))) return;
   doorbell.current = state.entity_id;
   doorbell.at = live && at !== null ? at : 0;
   $("#doorbell-title").textContent = live ? `On sonne : ${doorbellPlace(state)}` : doorbellPlace(state);

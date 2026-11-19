@@ -52,6 +52,8 @@ function showSaver() {
   if (src) $("#saver").style.setProperty("--saver-photo", `url("${src}")`);
   else $("#saver").style.removeProperty("--saver-photo");
   $("#saver").hidden = false;
+  // L'accueil v4 (essai) : la veille de la maquette, grande heure au centre.
+  $("#saver").classList.toggle("v4", typeof hubV4On === "function" && hubV4On());
   renderSaver();
   saver.refresh = setInterval(renderSaver, 20_000);
 }
