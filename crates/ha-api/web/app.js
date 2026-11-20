@@ -490,15 +490,30 @@ function shortenName(tile, room) {
   return tile;
 }
 
-// Les sections qu'on a repliées, retenues par cet appareil.
+// Les sections repliées, retenues par cet appareil. Sur téléphone, elles
+// sont repliées d'office (la carte « La maison » montre déjà les pièces) :
+// on retient alors celles qu'on a ouvertes.
 const FOLDED_KEY = "ha-sections-pliees";
-function foldedSections() {
+const OPENED_KEY = "ha-sections-ouvertes";
+const PHONE = window.matchMedia("(max-width: 639px)");
+PHONE.addEventListener("change", () => renderAll());
+function storedSet(key) {
   try {
-    const list = JSON.parse(localStorage.getItem(FOLDED_KEY) ?? "[]");
+    const list = JSON.parse(localStorage.getItem(key) ?? "[]");
     return new Set(Array.isArray(list) ? list.filter((name) => typeof name === "string") : []);
   } catch {
     return new Set();
   }
+}
+function isFolded(title) {
+  return PHONE.matches ? !storedSet(OPENED_KEY).has(title) : storedSet(FOLDED_KEY).has(title);
+}
+function setFolded(title, fold) {
+  const key = PHONE.matches ? OPENED_KEY : FOLDED_KEY;
+  const set = storedSet(key);
+  if (fold === !PHONE.matches) set.add(title);
+  else set.delete(title);
+  try { localStorage.setItem(key, JSON.stringify([...set])); } catch { /* stockage plein ou interdit */ }
 }
 
 /** Le résumé d'une pièce à droite de son titre : « 20,6° · 3 allumées ». */
@@ -516,7 +531,7 @@ function sectionSummary(title) {
 /** Le titre d'une section : un bouton qui la replie ou la déplie. Une pièce
  *  repliée garde son résumé (température, lumières allumées). */
 function sectionHead(title, grid, room) {
-  const folded = foldedSections().has(title);
+  const folded = isFolded(title);
   grid.hidden = folded;
   const summary = el("span", { class: "section-summary ml-auto shrink-0 normal-case tracking-normal font-medium text-[0.8rem] tabular-nums", text: room ? sectionSummary(title) : "" });
   if (room) summary.dataset.room = title;
@@ -524,14 +539,11 @@ function sectionHead(title, grid, room) {
   chevron.setAttribute("class", `size-4 shrink-0 transition-transform ${folded ? "-rotate-90" : ""}`);
   const button = el("button", {
     type: "button", "aria-expanded": String(!folded),
-    class: "section-toggle [:where(&)]:[all:unset] flex w-full min-h-6 items-center gap-2 cursor-pointer rounded-md hover:text-text focus-visible:outline-3 focus-visible:outline-accent focus-visible:outline-offset-2",
+    class: "section-toggle [:where(&)]:[all:unset] flex w-full min-h-6 max-sm:min-h-10 items-center gap-2 cursor-pointer rounded-md hover:text-text focus-visible:outline-3 focus-visible:outline-accent focus-visible:outline-offset-2",
   }, el("span", { class: "min-w-0 truncate", text: title }), summary, chevron);
   button.addEventListener("click", () => {
-    const set = foldedSections();
-    const fold = !set.has(title);
-    if (fold) set.add(title);
-    else set.delete(title);
-    try { localStorage.setItem(FOLDED_KEY, JSON.stringify([...set])); } catch { /* stockage plein ou interdit */ }
+    const fold = !grid.hidden;
+    setFolded(title, fold);
     grid.hidden = fold;
     button.setAttribute("aria-expanded", String(!fold));
     chevron.classList.toggle("-rotate-90", fold);

@@ -6921,6 +6921,9 @@
     .max-sm\:max-h-\[88dvh\] {
       max-height: 88dvh;
     }
+    .max-sm\:min-h-10 {
+      min-height: calc(var(--spacing) * 10);
+    }
     .max-sm\:w-auto {
       width: auto;
     }
@@ -6941,6 +6944,9 @@
     }
     .max-sm\:gap-0 {
       gap: 0px;
+    }
+    .max-sm\:gap-3 {
+      gap: calc(var(--spacing) * 3);
     }
     .max-sm\:overflow-hidden {
       overflow: hidden;
