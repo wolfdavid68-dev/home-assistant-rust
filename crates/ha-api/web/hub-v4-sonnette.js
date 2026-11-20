@@ -24,11 +24,11 @@ const HUB_V4_JUST_NOW = 60_000;
 // Une photo prise un peu avant le coup de sonnette compte comme la nouvelle.
 const HUB_V4_FRESH = 15_000;
 // La surface des cartes (celle des incrustations).
-const HUB_V4_GLASS = "rounded-[28px] bg-[rgb(16_18_42/0.8)] backdrop-blur-[20px] backdrop-saturate-150 "
-  + "shadow-[inset_0_1px_0_rgb(255_255_255/0.09),inset_0_0_0_1px_rgb(255_255_255/0.06),0_18px_40px_-18px_rgb(0_0_0/0.65)]";
+const HUB_V4_GLASS = "rounded-[28px] bg-scrim/80 backdrop-blur-[20px] backdrop-saturate-150 "
+  + "shadow-[inset_0_1px_0_color-mix(in_srgb,var(--v3-voile)_9%,transparent),inset_0_0_0_1px_color-mix(in_srgb,var(--v3-voile)_6%,transparent),0_18px_40px_-18px_rgb(0_0_0/0.65)]";
 const HUB_V4_PHOTO_BG = "bg-[radial-gradient(120%_90%_at_30%_20%,#2a2f55,#121530_60%,#0b0d22)] "
-  + "shadow-[inset_0_0_0_1px_rgb(255_255_255/0.1)]";
-const HUB_V4_TAG = "inline-flex items-center gap-2 min-h-9 px-3 rounded-[12px] bg-[rgb(10_12_32/0.6)] text-[13px] font-medium";
+  + "shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--v3-voile)_10%,transparent)]";
+const HUB_V4_TAG = "inline-flex items-center gap-2 min-h-9 px-3 rounded-[12px] bg-scrim/60 text-[13px] font-medium";
 
 /** « à l'instant », « à 21:56 » ; « la dernière photo » sans heure. */
 function hubV4DoorbellWhen(at, now = Date.now()) {
@@ -168,17 +168,17 @@ function hubV4Camera(entityId) {
   hubV4Close();
   const dialog = el("dialog", {
     class: "fixed inset-0 m-0 p-0 w-screen h-dvh max-w-none max-h-none border-0 bg-transparent overflow-hidden "
-      + "text-[#f4f2fb] font-sans [color-scheme:dark] [font-variant-numeric:tabular-nums] backdrop:bg-transparent",
+      + "text-v-ink font-sans [color-scheme:dark] [font-variant-numeric:tabular-nums] backdrop:bg-transparent",
     "aria-labelledby": "hub-v4-cam-title",
   });
   const veil = el("div", {
-    class: "absolute inset-0 bg-[rgb(7_10_28/0.84)] backdrop-blur-[6px] animate-v4-fade motion-reduce:animate-none",
+    class: "absolute inset-0 bg-scrim/84 backdrop-blur-[6px] animate-v4-fade motion-reduce:animate-none",
   });
   const back = el("button", {
-    type: "button", class: `${HUB_V4_ICON_BTN} bg-white/10`, "aria-label": "Retour à l'accueil",
+    type: "button", class: `${HUB_V4_ICON_BTN} bg-voile/10`, "aria-label": "Retour à l'accueil",
   }, svgIcon(ICONS.back));
   back.addEventListener("click", () => hubV4Close());
-  const title = el("b", { id: "hub-v4-cam-title", class: "text-[13px] font-medium tracking-[0.02em] text-[rgb(226_224_244/0.8)]" });
+  const title = el("b", { id: "hub-v4-cam-title", class: "text-[13px] font-medium tracking-[0.02em] text-v-ink2" });
   const head = el("header", { class: "col-span-full flex items-center gap-3" }, back,
     el("span", { class: "inline-flex items-center gap-2 [&_svg]:size-4" }, svgIcon(HUB_V4_BELL_ICONS.camera), title));
 
@@ -188,8 +188,8 @@ function hubV4Camera(entityId) {
   const empty = el("span", { class: `grid justify-items-center gap-2.5 text-[15px] ${HUB_V4_MUTE} [&_svg]:size-11 [&_svg]:opacity-40` },
     svgIcon(HUB_V4_BELL_ICONS.camera), el("span"));
   const shotTag = el("span", { class: HUB_V4_TAG },
-    el("i", { class: "size-2 rounded-full bg-[#ffbf5e] shadow-[0_0_8px_#ffbf5e]", "aria-hidden": "true" }), el("span"));
-  const close = el("button", { type: "button", class: `${HUB_V4_ICON_BTN} bg-[rgb(10_12_32/0.6)]`, "aria-label": "Fermer" },
+    el("i", { class: "size-2 rounded-full bg-v-amber shadow-[0_0_8px_#ffbf5e]", "aria-hidden": "true" }), el("span"));
+  const close = el("button", { type: "button", class: `${HUB_V4_ICON_BTN} bg-scrim/60`, "aria-label": "Fermer" },
     svgIcon(HUB_V4_ICONS.close));
   close.addEventListener("click", () => hubV4Close());
   const view = el("section", {
@@ -210,14 +210,14 @@ function hubV4Camera(entityId) {
   const passages = el("ul", { class: "m-0 p-0 list-none flex flex-col gap-1" });
   const log = el("section", { class: `flex flex-col gap-2.5 p-3 ${HUB_V4_GLASS} animate-v4-pop motion-reduce:animate-none`, "aria-label": "Derniers passages" },
     el("div", { class: "flex items-center gap-3 min-h-12" },
-      el("span", { class: "grid place-items-center size-11 shrink-0 rounded-2xl bg-[rgb(154_216_255/0.16)] text-[#9ad8ff] [&_svg]:size-[22px]", "aria-hidden": "true" },
+      el("span", { class: "grid place-items-center size-11 shrink-0 rounded-2xl bg-v-sky/16 text-v-sky [&_svg]:size-[22px]", "aria-hidden": "true" },
         svgIcon(ICONS.archive)),
       el("p", { class: "m-0 flex flex-col" }, el("b", { class: "text-[17px] font-semibold leading-tight", text: "Derniers passages" }),
         el("span", { class: `text-[13px] ${HUB_V4_MUTE}`, text: "les dernières 24 heures" }))),
     passages);
   log.hidden = true;
   const note = (icon, text) => el("p", {
-    class: "m-0 flex items-center gap-2 min-h-11 px-3 rounded-[16px] bg-white/4 text-[13px] text-[rgb(226_224_244/0.8)] [&_svg]:size-4 [&_svg]:shrink-0",
+    class: "m-0 flex items-center gap-2 min-h-11 px-3 rounded-[16px] bg-voile/4 text-[13px] text-v-ink2 [&_svg]:size-4 [&_svg]:shrink-0",
   }, svgIcon(icon), el("span", { text }));
   const know = el("section", { class: `flex flex-col gap-1.5 p-3 ${HUB_V4_GLASS} animate-v4-pop motion-reduce:animate-none`, "aria-label": "À savoir" },
     note(ICONS.home, "Les images restent à la maison, rien n'est publié."),
@@ -236,10 +236,10 @@ function hubV4Camera(entityId) {
       const names = new Map([...entities.values()].map((s) => [s.entity_id, nameOf(s)]));
       const items = hubV4Passages(data?.entries, entityId, [...entities.keys()], names);
       log.hidden = items.length === 0;
-      swap(passages, ...items.map((item) => el("li", { class: "flex items-center gap-3 min-h-14 p-2 rounded-[16px] bg-white/4" },
+      swap(passages, ...items.map((item) => el("li", { class: "flex items-center gap-3 min-h-14 p-2 rounded-[16px] bg-voile/4" },
         el("span", {
-          class: "grid place-items-center size-10 shrink-0 rounded-[12px] bg-[#1d2148] text-[rgb(226_224_244/0.8)] "
-            + "shadow-[inset_0_0_0_1px_rgb(255_255_255/0.08)] [&_svg]:size-[18px]",
+          class: "grid place-items-center size-10 shrink-0 rounded-[12px] bg-voile/10 text-v-ink2 "
+            + "shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--v3-voile)_8%,transparent)] [&_svg]:size-[18px]",
           "aria-hidden": "true",
         }, svgIcon(item.kind === "bell" ? ICONS.bell : item.kind === "motion" ? ICONS.motion : ICONS.door)),
         el("p", { class: "m-0 flex-1 min-w-0 flex flex-col leading-snug" },

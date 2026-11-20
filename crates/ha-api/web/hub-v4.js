@@ -23,12 +23,12 @@ const HUB_V4_MARGIN = 8;
 const hubV4 = { dialog: null, refresh: null };
 
 // Les classes communes. Les couleurs sont celles de l'accueil v3 (hub-v3.css).
-const HUB_V4_FOCUS = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#9ad8ff]";
+const HUB_V4_FOCUS = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v-sky";
 const HUB_V4_BTN = "flex items-center justify-center gap-1.5 min-h-11 px-4 rounded-[14px] border-0 "
-  + "bg-white/8 text-[14px] font-medium text-inherit cursor-pointer transition-colors "
-  + "hover:bg-white/14 disabled:opacity-40 disabled:cursor-default [&.pending]:opacity-60 [&_svg]:size-4 "
+  + "bg-voile/8 text-[14px] font-medium text-inherit cursor-pointer transition-colors "
+  + "hover:bg-voile/14 disabled:opacity-40 disabled:cursor-default [&.pending]:opacity-60 [&_svg]:size-4 "
   + HUB_V4_FOCUS;
-const HUB_V4_MUTE = "text-[rgb(226_224_244/0.66)]";
+const HUB_V4_MUTE = "text-v-mute";
 
 /** Le réglage v4 est-il choisi sur cet appareil ? */
 function hubV4On() {
@@ -127,7 +127,7 @@ function hubV4Overlay({ icon, tone = "amber", title, sub, body, more, spot, refr
   hubV4Close();
   const dialog = el("dialog", {
     class: "hub-v4-ovs fixed inset-0 m-0 p-0 w-screen h-dvh max-w-none max-h-none border-0 bg-transparent "
-      + "overflow-hidden text-[#f4f2fb] font-sans [color-scheme:dark] [font-variant-numeric:tabular-nums] "
+      + "overflow-hidden text-v-ink font-sans [color-scheme:dark] [font-variant-numeric:tabular-nums] "
       + "backdrop:bg-transparent",
     "aria-labelledby": "hub-v4-title",
   });
@@ -143,7 +143,7 @@ function hubV4Overlay({ icon, tone = "amber", title, sub, body, more, spot, refr
       class: "pointer-events-none absolute left-(--sx) top-(--sy) w-(--sw) h-(--sh) rounded-[18px] "
         + "shadow-[0_0_0_200vmax_rgb(7_10_28/0.72)] animate-v4-fade motion-reduce:animate-none",
     }, el("div", {
-      class: "absolute -inset-1 rounded-[22px] border-2 border-[#ffbf5e] "
+      class: "absolute -inset-1 rounded-[22px] border-2 border-v-amber "
         + "shadow-[0_0_28px_rgb(255_191_94/0.55),inset_0_0_22px_rgb(255_191_94/0.25)] "
         + "animate-v4-breathe motion-reduce:animate-none",
     }));
@@ -154,17 +154,17 @@ function hubV4Overlay({ icon, tone = "amber", title, sub, body, more, spot, refr
     parts.push(halo);
   }
   const close = el("button", {
-    type: "button", class: `grid place-items-center size-11 shrink-0 p-0 rounded-[14px] border-0 bg-white/8 text-inherit `
-      + `cursor-pointer transition-colors hover:bg-white/14 [&_svg]:size-5 ${HUB_V4_FOCUS}`,
+    type: "button", class: `grid place-items-center size-11 shrink-0 p-0 rounded-[14px] border-0 bg-voile/8 text-inherit `
+      + `cursor-pointer transition-colors hover:bg-voile/14 [&_svg]:size-5 ${HUB_V4_FOCUS}`,
     "aria-label": "Fermer",
   }, svgIcon(HUB_V4_ICONS.close));
   close.addEventListener("click", () => hubV4Close());
   const head = el("header", { class: "flex items-center gap-3 min-h-12" },
     el("span", {
-      class: "grid place-items-center size-11 shrink-0 rounded-2xl bg-[rgb(255_191_94/0.16)] text-[#ffbf5e] [&_svg]:size-[22px] "
-        + "data-[tone=sky]:bg-[rgb(154_216_255/0.16)] data-[tone=sky]:text-[#9ad8ff] "
-        + "data-[tone=violet]:bg-[rgb(185_163_255/0.16)] data-[tone=violet]:text-[#b9a3ff] "
-        + "data-[tone=green]:bg-[rgb(111_220_156/0.16)] data-[tone=green]:text-[#6fdc9c]",
+      class: "grid place-items-center size-11 shrink-0 rounded-2xl bg-v-amber/16 text-v-amber [&_svg]:size-[22px] "
+        + "data-[tone=sky]:bg-v-sky/16 data-[tone=sky]:text-v-sky "
+        + "data-[tone=violet]:bg-v-violet/16 data-[tone=violet]:text-v-violet "
+        + "data-[tone=green]:bg-v-ok/16 data-[tone=green]:text-v-ok",
       "data-tone": tone,
       "aria-hidden": "true",
     }, svgIcon(icon)),
@@ -173,14 +173,14 @@ function hubV4Overlay({ icon, tone = "amber", title, sub, body, more, spot, refr
     close);
   const pop = el("section", {
     class: "hub-v4-pop absolute left-(--x) top-(--y) w-[320px] max-h-[calc(100dvh-16px)] overflow-auto "
-      + "flex flex-col gap-2.5 p-3 rounded-[28px] bg-[rgb(16_18_42/0.8)] backdrop-blur-[20px] backdrop-saturate-150 "
-      + "shadow-[inset_0_1px_0_rgb(255_255_255/0.09),inset_0_0_0_1px_rgb(255_255_255/0.06),0_18px_40px_-18px_rgb(0_0_0/0.65)] "
+      + "flex flex-col gap-2.5 p-3 rounded-[28px] bg-scrim/80 backdrop-blur-[20px] backdrop-saturate-150 "
+      + "shadow-[inset_0_1px_0_color-mix(in_srgb,var(--v3-voile)_9%,transparent),inset_0_0_0_1px_color-mix(in_srgb,var(--v3-voile)_6%,transparent),0_18px_40px_-18px_rgb(0_0_0/0.65)] "
       + "animate-v4-pop motion-reduce:animate-none "
       // Sur le téléphone, une feuille qui monte du bas, qu'on tire vers le bas pour la fermer.
       + "max-sm:inset-x-0 max-sm:top-auto max-sm:bottom-0 max-sm:w-auto max-sm:max-h-[88dvh] max-sm:rounded-b-none "
       + "max-sm:pt-2 max-sm:pb-[max(12px,env(safe-area-inset-bottom))] max-sm:animate-v4-sheet translate-y-(--dy)",
   }, el("span", {
-    class: "hidden max-sm:block shrink-0 mx-auto w-10 h-1.5 rounded-full bg-white/25 touch-none",
+    class: "hidden max-sm:block shrink-0 mx-auto w-10 h-1.5 rounded-full bg-voile/25 touch-none",
     "aria-hidden": "true",
   }), head, ...body);
   pop.style.setProperty("--dy", "0px");
@@ -197,7 +197,7 @@ function hubV4Overlay({ icon, tone = "amber", title, sub, body, more, spot, refr
   // La flèche vers la pièce : un carré tourné, sur le bord qui lui fait face.
   // Hors de la fenêtre (qui défile) : dedans, elle ferait une barre de défilement.
   const arrow = el("span", {
-    class: "absolute left-(--ax) top-(--ay) size-3.5 rotate-45 bg-[rgb(16_18_42/0.8)] max-sm:hidden",
+    class: "absolute left-(--ax) top-(--ay) size-3.5 rotate-45 bg-scrim/80 max-sm:hidden",
     "aria-hidden": "true",
   });
   arrow.hidden = true;
@@ -349,15 +349,15 @@ function hubV4Room(name) {
     const tgSub = el("span", { class: `text-[13px] ${HUB_V4_MUTE}` });
     const toggle = el("button", {
       type: "button", role: "switch", "aria-label": `Lumières : ${name}`,
-      class: "group flex items-center gap-3 w-full min-h-14 px-3 rounded-[18px] border-0 bg-[rgb(255_191_94/0.1)] "
+      class: "group flex items-center gap-3 w-full min-h-14 px-3 rounded-[18px] border-0 bg-v-amber/10 "
         + "text-left text-inherit cursor-pointer disabled:opacity-40 disabled:cursor-default [&.pending]:opacity-60 "
         + HUB_V4_FOCUS,
     },
-    el("span", { class: "text-[#ffbf5e] [&_svg]:size-5", "aria-hidden": "true" }, svgIcon(ICONS.bulb)),
+    el("span", { class: "text-v-amber [&_svg]:size-5", "aria-hidden": "true" }, svgIcon(ICONS.bulb)),
     el("span", { class: "flex flex-col flex-1 min-w-0" },
       el("b", { class: "text-[15px] font-semibold", text: "Lumières" }), tgSub),
     el("span", {
-      class: "relative shrink-0 w-[52px] h-8 rounded-full bg-white/16 transition-colors group-aria-checked:bg-[#ffbf5e] "
+      class: "relative shrink-0 w-[52px] h-8 rounded-full bg-voile/16 transition-colors group-aria-checked:bg-v-amber "
         + "after:absolute after:top-1 after:left-1 after:size-6 after:rounded-full after:bg-white after:transition-transform "
         + "group-aria-checked:after:translate-x-5 motion-reduce:after:transition-none",
       "aria-hidden": "true",
@@ -375,8 +375,8 @@ function hubV4Room(name) {
       const node = el("button", {
         type: "button",
         class: "flex flex-col items-center justify-center gap-1 min-h-14 px-2 py-1.5 rounded-[14px] border-0 "
-          + `bg-white/6 text-[12px] ${HUB_V4_MUTE} cursor-pointer transition-colors `
-          + "aria-pressed:bg-[rgb(255_191_94/0.14)] aria-pressed:text-[#ffd9a0] "
+          + `bg-voile/6 text-[12px] ${HUB_V4_MUTE} cursor-pointer transition-colors `
+          + "aria-pressed:bg-v-amber/14 aria-pressed:text-v-amber2 "
           + "disabled:opacity-40 disabled:cursor-default [&.pending]:opacity-60 [&_svg]:size-[18px] " + HUB_V4_FOCUS,
       }, svgIcon(ICONS.bulb), el("span", { class: "max-w-full truncate", text: hubV4ShortName(nameOf(state), name) }));
       node.addEventListener("click", () => {
@@ -430,7 +430,7 @@ function hubV4Room(name) {
     const head = el("button", {
       type: "button",
       class: "flex items-baseline justify-between gap-2 w-full px-1 pt-1 rounded-[10px] border-0 bg-transparent "
-        + "text-left text-[13px] text-inherit cursor-pointer disabled:cursor-default enabled:hover:bg-white/6 "
+        + "text-left text-[13px] text-inherit cursor-pointer disabled:cursor-default enabled:hover:bg-voile/6 "
         + HUB_V4_FOCUS,
     }, label, word);
     // Un seul volet : sa ligne ouvre sa fenêtre (position, mi-hauteur).
@@ -506,7 +506,7 @@ const HUB_V4_MAIN = "flex items-center justify-center gap-1.5 min-h-12 px-4 roun
   + HUB_V4_FOCUS;
 // Un curseur : la vraie glissière est invisible, posée sur le dessin.
 const HUB_V4_RANGE = "absolute inset-0 size-full m-0 opacity-0 cursor-pointer disabled:cursor-default";
-const HUB_V4_TRACK = "has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-[#9ad8ff] "
+const HUB_V4_TRACK = "has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-v-sky "
   + "has-disabled:opacity-40";
 const HUB_V4_LABEL = "px-1 pt-1 text-[13px] font-semibold";
 // Pendant qu'on glisse, l'état reçu ne fait pas sauter le curseur.
@@ -520,14 +520,14 @@ function hubV4Choices(label, tone, items) {
     const node = el("button", {
       type: "button", "aria-pressed": "false",
       class: "min-h-10 px-2 rounded-[12px] border-0 bg-transparent text-[13px] font-medium text-inherit cursor-pointer "
-        + `transition-colors hover:bg-white/8 ${pressed} disabled:opacity-40 disabled:cursor-default ${HUB_V4_FOCUS}`,
+        + `transition-colors hover:bg-voile/8 ${pressed} disabled:opacity-40 disabled:cursor-default ${HUB_V4_FOCUS}`,
       text,
     });
     node.addEventListener("click", run);
     return node;
   });
   const box = el("div", {
-    class: "grid grid-flow-col auto-cols-fr gap-1 p-1 rounded-[16px] bg-white/6", role: "group", "aria-label": label,
+    class: "grid grid-flow-col auto-cols-fr gap-1 p-1 rounded-[16px] bg-voile/6", role: "group", "aria-label": label,
   }, ...nodes);
   return { box, nodes };
 }
@@ -617,10 +617,10 @@ function hubV4Lamp(entityId, spot = null) {
     const value = el("b", { class: "relative text-[15px] font-semibold" });
     const range = el("input", { type: "range", min: "1", max: "100", step: "1", "aria-label": "Intensité", class: HUB_V4_RANGE });
     const bar = el("label", {
-      class: `relative flex items-center justify-between h-14 px-4 rounded-[18px] bg-white/8 overflow-hidden ${HUB_V4_TRACK}`,
+      class: `relative flex items-center justify-between h-14 px-4 rounded-[18px] bg-voile/8 overflow-hidden ${HUB_V4_TRACK}`,
     },
     el("span", {
-      class: "absolute inset-y-0 left-0 w-(--v) bg-linear-to-r from-[rgb(255_191_94/0.3)] to-[rgb(255_191_94/0.85)] "
+      class: "absolute inset-y-0 left-0 w-(--v) bg-linear-to-r from-v-amber/30 to-v-amber/85 "
         + "transition-[width] motion-reduce:transition-none",
       "aria-hidden": "true",
     }),
@@ -777,9 +777,9 @@ function hubV4Cover(entityId, spot = null) {
   };
 
   const big = el("b", { class: "text-[22px] font-semibold leading-none" });
-  const small = el("span", { class: "text-[12px] text-[rgb(244_242_251/0.8)]" });
+  const small = el("span", { class: "text-[12px] text-v-ink2" });
   const pane = el("div", {
-    class: "relative w-[118px] h-[168px] shrink-0 rounded-[14px] overflow-hidden border-4 border-white/10 "
+    class: "relative w-[118px] h-[168px] shrink-0 rounded-[14px] overflow-hidden border-4 border-voile/10 "
       + "bg-[linear-gradient(180deg,#22305e,#2d2a5a,#4a3157)]",
     "aria-hidden": "true",
   },
@@ -792,7 +792,7 @@ function hubV4Cover(entityId, spot = null) {
   const moves = [["Monter", "up", "open_cover"], ["Arrêter", "stop", "stop_cover"], ["Descendre", "down", "close_cover"]]
     .map(([text, icon, service]) => {
       const node = el("button", {
-        type: "button", class: `${HUB_V4_BTN} justify-start h-[52px] data-strong:bg-white/16`,
+        type: "button", class: `${HUB_V4_BTN} justify-start h-[52px] data-strong:bg-voile/16`,
       }, svgIcon(ICONS[icon]), el("span", { text }));
       if (service === "stop_cover") node.dataset.strong = "";
       node.addEventListener("click", () => {
@@ -907,8 +907,8 @@ function hubV4Ring() {
   svg.setAttribute("class", "size-11 shrink-0 -rotate-90");
   svg.setAttribute("aria-hidden", "true");
   const rings = [
-    ["stroke-white/12", ""],
-    ["stroke-[#b9a3ff] [stroke-dasharray:100] animate-v4-count motion-reduce:animate-none", "100"],
+    ["stroke-voile/12", ""],
+    ["stroke-v-violet [stroke-dasharray:100] animate-v4-count motion-reduce:animate-none", "100"],
   ];
   for (const [style, length] of rings) {
     const circle = document.createElementNS(NS, "circle");
@@ -954,7 +954,7 @@ function hubV4Moment(state) {
     sub: el("span", { class: `text-[13px] ${HUB_V4_MUTE}`, text: "Ce qui va se passer" }),
     body: [
       list,
-      el("div", { class: "flex items-center gap-3 p-3 rounded-[18px] bg-[rgb(185_163_255/0.12)]" },
+      el("div", { class: "flex items-center gap-3 p-3 rounded-[18px] bg-v-violet/12" },
         hubV4Ring(),
         el("div", { class: "flex flex-col" }, count,
           el("span", { class: `text-[13px] ${HUB_V4_MUTE}`, text: "Touche Annuler pour arrêter." }))),
@@ -967,14 +967,14 @@ function hubV4Moment(state) {
         return;
       }
       const rows = hubV4MomentRows(targets(), (id) => entities.get(id));
-      swap(list, ...rows.map((row) => el("li", { class: "flex items-center gap-3 min-h-12 px-3 py-1.5 rounded-[16px] bg-white/6" },
+      swap(list, ...rows.map((row) => el("li", { class: "flex items-center gap-3 min-h-12 px-3 py-1.5 rounded-[16px] bg-voile/6" },
         el("span", { class: `${HUB_V4_MUTE} [&_svg]:size-5`, "aria-hidden": "true" },
           svgIcon(HUB_V4_GROUPS.find(([domain]) => domain === row.domain)[2])),
         el("span", { class: "flex flex-col flex-1 min-w-0" },
           el("b", { class: "text-[14px] font-semibold", text: row.label }),
           el("span", { class: `text-[12px] ${HUB_V4_MUTE} truncate`, text: row.now })),
         el("span", {
-          class: `text-[13px] text-right ${row.done ? "text-[#6fdc9c]" : "text-[#f4f2fb]"}`, text: row.then,
+          class: `text-[13px] text-right ${row.done ? "text-v-ok" : "text-v-ink"}`, text: row.then,
         }))));
     },
     onClose: () => clearInterval(ticker),
@@ -1025,7 +1025,7 @@ function hubV4Approval() {
   let busy = false;
   const sub = el("span", { class: `text-[13px] ${HUB_V4_MUTE}` });
   const who = el("span");
-  const order = el("p", { class: "m-0 font-serif text-[22px] leading-snug" });
+  const order = el("p", { class: "m-0 font-titre text-[22px] font-semibold leading-snug tracking-[-0.02em]" });
   const reason = el("p", { class: `m-0 text-[13px] ${HUB_V4_MUTE}` });
   const expiry = el("p", { class: `m-0 px-1 text-[12px] ${HUB_V4_MUTE}` });
   const deny = el("button", { type: "button", class: HUB_V4_BTN, text: "Refuser" });
@@ -1054,9 +1054,9 @@ function hubV4Approval() {
     title: "Ordre à valider",
     sub,
     body: [
-      el("div", { class: "flex flex-col gap-2 p-3.5 rounded-[18px] bg-white/6" },
+      el("div", { class: "flex flex-col gap-2 p-3.5 rounded-[18px] bg-voile/6" },
         el("span", { class: `flex items-center gap-2 text-[13px] ${HUB_V4_MUTE}` },
-          el("span", { class: "text-[#9ad8ff] [&_svg]:size-4", "aria-hidden": "true" }, svgIcon(ICONS.mic)), who),
+          el("span", { class: "text-v-sky [&_svg]:size-4", "aria-hidden": "true" }, svgIcon(ICONS.mic)), who),
         order, reason),
       el("div", { class: "grid grid-cols-2 gap-2" }, deny, approve),
       expiry,

@@ -144,7 +144,7 @@ function hubV4PacTile() {
       const tip = el("span", {
         role: "tooltip",
         class: `pointer-events-none absolute bottom-[calc(100%+10px)] ${side} z-10 whitespace-nowrap `
-          + "px-3 py-1.5 rounded-[10px] bg-[#f4f2fb] text-[#16182e] text-[12px] font-medium shadow-lg "
+          + "px-3 py-1.5 rounded-[10px] bg-v-ink text-v-inverse text-[12px] font-medium shadow-lg "
           + "opacity-0 translate-y-1 transition duration-150 group-hover:opacity-100 group-hover:translate-y-0 "
           + "group-focus-visible:opacity-100 group-focus-visible:translate-y-0 motion-reduce:transition-none",
       }, el("b", { text: part.name }), ` · ${hubV4KwhText(part.kwh)} kWh · ${part.pct} %`);
@@ -178,7 +178,7 @@ function hubV4NowTile() {
       el("span", { class: `text-[12px] font-normal truncate ${HUB_V4_MUTE}`, text: sub })),
     // Une mesure en grand chiffre ; un mot (« Chauffage ») plus discret.
     el("span", {
-      class: /\d/.test(value) ? "font-titre text-[22px] font-light whitespace-nowrap" : "text-[14px] font-semibold text-[#ffc3a4] whitespace-nowrap",
+      class: /\d/.test(value) ? "font-titre text-[22px] font-light whitespace-nowrap" : "text-[14px] font-semibold text-v-heat whitespace-nowrap",
       text: value,
     }));
   const refresh = () => {
@@ -221,7 +221,7 @@ function hubV4MachineEnergyTile(machineId) {
     return el("div", { class: "flex flex-col gap-1" },
       el("p", { class: "m-0 flex justify-between gap-3 text-[13px]" }, el("span", { text: name }),
         el("em", { class: `not-italic ${HUB_V4_MUTE}`, text: `${hubV4KwhText(kwh.value)} kWh` })),
-      el("span", { class: "block h-2 rounded-full bg-white/8" }, fill));
+      el("span", { class: "block h-2 rounded-full bg-voile/8" }, fill));
   };
   const refresh = () => {
     const machine = entities.get(machineId);
@@ -240,7 +240,7 @@ function hubV4MachineEnergyTile(machineId) {
     setAttr(compare, "aria-label", `${nameOf(machine)} : ${hubV4EnergyCompare(kwh, pac)}`);
     compare.replaceChildren(
       bar("Pompe à chaleur", { value: pac, pct: (pac / most) * 100 }, "bg-[#f4511e]"),
-      bar(nameOf(machine), { value: kwh, pct: (kwh / most) * 100 }, "bg-[rgb(236_234_248/0.7)]"));
+      bar(nameOf(machine), { value: kwh, pct: (kwh / most) * 100 }, "bg-v-ink/70"));
   };
   return { node: tile.node, refresh };
 }
@@ -250,7 +250,7 @@ function hubV4OthersTile(taken) {
   const tile = hubV4Tile(ICONS.plug, "violet", "Autres appareils");
   const list = el("ul", { class: "m-0 p-0 list-none flex flex-col gap-2" });
   const empty = el("p", {
-    class: `m-0 px-4 py-5 rounded-[16px] border border-dashed border-white/18 text-center text-[13px] ${HUB_V4_MUTE}`,
+    class: `m-0 px-4 py-5 rounded-[16px] border border-dashed border-voile/18 text-center text-[13px] ${HUB_V4_MUTE}`,
     text: "Pas encore mesurés",
   });
   tile.node.append(list, empty);
@@ -330,8 +330,8 @@ function hubV4EnergyBody() {
   paints.push(others.refresh, meter.refresh);
 
   // Sous le dessin, la phrase de la maquette.
-  const caption = el("p", { class: "m-0 px-5 py-2.5 rounded-full bg-[rgb(16_18_42/0.6)] backdrop-blur-[14px] text-[17px] text-center" },
-    "Toute la chaleur vient de la ", el("b", { class: "text-[#ffbf5e]", text: "pompe à chaleur" }), ".");
+  const caption = el("p", { class: "m-0 px-5 py-2.5 rounded-full bg-scrim/60 backdrop-blur-[14px] text-[17px] text-center" },
+    "Toute la chaleur vient de la ", el("b", { class: "text-v-amber", text: "pompe à chaleur" }), ".");
   paints.push(() => {
     const total = hubV4PacReading()?.total ?? 0;
     const rest = hubV4EnergyMachines().reduce((sum, m) => sum + hubV4EnergyValue(m.meter), 0)

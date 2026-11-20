@@ -15,14 +15,13 @@ const TOKEN_KEY = "ha_token";
 const $ = (selector) => document.querySelector(selector);
 
 // ---------------------------------------------------------------- Apparence
-// Clair, sombre (ou comme l'appareil), le style « plan d'architecte », de
-// jour ou de nuit, et « maquette » (fond sombre dégradé, house.js). Les trois
-// derniers prennent la mise en page « tableau » : les pièces à gauche, le
-// dessin de la maison au centre, les volets en dessous. Un réglage de cet appareil seulement
-// (localStorage) : la télé du salon peut être en plan, le téléphone en sombre.
-// Appliqué tout de suite, avant le premier affichage de la page.
+// Clair ou sombre, ou comme l'appareil (« Automatique »). Tout le tableau de
+// bord suit ce choix, l'accueil v3/v4 aussi (hub-v3.css). Un réglage de cet
+// appareil seulement (localStorage), appliqué avant le premier affichage.
+// Les anciens styles (« plan », « plan-nuit », « maquette ») ne sont plus
+// proposés : un appareil qui les avait gardés repasse en « Automatique ».
 const THEME_KEY = "ha-theme";
-const THEMES = ["auto", "light", "dark", "plan", "plan-nuit", "maquette"];
+const THEMES = ["auto", "light", "dark"];
 const darkQuery = matchMedia("(prefers-color-scheme: dark)");
 
 function themeWanted() {

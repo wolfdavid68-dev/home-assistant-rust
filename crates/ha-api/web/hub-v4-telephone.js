@@ -17,8 +17,8 @@
 // incrustations qui montent du bas).
 const hubV4TelMedia = matchMedia("(max-width: 639px)");
 const hubV4Tel = { ui: null, placed: false };
-const HUB_V4_TEL_GLASS = "bg-[rgb(18_20_46/0.52)] backdrop-blur-[18px] backdrop-saturate-150 "
-  + "shadow-[inset_0_1px_0_rgb(255_255_255/0.09),inset_0_0_0_1px_rgb(255_255_255/0.06)]";
+const HUB_V4_TEL_GLASS = "bg-scrim/52 backdrop-blur-[18px] backdrop-saturate-150 "
+  + "shadow-[inset_0_1px_0_color-mix(in_srgb,var(--v3-voile)_9%,transparent),inset_0_0_0_1px_color-mix(in_srgb,var(--v3-voile)_6%,transparent)]";
 
 /** L'accueil v4 en colonne, sur ce téléphone ? */
 function hubV4Phone() {
@@ -111,7 +111,7 @@ function hubV4TelTab(icon, label, run) {
   const node = el("button", {
     type: "button",
     class: `flex flex-col items-center gap-1 min-w-0 pt-1.5 border-0 bg-transparent text-[11px] font-medium `
-      + `${HUB_V4_MUTE} cursor-pointer aria-[current=page]:text-[#ffd9a0] [&_svg]:size-6 ${HUB_V4_FOCUS}`,
+      + `${HUB_V4_MUTE} cursor-pointer aria-[current=page]:text-v-amber2 [&_svg]:size-6 ${HUB_V4_FOCUS}`,
   }, svgIcon(icon), el("span", { text: label }));
   node.addEventListener("click", run);
   return node;
@@ -134,7 +134,7 @@ function hubV4TelBuild() {
     when: el("span", { class: "flex-1 min-w-0 truncate" }),
     live: el("span", { class: `flex items-center gap-1.5 shrink-0 ${HUB_V4_MUTE}` }),
     bell: button({
-      class: `relative grid place-items-center size-10 shrink-0 p-0 rounded-full border-0 bg-white/8 text-inherit `
+      class: `relative grid place-items-center size-10 shrink-0 p-0 rounded-full border-0 bg-voile/8 text-inherit `
         + `cursor-pointer [&_svg]:size-5 ${HUB_V4_FOCUS}`,
       "aria-label": "Notifications",
     }, svgIcon(ICONS.bell)),
@@ -146,11 +146,11 @@ function hubV4TelBuild() {
         + `text-[#1a1530] cursor-pointer ${HUB_V4_FOCUS}`,
       "aria-label": "Qui est là",
     }),
-    hello: el("h1", { class: "m-0 font-['Instrument_Serif',Georgia,'Noto_Serif',serif] text-[34px] font-normal leading-[1.05] tracking-[-0.01em]" }),
-    calm: el("em", { class: "block text-[#ffd9a0]" }),
+    hello: el("h1", { class: "m-0 font-titre text-[32px] font-semibold leading-[1.08] tracking-[-0.03em]" }),
+    calm: el("em", { class: "block not-italic text-v-sky" }),
     summary: el("p", { class: `m-0 mt-2 text-[14px] leading-snug ${HUB_V4_MUTE}` }),
     approval: el("div", {
-      class: "flex items-center gap-3 mx-4 pl-4 pr-1.5 py-1.5 rounded-full bg-[rgb(255_191_94/0.14)] text-[#ffd9a0] text-[14px] font-medium",
+      class: "flex items-center gap-3 mx-4 pl-4 pr-1.5 py-1.5 rounded-full bg-v-amber/14 text-v-amber2 text-[14px] font-medium",
       role: "status",
     }),
     approvalText: el("span", { class: "flex-1 min-w-0 truncate" }),
@@ -171,15 +171,15 @@ function hubV4TelBuild() {
     cards: el("div", { class: "grid grid-cols-2 gap-2.5 px-4" }),
     music: el("section", {
       class: "fixed left-3 right-3 bottom-[calc(76px+env(safe-area-inset-bottom))] z-[1] flex items-center gap-3 p-2 pr-2.5 "
-        + "rounded-[22px] bg-[rgb(16_18_42/0.82)] backdrop-blur-[20px] backdrop-saturate-150 "
-        + "shadow-[inset_0_1px_0_rgb(255_255_255/0.09),inset_0_0_0_1px_rgb(255_255_255/0.06),0_18px_40px_-18px_rgb(0_0_0/0.65)]",
+        + "rounded-[22px] bg-scrim/82 backdrop-blur-[20px] backdrop-saturate-150 "
+        + "shadow-[inset_0_1px_0_color-mix(in_srgb,var(--v3-voile)_9%,transparent),inset_0_0_0_1px_color-mix(in_srgb,var(--v3-voile)_6%,transparent),0_18px_40px_-18px_rgb(0_0_0/0.65)]",
       "aria-label": "Musique",
     }),
     musicOpen: button({ class: `flex flex-1 items-center gap-3 min-w-0 p-0 border-0 bg-transparent text-left text-inherit cursor-pointer ${HUB_V4_FOCUS}` }),
     musicImg: el("img", { class: "absolute inset-0 size-full object-cover", alt: "", decoding: "async", draggable: "false" }),
     musicTitle: el("b", { class: "text-[14px] font-semibold truncate" }),
     musicSub: el("small", { class: `text-[12px] ${HUB_V4_MUTE} truncate` }),
-    play: button({ class: `grid place-items-center size-11 shrink-0 p-0 rounded-full border-0 bg-white/10 text-inherit cursor-pointer disabled:opacity-40 [&_svg]:size-5 ${HUB_V4_FOCUS}` }),
+    play: button({ class: `grid place-items-center size-11 shrink-0 p-0 rounded-full border-0 bg-voile/10 text-inherit cursor-pointer disabled:opacity-40 [&_svg]:size-5 ${HUB_V4_FOCUS}` }),
     next: button({ class: `grid place-items-center size-11 shrink-0 p-0 rounded-full border-0 bg-transparent text-inherit cursor-pointer disabled:opacity-40 [&_svg]:size-5 ${HUB_V4_FOCUS}`, "aria-label": "Morceau suivant" },
       svgIcon(ICONS.next)),
   };
@@ -193,7 +193,7 @@ function hubV4TelBuild() {
   // Les lentilles : les mêmes que sur la tablette (hub-v3.js).
   ui.segs = HUB_V3_LENSES.map((lens) => {
     const seg = button({
-      class: `shrink-0 min-h-9 px-3.5 rounded-full border-0 bg-white/8 text-[13px] font-medium text-inherit cursor-pointer `
+      class: `shrink-0 min-h-9 px-3.5 rounded-full border-0 bg-voile/8 text-[13px] font-medium text-inherit cursor-pointer `
         + `transition-colors aria-pressed:bg-[#ffbf5e] aria-pressed:text-[#1a1530] ${HUB_V4_FOCUS}`,
       "data-lens": lens.id,
       "aria-pressed": "false",
@@ -225,8 +225,8 @@ function hubV4TelBuild() {
   ui.tempo = hubV4TelCard(ICONS.bolt, "Tempo", () => hubV4Tempo());
   ui.agenda = hubV4TelCard(ICONS.calendar, "Agenda", () => hubV4Agenda());
   ui.tempoDot = el("span", {
-    class: "inline-block size-2.5 mr-2 rounded-full align-middle bg-white/40 data-[c=blue]:bg-[#5b8cff] "
-      + "data-[c=white]:bg-[#f4f2fb] data-[c=red]:bg-[#ff6b6b]",
+    class: "inline-block size-2.5 mr-2 rounded-full align-middle bg-voile/40 data-[c=blue]:bg-[#5b8cff] "
+      + "data-[c=white]:bg-white data-[c=white]:ring-1 data-[c=white]:ring-voile/30 data-[c=red]:bg-[#ff6b6b]",
     "aria-hidden": "true",
   });
   ui.cards.append(ui.weather.node, ui.heat.node, ui.tempo.node, ui.agenda.node);
@@ -254,7 +254,7 @@ function hubV4TelBuild() {
   ui.home.setAttribute("aria-current", "page");
   ui.tabs = el("nav", {
     class: "fixed inset-x-0 bottom-0 z-[1] grid grid-cols-5 pt-1 pb-[max(10px,env(safe-area-inset-bottom))] "
-      + "bg-[rgb(10_12_32/0.72)] backdrop-blur-[20px] backdrop-saturate-150 border-0 border-t border-solid border-white/8",
+      + "bg-scrim/72 backdrop-blur-[20px] backdrop-saturate-150 border-0 border-t border-solid border-voile/8",
     "aria-label": "Navigation",
   },
   ui.home,
@@ -270,7 +270,7 @@ function hubV4TelBuild() {
     id: "hub-tel",
     class: "hub-v4-tel hidden [[data-hub-tel]_&]:flex flex-col gap-4 min-h-full "
       + "pt-[max(12px,env(safe-area-inset-top))] pb-[calc(152px+env(safe-area-inset-bottom))] "
-      + "text-[#f4f2fb] [font-variant-numeric:tabular-nums]",
+      + "text-v-ink [font-variant-numeric:tabular-nums]",
   },
   el("header", { class: "flex items-center gap-2.5 px-5 text-[13px] font-medium" }, ui.when, ui.live, ui.bell, ui.avatar),
   el("div", { class: "px-5" }, ui.hello, ui.summary),
@@ -321,12 +321,12 @@ function hubV4TelPanelBuild(ui) {
   lights.node.append(roomGrid);
   ui.lights = lights.node;
   ui.syncRooms = hubV4Keyed(roomGrid, (room) => {
-    const count = el("span", { class: `text-[13px] ${HUB_V4_MUTE} group-data-full:text-[#ffd79a]` });
+    const count = el("span", { class: `text-[13px] ${HUB_V4_MUTE} group-data-full:text-v-amber2` });
     const node = el("button", {
       type: "button",
-      class: "group flex items-center justify-between gap-2 min-h-12 px-3.5 rounded-[14px] border-0 bg-white/6 text-left "
-        + "text-[14px] font-semibold text-inherit cursor-pointer transition-colors hover:bg-white/10 "
-        + `data-full:bg-[rgb(255_191_94/0.16)] ${HUB_V4_FOCUS}`,
+      class: "group flex items-center justify-between gap-2 min-h-12 px-3.5 rounded-[14px] border-0 bg-voile/6 text-left "
+        + "text-[14px] font-semibold text-inherit cursor-pointer transition-colors hover:bg-voile/10 "
+        + `data-full:bg-v-amber/16 ${HUB_V4_FOCUS}`,
     }, el("span", { class: "truncate", text: room }), count);
     node.addEventListener("click", () => hubV4Room(room));
     return {
@@ -433,8 +433,8 @@ function hubV4TelRenderPages() {
   const pill = (text, pressed, run) => {
     const node = el("button", {
       type: "button",
-      class: `shrink-0 min-h-9 px-3.5 rounded-full border-0 bg-white/8 text-[13px] font-medium text-inherit cursor-pointer `
-        + `transition-colors aria-pressed:bg-[#f4f2fb] aria-pressed:text-[#1a1530] ${HUB_V4_FOCUS}`,
+      class: `shrink-0 min-h-9 px-3.5 rounded-full border-0 bg-voile/8 text-[13px] font-medium text-inherit cursor-pointer `
+        + `transition-colors aria-pressed:bg-v-ink aria-pressed:text-v-inverse ${HUB_V4_FOCUS}`,
       "aria-pressed": String(pressed),
     }, text);
     node.addEventListener("click", run);
@@ -459,7 +459,7 @@ function hubV4TelRenderTop(now) {
   const day = fullDate.format(now);
   setText(ui.when, `${day.charAt(0).toUpperCase()}${day.slice(1)} · ${hourMinute.format(now)}`);
   const live = $("#connection")?.classList.contains("live");
-  swap(ui.live, el("i", { class: live ? "size-2 rounded-full bg-[#6fdc9c]" : "size-2 rounded-full bg-[#ff8f8f]" }),
+  swap(ui.live, el("i", { class: live ? "size-2 rounded-full bg-v-ok" : "size-2 rounded-full bg-v-alert" }),
     live ? "En direct" : "Hors ligne");
   const notices = $("#open-notices");
   ui.bell.hidden = !notices || notices.hidden;

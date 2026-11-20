@@ -18,14 +18,14 @@ const HUB_V4_ENERGY = "*énergie";
 const hubV4Pg = { dialog: null, name: null, back: null, refresh: null, place: null, timer: null };
 
 // Une tuile : le verre sombre de la maquette.
-const HUB_V4_TILE = "flex flex-col gap-3 p-4 rounded-[24px] bg-[rgb(16_18_42/0.72)] backdrop-blur-[18px] backdrop-saturate-150 "
-  + "shadow-[inset_0_1px_0_rgb(255_255_255/0.08),inset_0_0_0_1px_rgb(255_255_255/0.06),0_18px_40px_-22px_rgb(0_0_0/0.7)]";
+const HUB_V4_TILE = "flex flex-col gap-3 p-4 rounded-[24px] bg-scrim/72 backdrop-blur-[18px] backdrop-saturate-150 "
+  + "shadow-[inset_0_1px_0_color-mix(in_srgb,var(--v3-voile)_8%,transparent),inset_0_0_0_1px_color-mix(in_srgb,var(--v3-voile)_6%,transparent),0_18px_40px_-22px_rgb(0_0_0/0.7)]";
 const HUB_V4_TILE_HEAD = "flex items-center gap-2.5 min-h-9 [&>svg]:size-5 [&>svg]:shrink-0";
 const HUB_V4_TILE_TITLE = "flex-1 min-w-0 text-[15px] font-semibold truncate";
 // Une pastille de la barre du haut (pièce, étage).
 const HUB_V4_PILL = "flex items-center gap-1 min-h-10 px-3.5 rounded-full border-0 bg-transparent text-[14px] font-medium "
-  + `text-inherit whitespace-nowrap cursor-pointer transition-colors hover:bg-white/10 ${HUB_V4_MUTE} `
-  + "aria-[current=page]:bg-white/14 aria-[current=page]:text-[#f4f2fb] [&_svg]:size-4 " + HUB_V4_FOCUS;
+  + `text-inherit whitespace-nowrap cursor-pointer transition-colors hover:bg-voile/10 ${HUB_V4_MUTE} `
+  + "aria-[current=page]:bg-voile/14 aria-[current=page]:text-v-ink [&_svg]:size-4 " + HUB_V4_FOCUS;
 // La part de l'écran qu'occupe la pièce zoomée (largeur, hauteur).
 const HUB_V4_ZOOM = { w: 0.34, h: 0.42, y: 0.5 };
 const HUB_V4_LOG_HOURS = 12;
@@ -148,8 +148,8 @@ function hubV4SilentSince(changed, now) {
 function hubV4Tile(icon, tone, title, ...rest) {
   const titleNode = el("b", { class: HUB_V4_TILE_TITLE, text: title });
   const head = el("header", { class: HUB_V4_TILE_HEAD }, el("span", {
-    class: "text-[#ffbf5e] data-[tone=sky]:text-[#9ad8ff] data-[tone=heat]:text-[#ff9a6b] "
-      + "data-[tone=violet]:text-[#b9a3ff] data-[tone=alert]:text-[#ff8b8b] [&_svg]:size-5",
+    class: "text-v-amber data-[tone=sky]:text-v-sky data-[tone=heat]:text-v-heat "
+      + "data-[tone=violet]:text-v-violet data-[tone=alert]:text-v-alert [&_svg]:size-5",
     "data-tone": tone, "aria-hidden": "true",
   }, svgIcon(icon)), titleNode, ...rest);
   return { node: el("section", { class: HUB_V4_TILE }, head), head, titleNode };
@@ -167,7 +167,7 @@ function hubV4HeatTile(entityId, title) {
   const tile = hubV4Tile(ICONS.flame, "heat", title);
   const modes = [["confort", "Confort"], ["eco", "Éco"]].map(([preset, text]) => {
     const node = el("button", {
-      type: "button", class: `${HUB_V4_BTN} flex-1 aria-pressed:bg-[rgb(255_154_107/0.24)] aria-pressed:text-[#ffc3a4]`,
+      type: "button", class: `${HUB_V4_BTN} flex-1 aria-pressed:bg-v-heat/24 aria-pressed:text-v-heat`,
       "aria-pressed": "false", text,
     });
     node.dataset.preset = preset;
@@ -183,8 +183,8 @@ function hubV4HeatTile(entityId, title) {
   const modeRow = el("div", { class: "flex gap-2", role: "group", "aria-label": "Mode" }, ...modes);
   const nudge = (direction) => {
     const node = el("button", {
-      type: "button", class: `grid place-items-center size-14 shrink-0 p-0 rounded-full border-0 bg-white/8 text-[26px] `
-        + `font-light text-inherit cursor-pointer transition-colors hover:bg-white/14 disabled:opacity-35 disabled:cursor-default ${HUB_V4_FOCUS}`,
+      type: "button", class: `grid place-items-center size-14 shrink-0 p-0 rounded-full border-0 bg-voile/8 text-[26px] `
+        + `font-light text-inherit cursor-pointer transition-colors hover:bg-voile/14 disabled:opacity-35 disabled:cursor-default ${HUB_V4_FOCUS}`,
       "aria-label": direction > 0 ? "Monter la consigne" : "Baisser la consigne",
       text: direction > 0 ? "+" : "−",
     });
@@ -227,15 +227,15 @@ function hubV4HeatTile(entityId, title) {
 /** Une lampe de la grille : la toucher l'allume ou l'éteint. */
 function hubV4LampButton(entityId, room) {
   const name = el("b", { class: "text-[14px] font-semibold truncate" });
-  const word = el("span", { class: `text-[12px] ${HUB_V4_MUTE} group-aria-pressed:text-[#ffd79a]` });
+  const word = el("span", { class: `text-[12px] ${HUB_V4_MUTE} group-aria-pressed:text-v-amber2` });
   const node = el("button", {
     type: "button", "aria-pressed": "false",
-    class: "group flex items-center gap-2.5 min-h-14 px-3 rounded-[16px] border-0 bg-white/6 text-left text-inherit "
-      + "cursor-pointer transition-colors hover:bg-white/10 aria-pressed:bg-[rgb(255_191_94/0.16)] "
+    class: "group flex items-center gap-2.5 min-h-14 px-3 rounded-[16px] border-0 bg-voile/6 text-left text-inherit "
+      + "cursor-pointer transition-colors hover:bg-voile/10 aria-pressed:bg-v-amber/16 "
       + `disabled:opacity-40 disabled:cursor-default [&.pending]:opacity-60 ${HUB_V4_FOCUS}`,
   },
   el("span", {
-    class: `grid place-items-center size-9 shrink-0 rounded-full bg-white/8 ${HUB_V4_MUTE} [&_svg]:size-[18px] `
+    class: `grid place-items-center size-9 shrink-0 rounded-full bg-voile/8 ${HUB_V4_MUTE} [&_svg]:size-[18px] `
       + "group-aria-pressed:bg-[#ffbf5e] group-aria-pressed:text-[#2a1a00] group-aria-pressed:shadow-[0_0_18px_rgb(255_191_94/0.6)]",
     "aria-hidden": "true",
   }, svgIcon(ICONS.bulb)),
@@ -348,7 +348,7 @@ function hubV4Whole(name) {
 /** La barre du haut : retour, les pièces de l'étage, l'autre étage, toute la maison. */
 function hubV4PageNav(name) {
   const pages = house.pages ?? [];
-  const back = el("button", { type: "button", class: `${HUB_V4_PILL} bg-white/8 text-[#f4f2fb] pl-2.5` },
+  const back = el("button", { type: "button", class: `${HUB_V4_PILL} bg-voile/8 text-v-ink pl-2.5` },
     el("span", { class: "rotate-180 [&_svg]:size-4", "aria-hidden": "true" }, svgIcon(HUB_V4_ICONS.go)), "Maison");
   back.addEventListener("click", () => hubV4PageClose());
   const pill = (text, current, run, arrow = false) => {
@@ -376,7 +376,7 @@ function hubV4PageNav(name) {
       const first = hubV4FloorRooms(other).find((room) => areas.some((a) => a.name === room));
       if (!first) continue;
       if (links.length > 0 && !links.some((l) => l.dataset.sep)) {
-        const sep = el("span", { class: "w-px h-6 mx-1 bg-white/14", "aria-hidden": "true" });
+        const sep = el("span", { class: "w-px h-6 mx-1 bg-voile/14", "aria-hidden": "true" });
         sep.dataset.sep = "";
         links.push(sep);
       }
@@ -397,9 +397,9 @@ function hubV4PageNav(name) {
   }
   return el("nav", {
     class: "absolute inset-x-0 top-0 z-20 flex items-center gap-3 px-5 pt-4 pb-2 overflow-x-auto [scrollbar-width:none] "
-      + "max-lg:bg-[rgb(11_13_34/0.88)] max-lg:backdrop-blur-[16px]",
+      + "max-lg:bg-scrim/88 max-lg:backdrop-blur-[16px]",
     "aria-label": "Pièces",
-  }, back, el("div", { class: "flex items-center gap-1 p-1 rounded-full bg-[rgb(16_18_42/0.6)] backdrop-blur-[14px]" }, ...links));
+  }, back, el("div", { class: "flex items-center gap-1 p-1 rounded-full bg-scrim/60 backdrop-blur-[14px]" }, ...links));
 }
 
 /** Le fond : le dessin de l'étage, zoomé sur la pièce (ou entier pour toute la maison). */
@@ -420,7 +420,7 @@ function hubV4PageStage(name) {
     : page.zones.filter((z) => z.area === name).sort((a, b) => b.w * b.h - a.w * a.h)[0];
   if (zone) {
     ring = el("div", {
-      class: "absolute left-(--rl) top-(--rt) w-(--rw) h-(--rh) rounded-[14px] border-2 border-[#ffbf5e] "
+      class: "absolute left-(--rl) top-(--rt) w-(--rw) h-(--rh) rounded-[14px] border-2 border-v-amber "
         + "shadow-[0_0_36px_rgb(255_191_94/0.5),inset_0_0_26px_rgb(255_191_94/0.22)] animate-v4-breathe motion-reduce:animate-none",
     });
     ring.hidden = true;
@@ -429,7 +429,7 @@ function hubV4PageStage(name) {
   // Les colonnes restent lisibles : le dessin s'assombrit sur les côtés.
   stage.append(el("div", {
     class: "absolute inset-0 bg-[linear-gradient(90deg,#0b0d22_0%,rgb(11_13_34/0.7)_28%,rgb(11_13_34/0.1)_44%,"
-      + "rgb(11_13_34/0.1)_58%,rgb(11_13_34/0.7)_74%,#0b0d22_100%)] max-lg:bg-[rgb(11_13_34/0.72)]",
+      + "rgb(11_13_34/0.1)_58%,rgb(11_13_34/0.7)_74%,#0b0d22_100%)] max-lg:bg-scrim/72",
   }));
   const place = () => {
     const box = stage.getBoundingClientRect();
@@ -616,12 +616,12 @@ function hubV4HouseBody() {
   roomsTile.node.append(grid);
   left.push(roomsTile.node);
   const syncRooms = hubV4Keyed(grid, (room) => {
-    const count = el("span", { class: `text-[13px] ${HUB_V4_MUTE} group-data-full:text-[#ffd79a]` });
+    const count = el("span", { class: `text-[13px] ${HUB_V4_MUTE} group-data-full:text-v-amber2` });
     const node = el("button", {
       type: "button",
-      class: "group flex items-center justify-between gap-2 min-h-12 px-3.5 rounded-[14px] border-0 bg-white/6 text-left "
-        + "text-[14px] font-semibold text-inherit cursor-pointer transition-colors hover:bg-white/10 "
-        + `data-full:bg-[rgb(255_191_94/0.16)] ${HUB_V4_FOCUS}`,
+      class: "group flex items-center justify-between gap-2 min-h-12 px-3.5 rounded-[14px] border-0 bg-voile/6 text-left "
+        + "text-[14px] font-semibold text-inherit cursor-pointer transition-colors hover:bg-voile/10 "
+        + `data-full:bg-v-amber/16 ${HUB_V4_FOCUS}`,
     }, el("span", { class: "truncate", text: room }), count);
     node.addEventListener("click", () => hubV4Page(room));
     return {
@@ -692,8 +692,8 @@ function hubV4HouseBody() {
     const word = el("span", { class: `text-[12px] ${HUB_V4_MUTE}` });
     const node = el("button", {
       type: "button", "aria-pressed": "false",
-      class: "flex flex-col items-start min-h-14 px-3 py-2 rounded-[16px] border-0 bg-white/6 text-left text-inherit "
-        + "cursor-pointer transition-colors hover:bg-white/10 aria-pressed:bg-[rgb(185_163_255/0.18)] "
+      class: "flex flex-col items-start min-h-14 px-3 py-2 rounded-[16px] border-0 bg-voile/6 text-left text-inherit "
+        + "cursor-pointer transition-colors hover:bg-voile/10 aria-pressed:bg-v-violet/18 "
         + `disabled:opacity-40 disabled:cursor-default [&.pending]:opacity-60 ${HUB_V4_FOCUS}`,
     }, name, word);
     node.addEventListener("click", () => {
@@ -749,7 +749,7 @@ function hubV4HouseBody() {
     safeList.dataset.mark = mark;
     safeList.replaceChildren(...rows.map((row) => el("li", { class: "flex items-baseline justify-between gap-3 text-[14px]" },
       el("span", { class: "truncate", text: row.name }),
-      el("span", { class: row.bad ? "font-semibold text-[#ff8b8b]" : HUB_V4_MUTE, text: row.word }))));
+      el("span", { class: row.bad ? "font-semibold text-v-alert" : HUB_V4_MUTE, text: row.word }))));
   });
 
   return { left, right, refresh: () => paints.forEach((paint) => paint()) };
@@ -779,8 +779,8 @@ function hubV4Page(name) {
     class: "hidden lg:flex lg:col-start-2 lg:row-start-1 flex-col justify-end items-center pb-24 min-h-0 pointer-events-none",
   }, ...body.middle)] : [];
   const dialog = el("dialog", {
-    class: "hub-v4-page fixed inset-0 m-0 p-0 w-screen h-dvh max-w-none max-h-none border-0 bg-[#0b0d22] overflow-hidden "
-      + "text-[#f4f2fb] font-sans [color-scheme:dark] [font-variant-numeric:tabular-nums] backdrop:bg-[#0b0d22] "
+    class: "hub-v4-page fixed inset-0 m-0 p-0 w-screen h-dvh max-w-none max-h-none border-0 bg-scrim overflow-hidden "
+      + "text-v-ink font-sans [color-scheme:dark] [font-variant-numeric:tabular-nums] backdrop:bg-scrim "
       + "animate-v4-fade motion-reduce:animate-none",
     "aria-labelledby": "hub-v4-page-title",
   },
