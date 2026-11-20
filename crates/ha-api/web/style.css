@@ -6906,15 +6906,31 @@
     .max-sm\:animate-v4-sheet {
       animation: var(--animate-v4-sheet);
     }
+    .max-sm\:gap-0 {
+      gap: 0px;
+    }
+    .max-sm\:overflow-hidden {
+      overflow: hidden;
+    }
+    .max-sm\:rounded-carte {
+      border-radius: var(--radius);
+    }
     .max-sm\:rounded-b-none {
       border-bottom-right-radius: 0;
       border-bottom-left-radius: 0;
+    }
+    .max-sm\:bg-card {
+      background-color: var(--card);
     }
     .max-sm\:pt-2 {
       padding-top: calc(var(--spacing) * 2);
     }
     .max-sm\:pb-\[max\(12px\,env\(safe-area-inset-bottom\)\)\] {
       padding-bottom: max(12px, env(safe-area-inset-bottom));
+    }
+    .max-sm\:shadow-carte {
+      --tw-shadow: var(--shadow);
+      box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
     }
   }
   @media (width >= 64rem) {
@@ -6955,6 +6971,17 @@
   }
   .\[\&_\.active\]\:text-accent .active {
     color: var(--accent);
+  }
+  @media (width < 40rem) {
+    .max-sm\:\[\&_\.history-button\]\:top-\[7px\] .history-button {
+      top: 7px;
+    }
+    .max-sm\:\[\&_\.history-button\]\:right-\[6px\] .history-button {
+      right: 6px;
+    }
+    .max-sm\:\[\&_\.history-button\]\:opacity-70 .history-button {
+      opacity: 70%;
+    }
   }
   .\[\&_\.hit\]\:\[fill\:transparent\] .hit {
     fill: transparent;
@@ -7152,6 +7179,9 @@
   }
   .\[\&_input\]\:m-0 input {
     margin: 0px;
+  }
+  .\[\&_input\]\:basis-\[8rem\] input {
+    flex-basis: 8rem;
   }
   .\[\&_input\]\:\[cursor\:inherit\] input {
     cursor: inherit;
@@ -7945,6 +7975,64 @@
   }
   .\[\&\>\*\]\:whitespace-nowrap > * {
     white-space: nowrap;
+  }
+  @media (width < 40rem) {
+    .max-sm\:\[\&\>\.tile\]\:gap-\[8px\] > .tile {
+      gap: 8px;
+    }
+    .max-sm\:\[\&\>\.tile\]\:rounded-none > .tile {
+      border-radius: 0;
+    }
+    .max-sm\:\[\&\>\.tile\]\:bg-transparent > .tile {
+      background-color: transparent;
+    }
+    .max-sm\:\[\&\>\.tile\]\:px-\[14px\] > .tile {
+      padding-inline: 14px;
+    }
+    .max-sm\:\[\&\>\.tile\]\:py-\[11px\] > .tile {
+      padding-block: 11px;
+    }
+    .max-sm\:\[\&\>\.tile\]\:shadow-none > .tile {
+      --tw-shadow: 0 0 #0000;
+      box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+    }
+    .max-sm\:\[\&\>\.tile\+\.tile\]\:border-t > .tile + .tile {
+      border-top-style: var(--tw-border-style);
+      border-top-width: 1px;
+    }
+    .max-sm\:\[\&\>\.tile\+\.tile\]\:border-line > .tile + .tile {
+      border-color: var(--line);
+    }
+    .max-sm\:\[\&\>\.tile\.light\.on\]\:text-text > .tile.light.on {
+      color: var(--text);
+    }
+    .max-sm\:\[\&\>\.tile\.sensor\]\:grid-cols-\[minmax\(0\,1fr\)_auto\] > .tile.sensor {
+      grid-template-columns: minmax(0,1fr) auto;
+    }
+    .max-sm\:\[\&\>\.tile\.sensor\]\:items-center > .tile.sensor {
+      align-items: center;
+    }
+    .max-sm\:\[\&\>\.tile\.sensor\>\.tile-head\]\:pr-0 > .tile.sensor > .tile-head {
+      padding-right: 0px;
+    }
+    .max-sm\:\[\&\>\.tile\.sensor\>\.value\]\:mr-\[2rem\] > .tile.sensor > .value {
+      margin-right: 2rem;
+    }
+    .max-sm\:\[\&\>\.tile\.sensor\>\.value\]\:text-\[1\.4rem\] > .tile.sensor > .value {
+      font-size: 1.4rem;
+    }
+    .max-sm\:\[\&\>\.tile\.sensor\>\:not\(\.tile-head\,\.value\,\.history-button\)\]\:col-span-full > .tile.sensor > :not(.tile-head, .value, .history-button) {
+      grid-column: 1 / -1;
+    }
+    .max-sm\:\[\&\>\.tile\>input\[type\=range\]\]\:ml-\[50px\] > .tile > input[type=range] {
+      margin-left: 50px;
+    }
+    .max-sm\:\[\&\>\.tile\>input\[type\=range\]\]\:h-\[18px\] > .tile > input[type=range] {
+      height: 18px;
+    }
+    .max-sm\:\[\&\>\.tile\>input\[type\=range\]\]\:w-\[calc\(100\%-50px\)\] > .tile > input[type=range] {
+      width: calc(100% - 50px);
+    }
   }
   .\[\&\>button\]\:\[justify-self\:start\] > button {
     justify-self: start;

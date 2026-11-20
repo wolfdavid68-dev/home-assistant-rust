@@ -297,6 +297,7 @@ function updateTiles(entityId) {
  *  de la nouvelle. */
 function replaceTile(tile, state) {
   const next = renderTile(state);
+  if (tile.dataset.room) shortenName(next, tile.dataset.room);
   const focused = tile.contains(document.activeElement) ? document.activeElement : null;
   const index = focused ? [...tile.querySelectorAll(TILE_FIELDS)].indexOf(focused) : -1;
   const twin = index < 0 ? null : next.querySelectorAll(TILE_FIELDS)[index];
@@ -461,6 +462,29 @@ function looseStates(states = [...entities.values()]) {
 // La pièce affichée seule (après un toucher sur le plan), ou `null`.
 const view = { room: null };
 
+// Les tuiles d'une section, en grille.
+const TILE_GRID = "tile-grid grid [grid-template-columns:repeat(auto-fill,_minmax(min(100%,_200px),_1fr))] [align-items:start] gap-[12px] [@media(min-width:1000px)]:[:not(:where(.o079300))[data-layout=board]_&]:[grid-template-columns:repeat(auto-fill,_minmax(260px,_1fr))] [:not(:where(.o102200)).room-body_&]:[grid-template-columns:1fr] [.room-body_&>*]:[grid-column:1_/_-1] [@media(min-width:1000px)]:[.room-view_.room-body_&>*]:[break-inside:avoid]";
+// Sur téléphone, les appareils d'une pièce forment une seule carte : une
+// ligne par appareil, séparées d'un filet (au lieu d'une carte chacun).
+const ROOM_LIST = "room-list max-sm:gap-0 max-sm:bg-card max-sm:rounded-carte max-sm:shadow-carte max-sm:overflow-hidden max-sm:[&>.tile]:rounded-none max-sm:[&>.tile]:shadow-none max-sm:[&>.tile]:bg-transparent max-sm:[&>.tile]:px-[14px] max-sm:[&>.tile]:py-[11px] max-sm:[&>.tile]:gap-[8px] max-sm:[&>.tile+.tile]:border-t max-sm:[&>.tile+.tile]:border-line max-sm:[&>.tile.light.on]:text-text max-sm:[&>.tile>input[type=range]]:h-[18px] max-sm:[&>.tile>input[type=range]]:ml-[50px] max-sm:[&>.tile>input[type=range]]:w-[calc(100%-50px)] max-sm:[&>.tile.sensor]:grid-cols-[minmax(0,1fr)_auto] max-sm:[&>.tile.sensor]:items-center max-sm:[&>.tile.sensor>.tile-head]:pr-0 max-sm:[&>.tile.sensor>.value]:text-[1.4rem] max-sm:[&>.tile.sensor>.value]:mr-[2rem] max-sm:[&>.tile.sensor>:not(.tile-head,.value,.history-button)]:col-span-full max-sm:[&_.history-button]:top-[7px] max-sm:[&_.history-button]:right-[6px] max-sm:[&_.history-button]:opacity-70";
+
+/** Dans la section d'une pièce, « Salon lampe 1 » devient « Lampe 1 » et
+ *  « Température Salon », « Température » : le titre dit déjà la pièce. */
+function shortenName(tile, room) {
+  tile.dataset.room = room;
+  const name = tile.querySelector(".tile-head .name");
+  if (!name) return tile;
+  const full = name.textContent;
+  const lower = full.toLocaleLowerCase("fr");
+  const key = room.toLocaleLowerCase("fr");
+  let short = full;
+  if (lower.startsWith(`${key} `)) short = full.slice(room.length + 1);
+  else if (lower.endsWith(` ${key}`)) short = full.slice(0, -room.length - 1);
+  short = short.trim();
+  if (short && short !== full) name.textContent = short.charAt(0).toLocaleUpperCase("fr") + short.slice(1);
+  return tile;
+}
+
 function renderAll() {
   // Tout redessiner : les panneaux du tableau aussi, même sans changement.
   forgetPanels();
@@ -471,8 +495,9 @@ function renderAll() {
   const sorted = [...entities.values()].sort(
     (a, b) => first(a) - first(b) || nameOf(a).localeCompare(nameOf(b), "fr"),
   );
-  const section = (title, items) =>
-    el("section", {}, el("h2", { text: title }), el("div", { class: "tile-grid grid [grid-template-columns:repeat(auto-fill,_minmax(min(100%,_200px),_1fr))] [align-items:start] gap-[12px] [@media(min-width:1000px)]:[:not(:where(.o079300))[data-layout=board]_&]:[grid-template-columns:repeat(auto-fill,_minmax(260px,_1fr))] [:not(:where(.o102200)).room-body_&]:[grid-template-columns:1fr] [.room-body_&>*]:[grid-column:1_/_-1] [@media(min-width:1000px)]:[.room-view_.room-body_&>*]:[break-inside:avoid]" }, ...items.map(renderTile)));
+  const section = (title, items, room) =>
+    el("section", {}, el("h2", { text: title }), el("div", { class: room ? `${TILE_GRID} ${ROOM_LIST}` : TILE_GRID },
+      ...items.map((state) => (room ? shortenName(renderTile(state), title) : renderTile(state)))));
 
   // Une seule pièce : son nom, un bouton retour, ses appareils.
   const room = view.room === null ? undefined : areas.find((area) => area.name === view.room);
@@ -483,7 +508,7 @@ function renderAll() {
     container.replaceChildren(
       el("section", {},
         el("div", { class: "room-view-head flex items-center gap-3 [:not(:where(.o008200))&_h2]:[font-family:var(--font-display)] [:not(:where(.o008201))&_h2]:text-[1.6rem] [:not(:where(.o008202))&_h2]:font-semibold [:not(:where(.o008203))&_h2]:[letter-spacing:-0.02em] [:not(:where(.o008204))&_h2]:[text-transform:none] [:not(:where(.o008205))&_h2]:text-text" }, back, el("h2", { text: room.name })),
-        el("div", { class: "tile-grid grid [grid-template-columns:repeat(auto-fill,_minmax(min(100%,_200px),_1fr))] [align-items:start] gap-[12px] [@media(min-width:1000px)]:[:not(:where(.o079300))[data-layout=board]_&]:[grid-template-columns:repeat(auto-fill,_minmax(260px,_1fr))] [:not(:where(.o102200)).room-body_&]:[grid-template-columns:1fr] [.room-body_&>*]:[grid-column:1_/_-1] [@media(min-width:1000px)]:[.room-view_.room-body_&>*]:[break-inside:avoid]" }, ...items.map(renderTile)),
+        el("div", { class: `${TILE_GRID} ${ROOM_LIST}` }, ...items.map((state) => shortenName(renderTile(state), room.name))),
       ),
     );
     $("#empty").hidden = true;
@@ -497,7 +522,7 @@ function renderAll() {
       .map((entity) => entities.get(entity.entity_id))
       .filter((state) => state !== undefined);
     items.forEach((s) => used.add(s.entity_id));
-    return { title: area.name, items };
+    return { title: area.name, items, room: true };
   });
   // … puis, par type, les appareils qui ne sont dans aucune pièce.
   const loose = looseStates(sorted).filter((s) => !used.has(s.entity_id));
@@ -521,7 +546,7 @@ function renderAll() {
   container.replaceChildren(
     ...[...areaGroups, ...groups]
       .filter((group) => group.items.length > 0)
-      .map(({ title, items }) => section(title, items)),
+      .map(({ title, items, room }) => section(title, items, room)),
   );
   $("#empty").hidden = entities.size > 0;
 }
