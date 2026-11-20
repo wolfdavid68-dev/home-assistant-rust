@@ -175,35 +175,42 @@ function renderPlan() {
     lit += info.lights;
     if (info.alert) warnings += 1;
     if (Number.isFinite(info.temperature)) temps.push(info.temperature);
-    const detail = info.alert ? info.alert
-      : info.lights > 0 ? `${info.lights} lumière${info.lights > 1 ? "s" : ""}`
-      : info.open > 0 ? `${info.open} ouverture${info.open > 1 ? "s" : ""}`
-      : info.heating ? "chauffe" : "";
-    const classes = ["room"];
-    if (info.count >= 4) classes.push("big");
-    if (info.alert) classes.push("alert");
-    else if (info.lights > 0) classes.push("lit");
-    else if (info.heating) classes.push("heat");
+    // Une tuile compacte, toutes de la même taille (l'ancienne « grande »
+    // pièce prenait 2 colonnes et 2 rangées : sur téléphone, un vide à droite,
+    // voire une colonne de trop et la page qui déborde). L'icône, le nom, et
+    // une ligne qui dit tout : température, lumières, ouvertures, chauffe.
+    const temp = Number.isFinite(info.temperature) ? `${number.format(info.temperature)}°` : "";
+    const facts = info.alert ? [info.alert] : [
+      info.lights > 0 ? `${info.lights} lumière${info.lights > 1 ? "s" : ""}` : "",
+      info.open > 0 ? `${info.open} ouverte${info.open > 1 ? "s" : ""}` : "",
+      info.heating ? "chauffe" : "",
+    ].filter(Boolean);
+    const detail = facts.join(" · ");
+    const state = info.alert ? "alert" : info.lights > 0 ? "lit" : info.heating ? "heat" : "";
+    const tone = {
+      alert: "bg-alert-soft text-alert-ink",
+      lit: "bg-glow-soft text-glow-ink",
+      heat: "bg-heat-soft text-heat-ink",
+    }[state] ?? "bg-card-2 text-text";
+    // L'encre sombre reste sur l'aplat jaune vif, dans les deux thèmes.
+    const iconTone = {
+      alert: "bg-alert text-accent-ink",
+      lit: "bg-glow text-[#3b2a05]",
+      heat: "bg-heat text-accent-ink",
+    }[state] ?? "bg-card text-text-2";
     const room = el(
       "button",
-      { type: "button", class: classes.join(" "), "aria-label": [area.name, detail, Number.isFinite(info.temperature) ? `${number.format(info.temperature)} degrés` : ""].filter(Boolean).join(", ") },
-      el("span", { class: "room-name [:not(:where(.o006300))&]:font-semibold [:not(:where(.o006301))&]:text-[0.86rem] overflow-hidden text-ellipsis whitespace-nowrap [.room.big_&]:text-[1rem] [[data-layout=board]_&]:hidden", text: area.name }),
-      el("span", { class: "room-foot flex justify-between items-baseline gap-[0.3rem] text-[0.75rem] [&_span:first-child]:overflow-hidden [&_span:first-child]:text-ellipsis [&_span:first-child]:whitespace-nowrap [[data-theme|=plan]_&]:flex-wrap [[data-theme|=plan]_&]:justify-end [[data-theme|=plan]_&>span:first-child:empty]:hidden [[data-layout=board]_&]:hidden" },
-        el("span", { text: detail }),
-        Number.isFinite(info.temperature) ? el("span", { class: "room-temp [:not(:where(.o006600))&]:font-semibold [:not(:where(.o006601))&]:text-[0.95rem] [:not(:where(.o006602))&]:[font-variant-numeric:tabular-nums] flex-none [.room.big_&]:text-[1.25rem] [:not(:where(.o064000))[data-theme|=plan]_&]:[font-family:var(--font-mono)] [:not(:where(.o064001))[data-theme|=plan]_&]:font-medium [:not(:where(.o064002))[data-theme|=plan]_&]:text-[0.85rem] [[data-theme|=plan]_.room.big_&]:text-[1.05rem]", text: `${number.format(info.temperature)}°` }) : el("span")),
+      { type: "button", class: `room ${state} flex flex-row items-center justify-start bg-none shadow-none gap-2 min-w-0 min-h-[60px] p-2 pr-2.5 `
+          + `rounded-[14px] border-0 text-left cursor-pointer transition-transform hover:-translate-y-px `
+          + `focus-visible:outline-3 focus-visible:outline-accent focus-visible:outline-offset-2 ${tone}`,
+        "aria-label": [area.name, detail, temp ? `${temp.slice(0, -1)} degrés` : ""].filter(Boolean).join(", ") },
+      el("span", { class: `grid place-items-center size-9 shrink-0 rounded-[10px] [&_svg]:size-[18px] ${iconTone}` }, svgIcon(roomIcon(area.name))),
+      el("span", { class: "grid min-w-0 flex-1 gap-px leading-tight" },
+        el("span", { class: "font-semibold text-[0.95rem] line-clamp-2 [overflow-wrap:anywhere]", text: area.name }),
+        el("span", { class: `flex items-baseline gap-1.5 min-w-0 text-[0.8rem] ${state ? "" : "text-muted"}` },
+          temp ? el("b", { class: "shrink-0 font-semibold text-[0.9rem] tabular-nums", text: temp }) : "",
+          el("span", { class: "truncate opacity-90", text: detail || `${info.count} appareil${info.count > 1 ? "s" : ""}` }))),
     );
-    // L'humidité : affichée par le style « plan » (« 25,1° | 49 % »).
-    if (finite(info.humidity)) room.querySelector(".room-temp")?.append(el("span", { class: "room-hum hidden [[data-theme|=plan]_&]:inline [[data-theme|=plan]_&]:text-muted [[data-theme|=plan]_&]:text-[0.78rem] [[data-theme|=plan]_&]:whitespace-nowrap", text: ` | ${number.format(Math.round(info.humidity))} %` }));
-    // La mise en page « tableau » : une ligne, avec l'icône de la pièce.
-    const measures = [
-      Number.isFinite(info.temperature) ? `${number.format(info.temperature)} °C` : "",
-      finite(info.humidity) ? `${number.format(info.humidity)} %` : "",
-    ].filter(Boolean).join(" | ");
-    room.append(el("span", { class: "room-line hidden [[data-layout=board]_&]:flex [[data-layout=board]_&]:items-center [[data-layout=board]_&]:gap-[0.6rem] [[data-layout=board]_&]:min-w-0" },
-      el("span", { class: "room-icon flex-none w-[34px] h-[34px] [border-radius:10px] grid [place-items:center] bg-card-2 text-text-2 [:not(:where(.o071600))&_svg]:w-[18px] [:not(:where(.o071601))&_svg]:h-[18px] [:not(:where(.o072100))[data-layout=board]_.room.lit_&]:bg-glow [:not(:where(.o072101))[data-layout=board]_.room.lit_&]:[color:#3b2a05] [:not(:where(.o072200))[data-layout=board]_.room.alert_&]:bg-alert [:not(:where(.o072201))[data-layout=board]_.room.alert_&]:[color:#ffffff] [@media(min-width:1000px)]:[:not(:where(.o078200))[data-layout=board]_&]:w-[30px] [@media(min-width:1000px)]:[:not(:where(.o078201))[data-layout=board]_&]:h-[30px] [@media(min-width:1000px)]:[:not(:where(.o078300))[data-layout=board]_&_svg]:w-[16px] [@media(min-width:1000px)]:[:not(:where(.o078301))[data-layout=board]_&_svg]:h-[16px] [:not(:where(.o079700))[data-theme|=plan]_&]:[background:transparent] [[data-theme|=plan]_&]:[border:1px_solid_var(--ink-line)] [:not(:where(.o079702))[data-theme|=plan]_&]:[border-radius:4px] [:not(:where(.o079703))[data-theme|=plan]_&]:[color:var(--ink)] [@media(min-width:1000px)]:[[data-theme=maquette][data-layout=board]_&]:w-[36px] [@media(min-width:1000px)]:[[data-theme=maquette][data-layout=board]_&]:h-[36px] [@media(min-width:1000px)]:[:not(:where(.o084300))[data-theme=maquette][data-layout=board]_&_svg]:w-[20px] [@media(min-width:1000px)]:[:not(:where(.o084301))[data-theme=maquette][data-layout=board]_&_svg]:h-[20px] [:not(:where(.o085600))[data-theme=maquette]_&]:[border-radius:50%] [:not(:where(.o085601))[data-theme=maquette]_&]:[background:transparent] [:not(:where(.o085602))[data-theme=maquette]_&]:[color:#8e8e98] [:not(:where(.o085700))[data-theme=maquette]_.room.lit_&]:[background:rgb(255_193_7_/_0.2)] [:not(:where(.o085701))[data-theme=maquette]_.room.lit_&]:[color:var(--m-amber)] [:not(:where(.o085702))[data-theme=maquette]_.room.lit_&]:[box-shadow:none] [:not(:where(.o085800))[data-theme=maquette]_.room.heat_&]:[background:rgb(255_152_0_/_0.2)] [:not(:where(.o085801))[data-theme=maquette]_.room.heat_&]:[color:var(--m-orange)] [:not(:where(.o085900))[data-theme=maquette]_.room.alert_&]:[background:rgb(244_67_54_/_0.22)] [:not(:where(.o085901))[data-theme=maquette]_.room.alert_&]:[color:var(--m-red)] [:not(:where(.o085902))[data-theme=maquette]_.room.alert_&]:[box-shadow:none] [:not(:where(.o100300)).room-top_&]:w-[44px] [:not(:where(.o100301)).room-top_&]:h-[44px] [:not(:where(.o100302)).room-top_&]:[border-radius:14px] [:not(:where(.o100400)).room-top_&_svg]:w-[22px] [:not(:where(.o100401)).room-top_&_svg]:h-[22px] [:not(:where(.o100500))&.lit]:bg-glow [:not(:where(.o100501))&.lit]:[color:#3b2a05] [:not(:where(.o100600))&.heat]:[background:color-mix(in_srgb,_var(--series-2)_22%,_transparent)] [:not(:where(.o100601))&.heat]:[color:var(--series-2)] [:not(:where(.o100700))&.alert]:bg-alert [:not(:where(.o100701))&.alert]:[color:#ffffff] [[data-theme|=plan]_.room-top_&]:[border-radius:4px] [[data-theme|=plan]_.room-top_&]:[border:1px_solid_var(--ink-line)] [:not(:where(.o104600))[data-theme=maquette]_&.lit]:[background:rgb(255_193_7_/_0.2)] [:not(:where(.o104601))[data-theme=maquette]_&.lit]:[color:var(--m-amber)] [:not(:where(.o104700))[data-theme=maquette]_&.heat]:[background:rgb(255_152_0_/_0.2)] [:not(:where(.o104701))[data-theme=maquette]_&.heat]:[color:var(--m-orange)] [:not(:where(.o104800))[data-theme=maquette]_&.alert]:[background:rgb(244_67_54_/_0.22)] [:not(:where(.o104801))[data-theme=maquette]_&.alert]:[color:var(--m-red)]" }, svgIcon(roomIcon(area.name))),
-      el("span", { class: "room-text grid min-w-0 [line-height:1.25]" },
-        el("span", { class: "room-line-name [:not(:where(.o071800))&]:font-semibold [:not(:where(.o071801))&]:text-[0.86rem] overflow-hidden text-ellipsis whitespace-nowrap text-text", text: area.name }),
-        el("span", { class: "room-line-info [:not(:where(.o071900))&]:text-[0.74rem] text-muted overflow-hidden text-ellipsis whitespace-nowrap [:not(:where(.o071905))&]:[font-variant-numeric:tabular-nums] [[data-layout=board]_.room.alert_&]:text-alert [[data-theme|=plan]_&]:[font-family:var(--font-mono)]", text: [measures, detail].filter(Boolean).join(" · ") || "—" }))));
     // Mise en page « tableau » : la pièce s'ouvre en fenêtre, par-dessus la
     // maquette (house.js) ; sinon, seule, à la place des sections.
     room.addEventListener("click", () => (isBoard() ? openRoom(area.name) : showRoom(area.name)));
@@ -218,7 +225,7 @@ function renderPlan() {
   }
   swap(card,
     el("div", { class: "plan-head flex justify-between items-baseline gap-2 [:not(:where(.o005500))&_h2]:[font-family:var(--font-display)] [:not(:where(.o005501))&_h2]:text-[1.1rem] [:not(:where(.o005502))&_h2]:[text-transform:none] [:not(:where(.o005503))&_h2]:[letter-spacing:-0.01em] [:not(:where(.o005504))&_h2]:text-text [:not(:where(.o063600))[data-theme|=plan]_&_h2]:[font-family:var(--font-mono)] [:not(:where(.o063601))[data-theme|=plan]_&_h2]:text-[0.8rem] [:not(:where(.o063602))[data-theme|=plan]_&_h2]:font-medium [:not(:where(.o063603))[data-theme|=plan]_&_h2]:uppercase [:not(:where(.o063604))[data-theme|=plan]_&_h2]:[letter-spacing:0.14em] [:not(:where(.o063605))[data-theme|=plan]_&_h2]:[color:var(--ink)] [[data-layout=board]_&]:hidden" }, el("h2", { text: "La maison" })),
-    el("div", { class: "plan" }, ...rooms),
+    el("div", { class: "plan grid grid-cols-[repeat(auto-fill,minmax(min(100%,150px),1fr))] auto-rows-auto gap-2" }, ...rooms),
     legend,
   );
 }

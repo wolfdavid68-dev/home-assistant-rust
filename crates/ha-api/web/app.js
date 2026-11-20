@@ -15,14 +15,13 @@ const TOKEN_KEY = "ha_token";
 const $ = (selector) => document.querySelector(selector);
 
 // ---------------------------------------------------------------- Apparence
-// Clair, sombre (ou comme l'appareil), le style « plan d'architecte », de
-// jour ou de nuit, et « maquette » (fond sombre dégradé, house.js). Les trois
-// derniers prennent la mise en page « tableau » : les pièces à gauche, le
-// dessin de la maison au centre, les volets en dessous. Un réglage de cet appareil seulement
-// (localStorage) : la télé du salon peut être en plan, le téléphone en sombre.
-// Appliqué tout de suite, avant le premier affichage de la page.
+// Clair ou sombre, ou comme l'appareil (« Automatique »). Tout le tableau de
+// bord suit ce choix, l'accueil v3/v4 aussi (hub-v3.css). Un réglage de cet
+// appareil seulement (localStorage), appliqué avant le premier affichage.
+// Les anciens styles (« plan », « plan-nuit », « maquette ») ne sont plus
+// proposés : un appareil qui les avait gardés repasse en « Automatique ».
 const THEME_KEY = "ha-theme";
-const THEMES = ["auto", "light", "dark", "plan", "plan-nuit", "maquette"];
+const THEMES = ["auto", "light", "dark"];
 const darkQuery = matchMedia("(prefers-color-scheme: dark)");
 
 function themeWanted() {
@@ -292,12 +291,18 @@ function updateTiles(entityId) {
     if (tileHold.pointer && tile.contains(tileHold.pointer)) tileHold.waiting.add(entityId);
     else replaceTile(tile, state);
   }
+  // Le résumé de la pièce suit (une lumière allumée, une température).
+  for (const summary of document.querySelectorAll("#sections .section-summary[data-room]")) {
+    const text = sectionSummary(summary.dataset.room);
+    if (summary.textContent !== text) summary.textContent = text;
+  }
 }
 
 /** Remplace une tuile ; le focus (et le texte en cours) passe au même champ
  *  de la nouvelle. */
 function replaceTile(tile, state) {
   const next = renderTile(state);
+  if (tile.dataset.room) shortenName(next, tile.dataset.room);
   const focused = tile.contains(document.activeElement) ? document.activeElement : null;
   const index = focused ? [...tile.querySelectorAll(TILE_FIELDS)].indexOf(focused) : -1;
   const twin = index < 0 ? null : next.querySelectorAll(TILE_FIELDS)[index];
@@ -462,6 +467,90 @@ function looseStates(states = [...entities.values()]) {
 // La pièce affichée seule (après un toucher sur le plan), ou `null`.
 const view = { room: null };
 
+// Les tuiles d'une section, en grille.
+const TILE_GRID = "tile-grid grid [grid-template-columns:repeat(auto-fill,_minmax(min(100%,_200px),_1fr))] [align-items:start] gap-[12px] [@media(min-width:1000px)]:[:not(:where(.o079300))[data-layout=board]_&]:[grid-template-columns:repeat(auto-fill,_minmax(260px,_1fr))] [:not(:where(.o102200)).room-body_&]:[grid-template-columns:1fr] [.room-body_&>*]:[grid-column:1_/_-1] [@media(min-width:1000px)]:[.room-view_.room-body_&>*]:[break-inside:avoid]";
+// Sur téléphone, les tuiles d'une section forment une seule carte : une
+// ligne par appareil, séparées d'un filet (au lieu d'une carte chacune).
+const PHONE_LIST = "phone-list max-sm:gap-0 max-sm:bg-card max-sm:rounded-carte max-sm:shadow-carte max-sm:overflow-hidden max-sm:[&>.tile]:rounded-none max-sm:[&>.tile]:shadow-none max-sm:[&>.tile]:bg-transparent max-sm:[&>.tile]:px-[14px] max-sm:[&>.tile]:py-[11px] max-sm:[&>.tile]:gap-[8px] max-sm:[&>.tile+.tile]:border-t max-sm:[&>.tile+.tile]:border-line max-sm:[&>.tile.light.on]:text-text max-sm:[&>.tile>input[type=range]]:h-[18px] max-sm:[&>.tile>input[type=range]]:ml-[50px] max-sm:[&>.tile>input[type=range]]:w-[calc(100%-50px)] max-sm:[&>.tile.sensor]:grid-cols-[minmax(0,1fr)_auto] max-sm:[&>.tile.sensor]:items-center max-sm:[&>.tile.sensor>.tile-head]:pr-0 max-sm:[&>.tile.sensor>.value]:text-[1.4rem] max-sm:[&>.tile.sensor>.value]:mr-[2rem] max-sm:[&>.tile.sensor>:not(.tile-head,.value,.history-button)]:col-span-full max-sm:[&_.history-button]:top-[7px] max-sm:[&_.history-button]:right-[6px] max-sm:[&_.history-button]:opacity-70";
+
+/** Dans la section d'une pièce, « Salon lampe 1 » devient « Lampe 1 » et
+ *  « Température Salon », « Température » : le titre dit déjà la pièce. */
+function shortenName(tile, room) {
+  tile.dataset.room = room;
+  const name = tile.querySelector(".tile-head .name");
+  if (!name) return tile;
+  const full = name.textContent;
+  const lower = full.toLocaleLowerCase("fr");
+  const key = room.toLocaleLowerCase("fr");
+  let short = full;
+  if (lower.startsWith(`${key} `)) short = full.slice(room.length + 1);
+  else if (lower.endsWith(` ${key}`)) short = full.slice(0, -room.length - 1);
+  short = short.trim();
+  if (short && short !== full) name.textContent = short.charAt(0).toLocaleUpperCase("fr") + short.slice(1);
+  return tile;
+}
+
+// Les sections repliées, retenues par cet appareil. Sur téléphone, elles
+// sont repliées d'office (la carte « La maison » montre déjà les pièces) :
+// on retient alors celles qu'on a ouvertes.
+const FOLDED_KEY = "ha-sections-pliees";
+const OPENED_KEY = "ha-sections-ouvertes";
+const PHONE = window.matchMedia("(max-width: 639px)");
+PHONE.addEventListener("change", () => renderAll());
+function storedSet(key) {
+  try {
+    const list = JSON.parse(localStorage.getItem(key) ?? "[]");
+    return new Set(Array.isArray(list) ? list.filter((name) => typeof name === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+function isFolded(title) {
+  return PHONE.matches ? !storedSet(OPENED_KEY).has(title) : storedSet(FOLDED_KEY).has(title);
+}
+function setFolded(title, fold) {
+  const key = PHONE.matches ? OPENED_KEY : FOLDED_KEY;
+  const set = storedSet(key);
+  if (fold === !PHONE.matches) set.add(title);
+  else set.delete(title);
+  try { localStorage.setItem(key, JSON.stringify([...set])); } catch { /* stockage plein ou interdit */ }
+}
+
+/** Le résumé d'une pièce à droite de son titre : « 20,6° · 3 allumées ». */
+function sectionSummary(title) {
+  const area = areas.find((a) => a.name === title);
+  if (!area) return "";
+  const info = roomInfo(area);
+  return [
+    Number.isFinite(info.temperature) ? `${number.format(info.temperature)}°` : "",
+    info.lights > 0 ? `${info.lights} allumée${info.lights > 1 ? "s" : ""}` : "",
+    info.open > 0 ? `${info.open} ouverte${info.open > 1 ? "s" : ""}` : "",
+  ].filter(Boolean).join(" · ");
+}
+
+/** Le titre d'une section : un bouton qui la replie ou la déplie. Une pièce
+ *  repliée garde son résumé (température, lumières allumées). */
+function sectionHead(title, grid, room) {
+  const folded = isFolded(title);
+  grid.hidden = folded;
+  const summary = el("span", { class: "section-summary ml-auto shrink-0 normal-case tracking-normal font-medium text-[0.8rem] tabular-nums", text: room ? sectionSummary(title) : "" });
+  if (room) summary.dataset.room = title;
+  const chevron = svgIcon(ICONS.down);
+  chevron.setAttribute("class", `size-4 shrink-0 transition-transform ${folded ? "-rotate-90" : ""}`);
+  const button = el("button", {
+    type: "button", "aria-expanded": String(!folded),
+    class: "section-toggle [:where(&)]:[all:unset] flex w-full min-h-6 max-sm:min-h-10 items-center gap-2 cursor-pointer rounded-md hover:text-text focus-visible:outline-3 focus-visible:outline-accent focus-visible:outline-offset-2",
+  }, el("span", { class: "min-w-0 truncate", text: title }), summary, chevron);
+  button.addEventListener("click", () => {
+    const fold = !grid.hidden;
+    setFolded(title, fold);
+    grid.hidden = fold;
+    button.setAttribute("aria-expanded", String(!fold));
+    chevron.classList.toggle("-rotate-90", fold);
+  });
+  return el("h2", {}, button);
+}
+
 function renderAll() {
   // Tout redessiner : les panneaux du tableau aussi, même sans changement.
   forgetPanels();
@@ -472,8 +561,11 @@ function renderAll() {
   const sorted = [...entities.values()].sort(
     (a, b) => first(a) - first(b) || nameOf(a).localeCompare(nameOf(b), "fr"),
   );
-  const section = (title, items) =>
-    el("section", {}, el("h2", { text: title }), el("div", { class: "tile-grid grid [grid-template-columns:repeat(auto-fill,_minmax(min(100%,_200px),_1fr))] [align-items:start] gap-[12px] [@media(min-width:1000px)]:[:not(:where(.o079300))[data-layout=board]_&]:[grid-template-columns:repeat(auto-fill,_minmax(260px,_1fr))] [:not(:where(.o102200)).room-body_&]:[grid-template-columns:1fr] [.room-body_&>*]:[grid-column:1_/_-1] [@media(min-width:1000px)]:[.room-view_.room-body_&>*]:[break-inside:avoid]" }, ...items.map(renderTile)));
+  const section = (title, items, room) => {
+    const grid = el("div", { class: `${TILE_GRID} ${PHONE_LIST}` },
+      ...items.map((state) => (room ? shortenName(renderTile(state), title) : renderTile(state))));
+    return el("section", {}, sectionHead(title, grid, room), grid);
+  };
 
   // Une seule pièce : son nom, un bouton retour, ses appareils.
   const room = view.room === null ? undefined : areas.find((area) => area.name === view.room);
@@ -484,7 +576,7 @@ function renderAll() {
     container.replaceChildren(
       el("section", {},
         el("div", { class: "room-view-head flex items-center gap-3 [:not(:where(.o008200))&_h2]:[font-family:var(--font-display)] [:not(:where(.o008201))&_h2]:text-[1.6rem] [:not(:where(.o008202))&_h2]:font-semibold [:not(:where(.o008203))&_h2]:[letter-spacing:-0.02em] [:not(:where(.o008204))&_h2]:[text-transform:none] [:not(:where(.o008205))&_h2]:text-text" }, back, el("h2", { text: room.name })),
-        el("div", { class: "tile-grid grid [grid-template-columns:repeat(auto-fill,_minmax(min(100%,_200px),_1fr))] [align-items:start] gap-[12px] [@media(min-width:1000px)]:[:not(:where(.o079300))[data-layout=board]_&]:[grid-template-columns:repeat(auto-fill,_minmax(260px,_1fr))] [:not(:where(.o102200)).room-body_&]:[grid-template-columns:1fr] [.room-body_&>*]:[grid-column:1_/_-1] [@media(min-width:1000px)]:[.room-view_.room-body_&>*]:[break-inside:avoid]" }, ...items.map(renderTile)),
+        el("div", { class: `${TILE_GRID} ${PHONE_LIST}` }, ...items.map((state) => shortenName(renderTile(state), room.name))),
       ),
     );
     $("#empty").hidden = true;
@@ -498,7 +590,7 @@ function renderAll() {
       .map((entity) => entities.get(entity.entity_id))
       .filter((state) => state !== undefined);
     items.forEach((s) => used.add(s.entity_id));
-    return { title: area.name, items };
+    return { title: area.name, items, room: true };
   });
   // … puis, par type, les appareils qui ne sont dans aucune pièce.
   const loose = looseStates(sorted).filter((s) => !used.has(s.entity_id));
@@ -522,7 +614,7 @@ function renderAll() {
   container.replaceChildren(
     ...[...areaGroups, ...groups]
       .filter((group) => group.items.length > 0)
-      .map(({ title, items }) => section(title, items)),
+      .map(({ title, items, room }) => section(title, items, room)),
   );
   $("#empty").hidden = entities.size > 0;
 }

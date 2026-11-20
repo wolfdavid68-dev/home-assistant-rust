@@ -389,7 +389,7 @@ function dateTimeTile(state) {
     : hasDate && hasTime ? `${shortDate.format(new Date(`${datePart}T12:00:00`))} à ${timePart.slice(0, 5)}`
     : hasDate ? shortDate.format(new Date(`${datePart}T12:00:00`))
     : state.state.slice(0, 5);
-  return el("div", { id: tileId(state.entity_id), class: "tile sensor" }, tileHead(state, ICONS.timer, shown), el("div", { class: "add-when flex gap-2 [flex:1_1_100%] [:not(:where(.o017900))&_input]:flex-1 [:not(:where(.o017901))&_input]:min-w-0" }, ...inputs));
+  return el("div", { id: tileId(state.entity_id), class: "tile sensor" }, tileHead(state, ICONS.timer, shown), el("div", { class: "add-when flex flex-wrap min-w-0 gap-2 [flex:1_1_100%] [&_input]:basis-[8rem] [:not(:where(.o017900))&_input]:flex-1 [:not(:where(.o017901))&_input]:min-w-0" }, ...inputs));
 }
 
 function scheduleTile(state) {
@@ -661,7 +661,7 @@ function calendarTile(state) {
     const sent = await callService("calendar", "create_event", { entity_id: state.entity_id, summary, ...data });
     if (sent) time.value = "";
     return sent;
-  }, [el("div", { class: "add-when flex gap-2 [flex:1_1_100%] [:not(:where(.o017900))&_input]:flex-1 [:not(:where(.o017901))&_input]:min-w-0" }, day, time)]);
+  }, [el("div", { class: "add-when flex flex-wrap min-w-0 gap-2 [flex:1_1_100%] [&_input]:basis-[8rem] [:not(:where(.o017900))&_input]:flex-1 [:not(:where(.o017901))&_input]:min-w-0" }, day, time)]);
   return el(
     "div",
     { id: tileId(state.entity_id), class: `tile wide-tile${current ? " on" : ""}` },

@@ -11,14 +11,14 @@
 // change. Styles en classes Tailwind ; pas d'innerHTML. Chargé après hub-v4.js.
 "use strict";
 
-const HUB_V4_ROW = "flex items-center gap-3 min-h-12 px-3 py-2 rounded-[16px] bg-white/6";
-const HUB_V4_ICON_BTN = "grid place-items-center size-11 shrink-0 p-0 rounded-full border-0 bg-white/8 text-inherit "
-  + "cursor-pointer transition-colors hover:bg-white/14 disabled:opacity-35 disabled:cursor-default [&_svg]:size-5 "
+const HUB_V4_ROW = "flex items-center gap-3 min-h-12 px-3 py-2 rounded-[16px] bg-voile/6";
+const HUB_V4_ICON_BTN = "grid place-items-center size-11 shrink-0 p-0 rounded-full border-0 bg-voile/8 text-inherit "
+  + "cursor-pointer transition-colors hover:bg-voile/14 disabled:opacity-35 disabled:cursor-default [&_svg]:size-5 "
   + HUB_V4_FOCUS;
-const HUB_V4_INPUT = "w-full min-h-12 px-4 rounded-[16px] border-0 bg-white/8 text-[15px] text-inherit "
-  + "placeholder:text-[rgb(226_224_244/0.5)] [color-scheme:dark] " + HUB_V4_FOCUS;
-const HUB_V4_CHIP = "min-h-10 px-3 rounded-full border-0 bg-white/8 text-[13px] text-inherit cursor-pointer "
-  + "transition-colors hover:bg-white/14 " + HUB_V4_FOCUS;
+const HUB_V4_INPUT = "w-full min-h-12 px-4 rounded-[16px] border-0 bg-voile/8 text-[15px] text-inherit "
+  + "placeholder:text-v-mute/80 [color-scheme:dark] " + HUB_V4_FOCUS;
+const HUB_V4_CHIP = "min-h-10 px-3 rounded-full border-0 bg-voile/8 text-[13px] text-inherit cursor-pointer "
+  + "transition-colors hover:bg-voile/14 " + HUB_V4_FOCUS;
 // Un « + » et une coche, en traits (comme ICONS).
 const HUB_V4_MORE_ICONS = { plus: ["M12 5v14", "M5 12h14"] };
 
@@ -76,13 +76,13 @@ function hubV4Music() {
   const img = el("img", { alt: "", decoding: "async", draggable: "false", class: "absolute inset-0 size-full object-cover" });
   const art = el("div", {
     class: "relative grid place-items-center h-40 rounded-[20px] overflow-hidden "
-      + "bg-[radial-gradient(circle_at_30%_20%,rgb(185_163_255/0.45),rgb(16_18_42/0.6))] text-[#b9a3ff] [&>svg]:size-14 [&>svg]:opacity-60",
+      + "bg-[radial-gradient(circle_at_30%_20%,rgb(185_163_255/0.45),rgb(16_18_42/0.6))] text-v-violet [&>svg]:size-14 [&>svg]:opacity-60",
     "aria-hidden": "true",
   }, svgIcon(ICONS.music), img);
   const title = el("b", { class: "text-[17px] font-semibold truncate" });
   const artist = el("span", { class: `text-[13px] ${HUB_V4_MUTE} truncate` });
-  const progress = el("div", { class: "relative h-1.5 rounded-full bg-white/10 overflow-hidden", role: "img" },
-    el("span", { class: "absolute inset-y-0 left-0 w-(--p) rounded-full bg-[#b9a3ff]" }));
+  const progress = el("div", { class: "relative h-1.5 rounded-full bg-voile/10 overflow-hidden", role: "img" },
+    el("span", { class: "absolute inset-y-0 left-0 w-(--p) rounded-full bg-v-violet" }));
   const at = el("span");
   const length = el("span");
   const times = el("p", { class: `m-0 flex justify-between text-[12px] ${HUB_V4_MUTE}` }, at, length);
@@ -106,10 +106,10 @@ function hubV4Music() {
   const volumeValue = el("b", { class: "relative text-[14px] font-semibold" });
   const range = el("input", { type: "range", min: "0", max: "100", step: "1", "aria-label": "Volume", class: HUB_V4_RANGE });
   const volume = el("label", {
-    class: `relative flex items-center justify-between h-12 px-4 rounded-[16px] bg-white/8 overflow-hidden ${HUB_V4_TRACK}`,
+    class: `relative flex items-center justify-between h-12 px-4 rounded-[16px] bg-voile/8 overflow-hidden ${HUB_V4_TRACK}`,
   },
   el("span", {
-    class: "absolute inset-y-0 left-0 w-(--v) bg-linear-to-r from-[rgb(185_163_255/0.25)] to-[rgb(185_163_255/0.7)] "
+    class: "absolute inset-y-0 left-0 w-(--v) bg-linear-to-r from-v-violet/25 to-v-violet/70 "
       + "transition-[width] motion-reduce:transition-none",
     "aria-hidden": "true",
   }),
@@ -142,10 +142,10 @@ function hubV4Music() {
       const playing = player.state === "playing";
       const node = el("button", {
         type: "button", "aria-pressed": String(player.entity_id === id),
-        class: "flex items-center gap-2.5 min-h-11 px-3 rounded-[14px] border-0 bg-white/6 text-left text-[14px] text-inherit "
-          + "cursor-pointer transition-colors hover:bg-white/10 aria-pressed:bg-[rgb(185_163_255/0.2)] " + HUB_V4_FOCUS,
+        class: "flex items-center gap-2.5 min-h-11 px-3 rounded-[14px] border-0 bg-voile/6 text-left text-[14px] text-inherit "
+          + "cursor-pointer transition-colors hover:bg-voile/10 aria-pressed:bg-v-violet/20 " + HUB_V4_FOCUS,
       },
-      el("span", { class: "size-2 shrink-0 rounded-full bg-white/25 data-on:bg-[#b9a3ff]", ...(playing ? { "data-on": "" } : {}) }),
+      el("span", { class: "size-2 shrink-0 rounded-full bg-voile/25 data-on:bg-v-violet", ...(playing ? { "data-on": "" } : {}) }),
       el("span", { class: "flex-1 truncate", text: nameOf(player) }),
       el("span", { class: `text-[12px] ${HUB_V4_MUTE}`, text: playing ? "en cours" : player.state === "paused" ? "en pause" : "" }));
       node.addEventListener("click", () => {
@@ -258,7 +258,7 @@ function hubV4Weather() {
   if (!hubV4Can()) return false;
   const get = () => [...entities.values()].find((s) => domainOf(s) === "weather");
   if (!get()) return false;
-  const icon = el("span", { class: "text-[#9ad8ff] [&_svg]:size-12", "aria-hidden": "true" });
+  const icon = el("span", { class: "text-v-sky [&_svg]:size-12", "aria-hidden": "true" });
   const temp = el("b", { class: "font-titre text-[44px] font-light leading-none" });
   const label = el("b", { class: "text-[15px] font-semibold" });
   const feel = el("span", { class: `text-[13px] ${HUB_V4_MUTE}` });
@@ -296,10 +296,10 @@ function hubV4Weather() {
         el("span", { class: "first-letter:uppercase", text: dayName.format(new Date(`${day.datetime.slice(0, 10)}T12:00`)) }),
         svgIcon(weatherIcon(day.condition)),
         el("span", { class: `text-right ${HUB_V4_MUTE}`, text: `${day.low}°` }),
-        el("span", { class: "relative h-1.5 rounded-full bg-white/10" }, bar),
+        el("span", { class: "relative h-1.5 rounded-full bg-voile/10" }, bar),
         el("span", { class: "font-semibold", text: `${day.high}°` }));
       if (day.rain === null) return [row];
-      return [row, el("li", { class: "pl-[72px] -mt-1 text-[12px] text-[#9ad8ff]", text: `Pluie possible · ${day.rain} %` })];
+      return [row, el("li", { class: "pl-[72px] -mt-1 text-[12px] text-v-sky", text: `Pluie possible · ${day.rain} %` })];
     }));
   };
   hubV4Overlay({
@@ -330,12 +330,12 @@ function hubV4Tempo() {
   if (!hubV4Can() || !entities.get(TEMPO_TODAY)) return false;
   const day = (label) => {
     const dot = el("span", {
-      class: "size-3.5 shrink-0 rounded-full border-2 border-dashed border-white/40 "
-        + "data-[tone=blue]:border-0 data-[tone=blue]:bg-[#5b8cff] data-[tone=white]:border-0 data-[tone=white]:bg-[#f4f2fb] "
+      class: "size-3.5 shrink-0 rounded-full border-2 border-dashed border-voile/40 "
+        + "data-[tone=blue]:border-0 data-[tone=blue]:bg-[#5b8cff] data-[tone=white]:border-0 data-[tone=white]:bg-white data-[tone=white]:ring-1 data-[tone=white]:ring-voile/30 "
         + "data-[tone=red]:border-0 data-[tone=red]:bg-[#ff6b6b]",
     });
     const word = el("b", { class: "text-[20px] font-semibold" });
-    const node = el("div", { class: "flex flex-col gap-1 p-3 rounded-[18px] bg-white/6" },
+    const node = el("div", { class: "flex flex-col gap-1 p-3 rounded-[18px] bg-voile/6" },
       el("span", { class: `text-[13px] ${HUB_V4_MUTE}`, text: label }), el("span", { class: "flex items-center gap-2" }, dot, word));
     return { node, dot, word };
   };
@@ -412,7 +412,7 @@ function hubV4Agenda() {
           const row = el("button", {
             type: "button",
             class: "flex items-center gap-2.5 w-full min-h-11 px-2 rounded-[12px] border-0 bg-transparent text-left text-inherit "
-              + `cursor-pointer transition-colors hover:bg-white/8 ${HUB_V4_FOCUS}`,
+              + `cursor-pointer transition-colors hover:bg-voile/8 ${HUB_V4_FOCUS}`,
           },
           el("span", { class: "w-1 self-stretch my-1.5 shrink-0 rounded-full bg-(--ev)" }),
           el("span", { class: "flex flex-col min-w-0" },
@@ -428,9 +428,9 @@ function hubV4Agenda() {
           });
           return row;
         });
-      return el("li", { class: "grid grid-cols-[44px_1fr] gap-2 items-start p-1.5 rounded-[16px] bg-white/6" },
+      return el("li", { class: "grid grid-cols-[44px_1fr] gap-2 items-start p-1.5 rounded-[16px] bg-voile/6" },
         el("span", { class: `flex flex-col items-center pt-1.5 text-[12px] ${HUB_V4_MUTE}` },
-          dateDay.format(date), el("b", { class: "text-[20px] font-semibold text-[#f4f2fb] leading-tight", text: String(date.getDate()) })),
+          dateDay.format(date), el("b", { class: "text-[20px] font-semibold text-v-ink leading-tight", text: String(date.getDate()) })),
         el("div", { class: "flex flex-col min-w-0" }, ...rows));
     }));
     add.hidden = !calendars.some((c) => c.id === "calendar.maison" && !c.readOnly && canControl(c.state));
@@ -526,7 +526,7 @@ function hubV4Announce() {
   // Où : partout, ou une seule enceinte.
   let where = "";
   const whereLabel = el("b", { class: HUB_V4_LABEL, text: "Où" });
-  const whereBox = el("div", { class: "flex flex-wrap gap-1 p-1 rounded-[16px] bg-white/6", role: "group", "aria-label": "Où" });
+  const whereBox = el("div", { class: "flex flex-wrap gap-1 p-1 rounded-[16px] bg-voile/6", role: "group", "aria-label": "Où" });
   const send = el("button", { type: "submit", class: HUB_V4_MAIN }, svgIcon(ICONS.megaphone), "Annoncer");
   const form = el("form", { class: "flex flex-col gap-2.5" }, input, ideas, whereLabel, whereBox, send);
   form.addEventListener("submit", async (event) => {
@@ -555,7 +555,7 @@ function hubV4Announce() {
       const node = el("button", {
         type: "button", "aria-pressed": String(id === where),
         class: "flex-1 min-h-10 px-3 rounded-[12px] border-0 bg-transparent text-[13px] font-medium text-inherit cursor-pointer "
-          + `transition-colors hover:bg-white/8 aria-pressed:bg-[#9ad8ff] aria-pressed:text-[#0b1a2b] ${HUB_V4_FOCUS}`,
+          + `transition-colors hover:bg-voile/8 aria-pressed:bg-[#9ad8ff] aria-pressed:text-[#0b1a2b] ${HUB_V4_FOCUS}`,
         text,
       });
       node.addEventListener("click", () => {
@@ -607,8 +607,8 @@ function hubV4Bell() {
         const urgent = approval || (a.kind === "repair" && a.severity === "error");
         const created = new Date(a.created_at);
         const icon = el("span", {
-          class: "grid place-items-center size-9 shrink-0 rounded-full bg-white/8 [&_svg]:size-[18px] "
-            + "data-urgent:bg-[rgb(255_191_94/0.2)] data-urgent:text-[#ffbf5e]",
+          class: "grid place-items-center size-9 shrink-0 rounded-full bg-voile/8 [&_svg]:size-[18px] "
+            + "data-urgent:bg-v-amber/20 data-urgent:text-v-amber",
           "aria-hidden": "true", ...(urgent ? { "data-urgent": "" } : {}),
         }, svgIcon(approval ? ICONS.shield : a.kind === "repair" ? ICONS.gauge : ICONS.bell));
         const text = el("p", { class: "m-0 flex flex-col flex-1 min-w-0" },
@@ -617,7 +617,7 @@ function hubV4Bell() {
         const time = el("time", { class: `shrink-0 self-start pt-1 text-[12px] ${HUB_V4_MUTE}`, text: hubV4Clock(created) });
         if (approval) {
           const row = el("button", {
-            type: "button", class: `${HUB_V4_ROW} w-full border-0 text-left text-inherit cursor-pointer hover:bg-white/10 ${HUB_V4_FOCUS}`,
+            type: "button", class: `${HUB_V4_ROW} w-full border-0 text-left text-inherit cursor-pointer hover:bg-voile/10 ${HUB_V4_FOCUS}`,
           }, icon, text, time);
           row.addEventListener("click", () => hubV4Approval());
           return el("li", {}, row);
@@ -669,7 +669,7 @@ function hubV4Assist() {
       : lines.map((line) => el("p", {
         class: "m-0 max-w-[85%] px-3 py-2 rounded-[16px] text-[14px] leading-snug [overflow-wrap:anywhere] "
           + "data-[from=me]:self-end data-[from=me]:rounded-br-[4px] data-[from=me]:bg-[#9ad8ff] data-[from=me]:text-[#0b1a2b] "
-          + "data-[from=home]:self-start data-[from=home]:rounded-bl-[4px] data-[from=home]:bg-white/10 "
+          + "data-[from=home]:self-start data-[from=home]:rounded-bl-[4px] data-[from=home]:bg-voile/10 "
           + "data-error:shadow-[inset_3px_0_0_#ff6b6b]",
         "data-from": line.from, ...(line.error ? { "data-error": "" } : {}), text: line.text,
       }))));
@@ -746,12 +746,12 @@ function hubV4People() {
       swap(list, ...people.map((state) => {
         const name = nameOf(state);
         const avatar = el("span", {
-          class: "relative grid place-items-center size-10 shrink-0 rounded-full bg-(--pc) text-[16px] font-semibold text-[#14122a] "
+          class: "relative grid place-items-center size-10 shrink-0 rounded-full bg-(--pc) text-[16px] font-semibold text-scrim "
             + "data-away:opacity-45",
           "aria-hidden": "true", ...(state.state === "home" ? {} : { "data-away": "" }),
         }, name.charAt(0).toUpperCase(), el("span", {
-          class: "absolute -right-0.5 -bottom-0.5 size-3 rounded-full border-2 border-[#14122a] bg-[#6fdc9c] "
-            + "[[data-away]>&]:bg-[rgb(226_224_244/0.4)]",
+          class: "absolute -right-0.5 -bottom-0.5 size-3 rounded-full border-2 border-scrim bg-v-ok "
+            + "[[data-away]>&]:bg-v-mute/50",
         }));
         avatar.style.setProperty("--pc", personColor(name));
         return el("li", { class: HUB_V4_ROW }, avatar, el("p", { class: "m-0 flex flex-col min-w-0" },
@@ -798,8 +798,8 @@ function hubV4Machine(entityId) {
   const sub = el("span", { class: `text-[13px] ${HUB_V4_MUTE} truncate` });
   const end = el("b", { class: "font-titre text-[44px] font-light leading-none" });
   const left = el("span", { class: `text-[13px] ${HUB_V4_MUTE}` });
-  const bar = el("div", { class: "relative h-2 rounded-full bg-white/10 overflow-hidden" },
-    el("span", { class: "absolute inset-y-0 left-0 w-(--mp) rounded-full bg-[#9ad8ff] transition-[width] motion-reduce:transition-none" }));
+  const bar = el("div", { class: "relative h-2 rounded-full bg-voile/10 overflow-hidden" },
+    el("span", { class: "absolute inset-y-0 left-0 w-(--mp) rounded-full bg-v-sky transition-[width] motion-reduce:transition-none" }));
   hubV4Overlay({
     icon: ICONS.washer,
     tone: "sky",
@@ -848,7 +848,7 @@ function hubV4Water() {
     class: "absolute inset-x-0 bottom-0 h-(--lv) bg-linear-to-t from-[#ff9a6b] to-[#ffbf5e] transition-[height] motion-reduce:transition-none",
   });
   const tank = el("div", {
-    class: "relative w-16 h-28 shrink-0 rounded-[18px_18px_14px_14px] bg-white/8 overflow-hidden shadow-[inset_0_0_0_1px_rgb(255_255_255/0.12)]",
+    class: "relative w-16 h-28 shrink-0 rounded-[18px_18px_14px_14px] bg-voile/8 overflow-hidden shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--v3-voile)_12%,transparent)]",
     role: "img",
   }, fill);
   const temp = el("b", { class: "font-titre text-[44px] font-light leading-none" });
@@ -865,7 +865,7 @@ function hubV4Water() {
   const minus = nudge(-1);
   const plus = nudge(1);
   const modeLabel = el("b", { class: HUB_V4_LABEL, text: "Mode" });
-  const modes = el("div", { class: "grid grid-flow-col auto-cols-fr gap-1 p-1 rounded-[16px] bg-white/6", role: "group", "aria-label": "Mode" });
+  const modes = el("div", { class: "grid grid-flow-col auto-cols-fr gap-1 p-1 rounded-[16px] bg-voile/6", role: "group", "aria-label": "Mode" });
   hubV4Overlay({
     icon: ICONS.flame,
     title: "Eau chaude",
@@ -904,7 +904,7 @@ function hubV4Water() {
         const node = el("button", {
           type: "button", "aria-pressed": String(a.preset_mode === preset),
           class: "min-h-10 px-2 rounded-[12px] border-0 bg-transparent text-[13px] font-medium text-inherit cursor-pointer "
-            + "transition-colors hover:bg-white/8 aria-pressed:bg-[#ffbf5e] aria-pressed:text-[#1f1305] "
+            + "transition-colors hover:bg-voile/8 aria-pressed:bg-[#ffbf5e] aria-pressed:text-[#1f1305] "
             + `disabled:opacity-40 disabled:cursor-default ${HUB_V4_FOCUS}`,
           text: lookup(PRESET_LABELS, preset) ?? `${preset.charAt(0).toUpperCase()}${preset.slice(1)}`,
         });
@@ -984,8 +984,8 @@ function hubV4Security() {
           el("span", { class: `shrink-0 ${HUB_V4_MUTE} [&_svg]:size-5`, "aria-hidden": "true" }, svgIcon(iconOf(state))),
           el("b", { class: "flex-1 min-w-0 text-[14px] font-medium truncate", text: nameOf(state) }),
           el("span", {
-            class: "shrink-0 px-2.5 py-1 rounded-full text-[12px] font-semibold bg-[rgb(111_220_156/0.16)] text-[#6fdc9c] "
-              + "data-issue:bg-[rgb(255_107_107/0.18)] data-issue:text-[#ff8f8f]",
+            class: "shrink-0 px-2.5 py-1 rounded-full text-[12px] font-semibold bg-v-ok/16 text-v-ok "
+              + "data-issue:bg-v-alert/18 data-issue:text-v-alert",
             ...(issue ? { "data-issue": "" } : {}),
             text: hubV3SecurityWord(state),
           }));

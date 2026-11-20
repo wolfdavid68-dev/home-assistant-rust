@@ -46,6 +46,25 @@
   --color-alert: var(--alert);
   --color-alert-ink: var(--alert-ink);
   --color-alert-soft: var(--alert-soft);
+  /* La palette de l'accueil v3/v4 (hub-v3.css) : deux valeurs, Clair et
+     Sombre. `voile` = voile translucide (blanc la nuit, encre le jour : on
+     l'emploie avec une opacité, `bg-voile/8`) ; `scrim` = fond de panneau
+     (nuit profonde / blanc) ; `v-inverse` = texte posé sur `bg-v-ink`. */
+  --color-v-ink: var(--v3-ink);
+  --color-v-ink2: var(--v3-ink2);
+  --color-v-mute: var(--v3-mute);
+  --color-v-amber: var(--v3-amber);
+  --color-v-amber2: var(--v3-amber2);
+  --color-v-sky: var(--v3-sky);
+  --color-v-heat: var(--v3-heat);
+  --color-v-violet: var(--v3-violet);
+  --color-v-ok: var(--v3-ok);
+  --color-v-pink: var(--v3-pink);
+  --color-v-alert: var(--v3-alert);
+  --color-v-inverse: var(--v3-inverse);
+  --color-v-glass: var(--v3-glass);
+  --color-voile: var(--v3-voile);
+  --color-scrim: var(--v3-scrim);
   /* Noms distincts des variables de l'app (--font-display, --font-mono,
      --shadow-float) : les mêmes noms se référenceraient eux-mêmes. */
   --font-*: initial;

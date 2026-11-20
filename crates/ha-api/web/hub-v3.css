@@ -1,10 +1,16 @@
-/* v3 : accueil « ciel de nuit ». Actif seulement si <html data-hub-style="v3">. */
+/* v3/v4 : l'accueil « ciel ». Actif seulement si <html data-hub-style="v3">.
+   Il suit le thème : ciel de jour en Clair, ciel de nuit en Sombre. */
 
 /* ---------------------------------------------------------------- Jetons et fond */
-:root[data-hub-style="v3"] .hub {
+/* La palette de l'accueil, deux valeurs (Sombre par défaut, Clair plus bas).
+   Posée sur la racine : les écrans v4 hors de .hub (sonnette, incrustations)
+   la lisent aussi. Les classes Tailwind `text-v-ink`, `bg-voile/8`… y renvoient
+   (css/app.css). `--v3-voile` sert aux voiles translucides (blanc la nuit,
+   encre le jour), `--v3-scrim` aux fonds de panneau opaques ou presque. */
+:root {
   --v3-ink: #f4f2fb;
-  --v3-ink2: rgb(236 234 248 / 0.82);
-  --v3-mute: rgb(226 224 244 / 0.66);
+  --v3-ink2: #dcdae9;
+  --v3-mute: #b4b1c9;
   --v3-amber: #ffbf5e;
   --v3-amber2: #ffd9a0;
   --v3-sky: #9ad8ff;
@@ -13,28 +19,55 @@
   --v3-ok: #6fdc9c;
   --v3-pink: #ff9bd2;
   --v3-alert: #ff8f8f;
+  --v3-inverse: #1a1530;
+  --v3-voile: #ffffff;
+  --v3-scrim: #10122a;
+  --v3-glass: color-mix(in srgb, var(--v3-scrim) 56%, transparent);
+  --v3-glass-shadow: inset 0 1px 0 color-mix(in srgb, var(--v3-voile) 9%, transparent), inset 0 0 0 1px color-mix(in srgb, var(--v3-voile) 6%, transparent), 0 1px 1px rgb(0 0 0 / 0.2), 0 18px 40px -18px rgb(0 0 0 / 0.65);
+  --v3-sky-bg:
+    radial-gradient(60% 45% at 22% 18%, rgb(255 178 96 / 0.10), transparent 70%),
+    linear-gradient(180deg, #0a0d1d 0%, #0e1328 40%, #161a36 75%, #1d1f3e 100%);
+}
+:root[data-theme="light"] {
+  --v3-ink: #1c1a17;
+  --v3-ink2: #3d3832;
+  --v3-mute: #5f594f;
+  --v3-amber: #8a5000;
+  --v3-amber2: #7a4600;
+  --v3-sky: #1c5d9c;
+  --v3-heat: #b94716;
+  --v3-violet: #5640bd;
+  --v3-ok: #1b7a50;
+  --v3-pink: #a52f68;
+  --v3-alert: #c2361f;
+  --v3-inverse: #ffffff;
+  --v3-voile: #1c1a17;
+  --v3-scrim: #ffffff;
+  --v3-glass: rgb(255 255 255 / 0.8);
+  --v3-glass-shadow: inset 0 0 0 1px rgb(28 26 23 / 0.07), 0 1px 2px rgb(28 26 23 / 0.06), 0 12px 30px -14px rgb(28 26 23 / 0.18);
+  --v3-sky-bg:
+    radial-gradient(60% 45% at 18% 0%, #fff4df, transparent 70%),
+    linear-gradient(180deg, #edf1f7 0%, #f2efe9 55%, #ece6dc 100%);
+}
+
+:root[data-hub-style="v3"] .hub {
   --v3-ease: cubic-bezier(0.2, 0, 0, 1);
-  --v3-glass: rgb(18 20 46 / 0.52);
-  --v3-glass-shadow: inset 0 1px 0 rgb(255 255 255 / 0.09), inset 0 0 0 1px rgb(255 255 255 / 0.06), 0 1px 1px rgb(0 0 0 / 0.2), 0 18px 40px -18px rgb(0 0 0 / 0.65);
   /* Les jetons de l'appli, redéfinis pour ce fond sombre (les parties reprises en dépendent). */
   --text: var(--v3-ink);
   --muted: var(--v3-mute);
   --ink: var(--v3-ink);
   --card: var(--v3-glass);
-  --card-2: rgb(255 255 255 / 0.06);
+  --card-2: color-mix(in srgb, var(--v3-voile) 6%, transparent);
   --accent: var(--v3-sky);
-  --accent-soft: rgb(154 216 255 / 0.16);
-  --bg: #0d1230;
-  --line: rgb(255 255 255 / 0.1);
+  --accent-soft: color-mix(in srgb, var(--v3-sky) 16%, transparent);
+  --bg: var(--v3-scrim);
+  --line: color-mix(in srgb, var(--v3-voile) 10%, transparent);
   color: var(--v3-ink);
   color-scheme: dark;
   font-family: var(--font);
   -webkit-font-smoothing: antialiased;
   font-variant-numeric: tabular-nums;
-  background:
-    radial-gradient(60% 45% at 22% 18%, rgb(255 178 96 / 0.14), transparent 70%),
-    radial-gradient(50% 40% at 88% 96%, rgb(255 155 210 / 0.08), transparent 70%),
-    linear-gradient(180deg, #070a1c 0%, #0d1230 32%, #1c1a44 62%, #35274f 85%, #4a3157 100%);
+  background: var(--v3-sky-bg);
 }
 
 /* Les éléments masqués restent masqués, même avec un display posé plus bas. */
@@ -66,21 +99,21 @@
 }
 
 /* ---------------------------------------------------------------- Colonne gauche */
-:root[data-hub-style="v3"] .hub .hub-clock { font-family: var(--font); font-size: clamp(56px, 6.6vw, 84px); font-weight: 200; line-height: 1; letter-spacing: -0.045em; }
+:root[data-hub-style="v3"] .hub .hub-clock { font-size: clamp(56px, 6.6vw, 84px); font-weight: 600; font-family: var(--font-display); line-height: 1; letter-spacing: -0.045em; }
 :root[data-hub-style="v3"] .hub .hub-date { color: var(--v3-ink2); }
 :root[data-hub-style="v3"] .hub .hub-v3-hello {
   margin: 24px 0 0;
-  font-family: "Instrument Serif", Georgia, "Noto Serif", serif;
-  font-size: clamp(30px, 3.3vw, 42px);
-  font-weight: 400;
+  font-family: var(--font-display);
+  font-size: clamp(28px, 3vw, 38px);
+  font-weight: 600;
   line-height: 1.02;
   /* Le style de base met les titres h2 en petites capitales : pas ici. */
   text-transform: none;
-  letter-spacing: -0.005em;
+  letter-spacing: -0.03em;
   color: var(--v3-ink);
   text-wrap: balance;
 }
-:root[data-hub-style="v3"] .hub .hub-v3-hello em { display: block; font-style: italic; color: var(--v3-amber2); }
+:root[data-hub-style="v3"] .hub .hub-v3-hello em { display: block; font-style: normal; color: var(--accent); }
 :root[data-hub-style="v3"] .hub .hub-v3-hello a { color: inherit; text-decoration: underline; text-underline-offset: 4px; }
 :root[data-hub-style="v3"] .hub .hub-v3-summary { margin: 0; color: var(--v3-ink2); text-wrap: pretty; }
 
@@ -96,8 +129,8 @@
   padding: 0 12px;
   border: 0;
   border-radius: 14px;
-  background: rgb(255 255 255 / 0.07);
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.06);
+  background: color-mix(in srgb, var(--v3-voile) 7%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v3-voile) 6%, transparent);
   color: var(--v3-ink);
   text-align: left;
   cursor: pointer;
@@ -111,7 +144,7 @@
 :root[data-hub-style="v3"] .hub .hub-scene.t-night .hub-scene-icon { color: var(--v3-violet); }
 :root[data-hub-style="v3"] .hub .hub-scene.t-cine .hub-scene-icon { color: var(--v3-pink); }
 :root[data-hub-style="v3"] .hub .hub-scene.t-morning .hub-scene-icon { color: var(--v3-ok); }
-:root[data-hub-style="v3"] .hub .hub-scene.on { background: rgb(255 255 255 / 0.13); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.16); }
+:root[data-hub-style="v3"] .hub .hub-scene.on { background: color-mix(in srgb, var(--v3-voile) 13%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v3-voile) 16%, transparent); }
 :root[data-hub-style="v3"] .hub .hub-scene.pending { opacity: 0.5; }
 
 /* Musique : une tuile de verre, collée en bas de la colonne. */
@@ -149,7 +182,7 @@
   border-radius: 10px;
   color: #21133f;
   background: linear-gradient(140deg, #6d4fb0, #b9a3ff 58%, #ff9bd2);
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v3-voile) 12%, transparent);
 }
 :root[data-hub-style="v3"] .hub .hub-v3-art svg { width: 22px; height: 22px; }
 :root[data-hub-style="v3"] .hub .hub-v3-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
@@ -170,7 +203,7 @@
   color: var(--v3-ink);
   cursor: pointer;
 }
-:root[data-hub-style="v3"] .hub .hub-v3-play { background: rgb(255 255 255 / 0.1); }
+:root[data-hub-style="v3"] .hub .hub-v3-play { background: color-mix(in srgb, var(--v3-voile) 10%, transparent); }
 :root[data-hub-style="v3"] .hub .hub-v3-play:disabled,
 :root[data-hub-style="v3"] .hub .hub-v3-next:disabled { opacity: 0.4; cursor: default; }
 
@@ -191,7 +224,7 @@
 :root[data-hub-style="v3"] .hub .hub-weather-now span { font-size: 13px; line-height: 1.4; color: var(--v3-ink2); }
 :root[data-hub-style="v3"] .hub .hub-weather-now small { color: var(--v3-mute); }
 :root[data-hub-style="v3"] .hub .hub-forecast { gap: 4px; margin-top: 12px; }
-:root[data-hub-style="v3"] .hub .hub-forecast li { gap: 1px; padding: 6px 0; border-radius: 12px; background: rgb(255 255 255 / 0.04); font-size: 13px; color: var(--v3-mute); }
+:root[data-hub-style="v3"] .hub .hub-forecast li { gap: 1px; padding: 6px 0; border-radius: 12px; background: color-mix(in srgb, var(--v3-voile) 4%, transparent); font-size: 13px; color: var(--v3-mute); }
 :root[data-hub-style="v3"] .hub .hub-forecast b { font-size: 14px; font-weight: 500; color: var(--v3-ink); }
 
 /* Tempo : une rangée sans carte. */
@@ -199,14 +232,14 @@
 :root[data-hub-style="v3"] .hub .hub-v3-tempo-label { color: var(--v3-mute); }
 :root[data-hub-style="v3"] .hub .tempo-badge { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: 999px; font-size: 13px; font-weight: 600; line-height: 1; }
 :root[data-hub-style="v3"] .hub .tempo-badge.tempo-blue { background: rgb(91 141 255 / 0.16); color: var(--v3-ink); }
-:root[data-hub-style="v3"] .hub .tempo-badge.tempo-white { background: rgb(255 255 255 / 0.14); color: var(--v3-ink); }
-:root[data-hub-style="v3"] .hub .tempo-badge.tempo-red { background: rgb(255 99 99 / 0.2); color: #ffd0d0; }
-:root[data-hub-style="v3"] .hub .tempo-badge.tempo-unknown { background: rgb(255 255 255 / 0.08); color: var(--v3-mute); }
+:root[data-hub-style="v3"] .hub .tempo-badge.tempo-white { background: color-mix(in srgb, var(--v3-voile) 14%, transparent); color: var(--v3-ink); }
+:root[data-hub-style="v3"] .hub .tempo-badge.tempo-red { background: color-mix(in srgb, var(--v3-alert) 20%, transparent); color: var(--v3-alert); }
+:root[data-hub-style="v3"] .hub .tempo-badge.tempo-unknown { background: color-mix(in srgb, var(--v3-voile) 8%, transparent); color: var(--v3-mute); }
 
 /* Agenda : pas de hauteur forcée, la colonne défile. Barre de couleur par rendez-vous. */
 :root[data-hub-style="v3"] .hub .hub-agenda { flex: none; overflow: visible; gap: 2px; }
 :root[data-hub-style="v3"] .hub .hub-event { min-height: 44px; padding: 8px; border-radius: 12px; color: var(--v3-ink); }
-:root[data-hub-style="v3"] .hub .hub-event.next { background: rgb(154 216 255 / 0.1); }
+:root[data-hub-style="v3"] .hub .hub-event.next { background: color-mix(in srgb, var(--v3-sky) 10%, transparent); }
 :root[data-hub-style="v3"] .hub .hub-event-bar { width: 3px; background: var(--ev, var(--v3-pink)); }
 :root[data-hub-style="v3"] .hub .hub-event-time { font-family: var(--font-mono); font-size: 13px; color: var(--v3-mute); }
 :root[data-hub-style="v3"] .hub .hub-event-text small { font-size: 13px; color: var(--v3-mute); }
@@ -236,10 +269,10 @@
   font-size: 12px;
   font-weight: 600;
   color: var(--v3-ink2);
-  background: rgb(255 255 255 / 0.1);
+  background: color-mix(in srgb, var(--v3-voile) 10%, transparent);
 }
-:root[data-hub-style="v3"] .hub .hub-v3-heat-chip.running { color: #ffd2bd; background: rgb(255 139 94 / 0.18); }
-:root[data-hub-style="v3"] .hub .hub-v3-heat-chip.alert { color: #ffc4c4; background: rgb(255 99 99 / 0.22); }
+:root[data-hub-style="v3"] .hub .hub-v3-heat-chip.running { color: var(--v3-heat); background: color-mix(in srgb, var(--v3-heat) 18%, transparent); }
+:root[data-hub-style="v3"] .hub .hub-v3-heat-chip.alert { color: var(--v3-alert); background: color-mix(in srgb, var(--v3-alert) 22%, transparent); }
 :root[data-hub-style="v3"] .hub .hub-v3-zone {
   display: flex;
   align-items: center;
@@ -251,7 +284,7 @@
   padding: 8px 12px;
   border: 0;
   border-radius: 14px;
-  background: rgb(255 255 255 / 0.05);
+  background: color-mix(in srgb, var(--v3-voile) 5%, transparent);
   color: var(--v3-ink);
   font: inherit;
   text-align: left;
@@ -275,7 +308,7 @@
   backdrop-filter: blur(20px) saturate(150%);
   box-shadow: var(--v3-glass-shadow);
 }
-:root[data-hub-style="v3"] .hub .hub-alert.hub-pill[role] { background: rgb(255 152 0 / 0.18); color: #ffd08a; }
+:root[data-hub-style="v3"] .hub .hub-alert.hub-pill[role] { background: color-mix(in srgb, var(--v3-amber) 18%, transparent); color: var(--v3-amber); }
 :root[data-hub-style="v3"] .hub .hub-alert b { color: var(--v3-ink); }
 :root[data-hub-style="v3"] .hub .hub-live {
   height: 32px;
@@ -283,14 +316,14 @@
   border-radius: 999px;
   font-size: 13px;
   color: var(--v3-ink2);
-  background: rgb(111 220 156 / 0.1);
-  box-shadow: inset 0 0 0 1px rgb(111 220 156 / 0.22);
+  background: color-mix(in srgb, var(--v3-ok) 10%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v3-ok) 22%, transparent);
 }
 :root[data-hub-style="v3"] .hub .hub-live i { width: 7px; height: 7px; }
 :root[data-hub-style="v3"] .hub .hub-live i.on { background: var(--v3-ok); animation: hub-v3-live 2.4s ease-out infinite; }
 @keyframes hub-v3-live {
-  from { box-shadow: 0 0 0 0 rgb(111 220 156 / 0.6); }
-  to { box-shadow: 0 0 0 8px rgb(111 220 156 / 0); }
+  from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--v3-ok) 60%, transparent); }
+  to { box-shadow: 0 0 0 8px color-mix(in srgb, var(--v3-ok) 0%, transparent); }
 }
 :root[data-hub-style="v3"] .hub .hub-v3-actions { display: flex; align-items: center; gap: 6px; }
 :root[data-hub-style="v3"] .hub .hub-v3-ib {
@@ -325,7 +358,7 @@
   line-height: 1;
   color: #2a1406;
   background: var(--v3-amber);
-  box-shadow: 0 0 0 2px rgb(12 14 36 / 0.9);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--v3-scrim) 90%, transparent);
 }
 /* Avatar : le disque est peint derrière la lettre. */
 :root[data-hub-style="v3"] .hub .hub-v3-avatar {
@@ -396,8 +429,8 @@
 }
 :root[data-hub-style="v3"] .hub .hub-v3-seg::before { content: ""; position: absolute; inset: -4px 0; }
 :root[data-hub-style="v3"] .hub .hub-v3-seg[aria-pressed="true"] { color: var(--v3-ink); }
-:root[data-hub-style="v3"] .hub .hub-v3-sd { flex: none; width: 6px; height: 6px; border-radius: 50%; background: rgb(255 255 255 / 0.7); }
-:root[data-hub-style="v3"] .hub .hub-v3-seg[data-lens="vivant"] .hub-v3-sd { background: #ffffff; }
+:root[data-hub-style="v3"] .hub .hub-v3-sd { flex: none; width: 6px; height: 6px; border-radius: 50%; background: color-mix(in srgb, var(--v3-voile) 70%, transparent); }
+:root[data-hub-style="v3"] .hub .hub-v3-seg[data-lens="vivant"] .hub-v3-sd { background: var(--v3-ink); }
 :root[data-hub-style="v3"] .hub .hub-v3-seg[data-lens="lumieres"] .hub-v3-sd { background: var(--v3-amber); }
 :root[data-hub-style="v3"] .hub .hub-v3-seg[data-lens="volets"] .hub-v3-sd { background: var(--v3-sky); }
 :root[data-hub-style="v3"] .hub .hub-v3-seg[data-lens="chauffage"] .hub-v3-sd { background: var(--v3-heat); }
@@ -411,17 +444,17 @@
   height: 36px;
   border-radius: 14px;
   pointer-events: none;
-  background: rgb(255 255 255 / 0.13);
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1);
+  background: color-mix(in srgb, var(--v3-voile) 13%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v3-voile) 10%, transparent);
   transform: translateX(calc(var(--i, 0) * var(--v3-seg)));
   transition: transform 0.5s var(--v3-ease), background-color 0.5s var(--v3-ease);
 }
-:root[data-hub-style="v3"] .hub .hub-v3-lens[data-lens="vivant"] .hub-v3-seg-ind { background-color: rgb(255 255 255 / 0.13); }
-:root[data-hub-style="v3"] .hub .hub-v3-lens[data-lens="lumieres"] .hub-v3-seg-ind { background-color: rgb(255 191 94 / 0.24); }
-:root[data-hub-style="v3"] .hub .hub-v3-lens[data-lens="volets"] .hub-v3-seg-ind { background-color: rgb(154 216 255 / 0.22); }
-:root[data-hub-style="v3"] .hub .hub-v3-lens[data-lens="chauffage"] .hub-v3-seg-ind { background-color: rgb(255 139 94 / 0.24); }
-:root[data-hub-style="v3"] .hub .hub-v3-lens[data-lens="musique"] .hub-v3-seg-ind { background-color: rgb(185 163 255 / 0.24); }
-:root[data-hub-style="v3"] .hub .hub-v3-lens[data-lens="securite"] .hub-v3-seg-ind { background-color: rgb(111 220 156 / 0.22); }
+:root[data-hub-style="v3"] .hub .hub-v3-lens[data-lens="vivant"] .hub-v3-seg-ind { background-color: color-mix(in srgb, var(--v3-voile) 13%, transparent); }
+:root[data-hub-style="v3"] .hub .hub-v3-lens[data-lens="lumieres"] .hub-v3-seg-ind { background-color: color-mix(in srgb, var(--v3-amber) 24%, transparent); }
+:root[data-hub-style="v3"] .hub .hub-v3-lens[data-lens="volets"] .hub-v3-seg-ind { background-color: color-mix(in srgb, var(--v3-sky) 22%, transparent); }
+:root[data-hub-style="v3"] .hub .hub-v3-lens[data-lens="chauffage"] .hub-v3-seg-ind { background-color: color-mix(in srgb, var(--v3-heat) 24%, transparent); }
+:root[data-hub-style="v3"] .hub .hub-v3-lens[data-lens="musique"] .hub-v3-seg-ind { background-color: color-mix(in srgb, var(--v3-violet) 24%, transparent); }
+:root[data-hub-style="v3"] .hub .hub-v3-lens[data-lens="securite"] .hub-v3-seg-ind { background-color: color-mix(in srgb, var(--v3-ok) 22%, transparent); }
 /* Paliers calés sur la colonne du milieu : 88 px tient dès 1270 px d'écran,
    72 px dès 1076 px, 62 px (sans les points de couleur) dès 1016 px. */
 @media (max-width: 1279px) {
@@ -438,35 +471,35 @@
 :root[data-hub-style="v3"] .hub :is(.hub-v3-read, .hub-v3-pins, .hub-v3-lit-rooms) {
   --v3-lens: var(--v3-amber);
   --v3-lens-ink: #26170a;
-  --v3-lens-ring: rgb(255 191 94 / 0.22);
+  --v3-lens-ring: color-mix(in srgb, var(--v3-amber) 22%, transparent);
   --v3-lens-glow: rgb(255 160 60 / 0.8);
   --v3-lens-hover: #ffcb78;
 }
 :root[data-hub-style="v3"] .hub :is(.hub-v3-read, .hub-v3-pins, .hub-v3-lit-rooms)[data-lens="volets"] {
   --v3-lens: var(--v3-sky);
   --v3-lens-ink: #0a1f2e;
-  --v3-lens-ring: rgb(154 216 255 / 0.22);
+  --v3-lens-ring: color-mix(in srgb, var(--v3-sky) 22%, transparent);
   --v3-lens-glow: rgb(90 180 255 / 0.7);
   --v3-lens-hover: #b5e3ff;
 }
 :root[data-hub-style="v3"] .hub :is(.hub-v3-read, .hub-v3-pins, .hub-v3-lit-rooms)[data-lens="chauffage"] {
   --v3-lens: var(--v3-heat);
   --v3-lens-ink: #2a1206;
-  --v3-lens-ring: rgb(255 139 94 / 0.22);
+  --v3-lens-ring: color-mix(in srgb, var(--v3-heat) 22%, transparent);
   --v3-lens-glow: rgb(255 110 60 / 0.75);
   --v3-lens-hover: #ffa47f;
 }
 :root[data-hub-style="v3"] .hub :is(.hub-v3-read, .hub-v3-pins, .hub-v3-lit-rooms)[data-lens="musique"] {
   --v3-lens: var(--v3-violet);
   --v3-lens-ink: #1c1238;
-  --v3-lens-ring: rgb(185 163 255 / 0.22);
+  --v3-lens-ring: color-mix(in srgb, var(--v3-violet) 22%, transparent);
   --v3-lens-glow: rgb(150 120 255 / 0.7);
   --v3-lens-hover: #cbb9ff;
 }
 :root[data-hub-style="v3"] .hub :is(.hub-v3-read, .hub-v3-pins, .hub-v3-lit-rooms)[data-lens="securite"] {
   --v3-lens: var(--v3-ok);
   --v3-lens-ink: #08261a;
-  --v3-lens-ring: rgb(111 220 156 / 0.22);
+  --v3-lens-ring: color-mix(in srgb, var(--v3-ok) 22%, transparent);
   --v3-lens-glow: rgb(70 200 130 / 0.7);
   --v3-lens-hover: #8fe6b3;
 }
@@ -474,7 +507,7 @@
 :root[data-hub-style="v3"] .hub :is(.hub-v3-read, .hub-v3-pin, .hub-v3-room-chip).alert {
   --v3-lens: var(--v3-alert);
   --v3-lens-ink: #2e0a0a;
-  --v3-lens-ring: rgb(255 143 143 / 0.24);
+  --v3-lens-ring: color-mix(in srgb, var(--v3-alert) 24%, transparent);
   --v3-lens-glow: rgb(255 90 90 / 0.75);
   --v3-lens-hover: #ffa8a8;
 }
@@ -559,9 +592,9 @@
 :root[data-hub-style="v3"] .hub .hub-v3-pin::before { content: ""; position: absolute; inset: -8px -2px; }
 :root[data-hub-style="v3"] .hub .hub-v3-pin svg { width: 15px; height: 15px; stroke-width: 2; }
 :root[data-hub-style="v3"] .hub .hub-v3-pin.zero {
-  background: rgb(20 22 48 / 0.78);
+  background: color-mix(in srgb, var(--v3-scrim) 78%, transparent);
   color: var(--v3-ink2);
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.18);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v3-voile) 18%, transparent);
 }
 :root[data-hub-style="v3"] .hub .hub-v3-pin.pending { opacity: 0.6; }
 /* Hors Lumières : l'icône garde la couleur de la lentille au repos, le texte peut avoir deux lignes. */
@@ -672,22 +705,22 @@
 }
 :root[data-hub-style="v3"] .hub .hub-views button::before { content: ""; position: absolute; inset: -4px 0; }
 :root[data-hub-style="v3"] .hub .hub-views button[aria-pressed="true"],
-:root[data-hub-style="v3"] .hub .hub-views button.on { background: rgb(255 255 255 / 0.12); color: var(--v3-ink); }
+:root[data-hub-style="v3"] .hub .hub-views button.on { background: color-mix(in srgb, var(--v3-voile) 12%, transparent); color: var(--v3-ink); }
 
 /* ---------------------------------------------------------------- La maison */
 :root[data-hub-style="v3"] .hub .hub-house { inset: 96px 0 56px 0; }
 :root[data-hub-style="v3"] .hub .house-label { transition: opacity 0.5s var(--v3-ease); }
-:root[data-hub-style="v3"] .hub .house-label::before { background: rgb(12 14 36 / 0.9); box-shadow: 0 0 0 1.5px var(--v3-ink); }
+:root[data-hub-style="v3"] .hub .house-label::before { background: color-mix(in srgb, var(--v3-scrim) 90%, transparent); box-shadow: 0 0 0 1.5px var(--v3-ink); }
 :root[data-hub-style="v3"] .hub .house-label::after { background: var(--v3-ink); }
 :root[data-hub-style="v3"] .hub .house-tag {
   padding: 5px 9px 6px;
   border: 0;
   border-radius: 10px;
   color: var(--v3-ink);
-  background: rgb(12 14 36 / 0.66);
+  background: color-mix(in srgb, var(--v3-scrim) 66%, transparent);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1), 0 8px 20px -10px rgb(0 0 0 / 0.8);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v3-voile) 10%, transparent), 0 8px 20px -10px rgb(0 0 0 / 0.8);
 }
 :root[data-hub-style="v3"] .hub .house-label-name { font-size: 11px; color: var(--v3-mute); }
 :root[data-hub-style="v3"] .hub .house-tag strong { font-size: 13px; color: var(--v3-ink); }
@@ -714,14 +747,14 @@
 :root[data-hub-style="v3"] .hub #hub-house[data-lens="securite"] .house-layer:not(.off):not([data-kind="securite"]) { opacity: 0.25; }
 
 /* Ce qui correspond luit de la couleur de la bascule. */
-:root[data-hub-style="v3"] .hub #hub-house[data-lens="lumieres"] .house-label[data-kind="lumieres"] .house-tag { box-shadow: 0 0 0 1px rgb(255 191 94 / 0.55), 0 0 18px rgb(255 191 94 / 0.35); }
-:root[data-hub-style="v3"] .hub #hub-house[data-lens="volets"] .house-label[data-kind="volets"] .house-tag { box-shadow: 0 0 0 1px rgb(154 216 255 / 0.55), 0 0 18px rgb(154 216 255 / 0.35); }
-:root[data-hub-style="v3"] .hub #hub-house[data-lens="chauffage"] .house-label[data-kind="chauffage"] .house-tag { box-shadow: 0 0 0 1px rgb(255 139 94 / 0.55), 0 0 18px rgb(255 139 94 / 0.35); }
-:root[data-hub-style="v3"] .hub #hub-house[data-lens="musique"] .house-label[data-kind="musique"] .house-tag { box-shadow: 0 0 0 1px rgb(185 163 255 / 0.55), 0 0 18px rgb(185 163 255 / 0.35); }
-:root[data-hub-style="v3"] .hub #hub-house[data-lens="securite"] .house-label[data-kind="securite"] .house-tag { box-shadow: 0 0 0 1px rgb(111 220 156 / 0.55), 0 0 18px rgb(111 220 156 / 0.35); }
+:root[data-hub-style="v3"] .hub #hub-house[data-lens="lumieres"] .house-label[data-kind="lumieres"] .house-tag { box-shadow: 0 0 0 1px color-mix(in srgb, var(--v3-amber) 55%, transparent), 0 0 18px color-mix(in srgb, var(--v3-amber) 35%, transparent); }
+:root[data-hub-style="v3"] .hub #hub-house[data-lens="volets"] .house-label[data-kind="volets"] .house-tag { box-shadow: 0 0 0 1px color-mix(in srgb, var(--v3-sky) 55%, transparent), 0 0 18px color-mix(in srgb, var(--v3-sky) 35%, transparent); }
+:root[data-hub-style="v3"] .hub #hub-house[data-lens="chauffage"] .house-label[data-kind="chauffage"] .house-tag { box-shadow: 0 0 0 1px color-mix(in srgb, var(--v3-heat) 55%, transparent), 0 0 18px color-mix(in srgb, var(--v3-heat) 35%, transparent); }
+:root[data-hub-style="v3"] .hub #hub-house[data-lens="musique"] .house-label[data-kind="musique"] .house-tag { box-shadow: 0 0 0 1px color-mix(in srgb, var(--v3-violet) 55%, transparent), 0 0 18px color-mix(in srgb, var(--v3-violet) 35%, transparent); }
+:root[data-hub-style="v3"] .hub #hub-house[data-lens="securite"] .house-label[data-kind="securite"] .house-tag { box-shadow: 0 0 0 1px color-mix(in srgb, var(--v3-ok) 55%, transparent), 0 0 18px color-mix(in srgb, var(--v3-ok) 35%, transparent); }
 /* Les fenêtres des pièces allumées rayonnent. */
 :root[data-hub-style="v3"] .hub #hub-house[data-lens="lumieres"] .house-layer[data-kind="lumieres"]:not(.off) {
-  filter: brightness(1.15) saturate(1.1) drop-shadow(0 0 8px rgb(255 191 94 / 0.55));
+  filter: brightness(1.15) saturate(1.1) drop-shadow(0 0 8px color-mix(in srgb, var(--v3-amber) 55%, transparent));
 }
 
 /* Machine à laver en cours : carte de verre, toujours en pilule. Sa position ne change pas. */
@@ -758,7 +791,7 @@
 :root[data-hub-style="v3"] .hub .hub-dock svg { width: 20px; height: 20px; }
 :root[data-hub-style="v3"] .hub .hub-dock .hub-talk-button { color: var(--v3-sky); background: transparent; }
 /* Écoute en cours : fond bleuté bien visible. */
-:root[data-hub-style="v3"] .hub .hub-dock .hub-talk-button[data-state="listening"] { background: rgb(154 216 255 / 0.22); box-shadow: inset 0 0 0 1px rgb(154 216 255 / 0.4); }
+:root[data-hub-style="v3"] .hub .hub-dock .hub-talk-button[data-state="listening"] { background: color-mix(in srgb, var(--v3-sky) 22%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v3-sky) 40%, transparent); }
 /* La règle du thème a une spécificité élevée : on la dépasse par la fin. */
 :root[data-hub-style="v3"] .hub .hub-dock .hub-say-button[type] { background: transparent; color: var(--v3-amber2); }
 
@@ -770,11 +803,11 @@
 :root[data-hub-style="v3"] .hub :focus-visible { outline: 2px solid var(--v3-sky); outline-offset: 3px; }
 
 @media (hover: hover) {
-  :root[data-hub-style="v3"] .hub :is(.hub-scene:not(.on), .hub-v3-zone, .hub-v3-play, .hub-v3-next, .hub-views button:not([aria-pressed="true"]), .hub-dock button:not(.hub-talk-button)):hover { background-color: rgb(255 255 255 / 0.08); }
-  :root[data-hub-style="v3"] .hub .hub-v3-ib:not(.hub-v3-avatar):hover { background-color: rgb(255 255 255 / 0.12); }
+  :root[data-hub-style="v3"] .hub :is(.hub-scene:not(.on), .hub-v3-zone, .hub-v3-play, .hub-v3-next, .hub-views button:not([aria-pressed="true"]), .hub-dock button:not(.hub-talk-button)):hover { background-color: color-mix(in srgb, var(--v3-voile) 8%, transparent); }
+  :root[data-hub-style="v3"] .hub .hub-v3-ib:not(.hub-v3-avatar):hover { background-color: color-mix(in srgb, var(--v3-voile) 12%, transparent); }
   :root[data-hub-style="v3"] .hub :is(.hub-v3-pin:not(.zero):not(:disabled), .hub-v3-alloff):hover { background-color: var(--v3-lens-hover); }
-  :root[data-hub-style="v3"] .hub .hub-v3-pin.zero:not(:disabled):hover { background-color: rgb(34 36 70 / 0.86); }
-  :root[data-hub-style="v3"] .hub .hub-v3-room-chip:not(:disabled):hover { background-color: rgb(255 255 255 / 0.08); }
+  :root[data-hub-style="v3"] .hub .hub-v3-pin.zero:not(:disabled):hover { background-color: color-mix(in srgb, var(--v3-scrim) 86%, transparent); }
+  :root[data-hub-style="v3"] .hub .hub-v3-room-chip:not(:disabled):hover { background-color: color-mix(in srgb, var(--v3-voile) 8%, transparent); }
 }
 
 /* ---------------------------------------------------------------- Entrée animée */
@@ -803,3 +836,5 @@
 .hub-style-pick select { width: 100%; }
 /* Les pastilles du dessin ne se montrent qu'en v3, sur l'accueil. */
 .hub-v3-pins { display: none; }
+
+:root[data-hub-style="v3"][data-theme="light"] .hub { color-scheme: light; }

@@ -340,8 +340,14 @@ function heatMode(state) {
   if (state.state === "off") return "Arrêt";
   if (a.derogation === true) return finite(a.derogation_minutes) ? `Manuel · ${a.derogation_minutes} min` : "Manuel";
   if (typeof a.preset_mode === "string") return lookup(PRESET_LABELS, a.preset_mode) ?? a.preset_mode;
-  return statusText(state);
+  return lookup(HVAC_LABELS, state.state) ?? statusText(state);
 }
+
+// Les modes d'un thermostat (« heat » ne s'affiche pas tel quel).
+const HVAC_LABELS = {
+  heat: "Chauffe", cool: "Climatise", heat_cool: "Automatique", auto: "Automatique",
+  dry: "Déshumidifie", fan_only: "Ventilation",
+};
 
 function heatingDial(state) {
   const a = state.attributes;
