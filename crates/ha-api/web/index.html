@@ -128,7 +128,7 @@
         <section id="board-heating" class="board-heating hidden [[data-theme|=plan][data-layout=board]_&]:[box-shadow:0_0_0_1.25px_var(--ink)] [[data-theme|=plan][data-layout=board]_&]:[border-radius:6px]" aria-label="Chauffage" hidden></section>
         <!-- Mise en page « tableau » : les courbes de l'onglet (house.js) -->
         <section id="board-charts" class="board-charts hidden [[data-layout=board]_&:not([hidden])]:grid [[data-layout=board]_&:not([hidden])]:gap-[8px]" aria-label="Courbes" hidden></section>
-        <nav id="scenes" class="scenes flex flex-wrap gap-[8px]" aria-label="Scènes et scripts" hidden></nav>
+        <nav id="scenes" class="scenes flex flex-wrap gap-[8px] max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:snap-x max-sm:[scrollbar-width:none] max-sm:-mx-4 max-sm:px-4 max-sm:scroll-px-4 max-sm:[&>.scene]:flex-none max-sm:[&>.scene]:snap-start max-sm:[&>.scene]:min-h-[42px]" aria-label="Scènes et scripts" hidden></nav>
       </aside>
       <!-- Mise en page « tableau » (styles plan et maquette, house.js) : le
            dessin de la maison, ses repères et ses boutons, puis les volets. -->

@@ -16,6 +16,7 @@
     --font-weight-bold: 700;
     --font-weight-extrabold: 800;
     --tracking-tight: -0.025em;
+    --tracking-normal: 0em;
     --leading-tight: 1.25;
     --leading-snug: 1.375;
     --radius-md: 0.375rem;
@@ -3356,6 +3357,10 @@
     width: calc(var(--spacing) * 3.5);
     height: calc(var(--spacing) * 3.5);
   }
+  .size-4 {
+    width: calc(var(--spacing) * 4);
+    height: calc(var(--spacing) * 4);
+  }
   .size-7 {
     width: calc(var(--spacing) * 7);
     height: calc(var(--spacing) * 7);
@@ -3584,6 +3589,9 @@
   }
   .min-h-0 {
     min-height: 0px;
+  }
+  .min-h-6 {
+    min-height: calc(var(--spacing) * 6);
   }
   .min-h-9 {
     min-height: calc(var(--spacing) * 9);
@@ -5608,6 +5616,10 @@
     --tw-tracking: 0.14em;
     letter-spacing: 0.14em;
   }
+  .tracking-normal {
+    --tw-tracking: var(--tracking-normal);
+    letter-spacing: var(--tracking-normal);
+  }
   .tracking-tight {
     --tw-tracking: var(--tracking-tight);
     letter-spacing: var(--tracking-tight);
@@ -5785,6 +5797,9 @@
   }
   .capitalize {
     text-transform: capitalize;
+  }
+  .normal-case {
+    text-transform: none;
   }
   .uppercase {
     text-transform: uppercase;
@@ -6489,6 +6504,9 @@
         background-color: color-mix(in oklab, var(--v3-voile) 14%, transparent);
       }
     }
+    .hover\:text-text:hover {
+      color: var(--text);
+    }
   }
   .focus\:outline-none:focus {
     --tw-outline-style: none;
@@ -6891,6 +6909,9 @@
     .max-sm\:bottom-0 {
       bottom: 0px;
     }
+    .max-sm\:-mx-4 {
+      margin-inline: calc(var(--spacing) * -4);
+    }
     .max-sm\:block {
       display: block;
     }
@@ -6906,11 +6927,26 @@
     .max-sm\:animate-v4-sheet {
       animation: var(--animate-v4-sheet);
     }
+    .max-sm\:snap-x {
+      scroll-snap-type: x var(--tw-scroll-snap-strictness);
+    }
+    .max-sm\:scroll-px-4 {
+      scroll-padding-inline: calc(var(--spacing) * 4);
+    }
+    .max-sm\:\[scrollbar-width\:none\] {
+      scrollbar-width: none;
+    }
+    .max-sm\:flex-nowrap {
+      flex-wrap: nowrap;
+    }
     .max-sm\:gap-0 {
       gap: 0px;
     }
     .max-sm\:overflow-hidden {
       overflow: hidden;
+    }
+    .max-sm\:overflow-x-auto {
+      overflow-x: auto;
     }
     .max-sm\:rounded-carte {
       border-radius: var(--radius);
@@ -6921,6 +6957,9 @@
     }
     .max-sm\:bg-card {
       background-color: var(--card);
+    }
+    .max-sm\:px-4 {
+      padding-inline: calc(var(--spacing) * 4);
     }
     .max-sm\:pt-2 {
       padding-top: calc(var(--spacing) * 2);
@@ -7977,6 +8016,15 @@
     white-space: nowrap;
   }
   @media (width < 40rem) {
+    .max-sm\:\[\&\>\.scene\]\:min-h-\[42px\] > .scene {
+      min-height: 42px;
+    }
+    .max-sm\:\[\&\>\.scene\]\:flex-none > .scene {
+      flex: none;
+    }
+    .max-sm\:\[\&\>\.scene\]\:snap-start > .scene {
+      scroll-snap-align: start;
+    }
     .max-sm\:\[\&\>\.tile\]\:gap-\[8px\] > .tile {
       gap: 8px;
     }
@@ -14649,6 +14697,11 @@
   inherits: false;
   initial-value: solid;
 }
+@property --tw-scroll-snap-strictness {
+  syntax: "*";
+  inherits: false;
+  initial-value: proximity;
+}
 @property --tw-scale-x {
   syntax: "*";
   inherits: false;
@@ -14763,6 +14816,7 @@
       --tw-duration: initial;
       --tw-content: "";
       --tw-outline-style: solid;
+      --tw-scroll-snap-strictness: proximity;
       --tw-scale-x: 1;
       --tw-scale-y: 1;
       --tw-scale-z: 1;

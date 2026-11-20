@@ -291,6 +291,11 @@ function updateTiles(entityId) {
     if (tileHold.pointer && tile.contains(tileHold.pointer)) tileHold.waiting.add(entityId);
     else replaceTile(tile, state);
   }
+  // Le résumé de la pièce suit (une lumière allumée, une température).
+  for (const summary of document.querySelectorAll("#sections .section-summary[data-room]")) {
+    const text = sectionSummary(summary.dataset.room);
+    if (summary.textContent !== text) summary.textContent = text;
+  }
 }
 
 /** Remplace une tuile ; le focus (et le texte en cours) passe au même champ
@@ -485,6 +490,55 @@ function shortenName(tile, room) {
   return tile;
 }
 
+// Les sections qu'on a repliées, retenues par cet appareil.
+const FOLDED_KEY = "ha-sections-pliees";
+function foldedSections() {
+  try {
+    const list = JSON.parse(localStorage.getItem(FOLDED_KEY) ?? "[]");
+    return new Set(Array.isArray(list) ? list.filter((name) => typeof name === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+
+/** Le résumé d'une pièce à droite de son titre : « 20,6° · 3 allumées ». */
+function sectionSummary(title) {
+  const area = areas.find((a) => a.name === title);
+  if (!area) return "";
+  const info = roomInfo(area);
+  return [
+    Number.isFinite(info.temperature) ? `${number.format(info.temperature)}°` : "",
+    info.lights > 0 ? `${info.lights} allumée${info.lights > 1 ? "s" : ""}` : "",
+    info.open > 0 ? `${info.open} ouverte${info.open > 1 ? "s" : ""}` : "",
+  ].filter(Boolean).join(" · ");
+}
+
+/** Le titre d'une section : un bouton qui la replie ou la déplie. Une pièce
+ *  repliée garde son résumé (température, lumières allumées). */
+function sectionHead(title, grid, room) {
+  const folded = foldedSections().has(title);
+  grid.hidden = folded;
+  const summary = el("span", { class: "section-summary ml-auto shrink-0 normal-case tracking-normal font-medium text-[0.8rem] tabular-nums", text: room ? sectionSummary(title) : "" });
+  if (room) summary.dataset.room = title;
+  const chevron = svgIcon(ICONS.down);
+  chevron.setAttribute("class", `size-4 shrink-0 transition-transform ${folded ? "-rotate-90" : ""}`);
+  const button = el("button", {
+    type: "button", "aria-expanded": String(!folded),
+    class: "section-toggle [:where(&)]:[all:unset] flex w-full min-h-6 items-center gap-2 cursor-pointer rounded-md hover:text-text focus-visible:outline-3 focus-visible:outline-accent focus-visible:outline-offset-2",
+  }, el("span", { class: "min-w-0 truncate", text: title }), summary, chevron);
+  button.addEventListener("click", () => {
+    const set = foldedSections();
+    const fold = !set.has(title);
+    if (fold) set.add(title);
+    else set.delete(title);
+    try { localStorage.setItem(FOLDED_KEY, JSON.stringify([...set])); } catch { /* stockage plein ou interdit */ }
+    grid.hidden = fold;
+    button.setAttribute("aria-expanded", String(!fold));
+    chevron.classList.toggle("-rotate-90", fold);
+  });
+  return el("h2", {}, button);
+}
+
 function renderAll() {
   // Tout redessiner : les panneaux du tableau aussi, même sans changement.
   forgetPanels();
@@ -495,9 +549,11 @@ function renderAll() {
   const sorted = [...entities.values()].sort(
     (a, b) => first(a) - first(b) || nameOf(a).localeCompare(nameOf(b), "fr"),
   );
-  const section = (title, items, room) =>
-    el("section", {}, el("h2", { text: title }), el("div", { class: `${TILE_GRID} ${PHONE_LIST}` },
-      ...items.map((state) => (room ? shortenName(renderTile(state), title) : renderTile(state)))));
+  const section = (title, items, room) => {
+    const grid = el("div", { class: `${TILE_GRID} ${PHONE_LIST}` },
+      ...items.map((state) => (room ? shortenName(renderTile(state), title) : renderTile(state))));
+    return el("section", {}, sectionHead(title, grid, room), grid);
+  };
 
   // Une seule pièce : son nom, un bouton retour, ses appareils.
   const room = view.room === null ? undefined : areas.find((area) => area.name === view.room);
