@@ -296,7 +296,7 @@ function hubV4CoverRow(entityId, room) {
     setText(name, hubV4ShortName(nameOf(state), room));
     setText(word, hubV4CoverWord([state]));
     const ready = hubV4Ready(state);
-    const positioned = state.attributes.current_position != null;
+    const positioned = hubV4CanPosition(state);
     for (const button of buttons) {
       button.hidden = button.dataset.service === "set_cover_position" && !positioned;
       button.disabled = !ready;

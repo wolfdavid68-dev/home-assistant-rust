@@ -72,6 +72,8 @@ function showHub() {
 function hideHub() {
   hub.on = false;
   $("#hub").hidden = true;
+  // Les fenêtres de l'accueil v4 ne survivent pas à l'accueil.
+  if (typeof hubV4Shut === "function") hubV4Shut();
   delete document.documentElement.dataset.hub;
   const stage = $("#hub-house #house-stage");
   if (stage) {

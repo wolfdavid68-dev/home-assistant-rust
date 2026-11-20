@@ -3,7 +3,8 @@
 // Sur un écran étroit, quand la v4 est choisie (Mon compte → Style de
 // l'accueil), l'accueil v4 s'affiche aussi, mais en colonne : la date et
 // l'heure, le salut, l'ordre qui attend, le dessin de la maison et ses
-// lentilles, quatre cartes (météo, chauffage, Tempo, agenda), la musique en
+// lentilles (avec ses onglets : sur la tablette, #hub-views, caché ici), les
+// réglages de la lentille choisie (chauffage, volets, lumières), quatre cartes (météo, chauffage, Tempo, agenda), la musique en
 // bas, et cinq onglets. Le dessin n'est pas recopié : c'est le même #hub-house
 // que sur la tablette, déplacé ici puis remis à sa place. Toucher une pièce,
 // une carte ou la musique ouvre les mêmes incrustations que sur la tablette,
@@ -64,6 +65,30 @@ function hubV4TelNext(events, now) {
   const day = events.find((e) => e.allDay && e.startDate < midnight);
   return day ? { value: "Aujourd'hui", sub: day.summary } : null;
 }
+
+/** L'onglet où se touchent les pièces : celui affiché s'il a des zones de
+ *  pièce, sinon le premier qui en a (une vue de dehors n'en a pas), sinon null. */
+function hubV4TelRoomsPage(pages, current) {
+  const rooms = (page) => (page?.zones ?? []).some((zone) => typeof zone.area === "string" && zone.area !== "");
+  const shown = pages.find((page) => page.id === current);
+  if (rooms(shown)) return shown.id;
+  return pages.find(rooms)?.id ?? null;
+}
+
+/** Les appareils rangés pièce par pièce (dans l'ordre des pièces), puis par
+ *  nom ; ceux d'aucune pièce à la fin. `items` : [{ id, name, area }]. */
+function hubV4TelOrder(items, rooms) {
+  const rank = (area) => {
+    const i = rooms.indexOf(area);
+    return i === -1 ? rooms.length : i;
+  };
+  return [...items]
+    .sort((a, b) => rank(a.area) - rank(b.area) || a.name.localeCompare(b.name, "fr"))
+    .map((item) => item.id);
+}
+
+/** Les lentilles qui ont leurs réglages sous le dessin. */
+const HUB_V4_TEL_PANELS = ["lumieres", "volets", "chauffage"];
 
 // ---------------------------------------------------------------- Les éléments
 
@@ -133,6 +158,12 @@ function hubV4TelBuild() {
       class: `min-h-9 px-4 rounded-full border-0 bg-[#ffbf5e] text-[13px] font-semibold text-[#1a1530] cursor-pointer ${HUB_V4_FOCUS}`,
     }, "Voir"),
     houseSlot: el("div", { class: "relative shrink-0" }),
+    // Les onglets du dessin (vue de dehors, étages) et « Toute la maison ».
+    pages: el("nav", {
+      class: "flex gap-2 px-4 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+      "aria-label": "Vue",
+    }),
+    pagesMark: "",
     lens: el("nav", {
       class: "flex gap-2 px-4 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
       "aria-label": "Ce que montre la maison",
@@ -169,17 +200,24 @@ function hubV4TelBuild() {
     }, lens.label);
     seg.addEventListener("click", () => {
       hubV3.lens = lens.id;
+      // Une lentille montre les pièces : depuis la vue de dehors, l'étage d'abord.
+      hubV4TelRoomsShown();
       hubV3RenderLens();
       hubV4TelRenderLens();
+      hubV4TelRenderPanel();
     });
     return seg;
   });
   ui.lens.append(...ui.segs);
+  hubV4TelPanelBuild(ui);
 
   ui.weather = hubV4TelCard(ICONS.cloud, "Météo", () => hubV4Weather());
   ui.heat = hubV4TelCard(ICONS.flame, "Chauffage", () => {
-    // Le chauffage se lit sur le dessin : sa lentille.
+    // Toutes les zones de chauffage, réglables : la page « Toute la maison ».
+    if (typeof hubV4Page === "function" && hubV4Page(HUB_V4_ALL)) return;
+    // Sans elle : la lentille du chauffage, sur un étage qui a ses pièces.
     hubV3.lens = "chauffage";
+    hubV4TelRoomsShown();
     hubV3RenderLens();
     hubV4TelRenderLens();
     hubV4Tel.ui.houseSlot.scrollIntoView({ block: "center", behavior: hubV4TelMotion() });
@@ -236,17 +274,113 @@ function hubV4TelBuild() {
   },
   el("header", { class: "flex items-center gap-2.5 px-5 text-[13px] font-medium" }, ui.when, ui.live, ui.bell, ui.avatar),
   el("div", { class: "px-5" }, ui.hello, ui.summary),
-  ui.approval, ui.houseSlot, ui.lens, ui.cards, ui.music, ui.tabs);
+  ui.approval, ui.pages, ui.houseSlot, ui.lens, ui.panel, ui.cards, ui.music, ui.tabs);
 
   // En colonne, l'accueil défile ; seule la vue téléphone s'y affiche.
   $("#hub").classList.add("[[data-hub-tel]_&]:block!", "[[data-hub-tel]_&]:p-0!", "[[data-hub-tel]_&]:overflow-y-auto!",
     "[[data-hub-tel]_&]:overscroll-contain", "[[data-hub-tel]_&>:not(.hub-v4-tel)]:hidden!");
   // Le dessin, dans la colonne : une hauteur fixe à la place du centre de la tablette.
   $("#hub-house").classList.add("[[data-hub-tel]_&]:relative!", "[[data-hub-tel]_&]:inset-auto!",
-    "[[data-hub-tel]_&]:h-[clamp(230px,34dvh,320px)]!", "[[data-hub-tel]_&]:mx-2");
+    "[[data-hub-tel]_&]:h-[clamp(230px,34dvh,320px)]!", "[[data-hub-tel]_&]:mx-2",
+    // La carte du lave-linge, plus petite : le dessin est bas, ses pièces restent à toucher.
+    "[[data-hub-tel]_&_.machine-live]:scale-75", "[[data-hub-tel]_&_.machine-live]:origin-bottom-left");
   $("#hub").prepend(ui.root);
   hubV4Tel.ui = ui;
   return ui;
+}
+
+/** Les réglages de la lentille, sous le dessin : sur le téléphone, toucher une
+ *  pastille du dessin réduit n'est pas évident. Chauffage : chaque zone avec
+ *  Confort/Éco et − / +. Volets : chacun avec Ouvrir / Fermer, et « Tout
+ *  fermer ». Lumières : les pièces, qui s'ouvrent en incrustation. */
+function hubV4TelPanelBuild(ui) {
+  ui.panel = el("section", { class: "flex flex-col gap-2.5 px-4" });
+  ui.panelLens = "";
+
+  ui.heatList = el("div", { class: "flex flex-col gap-2.5" });
+  ui.syncHeat = hubV4Keyed(ui.heatList, (id) => hubV4HeatTile(id, nameOf(entities.get(id))));
+
+  const covers = hubV4Tile(ICONS.blinds, "sky", "Volets");
+  ui.coverAll = el("button", { type: "button", class: `${HUB_V4_BTN} min-h-9 px-3 text-[13px]` });
+  ui.coverAll.addEventListener("click", () => {
+    if (hubV3ActionRun("volets")) hubV3Wait(ui.coverAll);
+  });
+  covers.head.append(ui.coverAll);
+  const coverList = el("div", { class: "flex flex-col gap-4" });
+  covers.node.append(coverList);
+  ui.covers = covers.node;
+  ui.syncCovers = hubV4Keyed(coverList, (id) => hubV4CoverRow(id, ""));
+
+  const lights = hubV4Tile(ICONS.bulb, "amber", "Lumières");
+  ui.lightsOff = el("button", { type: "button", class: `${HUB_V4_BTN} min-h-9 px-3 text-[13px]`, text: "Tout éteindre" });
+  ui.lightsOff.addEventListener("click", () => {
+    if (hubV3ActionRun("lumieres")) hubV3Wait(ui.lightsOff);
+  });
+  lights.head.append(ui.lightsOff);
+  const roomGrid = el("div", { class: "grid grid-cols-2 gap-2" });
+  lights.node.append(roomGrid);
+  ui.lights = lights.node;
+  ui.syncRooms = hubV4Keyed(roomGrid, (room) => {
+    const count = el("span", { class: `text-[13px] ${HUB_V4_MUTE} group-data-full:text-[#ffd79a]` });
+    const node = el("button", {
+      type: "button",
+      class: "group flex items-center justify-between gap-2 min-h-12 px-3.5 rounded-[14px] border-0 bg-white/6 text-left "
+        + "text-[14px] font-semibold text-inherit cursor-pointer transition-colors hover:bg-white/10 "
+        + `data-full:bg-[rgb(255_191_94/0.16)] ${HUB_V4_FOCUS}`,
+    }, el("span", { class: "truncate", text: room }), count);
+    node.addEventListener("click", () => hubV4Room(room));
+    return {
+      node,
+      refresh: () => {
+        const area = areas.find((a) => a.name === room);
+        const list = area ? hubV3RoomLights(area) : [];
+        const lit = list.filter((s) => s.state === "on").length;
+        setText(count, hubV4RoomCount(lit, list.length));
+        node.toggleAttribute("data-full", list.length > 0 && lit === list.length);
+        setAttr(node, "aria-label", `${room} : ${hubV4LightsText(lit, list.length).toLowerCase()}`);
+      },
+    };
+  });
+
+  ui.panel.append(ui.heatList, ui.covers, ui.lights);
+}
+
+/** Les réglages de la lentille choisie (rien pour Vivant, Musique, Sécurité). */
+function hubV4TelRenderPanel() {
+  const ui = hubV4Tel.ui;
+  const lens = hubV3.lens;
+  const rooms = areas.filter((a) => !a.hidden).map((a) => a.name);
+  const shown = HUB_V4_TEL_PANELS.includes(lens);
+  ui.panel.hidden = !shown;
+  ui.heatList.hidden = lens !== "chauffage";
+  ui.covers.hidden = lens !== "volets";
+  ui.lights.hidden = lens !== "lumieres";
+  setAttr(ui.panel, "aria-label", shown ? `Réglages : ${HUB_V3_LENSES.find((l) => l.id === lens)?.label}` : "");
+  if (lens === "chauffage") {
+    // Dans l'ordre de la carte Chauffage : les zones de la maison d'abord.
+    ui.syncHeat(hubV4HeatZones().map((zone) => zone.id));
+  } else if (lens === "volets") {
+    const list = [...entities.values()].filter(hubV3IsShutter)
+      .map((s) => ({ id: s.entity_id, name: nameOf(s), area: hubV4AreaOf(s.entity_id) }));
+    ui.covers.hidden = list.length === 0;
+    ui.syncCovers(hubV4TelOrder(list, rooms));
+    const action = hubV3Action("volets");
+    ui.coverAll.hidden = action === null;
+    if (action !== null && ui.coverAll.textContent !== action) {
+      ui.coverAll.classList.remove("pending");
+      setText(ui.coverAll, action);
+    }
+  } else if (lens === "lumieres") {
+    const withLights = areas.filter((a) => !a.hidden && hubV3RoomLights(a).length > 0).map((a) => a.name);
+    ui.lights.hidden = withLights.length === 0;
+    ui.syncRooms(withLights);
+    ui.lightsOff.hidden = hubV3Action("lumieres") === null;
+  }
+  // Une autre lentille : ses réglages se montrent sous la rangée des lentilles.
+  if (shown && ui.panelLens !== lens && ui.panelLens !== "") {
+    ui.lens.scrollIntoView({ block: "start", behavior: hubV4TelMotion() });
+  }
+  ui.panelLens = lens;
 }
 
 function hubV4TelMotion() {
@@ -275,6 +409,45 @@ function hubV4TelSync() {
 }
 
 // ---------------------------------------------------------------- Le rendu
+
+/** Affiche un étage qui a ses pièces, si le dessin montre la maison de dehors. */
+function hubV4TelRoomsShown() {
+  const pages = house.pages ?? [];
+  const id = hubV4TelRoomsPage(pages, house.config?.id);
+  if (id === null || id === house.config?.id) return;
+  selectPage(id);
+  hubV4TelRenderPages();
+}
+
+/** Les onglets du dessin : refaits seulement s'ils changent (un bouton refait
+ *  sous le doigt perd le toucher). */
+function hubV4TelRenderPages() {
+  const ui = hubV4Tel.ui;
+  const pages = house.pages ?? [];
+  const all = typeof hubV4Page === "function";
+  const current = house.config?.id;
+  const mark = JSON.stringify([all, current, ...pages.map((page) => [page.id, page.name])]);
+  if (mark === ui.pagesMark) return;
+  ui.pagesMark = mark;
+  ui.pages.hidden = pages.length < 2 && !all;
+  const pill = (text, pressed, run) => {
+    const node = el("button", {
+      type: "button",
+      class: `shrink-0 min-h-9 px-3.5 rounded-full border-0 bg-white/8 text-[13px] font-medium text-inherit cursor-pointer `
+        + `transition-colors aria-pressed:bg-[#f4f2fb] aria-pressed:text-[#1a1530] ${HUB_V4_FOCUS}`,
+      "aria-pressed": String(pressed),
+    }, text);
+    node.addEventListener("click", run);
+    return node;
+  };
+  const tabs = pages.length < 2 ? [] : pages.map((page) => pill(page.name, page.id === current, () => {
+    if (page.id === house.config?.id) return;
+    selectPage(page.id);
+    hubV4TelRenderPages();
+  }));
+  const whole = all ? [pill("Toute la maison", false, () => hubV4Page(HUB_V4_ALL))] : [];
+  swap(ui.pages, ...tabs, ...whole);
+}
 
 function hubV4TelRenderLens() {
   const ui = hubV4Tel.ui;
@@ -381,7 +554,9 @@ function renderHubV4Tel() {
   const now = new Date();
   hubV4TelRenderTop(now);
   hubV4TelRenderHello(now);
+  hubV4TelRenderPages();
   hubV4TelRenderLens();
+  hubV4TelRenderPanel();
   hubV4TelRenderCards(now);
   hubV4TelRenderMusic();
 }

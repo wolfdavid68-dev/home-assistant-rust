@@ -12,6 +12,9 @@ const hubV4TelApproval = run("hubV4TelApproval");
 const hubV4TelZoneName = run("hubV4TelZoneName");
 const hubV4TelHeat = run("hubV4TelHeat");
 const hubV4TelNext = run("hubV4TelNext");
+const hubV4TelRoomsPage = run("hubV4TelRoomsPage");
+const hubV4CanPosition = run("hubV4CanPosition");
+const hubV4TelOrder = run("hubV4TelOrder");
 
 describe("hubV4TelApproval", () => {
   test("un, plusieurs, aucun ordre", () => {
@@ -64,5 +67,60 @@ describe("hubV4TelNext", () => {
     const day = { summary: "Anniversaire", startDate: at(19, 0), endDate: at(20, 0), allDay: true };
     assert.deepEqual(plain(hubV4TelNext([done, day], now)), { value: "Aujourd'hui", sub: "Anniversaire" });
     assert.equal(hubV4TelNext([done], now), null);
+  });
+});
+
+describe("hubV4TelRoomsPage", () => {
+  const outside = { id: "dehors", zones: [] };
+  const ground = { id: "rdc", zones: [{ area: "Salon" }] };
+  const upstairs = { id: "etage", zones: [{ area: "Chambre" }] };
+  const pages = [outside, ground, upstairs];
+  test("la vue de dehors n'a pas de pièce : le premier étage qui en a", () => {
+    assert.equal(hubV4TelRoomsPage(pages, "dehors"), "rdc");
+  });
+  test("un étage affiché reste affiché", () => {
+    assert.equal(hubV4TelRoomsPage(pages, "etage"), "etage");
+  });
+  test("une zone d'appareil seul ne compte pas ; aucune pièce : null", () => {
+    assert.equal(hubV4TelRoomsPage([outside, { id: "jardin", zones: [{ entity_id: "light.jardin" }] }], "dehors"), null);
+    assert.equal(hubV4TelRoomsPage([], undefined), null);
+  });
+});
+
+describe("hubV4CanPosition", () => {
+  const cover = (attributes) => ({ attributes });
+  test("supported_features en nombre : le bit 4", () => {
+    assert.equal(hubV4CanPosition(cover({ supported_features: 15, current_position: 40 })), true);
+    assert.equal(hubV4CanPosition(cover({ supported_features: 11, current_position: 40 })), false);
+  });
+  test("supported_features en liste", () => {
+    assert.equal(hubV4CanPosition(cover({ supported_features: ["open", "close", "set_position"] })), true);
+    assert.equal(hubV4CanPosition(cover({ supported_features: ["open", "close"], current_position: 40 })), false);
+  });
+  test("sans supported_features : la position donnée", () => {
+    assert.equal(hubV4CanPosition(cover({ current_position: 40 })), true);
+    assert.equal(hubV4CanPosition(cover({})), false);
+    assert.equal(hubV4CanPosition(undefined), false);
+  });
+});
+
+describe("hubV4TelOrder", () => {
+  const rooms = ["Salon", "Cuisine", "Chambre"];
+  test("pièce par pièce, dans l'ordre des pièces, puis par nom", () => {
+    const items = [
+      { id: "cover.chambre", name: "Volet chambre", area: "Chambre" },
+      { id: "cover.baie", name: "Volet baie", area: "Salon" },
+      { id: "cover.cuisine", name: "Volet cuisine", area: "Cuisine" },
+      { id: "cover.angle", name: "Volet angle", area: "Salon" },
+    ];
+    assert.deepEqual(plain(hubV4TelOrder(items, rooms)), ["cover.angle", "cover.baie", "cover.cuisine", "cover.chambre"]);
+  });
+  test("sans pièce : à la fin", () => {
+    const items = [
+      { id: "climate.maison", name: "Chauffage", area: "" },
+      { id: "climate.salon", name: "Chauffage salon", area: "Salon" },
+    ];
+    assert.deepEqual(plain(hubV4TelOrder(items, rooms)), ["climate.salon", "climate.maison"]);
+    assert.deepEqual(plain(hubV4TelOrder([], rooms)), []);
   });
 });
