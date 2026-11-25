@@ -123,3 +123,55 @@ describe("hubV4SilentSince", () => {
     assert.equal(hubV4SilentSince("n'importe quoi", now), "");
   });
 });
+
+describe("hubV4Zoom (options)", () => {
+  test("le zoom plafonné et centré sur l'espace libre", () => {
+    const at = hubV4Zoom({ x: 20, y: 40, w: 20, h: 20 }, { w: 1000, h: 800 }, 1, { max: 1200, cx: 600 });
+    assert.equal(at.width, 1200);
+    assert.equal(at.ring.left + at.ring.width / 2, 600);
+  });
+  test("plus haut que la scène : ni vide en haut ni en bas", () => {
+    const at = hubV4Zoom({ x: 40, y: 90, w: 10, h: 10 }, { w: 1000, h: 800 }, 1, { max: 1000 });
+    assert.equal(at.height, 1000);
+    assert.equal(at.top, -200);
+  });
+});
+
+describe("hubV4DialPart / hubV4DialArc", () => {
+  const hubV4DialPart = run("hubV4DialPart");
+  const hubV4DialArc = run("hubV4DialArc");
+  test("la part, bornée, et 0 sans valeur", () => {
+    assert.equal(hubV4DialPart(17.5, 7, 28), 0.5);
+    assert.equal(hubV4DialPart(40, 7, 28), 1);
+    assert.equal(hubV4DialPart(null, 7, 28), 0);
+    assert.equal(hubV4DialPart(20, 28, 7), 0);
+  });
+  test("l'arc part d'en bas à gauche, passe en haut à mi-course", () => {
+    assert.equal(hubV4DialArc(0).d, "M43.43 156.57");
+    const half = hubV4DialArc(0.5);
+    assert.equal(half.x, 100);
+    assert.equal(half.y, 20);
+    assert.equal(half.d, "M43.43 156.57A80 80 0 0 1 100 20");
+    assert.match(hubV4DialArc(1).d, /A80 80 0 1 1 156\.57 156\.57$/);
+  });
+});
+
+describe("hubV4CoverPick", () => {
+  const hubV4CoverPick = run("hubV4CoverPick");
+  test("le bouton de l'état présent", () => {
+    assert.equal(hubV4CoverPick({ state: "closed", attributes: {} }, true), "close_cover");
+    assert.equal(hubV4CoverPick({ state: "open", attributes: { current_position: 100 } }, true), "open_cover");
+    assert.equal(hubV4CoverPick({ state: "open", attributes: { current_position: 45 } }, true), "set_cover_position");
+    assert.equal(hubV4CoverPick({ state: "open", attributes: { current_position: 45 } }, false), null);
+    assert.equal(hubV4CoverPick({ state: "open", attributes: { current_position: 85 } }, true), null);
+    assert.equal(hubV4CoverPick({ state: "opening", attributes: {} }, false), null);
+  });
+});
+
+describe("hubV4DateLine", () => {
+  const hubV4DateLine = run("hubV4DateLine");
+  test("« Mardi 27 octobre · 21:56 »", () => {
+    const when = new Intl.DateTimeFormat("fr", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
+    assert.equal(hubV4DateLine(when.formatToParts(new Date(2026, 9, 27, 21, 56))), "Mardi 27 octobre · 21:56");
+  });
+});
