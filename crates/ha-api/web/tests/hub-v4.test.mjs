@@ -20,6 +20,7 @@ const hubV4WhiteRange = run("hubV4WhiteRange");
 const hubV4ClosedPart = run("hubV4ClosedPart");
 const hubV4CoverLabel = run("hubV4CoverLabel");
 const hubV4MomentRows = run("hubV4MomentRows");
+const hubV4MomentHeat = run("hubV4MomentHeat");
 const hubV4Expiry = run("hubV4Expiry");
 const hubV4AskedBy = run("hubV4AskedBy");
 const hubV4Suggested = run("hubV4Suggested");
@@ -198,6 +199,36 @@ describe("hubV4MomentRows", () => {
   test("une scène qui ne dit rien ne donne aucune ligne", () => {
     assert.deepEqual(plain(hubV4MomentRows(undefined, get)), []);
     assert.deepEqual(plain(hubV4MomentRows({ "media_player.radio": { state: "on" } }, get)), []);
+  });  test("le chauffage et la musique qui s'arrête", () => {
+    const more = new Map([
+      ["climate.etage", { entity_id: "climate.etage", state: "heat", attributes: { friendly_name: "Étage", preset_mode: "confort" } }],
+      ["media_player.salon", { entity_id: "media_player.salon", state: "playing", attributes: { friendly_name: "Salle à manger" } }],
+    ]);
+    const rows = plain(hubV4MomentRows({
+      "climate.etage": { state: "on", preset_mode: "eco" },
+      "media_player.salon": { state: "off" },
+    }, (id) => more.get(id)));
+    assert.deepEqual(rows, [
+      { domain: "climate", label: "Chauffage", now: "en confort", then: "Eco", done: false },
+      { domain: "media_player", label: "Musique", now: "Salle à manger", then: "s'arrête", done: false },
+    ]);
+  });
+});
+
+describe("hubV4MomentHeat", () => {
+  const heat = (state, attributes = {}) => ({ state, attributes });
+  test("un préréglage, une consigne, ou coupé", () => {
+    assert.equal(hubV4MomentHeat([{ state: "on", temperature: 19 }], [heat("heat", { temperature: 21 })]).then, "19°");
+    assert.equal(hubV4MomentHeat([{ state: "off" }], [heat("heat")]).then, "coupé");
+    assert.equal(hubV4MomentHeat([{ state: "on", hvac_mode: "off" }], [heat("off")]).then, "déjà coupé");
+  });
+  test("déjà fait", () => {
+    const row = plain(hubV4MomentHeat([{ state: "on", preset_mode: "nuit" }], [heat("heat", { preset_mode: "nuit" })]));
+    assert.deepEqual(row, { now: "en nuit", then: "déjà nuit", done: true });
+  });
+  test("une cible qui ne dit rien : pas de ligne", () => {
+    assert.equal(hubV4MomentHeat([{ state: "on" }], [heat("heat")]), null);
+    assert.equal(hubV4MomentHeat([{ state: "on", preset_mode: "eco" }, { state: "on", preset_mode: "confort" }], []), null);
   });
 });
 

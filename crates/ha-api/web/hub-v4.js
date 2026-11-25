@@ -359,7 +359,6 @@ function hubV4Room(name) {
         + "text-left text-inherit cursor-pointer disabled:opacity-40 disabled:cursor-default [&.pending]:opacity-60 "
         + HUB_V4_FOCUS,
     },
-    el("span", { class: "text-v-amber [&_svg]:size-5", "aria-hidden": "true" }, svgIcon(ICONS.bulb)),
     el("span", { class: "flex flex-col flex-1 min-w-0" },
       el("b", { class: "text-courant font-semibold", text: "Lumières" }), tgSub),
     el("span", {
@@ -374,13 +373,13 @@ function hubV4Room(name) {
     body.push(toggle);
 
     const lamps = el("div", {
-      class: "grid grid-cols-[repeat(auto-fill,minmax(88px,1fr))] gap-2", role: "group", "aria-label": "Lampe par lampe",
+      class: "grid grid-cols-[repeat(auto-fit,minmax(52px,1fr))] gap-1", role: "group", "aria-label": "Lampe par lampe",
     });
     const lampNodes = new Map();
     const makeLamp = (state) => {
       const node = el("button", {
         type: "button",
-        class: "flex flex-col items-center justify-center gap-1 min-h-14 px-2 py-1.5 rounded-[14px] border-0 "
+        class: "flex flex-col items-center justify-center gap-1 min-w-0 min-h-14 px-0.5 py-1.5 rounded-[14px] border-0 "
           + `bg-voile/6 text-legende ${HUB_V4_MUTE} cursor-pointer transition-colors `
           + "aria-pressed:bg-v-amber/14 aria-pressed:text-v-amber2 "
           + "disabled:opacity-40 disabled:cursor-default [&.pending]:opacity-60 [&_svg]:size-[18px] " + HUB_V4_FOCUS,
@@ -431,12 +430,12 @@ function hubV4Room(name) {
   }
 
   if (covers().length > 0) {
-    const label = el("b", { class: "font-semibold" });
-    const word = el("span", { class: HUB_V4_MUTE });
+    const label = el("span", {});
+    const word = el("span", {});
     const head = el("button", {
       type: "button",
       class: "flex items-baseline justify-between gap-2 w-full px-1 pt-1 rounded-[10px] border-0 bg-transparent "
-        + "text-left text-petit text-inherit cursor-pointer disabled:cursor-default enabled:hover:bg-voile/6 "
+        + `text-left text-petit ${HUB_V4_MUTE} cursor-pointer disabled:cursor-default enabled:hover:bg-voile/6 `
         + HUB_V4_FOCUS,
     }, label, word);
     // Un seul volet : sa ligne ouvre sa fenêtre (position, mi-hauteur).
@@ -453,15 +452,15 @@ function hubV4Room(name) {
       }
       return targets.length > 0;
     };
-    const buttons = [["Monter", "up", "open_cover"], ["Arrêter", "stop", "stop_cover"], ["Descendre", "down", "close_cover"]]
-      .map(([text, icon, service]) => {
-        const node = el("button", { type: "button", class: `${HUB_V4_BTN} px-2 text-petit` },
-          svgIcon(ICONS[icon]), el("span", { text }));
-        node.addEventListener("click", () => {
-          if (move(service)) hubV3Wait(node);
-        });
-        return node;
+    // Des flèches seules, comme la maquette : le mot reste pour les lecteurs d'écran.
+    const buttons = HUB_V4_MOVES.map(([text, icon, service]) => {
+      const node = el("button", { type: "button", class: `${HUB_V4_BTN} px-2 [&_svg]:size-[18px]`, "aria-label": text },
+        svgIcon(HUB_V4_MOVE_ICONS[icon]));
+      node.addEventListener("click", () => {
+        if (move(service)) hubV3Wait(node);
       });
+      return node;
+    });
     body.push(el("div", { class: "grid grid-cols-3 gap-2", role: "group", "aria-label": "Volets" }, ...buttons));
     paints.push(() => {
       const states = covers();
@@ -514,7 +513,30 @@ const HUB_V4_MAIN = "flex items-center justify-center gap-1.5 min-h-12 px-4 roun
 const HUB_V4_RANGE = "absolute inset-0 size-full m-0 opacity-0 cursor-pointer disabled:cursor-default";
 const HUB_V4_TRACK = "has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-v-amber "
   + "has-disabled:opacity-40";
-const HUB_V4_LABEL = "px-1 pt-1 text-petit font-semibold";
+// L'intitulé d'un groupe de réglages (« Lumière », « Où », « 4 jours ») : discret, comme la maquette.
+const HUB_V4_LABEL = `px-1 pt-1 text-petit ${HUB_V4_MUTE}`;
+// Monter, arrêter, descendre : des flèches et un rond (la maquette), pour la pièce et le volet.
+const HUB_V4_MOVES = [["Monter", "up", "open_cover"], ["Arrêter", "stop", "stop_cover"], ["Descendre", "down", "close_cover"]];
+const HUB_V4_MOVE_ICONS = {
+  up: ["M12 19V5", "M6 11l6-6 6 6"],
+  stop: ["M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 1 0 0-7z"],
+  down: ["M12 5v14", "M6 13l6 6 6-6"],
+};
+// Allumer / éteindre, sur le bouton principal de la lampe ; une horloge pour les lignes d'information.
+const HUB_V4_MORE_LINES = {
+  power: ["M12 3v8", "M6.4 6.6a8 8 0 1 0 11.2 0"],
+  clock: ["M12 3a9 9 0 1 0 0 18 9 9 0 1 0 0-18z", "M12 7.5V12l3 2"],
+  cross: ["M7 7l10 10", "M17 7L7 17"],
+};
+// Une ligne d'information, discrète, avec sa petite icône (« Sans réponse… », « arrive vers 11 h »).
+function hubV4Note(icon, text = "") {
+  const words = el("span", { class: "min-w-0", text });
+  const node = el("p", {
+    class: `m-0 flex items-center gap-2.5 min-h-10 px-3 py-2 rounded-[14px] bg-voile/6 text-legende ${HUB_V4_MUTE} `
+      + "[&>svg]:size-4 [&>svg]:shrink-0",
+  }, svgIcon(icon), words);
+  return { node, words };
+}
 // Pendant qu'on glisse, l'état reçu ne fait pas sauter le curseur.
 const HUB_V4_HOLD = 2500;
 
@@ -525,7 +547,7 @@ function hubV4Choices(label, tone, items) {
   const nodes = items.map(([text, run]) => {
     const node = el("button", {
       type: "button", "aria-pressed": "false",
-      class: "min-h-10 px-2 rounded-[12px] border-0 bg-transparent text-petit font-medium text-inherit cursor-pointer "
+      class: "min-h-11 px-2 rounded-[12px] border-0 bg-transparent text-petit font-medium text-inherit cursor-pointer "
         + `transition-colors hover:bg-voile/8 ${pressed} disabled:opacity-40 disabled:cursor-default ${HUB_V4_FOCUS}`,
       text,
     });
@@ -618,19 +640,24 @@ function hubV4Lamp(entityId, spot = null) {
     return true;
   };
 
+  // Dans l'ordre de la maquette : l'intensité, le blanc, puis les niveaux tout prêts.
+  let levels = null;
   if (hubV4Dimmable(first)) {
     let hold = 0;
     const value = el("b", { class: "relative text-courant font-semibold" });
     const range = el("input", { type: "range", min: "1", max: "100", step: "1", "aria-label": "Intensité", class: HUB_V4_RANGE });
     const bar = el("label", {
-      class: `relative flex items-center justify-between h-14 px-4 rounded-[18px] bg-voile/8 overflow-hidden ${HUB_V4_TRACK}`,
+      class: `relative flex items-center justify-between h-14 px-4 text-v-ink rounded-[18px] bg-voile/8 overflow-hidden ${HUB_V4_TRACK}`,
     },
     el("span", {
-      class: "absolute inset-y-0 left-0 w-(--v) bg-linear-to-r from-v-amber/30 to-v-amber/85 "
-        + "transition-[width] motion-reduce:transition-none",
+      class: "absolute inset-y-0 left-0 w-(--v) bg-linear-to-r from-v-amber/20 to-v-amber/45 "
+        + "transition-[width] motion-reduce:transition-none "
+        // La poignée : un trait au bout de la part allumée.
+        + "after:absolute after:right-2 after:top-1/2 after:-translate-y-1/2 after:w-1 after:h-6 after:rounded-full after:bg-v-ink/45",
       "aria-hidden": "true",
     }),
-    el("span", { class: "relative text-corps font-medium", text: "Intensité" }), value, range);
+    el("span", { class: "relative flex items-center gap-2 text-corps font-medium [&_svg]:size-4" },
+      svgIcon(ICONS.illuminance), "Intensité"), value, range);
     const show = (percent) => {
       bar.style.setProperty("--v", `${percent}%`);
       setText(value, `${percent} %`);
@@ -643,13 +670,13 @@ function hubV4Lamp(entityId, spot = null) {
       hold = Date.now() + HUB_V4_HOLD;
       send({ brightness: hubV4Brightness(Number(range.value)) });
     });
-    const levels = hubV4Choices("Niveaux", "amber", HUB_V4_LEVELS.map(([text, percent]) => [text, () => {
+    levels = hubV4Choices("Niveaux", "amber", HUB_V4_LEVELS.map(([text, percent]) => [text, () => {
       if (!send({ brightness: hubV4Brightness(percent) })) return;
       hold = Date.now() + HUB_V4_HOLD;
       range.value = String(percent);
       show(percent);
     }]));
-    body.push(el("b", { class: HUB_V4_LABEL, text: "Lumière" }), bar, levels.box);
+    body.push(el("span", { class: HUB_V4_LABEL, text: "Lumière" }), bar);
     paints.push((now) => {
       const percent = hubV4Percent(now);
       const ready = hubV4Ready(now);
@@ -677,7 +704,7 @@ function hubV4Lamp(entityId, spot = null) {
     },
     el("span", {
       class: "absolute top-2 left-[calc((100%_-_44px)_*_var(--t,0.5)_+_8px)] size-7 rounded-full bg-white "
-        + "shadow-[0_2px_8px_rgb(0_0_0/0.35)]",
+        + "ring-[3px] ring-scrim/70 shadow-[0_2px_8px_rgb(0_0_0/0.35)]",
       "aria-hidden": "true",
     }), range);
     const show = (kelvin) => {
@@ -692,7 +719,7 @@ function hubV4Lamp(entityId, spot = null) {
       hold = Date.now() + HUB_V4_HOLD;
       send({ color_temp_kelvin: Number(range.value) });
     });
-    body.push(el("b", { class: HUB_V4_LABEL, text: "Couleur du blanc" }), track,
+    body.push(el("span", { class: HUB_V4_LABEL, text: "Couleur du blanc" }), track,
       el("div", { class: `flex justify-between px-1 text-legende ${HUB_V4_MUTE}` },
         el("span", { text: "Chaud" }), el("span", { text: "Froid" })));
     paints.push((now) => {
@@ -705,7 +732,10 @@ function hubV4Lamp(entityId, spot = null) {
     });
   }
 
-  const main = el("button", { type: "button", class: HUB_V4_MAIN });
+  if (levels) body.push(levels.box);
+
+  const mainText = el("span");
+  const main = el("button", { type: "button", class: HUB_V4_MAIN }, svgIcon(HUB_V4_MORE_LINES.power), mainText);
   main.addEventListener("click", () => {
     const now = get();
     if (!now || !hubV4Ready(now)) return;
@@ -715,7 +745,7 @@ function hubV4Lamp(entityId, spot = null) {
   });
   body.push(main);
   paints.push((now) => {
-    setText(main, now.state === "on" ? "Éteindre" : "Allumer");
+    setText(mainText, now.state === "on" ? "Éteindre" : "Allumer");
     main.disabled = !hubV4Ready(now);
     if (main.dataset.state !== now.state) {
       main.dataset.state = now.state;
@@ -782,24 +812,25 @@ function hubV4Cover(entityId, spot = null) {
     return true;
   };
 
-  const big = el("b", { class: "font-chiffres text-titre font-light leading-none" });
+  const big = el("b", { class: "font-chiffres text-titre-l font-extralight leading-none" });
   const small = el("span", { class: "text-legende text-v-ink2" });
+  // La fenêtre : le dehors (teinté par le thème, nuit ou jour), les lames du volet par-dessus.
   const pane = el("div", {
-    class: "relative w-[118px] h-[168px] shrink-0 rounded-[14px] overflow-hidden border-4 border-voile/10 "
-      + "bg-[linear-gradient(180deg,#22305e,#2d2a5a,#4a3157)]",
+    class: "relative w-[118px] h-[168px] shrink-0 rounded-[14px] overflow-hidden ring-4 ring-inset ring-voile/10 "
+      + "bg-linear-to-b from-v-violet/30 via-v-violet/20 to-v-pink/25",
     "aria-hidden": "true",
   },
   el("span", {
-    class: "absolute inset-x-0 top-0 h-(--c) bg-[repeating-linear-gradient(180deg,#5a5d8c_0_9px,#45487a_9px_11px)] "
-      + "shadow-[0_2px_6px_rgb(0_0_0/0.45)] transition-[height] duration-700 motion-reduce:transition-none",
+    class: "absolute inset-x-0 top-0 h-(--c) bg-v-violet/45 "
+      + "bg-[repeating-linear-gradient(180deg,transparent_0_9px,color-mix(in_srgb,var(--v3-scrim)_45%,transparent)_9px_11px)] "
+      + "shadow-[0_2px_6px_rgb(0_0_0/0.3)] transition-[height] duration-700 motion-reduce:transition-none",
   }),
-  el("span", { class: "absolute inset-x-0 bottom-3 flex flex-col items-center gap-1 [text-shadow:0_1px_3px_rgb(0_0_0/0.7)]" },
-    big, small));
-  const moves = [["Monter", "up", "open_cover"], ["Arrêter", "stop", "stop_cover"], ["Descendre", "down", "close_cover"]]
+  el("span", { class: "absolute inset-x-0 bottom-3 flex flex-col items-center gap-1" }, big, small));
+  const moves = HUB_V4_MOVES
     .map(([text, icon, service]) => {
       const node = el("button", {
         type: "button", class: `${HUB_V4_BTN} justify-start h-[52px] data-strong:bg-voile/16`,
-      }, svgIcon(ICONS[icon]), el("span", { text }));
+      }, svgIcon(HUB_V4_MOVE_ICONS[icon]), el("span", { text }));
       if (service === "stop_cover") node.dataset.strong = "";
       node.addEventListener("click", () => {
         if (send(service)) hubV3Wait(node);
@@ -858,7 +889,10 @@ function hubV4Cover(entityId, spot = null) {
 
 // ---------------------------------------------------------------- Un moment
 
-const HUB_V4_GROUPS = [["light", "Lumières", ICONS.bulb], ["switch", "Prises", ICONS.plug], ["cover", "Volets", ICONS.blinds]];
+const HUB_V4_GROUPS = [
+  ["light", "Lumières", ICONS.bulb], ["switch", "Prises", ICONS.plug], ["cover", "Volets", ICONS.blinds],
+  ["climate", "Chauffage", ICONS.flame], ["media_player", "Musique", ICONS.speaker],
+];
 // Un moment se lance seul au bout de 3 s, sauf si on l'annule.
 const HUB_V4_COUNTDOWN = 3;
 
@@ -879,6 +913,19 @@ function hubV4MomentRows(targets, get) {
     const current = ids.map(get).filter((s) => s !== undefined);
     let now = "";
     let then;
+    if (domain === "climate") {
+      // Le chauffage : le préréglage visé (« Éco »), sinon la consigne, sinon coupé.
+      const row = hubV4MomentHeat(ids.map((id) => targets[id]), current);
+      if (row) rows.push({ domain, label, ...row });
+      continue;
+    }
+    if (domain === "media_player") {
+      // La musique : seulement quand la scène l'arrête (l'attribut ne dit rien d'autre de sûr).
+      if (!ids.every((id) => targets[id].state === "off")) continue;
+      const done = current.length === ids.length && current.every((s) => ["off", "idle", "standby"].includes(s.state));
+      rows.push({ domain, label, now: current.map(nameOf).join(", "), then: done ? "déjà arrêtée" : "s'arrête", done });
+      continue;
+    }
     if (domain === "cover") {
       now = hubV4CoverWord(current).toLowerCase();
       then = hubV4CoverWord(wanted).toLowerCase();
@@ -903,6 +950,38 @@ function hubV4MomentRows(targets, get) {
     rows.push({ domain, label, now, then: done ? `déjà ${then}` : then, done });
   }
   return rows;
+}
+
+/**
+ * La ligne « Chauffage » d'un moment : { now, then, done }, ou null si la
+ * scène ne dit pas ce qu'elle règle. `wanted` : les cibles, `current` : les
+ * états actuels des mêmes appareils.
+ */
+function hubV4MomentHeat(wanted, current) {
+  const labels = typeof PRESET_LABELS === "object" ? PRESET_LABELS : {};
+  const said = (preset) => lookup(labels, preset) ?? `${preset.charAt(0).toUpperCase()}${preset.slice(1)}`;
+  const one = (list) => (new Set(list).size === 1 ? list[0] : undefined);
+  const off = (t) => t.state === "off" || t.hvac_mode === "off";
+  let then = "";
+  let done = false;
+  if (wanted.every(off)) {
+    then = "coupé";
+    done = current.length === wanted.length && current.every((s) => s.state === "off");
+  } else if (typeof one(wanted.map((t) => t.preset_mode)) === "string") {
+    const preset = wanted[0].preset_mode;
+    then = said(preset);
+    done = current.length === wanted.length && current.every((s) => s.attributes.preset_mode === preset);
+  } else if (typeof one(wanted.map((t) => t.temperature)) === "number") {
+    const degrees = wanted[0].temperature;
+    then = `${hubV3Temp(degrees)}`;
+    done = current.length === wanted.length && current.every((s) => Number(s.attributes.temperature) === degrees);
+  } else {
+    return null;
+  }
+  const presets = current.map((s) => s.attributes.preset_mode).filter((p) => typeof p === "string");
+  const now = presets.length === current.length && one(presets) ? `en ${said(presets[0]).toLowerCase()}`
+    : current.length > 1 ? `${current.length} chauffages` : "";
+  return { now, then: done ? `déjà ${then.toLowerCase()}` : then, done };
 }
 
 /** L'anneau qui se vide pendant le compte à rebours. */
@@ -954,7 +1033,8 @@ function hubV4Moment(state) {
   setText(count, `Se lance dans ${left} s`);
 
   hubV4Overlay({
-    icon: ICONS.sparkle,
+    // L'icône du moment (la lune pour « Bonne nuit »), comme sur l'accueil.
+    icon: typeof hubSceneLook === "function" ? hubSceneLook(state, 0).icon : ICONS.sparkle,
     tone: "violet",
     title: nameOf(state),
     sub: el("span", { class: `text-petit ${HUB_V4_MUTE}`, text: "Ce qui va se passer" }),
@@ -1033,8 +1113,9 @@ function hubV4Approval() {
   const who = el("span");
   const order = el("p", { class: "m-0 font-recit text-titre font-normal leading-snug" });
   const reason = el("p", { class: `m-0 text-petit ${HUB_V4_MUTE}` });
-  const expiry = el("p", { class: `m-0 px-1 text-legende ${HUB_V4_MUTE}` });
-  const deny = el("button", { type: "button", class: HUB_V4_BTN, text: "Refuser" });
+  // « Ne plus demander pour cet ordre » (maquette) : l'API ne prend que { approve } ; pas de case.
+  const expiry = hubV4Note(HUB_V4_MORE_LINES.clock);
+  const deny = el("button", { type: "button", class: HUB_V4_BTN }, svgIcon(HUB_V4_MORE_LINES.cross), el("span", { text: "Refuser" }));
   const approve = el("button", { type: "button", class: HUB_V4_MAIN, text: "Valider" });
   const answer = async (yes) => {
     if (!shown || busy) return;
@@ -1056,7 +1137,7 @@ function hubV4Approval() {
   approve.addEventListener("click", () => answer(true));
 
   hubV4Overlay({
-    icon: HUB_ICONS.warn,
+    icon: ICONS.list,
     title: "Ordre à valider",
     sub,
     body: [
@@ -1065,7 +1146,7 @@ function hubV4Approval() {
           el("span", { class: "text-v-sky [&_svg]:size-4", "aria-hidden": "true" }, svgIcon(ICONS.mic)), who),
         order, reason),
       el("div", { class: "grid grid-cols-2 gap-2" }, deny, approve),
-      expiry,
+      expiry.node,
     ],
     more: { label: "Tous les avis", run: () => $("#open-notices").click() },
     spot: null,
@@ -1084,8 +1165,8 @@ function hubV4Approval() {
       setText(reason, typeof a.reason === "string" ? `Retenu parce que ${a.reason}.` : "");
       reason.hidden = typeof a.reason !== "string";
       const text = hubV4Expiry(a.expires_at, Date.now());
-      setText(expiry, text);
-      expiry.hidden = text === "";
+      setText(expiry.words, text);
+      expiry.node.hidden = text === "";
     },
   });
   return true;

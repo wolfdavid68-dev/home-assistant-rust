@@ -74,43 +74,49 @@ function hubV4Music() {
   const get = () => entities.get(id);
   const sub = el("span", { class: `text-petit ${HUB_V4_MUTE} truncate` });
   const img = el("img", { alt: "", decoding: "async", draggable: "false", class: "absolute inset-0 size-full object-cover" });
+  // La pochette ; sans elle, le dégradé de la maquette (violet, rose, ambre).
   const art = el("div", {
-    class: "relative grid place-items-center h-40 rounded-[20px] overflow-hidden "
-      + "bg-[radial-gradient(circle_at_30%_20%,rgb(185_163_255/0.45),rgb(16_18_42/0.6))] text-v-violet [&>svg]:size-14 [&>svg]:opacity-60",
+    class: "relative h-40 rounded-[20px] overflow-hidden bg-linear-to-br from-v-violet via-v-pink to-v-amber",
     "aria-hidden": "true",
-  }, svgIcon(ICONS.music), img);
+  }, img);
   const title = el("b", { class: "text-moyen font-semibold truncate" });
   const artist = el("span", { class: `text-petit ${HUB_V4_MUTE} truncate` });
-  const progress = el("div", { class: "relative h-1.5 rounded-full bg-voile/10 overflow-hidden", role: "img" },
-    el("span", { class: "absolute inset-y-0 left-0 w-(--p) rounded-full bg-v-violet" }));
+  // L'avancée du morceau : un trait fin, à l'encre (seulement si l'enceinte la donne).
+  const progress = el("div", { class: "relative h-1 mx-1 mt-1 rounded-full bg-voile/14 overflow-hidden", role: "img" },
+    el("span", { class: "absolute inset-y-0 left-0 w-(--p) rounded-full bg-v-ink" }));
   const at = el("span");
   const length = el("span");
-  const times = el("p", { class: `m-0 flex justify-between text-legende ${HUB_V4_MUTE}` }, at, length);
+  const times = el("p", { class: `m-0 -mt-1 px-1 flex justify-between text-legende ${HUB_V4_MUTE}` }, at, length);
   const command = (service, data) => {
     const now = get();
     if (!now || !hubV4Ready(now)) return;
     musicCommand(now, service, data);
   };
-  const prev = el("button", { type: "button", class: HUB_V4_ICON_BTN, "aria-label": "Précédent" }, svgIcon(ICONS.previous));
-  const next = el("button", { type: "button", class: HUB_V4_ICON_BTN, "aria-label": "Suivant" }, svgIcon(ICONS.next));
+  // Précédent et suivant : des icônes seules, sans fond (la maquette).
+  const skip = "grid place-items-center size-11 shrink-0 p-0 rounded-full border-0 bg-transparent text-inherit cursor-pointer "
+    + `transition-colors hover:bg-voile/10 disabled:opacity-35 disabled:cursor-default [&_svg]:size-5 ${HUB_V4_FOCUS}`;
+  const prev = el("button", { type: "button", class: skip, "aria-label": "Précédent" }, svgIcon(ICONS.previous));
+  const next = el("button", { type: "button", class: skip, "aria-label": "Suivant" }, svgIcon(ICONS.next));
   const play = el("button", {
-    type: "button", class: "grid place-items-center size-16 p-0 rounded-full border-0 bg-[#b9a3ff] text-[#170f33] cursor-pointer "
-      + `transition-colors hover:bg-[#cbbaff] disabled:opacity-40 disabled:cursor-default [&_svg]:size-7 ${HUB_V4_FOCUS}`,
+    type: "button", class: "grid place-items-center size-14 p-0 rounded-full border-0 bg-v-ink text-v-inverse cursor-pointer "
+      + `transition-colors hover:bg-v-ink/85 disabled:opacity-40 disabled:cursor-default [&_svg]:size-6 ${HUB_V4_FOCUS}`,
   });
   prev.addEventListener("click", () => command("media_previous_track"));
   next.addEventListener("click", () => command("media_next_track"));
   play.addEventListener("click", () => command(get()?.state === "playing" ? "media_pause" : "media_play"));
-  const controls = el("div", { class: "flex items-center justify-center gap-5" }, prev, play, next);
+  const controls = el("div", { class: "flex items-center justify-center gap-6" }, prev, play, next);
 
   let hold = 0;
   const volumeValue = el("b", { class: "relative text-corps font-semibold" });
   const range = el("input", { type: "range", min: "0", max: "100", step: "1", "aria-label": "Volume", class: HUB_V4_RANGE });
   const volume = el("label", {
-    class: `relative flex items-center justify-between h-12 px-4 rounded-[16px] bg-voile/8 overflow-hidden ${HUB_V4_TRACK}`,
+    class: `relative flex items-center justify-between h-12 px-4 text-v-ink rounded-[16px] bg-voile/8 overflow-hidden ${HUB_V4_TRACK}`,
   },
   el("span", {
-    class: "absolute inset-y-0 left-0 w-(--v) bg-linear-to-r from-v-violet/25 to-v-violet/70 "
-      + "transition-[width] motion-reduce:transition-none",
+    class: "absolute inset-y-0 left-0 w-(--v) bg-linear-to-r from-v-violet/20 to-v-violet/45 "
+      + "transition-[width] motion-reduce:transition-none "
+      // La poignée : un trait au bout de la part remplie.
+      + "after:absolute after:right-2 after:top-1/2 after:-translate-y-1/2 after:w-1 after:h-5 after:rounded-full after:bg-v-ink/45",
     "aria-hidden": "true",
   }),
   el("span", { class: "relative flex items-center gap-2 text-corps font-medium [&_svg]:size-4" }, svgIcon(ICONS.speaker), "Volume"),
@@ -133,7 +139,8 @@ function hubV4Music() {
   // seconde, et un bouton refait sous le doigt perd le toucher.
   let speakersMark = "";
   const paintSpeakers = () => {
-    const list = musicPlayers();
+    // L'enceinte affichée d'abord (la maquette), les autres dessous.
+    const list = musicPlayers().sort((a, b) => Number(b.entity_id === id) - Number(a.entity_id === id));
     speakers.hidden = list.length < 2;
     const mark = JSON.stringify([id, ...list.map((player) => [player.entity_id, player.state, nameOf(player)])]);
     if (mark === speakersMark) return;
@@ -145,7 +152,10 @@ function hubV4Music() {
         class: "flex items-center gap-2.5 min-h-11 px-3 rounded-[14px] border-0 bg-voile/6 text-left text-corps text-inherit "
           + "cursor-pointer transition-colors hover:bg-voile/10 aria-pressed:bg-v-violet/20 " + HUB_V4_FOCUS,
       },
-      el("span", { class: "size-2 shrink-0 rounded-full bg-voile/25 data-on:bg-v-violet", ...(playing ? { "data-on": "" } : {}) }),
+      el("span", {
+        class: "size-2.5 shrink-0 rounded-full border-2 border-voile/35 data-on:border-0 data-on:bg-v-violet",
+        ...(playing ? { "data-on": "" } : {}),
+      }),
       el("span", { class: "flex-1 truncate", text: nameOf(player) }),
       el("span", { class: `text-legende ${HUB_V4_MUTE}`, text: playing ? "en cours" : player.state === "paused" ? "en pause" : "" }));
       node.addEventListener("click", () => {
@@ -253,18 +263,27 @@ function hubV4WeatherDays(forecast) {
   }));
 }
 
-/** La météo : maintenant, puis quatre jours, barres min / max et pluie possible. */
+/** Ce que dit le sous-titre de la météo, selon l'heure. */
+function hubV4WeatherSub(hour) {
+  return hour >= 18 || hour < 5 ? "Ce soir et les jours qui viennent" : "Aujourd'hui et les jours qui viennent";
+}
+
+/**
+ * La météo : maintenant (grands chiffres fins), puis quatre jours, barres
+ * min / max et pluie possible. La rangée « Heure par heure » de la maquette
+ * n'y est pas : weather.maison ne donne que des prévisions par jour.
+ */
 function hubV4Weather() {
   if (!hubV4Can()) return false;
   const get = () => [...entities.values()].find((s) => domainOf(s) === "weather");
-  if (!get()) return false;
-  const icon = el("span", { class: "text-v-sky [&_svg]:size-12", "aria-hidden": "true" });
-  const temp = el("b", { class: "font-chiffres text-affiche-l font-extralight leading-none tracking-[-0.03em]" });
+  const first = get();
+  if (!first) return false;
+  const temp = el("b", { class: "font-chiffres text-geant font-extralight leading-none tracking-[-0.03em]" });
   const label = el("b", { class: "text-courant font-semibold" });
   const feel = el("span", { class: `text-petit ${HUB_V4_MUTE}` });
-  const now = el("div", { class: "flex items-center gap-3 px-1" }, icon, temp, el("p", { class: "m-0 flex flex-col" }, label, feel));
-  const daysTitle = el("b", { class: HUB_V4_LABEL, text: "4 jours" });
-  const list = el("ul", { class: "m-0 p-0 list-none flex flex-col gap-1" });
+  const now = el("div", { class: "flex items-center gap-3 px-1 pt-1" }, temp, el("p", { class: "m-0 flex flex-col min-w-0" }, label, feel));
+  const daysTitle = el("span", { class: HUB_V4_LABEL, text: "4 jours" });
+  const list = el("ul", { class: "m-0 p-0 list-none flex flex-col divide-y divide-voile/8" });
   const refresh = () => {
     const weather = get();
     if (!weather) {
@@ -272,41 +291,41 @@ function hubV4Weather() {
       return;
     }
     const a = weather.attributes;
-    if (icon.dataset.condition !== weather.state) {
-      icon.dataset.condition = weather.state;
-      icon.replaceChildren(svgIcon(weatherIcon(weather.state)));
-    }
     setText(temp, typeof a.temperature === "number" ? `${hubV4Num(a.temperature)}°` : "—");
     setText(label, lookup(WEATHER_LABELS, weather.state)?.[0] ?? "");
     const parts = [];
     if (typeof a.apparent_temperature === "number") parts.push(`ressenti ${Math.round(a.apparent_temperature)}°`);
     const wind = hubV4Wind(a.wind_speed);
     if (wind) parts.push(wind);
-    if (typeof a.humidity === "number") parts.push(`humidité ${Math.round(a.humidity)} %`);
     setText(feel, parts.join(" · "));
     const days = hubV4WeatherDays(a.forecast);
     daysTitle.hidden = days.length === 0;
-    swap(list, ...days.flatMap((day) => {
+    swap(list, ...days.map((day) => {
       const bar = el("span", {
-        class: "absolute inset-y-0 left-(--from) right-(--to) rounded-full bg-linear-to-r from-[#9ad8ff] to-[#ffbf5e]",
+        class: "absolute inset-y-0 left-(--from) right-(--to) rounded-full bg-linear-to-r from-v-sky to-v-amber",
       });
       bar.style.setProperty("--from", `${Math.round(day.from * 100)}%`);
       bar.style.setProperty("--to", `${Math.round((1 - day.to) * 100)}%`);
-      const row = el("li", { class: "grid grid-cols-[40px_24px_32px_1fr_32px] items-center gap-2 min-h-10 px-2 text-corps [&_svg]:size-5" },
-        el("span", { class: "first-letter:uppercase", text: dayName.format(new Date(`${day.datetime.slice(0, 10)}T12:00`)) }),
-        svgIcon(weatherIcon(day.condition)),
+      const row = el("div", { class: "grid grid-cols-[40px_24px_32px_1fr_32px] items-center gap-2 min-h-11 text-corps [&_svg]:size-5" },
+        el("span", {
+          class: "first-letter:uppercase font-medium",
+          // « Mer » plutôt que « mer. » (la maquette).
+          text: dayName.format(new Date(`${day.datetime.slice(0, 10)}T12:00`)).replace(/\.$/, ""),
+        }),
+        el("span", { class: HUB_V4_MUTE, "aria-hidden": "true" }, svgIcon(weatherIcon(day.condition))),
         el("span", { class: `text-right ${HUB_V4_MUTE}`, text: `${day.low}°` }),
         el("span", { class: "relative h-1.5 rounded-full bg-voile/10" }, bar),
         el("span", { class: "font-semibold", text: `${day.high}°` }));
-      if (day.rain === null) return [row];
-      return [row, el("li", { class: "pl-[72px] -mt-1 text-legende text-v-sky", text: `Pluie possible · ${day.rain} %` })];
+      const rain = day.rain === null ? []
+        : [el("p", { class: "m-0 -mt-1.5 pb-1.5 text-center text-legende text-v-sky", text: `Pluie possible · ${day.rain} %` })];
+      return el("li", { class: "px-2" }, row, ...rain);
     }));
   };
   hubV4Overlay({
-    icon: ICONS.partly,
+    icon: weatherIcon(first.state),
     tone: "sky",
     title: "Météo",
-    sub: el("span", { class: `text-petit ${HUB_V4_MUTE}`, text: "Maintenant et 4 jours" }),
+    sub: el("span", { class: `text-petit ${HUB_V4_MUTE}`, text: hubV4WeatherSub(new Date().getHours()) }),
     body: [now, daysTitle, list],
     spot: hubV4Rect(document.querySelector("#hub-weather")),
     refresh,
@@ -325,33 +344,38 @@ function hubV4TempoDay(state) {
   return { tone: "unknown", text: "À venir" };
 }
 
-/** Tempo : aujourd'hui, demain, et quand arrive la couleur de demain. */
+/**
+ * Tempo : aujourd'hui, demain, et quand arrive la couleur de demain ; dessous,
+ * l'agenda des jours qui viennent (la maquette les empile). Les « jours rouges
+ * restants » de la maquette n'y sont pas : aucun capteur ne les compte.
+ */
 function hubV4Tempo() {
   if (!hubV4Can() || !entities.get(TEMPO_TODAY)) return false;
   const day = (label) => {
     const dot = el("span", {
-      class: "size-3.5 shrink-0 rounded-full border-2 border-dashed border-voile/40 "
+      class: "size-3.5 shrink-0 rounded-full border-2 border-voile/40 "
         + "data-[tone=blue]:border-0 data-[tone=blue]:bg-[#5b8cff] data-[tone=white]:border-0 data-[tone=white]:bg-white data-[tone=white]:ring-1 data-[tone=white]:ring-voile/30 "
         + "data-[tone=red]:border-0 data-[tone=red]:bg-[#ff6b6b]",
     });
-    const word = el("b", { class: "text-grand font-semibold" });
-    const node = el("div", { class: "flex flex-col gap-1 p-3 rounded-[18px] bg-voile/6" },
+    const word = el("b", { class: "text-moyen font-semibold" });
+    const node = el("div", { class: "flex flex-col gap-1.5 p-3 rounded-[18px] bg-voile/6" },
       el("span", { class: `text-petit ${HUB_V4_MUTE}`, text: label }), el("span", { class: "flex items-center gap-2" }, dot, word));
     return { node, dot, word };
   };
   const today = day("Aujourd'hui");
   const tomorrow = day("Demain");
-  const note = el("p", { class: `m-0 px-1 text-petit ${HUB_V4_MUTE}` });
+  const note = hubV4Note(HUB_V4_MORE_LINES.clock);
   const paint = (part, state) => {
     const { tone, text } = hubV4TempoDay(state);
     part.dot.dataset.tone = tone;
     setText(part.word, text);
   };
+  const agenda = hubV4AgendaPart();
   hubV4Overlay({
     icon: ICONS.bolt,
     title: "Tempo",
-    sub: el("span", { class: `text-petit ${HUB_V4_MUTE}`, text: "La couleur du jour EDF" }),
-    body: [el("div", { class: "grid grid-cols-2 gap-2" }, today.node, tomorrow.node), note],
+    sub: el("span", { class: `text-petit ${HUB_V4_MUTE}`, text: "Couleur du jour EDF" }),
+    body: [el("div", { class: "grid grid-cols-2 gap-2" }, today.node, tomorrow.node), note.node, ...agenda.nodes],
     spot: hubV4Rect(document.querySelector("#hub-v3-tempo")),
     refresh: () => {
       if (!entities.get(TEMPO_TODAY)) {
@@ -362,7 +386,8 @@ function hubV4Tempo() {
       const next = entities.get(TEMPO_TOMORROW);
       paint(tomorrow, next);
       const waiting = hubV4TempoDay(next).tone === "unknown";
-      setText(note, waiting ? "La couleur de demain arrive vers 11 h." : "Un jour Tempo va de 6 h à 6 h.");
+      setText(note.words, waiting ? "La couleur de demain arrive vers 11 h." : "Un jour Tempo va de 6 h à 6 h.");
+      agenda.refresh();
     },
   });
   return true;
@@ -370,12 +395,20 @@ function hubV4Tempo() {
 
 // ---------------------------------------------------------------- Agenda
 
+/** Le prochain jour férié (sensor.prochain_jour_ferie) : { date, name }, ou null. */
+function hubV4Holiday(state) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(state?.state ?? "");
+  if (!match) return null;
+  const name = typeof state.attributes?.nom === "string" && state.attributes.nom.trim() ? state.attributes.nom.trim() : "Jour férié";
+  return { date: new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])), name };
+}
+
 /**
  * Les rendez-vous groupés par jour, sur `count` jours à partir d'aujourd'hui.
  * Aujourd'hui est toujours là (même vide) ; les autres jours, seulement s'il
- * y a quelque chose.
+ * y a quelque chose (un rendez-vous, ou un jour férié de `holidays`).
  */
-function hubV4AgendaDays(events, now, count = 7) {
+function hubV4AgendaDays(events, now, count = 7, holidays = []) {
   const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const days = [];
   for (let i = 0; i < count; i++) {
@@ -383,56 +416,105 @@ function hubV4AgendaDays(events, now, count = 7) {
     const to = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i + 1);
     // Un rendez-vous à l'heure qui déborde sur le lendemain n'y revient pas.
     const list = events.filter((e) => e.startDate < to && e.endDate > from && (i === 0 || e.startDate >= from || e.allDay));
-    if (i === 0 || list.length > 0) days.push({ date: from, events: list });
+    const off = holidays.filter((h) => h.date >= from && h.date < to).map((h) => h.name);
+    if (i === 0 || list.length > 0 || off.length > 0) days.push({ date: from, events: list, holidays: off });
   }
   return days;
 }
 
-/** L'agenda : les jours qui viennent ; « + » pour un rendez-vous dans l'agenda de la maison. */
-function hubV4Agenda() {
-  if (!hubV4Can() || typeof agendaCalendars !== "function" || agendaCalendars().length === 0) return false;
+/**
+ * La liste des jours de l'agenda (une rangée par jour : le jour à gauche, ses
+ * rendez-vous à droite), à remplir par `paint(calendars, keep)` ; `keep` : le
+ * nombre de jours montrés au plus.
+ */
+function hubV4AgendaList() {
   const list = el("ul", { class: "m-0 p-0 list-none flex flex-col gap-1.5" });
-  const add = el("button", { type: "button", class: `${HUB_V4_BTN} justify-start` }, svgIcon(HUB_V4_MORE_ICONS.plus), "Nouveau rendez-vous");
-  add.addEventListener("click", () => hubV4NewEvent());
   const dateDay = new Intl.DateTimeFormat("fr", { weekday: "short" });
-  const refresh = () => {
-    const calendars = agendaCalendars();
-    if (calendars.length === 0) {
-      hubV4Close();
-      return;
-    }
+  const line = (title, sub) => el("span", { class: "flex flex-col min-w-0 py-1" },
+    el("b", { class: "text-courant font-semibold truncate", text: title }),
+    ...(sub ? [el("span", { class: `text-legende ${HUB_V4_MUTE} truncate`, text: sub })] : []));
+  const paint = (calendars, keep = 7) => {
     const now = new Date();
     const start = dayStart(now);
     const events = hubMergeSame(agendaEvents(start, addDays(start, 7), calendars));
-    const days = hubV4AgendaDays(events, now);
-    swap(list, ...days.map(({ date, events: dayEvents }) => {
-      const rows = dayEvents.length === 0
-        ? [el("p", { class: `m-0 py-2 text-corps ${HUB_V4_MUTE}`, text: "Rien aujourd'hui" })]
-        : dayEvents.map((e) => {
+    const holiday = hubV4Holiday(entities.get("sensor.prochain_jour_ferie"));
+    const days = hubV4AgendaDays(events, now, 7, holiday ? [holiday] : []).slice(0, keep);
+    swap(list, ...days.map(({ date, events: dayEvents, holidays }) => {
+      const rows = [
+        ...holidays.map((name) => el("div", { class: "flex items-center min-h-11 px-2" }, line(name, "jour férié"))),
+        ...dayEvents.map((e) => {
           const row = el("button", {
             type: "button",
             class: "flex items-center gap-2.5 w-full min-h-11 px-2 rounded-[12px] border-0 bg-transparent text-left text-inherit "
               + `cursor-pointer transition-colors hover:bg-voile/8 ${HUB_V4_FOCUS}`,
           },
           el("span", { class: "w-1 self-stretch my-1.5 shrink-0 rounded-full bg-(--ev)" }),
-          el("span", { class: "flex flex-col min-w-0" },
-            el("b", { class: "text-corps font-semibold truncate", text: String(e.summary ?? "") }),
-            el("span", {
-              class: `text-legende ${HUB_V4_MUTE} truncate`,
-              text: [e.allDay ? "toute la journée" : hubV4Clock(e.startDate), e.location || ""].filter(Boolean).join(" · "),
-            })));
+          line(String(e.summary ?? ""), [e.allDay ? "toute la journée" : hubV4Clock(e.startDate), e.location || ""].filter(Boolean).join(" · ")));
           row.style.setProperty("--ev", e.color);
           row.addEventListener("click", () => {
             hubV4Close();
             openEventDetails(e);
           });
           return row;
-        });
-      return el("li", { class: "grid grid-cols-[44px_1fr] gap-2 items-start p-1.5 rounded-[16px] bg-voile/6" },
-        el("span", { class: `flex flex-col items-center pt-1.5 text-legende ${HUB_V4_MUTE}` },
-          dateDay.format(date), el("b", { class: "text-grand font-semibold text-v-ink leading-tight", text: String(date.getDate()) })),
+        }),
+      ];
+      if (rows.length === 0) rows.push(el("p", { class: "m-0 flex items-center min-h-11 px-2 text-courant font-medium", text: "Rien aujourd'hui" }));
+      return el("li", { class: "grid grid-cols-[44px_1fr] gap-1 items-center p-1.5 rounded-[16px] bg-voile/6" },
+        el("span", { class: `flex flex-col items-center text-legende ${HUB_V4_MUTE}` },
+          dateDay.format(date), el("b", { class: "text-moyen font-semibold text-v-ink leading-tight", text: String(date.getDate()) })),
         el("div", { class: "flex flex-col min-w-0" }, ...rows));
     }));
+  };
+  return { list, paint };
+}
+
+/**
+ * L'agenda sous Tempo : un en-tête (qui ouvre l'agenda) et les trois prochains
+ * jours. `nodes` est vide sans agenda.
+ */
+function hubV4AgendaPart() {
+  if (typeof agendaCalendars !== "function" || agendaCalendars().length === 0) return { nodes: [], refresh: () => {} };
+  const days = hubV4AgendaList();
+  const head = el("button", {
+    type: "button",
+    class: "flex items-center gap-3 w-full min-h-12 mt-1.5 p-0 rounded-[14px] border-0 bg-transparent text-left text-inherit "
+      + `cursor-pointer ${HUB_V4_FOCUS}`,
+    "aria-label": "Ouvrir l'agenda",
+  },
+  el("span", {
+    class: "grid place-items-center size-11 shrink-0 rounded-2xl bg-v-ok/16 text-v-ok [&_svg]:size-[22px]", "aria-hidden": "true",
+  }, svgIcon(ICONS.calendar)),
+  el("span", { class: "flex flex-col flex-1 min-w-0" },
+    el("b", { class: "font-recit text-titre font-normal leading-[1.05] tracking-[-0.01em]", text: "Agenda" }),
+    el("span", { class: `text-petit ${HUB_V4_MUTE}`, text: "Les jours qui viennent" })),
+  el("span", { class: `${HUB_V4_MUTE} [&_svg]:size-5`, "aria-hidden": "true" }, svgIcon(HUB_V4_ICONS.go)));
+  head.addEventListener("click", () => hubV4Agenda());
+  // Un trait sépare les deux fenêtres de la maquette, réunies ici.
+  const rule = el("hr", { class: "m-0 mt-1 border-0 border-t border-voile/10", "aria-hidden": "true" });
+  const nodes = [rule, head, days.list];
+  return {
+    nodes,
+    refresh: () => {
+      const calendars = agendaCalendars();
+      for (const node of nodes) node.hidden = calendars.length === 0;
+      if (calendars.length > 0) days.paint(calendars, 3);
+    },
+  };
+}
+
+/** L'agenda : les jours qui viennent ; « + » pour un rendez-vous dans l'agenda de la maison. */
+function hubV4Agenda() {
+  if (!hubV4Can() || typeof agendaCalendars !== "function" || agendaCalendars().length === 0) return false;
+  const days = hubV4AgendaList();
+  const add = el("button", { type: "button", class: `${HUB_V4_BTN} justify-start` }, svgIcon(HUB_V4_MORE_ICONS.plus), "Nouveau rendez-vous");
+  add.addEventListener("click", () => hubV4NewEvent());
+  const refresh = () => {
+    const calendars = agendaCalendars();
+    if (calendars.length === 0) {
+      hubV4Close();
+      return;
+    }
+    days.paint(calendars);
     add.hidden = !calendars.some((c) => c.id === "calendar.maison" && !c.readOnly && canControl(c.state));
   };
   hubV4Overlay({
@@ -440,7 +522,7 @@ function hubV4Agenda() {
     tone: "green",
     title: "Agenda",
     sub: el("span", { class: `text-petit ${HUB_V4_MUTE}`, text: "Les jours qui viennent" }),
-    body: [list, add],
+    body: [days.list, add],
     more: { label: "Tout l'agenda", run: () => { leaveHub(); openAgenda(); } },
     refresh,
   });
@@ -509,64 +591,94 @@ function hubV4NewEvent() {
 // ---------------------------------------------------------------- Annonce
 
 const HUB_V4_SAY_IDEAS = ["À table !", "On part dans 5 min", "Extinction des feux"];
+const HUB_V4_SAY_VOLUMES = [30, 50, 70];
+// Un choix d'une rangée segmentée (Où, Volume) : le choix courant teinté d'ambre.
+const HUB_V4_SEG = "flex-1 min-h-11 px-2 rounded-[12px] border-0 bg-transparent text-petit font-medium text-inherit cursor-pointer "
+  + `transition-colors hover:bg-voile/8 aria-pressed:bg-v-amber/20 aria-pressed:font-semibold ${HUB_V4_FOCUS}`;
+// Les idées : des pastilles carrées (la maquette), de 44 px de haut.
+const HUB_V4_SAY_CHIP = "min-h-11 px-3 rounded-[12px] border-0 bg-voile/8 text-petit text-inherit cursor-pointer "
+  + `transition-colors hover:bg-voile/14 ${HUB_V4_FOCUS}`;
 
-/** L'annonce : une phrase, des idées, où la dire. */
+/**
+ * Ce qu'envoie « Annoncer » (tts.speak) : le message partout, ou le carillon
+ * seul ; le volume (0 à 100) va avec, le service le règle sur les enceintes.
+ * Null s'il n'y a rien à dire.
+ */
+function hubV4SayData(announcer, where, message, volume) {
+  const data = { entity_id: announcer.tts.entity_id, media_player_entity_id: announcer.speakers, volume };
+  if (where === "chime") return data;
+  const text = String(message ?? "").trim();
+  return text === "" ? null : { ...data, message: text };
+}
+
+/** L'annonce : une phrase, des idées, où la dire (partout ou le carillon seul), à quel volume. */
 function hubV4Announce() {
   if (!hubV4Can() || hubAnnouncer() === null) return false;
-  const input = el("input", { type: "text", class: HUB_V4_INPUT, placeholder: "Le dîner est prêt", maxlength: "200", "aria-label": "Message" });
+  // Pas de bouton micro dans le champ (maquette) : le hub n'a pas de dictée vers un champ.
+  const input = el("textarea", {
+    class: "block w-full h-20 px-4 py-3 rounded-[16px] border-0 bg-voile/8 text-courant leading-snug text-inherit resize-none "
+      + `placeholder:text-v-mute/80 [color-scheme:var(--v4-scheme)] ${HUB_V4_FOCUS}`,
+    rows: "2",
+    placeholder: "Le dîner est prêt", maxlength: "200", "aria-label": "Message",
+  });
   const ideas = el("div", { class: "flex flex-wrap gap-1.5", role: "group", "aria-label": "Idées" },
     ...HUB_V4_SAY_IDEAS.map((text) => {
-      const node = el("button", { type: "button", class: HUB_V4_CHIP, text });
+      const node = el("button", { type: "button", class: HUB_V4_SAY_CHIP, text });
       node.addEventListener("click", () => {
         input.value = text;
         input.focus();
       });
       return node;
     }));
-  // Où : partout, ou une seule enceinte.
-  let where = "";
-  const whereLabel = el("b", { class: HUB_V4_LABEL, text: "Où" });
-  const whereBox = el("div", { class: "flex flex-wrap gap-1 p-1 rounded-[16px] bg-voile/6", role: "group", "aria-label": "Où" });
-  const send = el("button", { type: "submit", class: HUB_V4_MAIN }, svgIcon(ICONS.megaphone), "Annoncer");
-  const form = el("form", { class: "flex flex-col gap-2.5" }, input, ideas, whereLabel, whereBox, send);
+  let where = "all";
+  let volume = 50;
+  const segment = (label, items, pick) => {
+    const nodes = items.map(([value, text]) => {
+      const node = el("button", { type: "button", class: HUB_V4_SEG, "aria-pressed": "false", text });
+      node.addEventListener("click", () => {
+        pick(value);
+        refresh();
+      });
+      node.dataset.value = String(value);
+      return node;
+    });
+    const box = el("div", { class: "flex gap-1 p-1 rounded-[16px] bg-voile/6", role: "group", "aria-label": label }, ...nodes);
+    return { box, nodes };
+  };
+  const whereBox = segment("Où", [["all", "Partout"], ["chime", "Carillon seul"]], (value) => { where = value; });
+  const volumeBox = segment("Volume", HUB_V4_SAY_VOLUMES.map((level) => [level, `${level} %`]), (value) => { volume = value; });
+  const send = el("button", { type: "submit", class: HUB_V4_MAIN }, svgIcon(ICONS.speaker), "Annoncer");
+  const form = el("form", { class: "flex flex-col gap-2.5" }, input, ideas,
+    el("span", { class: HUB_V4_LABEL, text: "Où" }), whereBox.box,
+    el("span", { class: HUB_V4_LABEL, text: "Volume" }), volumeBox.box, send);
+  // Entrée envoie, comme l'ancien champ d'une ligne ; Maj + Entrée passe à la ligne.
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+      event.preventDefault();
+      form.requestSubmit();
+    }
+  });
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const announcer = hubAnnouncer();
-    const message = input.value.trim();
-    if (!announcer || message === "") return;
-    const speakers = where && announcer.speakers.includes(where) ? [where] : announcer.speakers;
+    const data = announcer ? hubV4SayData(announcer, where, input.value, volume) : null;
+    if (!data) return;
     send.disabled = true;
-    const sent = await callService("tts", "speak", { entity_id: announcer.tts.entity_id, media_player_entity_id: speakers, message });
+    const sent = await callService("tts", "speak", data);
     send.disabled = false;
     // L'annonce n'est pas partie : la fenêtre reste ouverte, le texte aussi.
     if (sent) hubV4Close();
   });
   const refresh = () => {
-    const announcer = hubAnnouncer();
-    if (!announcer) {
+    if (!hubAnnouncer()) {
       hubV4Close();
       return;
     }
-    if (where && !announcer.speakers.includes(where)) where = "";
-    const choices = [["", "Partout"], ...announcer.speakers.map((id) => [id, nameOf(entities.get(id))])];
-    whereLabel.hidden = announcer.speakers.length < 2;
-    whereBox.hidden = announcer.speakers.length < 2;
-    swap(whereBox, ...choices.map(([id, text]) => {
-      const node = el("button", {
-        type: "button", "aria-pressed": String(id === where),
-        class: "flex-1 min-h-10 px-3 rounded-[12px] border-0 bg-transparent text-petit font-medium text-inherit cursor-pointer "
-          + `transition-colors hover:bg-voile/8 aria-pressed:bg-[#9ad8ff] aria-pressed:text-[#0b1a2b] ${HUB_V4_FOCUS}`,
-        text,
-      });
-      node.addEventListener("click", () => {
-        where = id;
-        refresh();
-      });
-      return node;
-    }));
+    for (const node of whereBox.nodes) setAttr(node, "aria-pressed", String(node.dataset.value === where));
+    for (const node of volumeBox.nodes) setAttr(node, "aria-pressed", String(Number(node.dataset.value) === volume));
   };
   hubV4Overlay({
-    icon: ICONS.megaphone,
+    icon: ICONS.speaker,
     tone: "sky",
     title: "Annonce",
     sub: el("span", { class: `text-petit ${HUB_V4_MUTE}`, text: "La maison le dit à voix haute" }),
