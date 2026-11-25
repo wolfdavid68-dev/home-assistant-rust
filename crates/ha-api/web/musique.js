@@ -215,7 +215,7 @@ const musicUi = (() => {
       text: "Pour lancer une playlist d'ici, ajoute-la aux favoris dans l'appli Sonos : ouvre-la dans YouTube Music, touche « … » puis « Ajouter aux favoris Sonos ». Elle apparaîtra ici avec sa pochette.",
     }),
     favoritesCard: el("section", { class: "music-card music-favorites [background:color-mix(in_srgb,_var(--card)_84%,_transparent)] [-webkit-backdrop-filter:blur(24px)] [backdrop-filter:blur(24px)] rounded-carte [box-shadow:var(--shadow)] p-5 min-w-0 [&[hidden]]:hidden [:not(:where(.o159100))&_h3]:mt-0 [:not(:where(.o159100))&_h3]:mx-0 [:not(:where(.o159100))&_h3]:mb-3 [:not(:where(.o159101))&_h3]:text-moyen [:not(:where(.o159102))&_h3]:font-semibold", "aria-labelledby": "music-favorites-title" }),
-    empty: el("p", { class: "music-empty my-8 mx-auto text-muted [&[hidden]]:hidden", text: "Aucune enceinte pour l'instant." }),
+    empty: etatVide(ICONS.speaker, "Aucune enceinte pour l'instant."),
   };
   ui.progress.append(ui.seek, el("div", { class: "music-times flex justify-between [:not(:where(.o156702))&]:text-petit text-muted [:not(:where(.o156704))&]:[font-variant-numeric:tabular-nums]" }, ui.elapsed, ui.total));
   ui.favoritesCard.append(el("h3", { id: "music-favorites-title", text: "Favoris" }), ui.grid, ui.favoritesHint);

@@ -632,8 +632,8 @@ function calendarTile(state) {
       el("span", { class: "event-name flex-1 min-w-0 [overflow-wrap:break-word]", text: e.summary }));
     if (!readOnly) {
       const remove = el("button", { type: "button", class: "item-remove flex-none w-[28px] h-[28px] [border:0] rounded-puce [background:transparent] text-muted [:not(:where(.o016807))&]:text-moyen [:not(:where(.o016808))&]:[line-height:1] cursor-pointer [&:hover]:bg-alert-soft [&:hover]:text-alert", "aria-label": `Supprimer ${e.summary}`, text: "×" });
-      remove.addEventListener("click", () => {
-        if (window.confirm(`Supprimer « ${e.summary} » ?`)) callService("calendar", "delete_event", { entity_id: state.entity_id, uid: e.uid });
+      remove.addEventListener("click", async () => {
+        if (await confirmer(`« ${e.summary} » sera retiré de l'agenda.`, { titre: "Supprimer le rendez-vous ?", ok: "Supprimer", danger: true })) callService("calendar", "delete_event", { entity_id: state.entity_id, uid: e.uid });
       });
       row.append(remove);
     }

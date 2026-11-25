@@ -96,7 +96,7 @@ const SUN_EVENTS = [["sunrise", "lever du soleil"], ["sunset", "coucher du solei
 const WEEKDAYS = [["mon", "lun"], ["tue", "mar"], ["wed", "mer"], ["thu", "jeu"], ["fri", "ven"], ["sat", "sam"], ["sun", "dim"]];
 
 $("#open-automations").addEventListener("click", () => {
-  $("#automations").showModal();
+  ouvrirFenetre($("#automations"));
   showAutoList();
 });
 $("#automations-close").addEventListener("click", () => $("#automations").close());
@@ -124,7 +124,7 @@ async function showAutoList(notice = "") {
   $("#auto-new").hidden = !auto.editable;
   list.replaceChildren(...auto.list.map(autoCard));
   if (auto.list.length === 0) {
-    list.replaceChildren(el("li", { class: "auto-empty text-muted py-4 px-0", text: "Aucune automatisation pour l'instant." }));
+    list.replaceChildren(etatVide(ICONS.sparkle, "Aucune automatisation pour l'instant.", auto.editable ? { texte: "Nouvelle automatisation", onClick: () => $("#auto-new").click() } : null, "li"));
   }
 }
 
@@ -1020,9 +1020,9 @@ async function saveAutomation(id, request, done) {
   showAutoList(done + warnings);
 }
 
-$("#auto-delete").addEventListener("click", () => {
+$("#auto-delete").addEventListener("click", async () => {
   const id = auto.existingId;
-  if (id === null || !window.confirm(`Supprimer l'automatisation « ${auto.config?.alias || id} » ? (Ses versions sont gardées.)`)) return;
+  if (id === null || !await confirmer(`« ${auto.config?.alias || id} » sera supprimée. Ses versions sont gardées.`, { titre: "Supprimer l'automatisation ?", ok: "Supprimer", danger: true })) return;
   deleteAutomation(id);
 });
 
@@ -1080,7 +1080,7 @@ $("#auto-versions").addEventListener("click", async () => {
       return item;
     }),
   );
-  if (data.versions.length === 0) list.replaceChildren(el("li", { text: "Aucune version enregistrée." }));
+  if (data.versions.length === 0) list.replaceChildren(etatVide(ICONS.archive, "Aucune version enregistrée.", null, "li"));
 });
 
 $("#auto-cancel").addEventListener("click", () => showAutoList());
@@ -1203,8 +1203,7 @@ function askConfirmation(then) {
   const form = $("#confirm-form");
   form.reset();
   $("#confirm-error").hidden = true;
-  $("#confirm").showModal();
-  form.password.focus();
+  ouvrirFenetre($("#confirm"), form.password);
 }
 
 $("#confirm-cancel").addEventListener("click", () => {

@@ -579,7 +579,7 @@ async function wakeHeard(samples) {
     if (data.wake !== true || run !== voice.run || !wakeShouldListen()) return;
     // C'est le mot : la tablette se réveille, Assist s'ouvre.
     if (typeof saver !== "undefined" && saver.on) hideSaver();
-    if (!$("#assist").open) $("#assist").showModal();
+    ouvrirFenetre($("#assist"), false);
     if (data.response) {
       // « Maison, allume la cuisine » : déjà obéi, on dit la réponse.
       voice.turns = 0;
@@ -615,7 +615,7 @@ $("#assist-mic").replaceChildren(svgIcon(ICONS.mic));
 hubButton("#hub-talk", ICONS.mic, "Parler à la maison");
 $("#assist-mic").addEventListener("click", () => voiceStart());
 $("#hub-talk").addEventListener("click", () => {
-  if (!$("#assist").open) $("#assist").showModal();
+  ouvrirFenetre($("#assist"), false);
   voiceStart();
 });
 // Fermer Assist ferme aussi le micro, et arrête la réponse et l'enchaînement.

@@ -19,6 +19,7 @@
        de app.js) : la politique de sécurité (CSP) interdit le JavaScript
        écrit directement dans la page. -->
   <script src="/utils.js" defer></script>
+  <script src="/fenetres.js" defer></script>
   <script src="/app.js" defer></script>
   <script src="/tiles.js" defer></script>
   <script src="/tiles-appareils.js" defer></script>
@@ -167,10 +168,10 @@
     <section id="room-view" class="room-view max-w-[1760px] mt-2.5 mx-auto mb-0 [padding:0_var(--gutter-r)_7rem_var(--gutter)] [&[hidden]]:hidden [&_#room-close]:hidden [:root[data-hub=on]_#dashboard-view>&]:[content-visibility:hidden]" aria-label="Pièce" hidden></section>
     <!-- Le lecteur de musique (musique.js, étape 92) : rempli par le script. -->
     <section id="music-view" class="music-view relative [isolation:isolate] max-w-[1760px] mt-2.5 mx-auto mb-0 [padding:0_var(--gutter-r)_7rem_var(--gutter)] grid [:not(:where(.o153506))&]:[grid-template-columns:minmax(0,_1fr)] gap-3.5 [align-items:start] [&[hidden]]:hidden [:not(:where(.o156000))&_input[type=range]]:h-[28px] [:not(:where(.o156001))&_input[type=range]]:rounded-none [&_input[type=range]]:[background:linear-gradient(90deg,_var(--accent)_0_var(--fill,_0%),_color-mix(in_srgb,_var(--text)_14%,_transparent)_var(--fill,_0%)_100%)_center_/_100%_6px_no-repeat] [:not(:where(.o156100))&_input[type=range]::-webkit-slider-thumb]:w-[16px] [:not(:where(.o156101))&_input[type=range]::-webkit-slider-thumb]:h-[16px] [:not(:where(.o156102))&_input[type=range]::-webkit-slider-thumb]:rounded-full [:not(:where(.o156103))&_input[type=range]::-webkit-slider-thumb]:bg-accent [:not(:where(.o156104))&_input[type=range]::-webkit-slider-thumb]:[box-shadow:0_0_0_3px_var(--card)] [:not(:where(.o156200))&_input[type=range]::-moz-range-thumb]:w-[16px] [:not(:where(.o156201))&_input[type=range]::-moz-range-thumb]:h-[16px] [:not(:where(.o156202))&_input[type=range]::-moz-range-thumb]:rounded-full [:not(:where(.o156203))&_input[type=range]::-moz-range-thumb]:bg-accent [:not(:where(.o156204))&_input[type=range]::-moz-range-thumb]:[box-shadow:0_0_0_3px_var(--card)] [&_input[type=range]:disabled]:[cursor:default] [:not(:where(.o156400))&_input[type=range]:disabled::-webkit-slider-thumb]:[opacity:0] [:not(:where(.o156500))&_input[type=range]:disabled::-moz-range-thumb]:[opacity:0] [@media(min-width:1000px)]:[:not(:where(.o161000))&]:[grid-template-columns:minmax(0,_1.5fr)_minmax(0,_1fr)] [@media(min-width:1400px)]:[:not(:where(.o170100))&]:[grid-template-columns:minmax(0,_1.7fr)_minmax(0,_1fr)]" aria-label="Musique" hidden></section>
-    <dialog id="agenda-event" class="history-dialog agenda-event [max-height:calc(100dvh_-_2rem)] [border:0] rounded-fenetre bg-card text-text [box-shadow:var(--shadow-float)] p-5 [width:min(420px,_calc(100vw_-_32px))] [&::backdrop]:[background:rgb(14_20_32_/_0.45)] [&::backdrop]:[backdrop-filter:blur(3px)] [:not(:where(.o128800))&_h2]:flex [:not(:where(.o128801))&_h2]:items-center [&_h2]:gap-2.5 [:not(:where(.o128803))&_h2]:text-grand" aria-labelledby="agenda-event-title"></dialog>
+    <dialog id="agenda-event" data-fond-ferme class="history-dialog agenda-event [max-height:calc(100dvh_-_2rem)] [border:0] rounded-fenetre bg-card text-text [box-shadow:var(--shadow-float)] p-5 [width:min(420px,_calc(100vw_-_32px))] [&::backdrop]:[background:rgb(14_20_32_/_0.45)] [&::backdrop]:[backdrop-filter:blur(3px)]" aria-labelledby="agenda-event-title"></dialog>
     <dialog id="agenda-new" class="history-dialog agenda-new [width:min(720px,_calc(100vw_-_2rem))] [max-height:calc(100dvh_-_2rem)] [border:0] rounded-fenetre bg-card text-text [box-shadow:var(--shadow-float)] p-5 [&::backdrop]:[background:rgb(14_20_32_/_0.45)] [&::backdrop]:[backdrop-filter:blur(3px)] [:not(:where(.o129900))&_form]:grid [:not(:where(.o129901))&_form]:gap-2.5 [:not(:where(.o130000))&_label]:grid [:not(:where(.o130001))&_label]:gap-1 [&_label]:text-corps [&_label]:text-muted" aria-labelledby="agenda-new-title">
       <form id="agenda-new-form" method="dialog">
-        <div class="history-top flex items-center justify-between gap-4 [:not(:where(.o022100))&_h2]:[font-family:var(--font-display)] [:not(:where(.o022101))&_h2]:text-titre [:not(:where(.o022102))&_h2]:font-semibold [:not(:where(.o022103))&_h2]:[text-transform:none] [:not(:where(.o022104))&_h2]:[letter-spacing:-0.02em] [:not(:where(.o022105))&_h2]:text-text"><h2 id="agenda-new-title">Nouveau rendez-vous</h2><button id="agenda-new-close" class="ghost" type="button">Fermer</button></div>
+        <div class="fenetre-entete flex items-center justify-between gap-4 mb-1.5"><h2 id="agenda-new-title" class="m-0 font-titre text-titre font-semibold normal-case [letter-spacing:-0.02em] leading-tight text-text [overflow-wrap:anywhere]">Nouveau rendez-vous</h2><button id="agenda-new-close" class="fenetre-fermer flex-none grid place-items-center w-11 h-11 p-0 rounded-full border-0 bg-card-2 text-text-2 hover:text-text [&_svg]:w-5 [&_svg]:h-5" type="button" aria-label="Fermer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg></button></div>
         <label class="field"><span>Titre</span><input id="agenda-new-summary" required maxlength="200" autocomplete="off"></label>
         <label class="field"><span>Jour</span><input id="agenda-new-day" type="date" required></label>
         <div class="agenda-new-times grid [grid-template-columns:1fr_1fr] gap-2.5">
@@ -178,13 +179,15 @@
           <label class="field"><span>Fin</span><input id="agenda-new-end" type="time"></label>
         </div>
         <p class="auto-meta text-muted text-petit [&.run-loop]:text-alert [:not(:where(.o089100)).drawing-part>&]:m-0 [:not(:where(.o092300)).chart-card_&]:m-0">Sans heure : toute la journée. Ajouté dans l'agenda de la maison.</p>
-        <button class="action-button [justify-self:start] min-h-[40px] py-2 px-4 rounded-full [border:0] bg-card-2 font-semibold [&:active]:[transform:scale(0.97)]" type="submit">Ajouter</button>
+        <div class="fenetre-pied flex flex-wrap items-center justify-end gap-2.5 mt-2.5"><button id="agenda-new-cancel" class="ghost min-h-11 px-5 rounded-champ" type="button">Annuler</button><button class="primary min-h-11 px-5 rounded-champ" type="submit">Ajouter</button></div>
       </form>
     </dialog>
-    <p id="empty" class="empty text-center text-muted py-12 px-6" hidden>
-      Aucun appareil pour l'instant. Configure MQTT ou associe ton pont Hue
-      (<code>ha-server hue pair</code>).
-    </p>
+    <!-- Même forme que etatVide() (fenetres.js). -->
+    <div id="empty" class="empty etat-vide grid justify-items-center gap-3 py-12 px-6 text-center" hidden>
+      <span class="grid place-items-center w-14 h-14 rounded-full bg-card-2 text-muted [&_svg]:w-6 [&_svg]:h-6" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg></span>
+      <p class="m-0 max-w-sm text-corps text-muted">Aucun appareil pour l'instant. Configure MQTT ou associe ton pont Hue
+      (<code>ha-server hue pair</code>).</p>
+    </div>
     <nav class="dock fixed [:not(:where(.o020701))&]:[left:max(12px,_env(safe-area-inset-left,_0px))] [:not(:where(.o020702))&]:[right:max(12px,_env(safe-area-inset-right,_0px))] [:not(:where(.o020703))&]:[bottom:max(12px,_env(safe-area-inset-bottom,_0px))] [z-index:5] h-[64px] rounded-carte [background:color-mix(in_srgb,_var(--card)_92%,_transparent)] [backdrop-filter:blur(14px)] [box-shadow:var(--shadow-float)] [:not(:where(.o020710))&]:grid [grid-template-columns:repeat(4,_minmax(0,_1fr))] items-center [:not(:where(.o020800)):where(&_a)]:[all:unset] [:not(:where(.o020801))&_a]:cursor-pointer [:not(:where(.o020802))&_a]:grid [:not(:where(.o020803))&_a]:[justify-items:center] [:not(:where(.o020804))&_a]:gap-1 [:not(:where(.o020805))&_a]:text-micro [:not(:where(.o020806))&_a]:font-medium [:not(:where(.o020807))&_a]:text-muted [:not(:where(.o020808))&_a]:py-1.5 [:not(:where(.o020808))&_a]:px-0 [:not(:where(.o020809))&_a]:rounded-champ [:not(:where(.o021000))&_a]:min-w-0 [:not(:where(.o020800)):where(&_button)]:[all:unset] [:not(:where(.o020801))&_button]:cursor-pointer [:not(:where(.o020802))&_button]:grid [:not(:where(.o020803))&_button]:[justify-items:center] [:not(:where(.o020804))&_button]:gap-1 [:not(:where(.o020805))&_button]:text-micro [:not(:where(.o020806))&_button]:font-medium [:not(:where(.o020807))&_button]:text-muted [:not(:where(.o020808))&_button]:py-1.5 [:not(:where(.o020808))&_button]:px-0 [:not(:where(.o020809))&_button]:rounded-champ [:not(:where(.o021000))&_button]:min-w-0 [:not(:where(.o020900))&_svg]:w-[22px] [:not(:where(.o020901))&_svg]:h-[22px] [:not(:where(.o021100))&_span]:max-w-[100%] [:not(:where(.o021101))&_span]:overflow-hidden [:not(:where(.o021102))&_span]:text-ellipsis [:not(:where(.o021103))&_span]:whitespace-nowrap [@media(max-width:420px)]:[:not(:where(.o021200))&_a]:text-micro [@media(max-width:420px)]:[:not(:where(.o021200))&_button]:text-micro [&_.active]:text-accent [&_.active]:font-semibold [&_:focus-visible]:[outline:3px_solid_var(--accent)] [&_:focus-visible]:[outline-offset:-3px] [@media(min-width:760px)]:[:not(:where(.o021500))&]:hidden" aria-label="Navigation">
       <a href="#" id="dock-home" class="active"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg><span>Maison</span></a>
       <button id="dock-agenda" type="button" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v15H4z"/><path d="M4 10h16"/><path d="M8 3v4"/><path d="M16 3v4"/></svg><span>Agenda</span></button>
@@ -201,9 +204,9 @@
          son contenu est caché. data-view (list / detail) : sur un téléphone,
          le menu puis la rubrique. -->
     <dialog id="account-dialog" class="history-dialog group/set w-[min(980px,calc(100vw-2rem))] open:grid open:grid-cols-1 gap-4 [max-height:calc(100dvh_-_2rem)] [border:0] rounded-fenetre bg-card text-text [box-shadow:var(--shadow-float)] p-5 [&::backdrop]:[background:rgb(14_20_32_/_0.45)] [&::backdrop]:[backdrop-filter:blur(3px)]" data-view="detail" aria-labelledby="account-title">
-      <div class="history-top flex items-center justify-between gap-4 [:not(:where(.o022100))&_h2]:[font-family:var(--font-display)] [:not(:where(.o022101))&_h2]:text-titre [:not(:where(.o022102))&_h2]:font-semibold [:not(:where(.o022103))&_h2]:[text-transform:none] [:not(:where(.o022104))&_h2]:[letter-spacing:-0.02em] [:not(:where(.o022105))&_h2]:text-text">
-        <h2 id="account-title">Réglages</h2>
-        <button id="account-close" class="ghost" type="button">Fermer</button>
+      <div class="fenetre-entete flex items-center justify-between gap-4 mb-0">
+        <h2 id="account-title" class="m-0 font-titre text-titre font-semibold normal-case [letter-spacing:-0.02em] leading-tight text-text [overflow-wrap:anywhere]">Réglages</h2>
+        <button id="account-close" class="fenetre-fermer flex-none grid place-items-center w-11 h-11 p-0 rounded-full border-0 bg-card-2 text-text-2 hover:text-text [&_svg]:w-5 [&_svg]:h-5" type="button" aria-label="Fermer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg></button>
       </div>
       <div class="grid grid-cols-[250px_minmax(0,1fr)] gap-6 min-h-[min(70vh,620px)] max-[720px]:grid-cols-1 max-[720px]:min-h-0">
         <nav class="flex flex-col gap-0.5 self-start p-3 rounded-panneau bg-card-2 max-[720px]:group-data-[view=detail]/set:hidden" aria-label="Rubriques des réglages">
@@ -360,10 +363,10 @@
         </div>
       </div>
     </dialog>
-    <dialog id="history" class="history-dialog [width:min(720px,_calc(100vw_-_2rem))] [max-height:calc(100dvh_-_2rem)] [border:0] rounded-fenetre bg-card text-text [box-shadow:var(--shadow-float)] p-5 [&::backdrop]:[background:rgb(14_20_32_/_0.45)] [&::backdrop]:[backdrop-filter:blur(3px)]" aria-labelledby="history-title">
-      <div class="history-top flex items-center justify-between gap-4 [:not(:where(.o022100))&_h2]:[font-family:var(--font-display)] [:not(:where(.o022101))&_h2]:text-titre [:not(:where(.o022102))&_h2]:font-semibold [:not(:where(.o022103))&_h2]:[text-transform:none] [:not(:where(.o022104))&_h2]:[letter-spacing:-0.02em] [:not(:where(.o022105))&_h2]:text-text">
-        <h2 id="history-title">Historique</h2>
-        <button id="history-close" class="ghost" type="button">Fermer</button>
+    <dialog id="history" data-fond-ferme class="history-dialog [width:min(720px,_calc(100vw_-_2rem))] [max-height:calc(100dvh_-_2rem)] [border:0] rounded-fenetre bg-card text-text [box-shadow:var(--shadow-float)] p-5 [&::backdrop]:[background:rgb(14_20_32_/_0.45)] [&::backdrop]:[backdrop-filter:blur(3px)]" aria-labelledby="history-title">
+      <div class="fenetre-entete flex items-center justify-between gap-4 mb-4">
+        <h2 id="history-title" class="m-0 font-titre text-titre font-semibold normal-case [letter-spacing:-0.02em] leading-tight text-text [overflow-wrap:anywhere]">Historique</h2>
+        <button id="history-close" class="fenetre-fermer flex-none grid place-items-center w-11 h-11 p-0 rounded-full border-0 bg-card-2 text-text-2 hover:text-text [&_svg]:w-5 [&_svg]:h-5" type="button" aria-label="Fermer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg></button>
       </div>
       <div class="periods flex flex-wrap gap-1.5 my-3.5 mx-0 [.logbook-filters_&]:m-0" role="group" aria-label="Période">
         <button type="button" class="period [:not(:where(.o014400)).presets_&]:[border:0] [:not(:where(.o014401)).presets_&]:[background:transparent] [.presets_&]:text-petit [.presets_&]:min-h-[36px] [.presets_&]:py-1 [.presets_&]:px-0.5 [.presets_&]:min-w-0 [.presets_&]:overflow-hidden [.presets_&]:text-ellipsis [.presets_&]:whitespace-nowrap [:not(:where(.o014500)).presets_&[aria-pressed=true]]:bg-card [:not(:where(.o014501)).presets_&[aria-pressed=true]]:text-text [.presets_&[aria-pressed=true]]:[box-shadow:0_1px_3px_rgb(0_0_0_/_0.12)] min-h-[36px] py-1.5 px-3.5 rounded-full [border:1px_solid_var(--line)] bg-card text-text [:not(:where(.o022400))&[aria-pressed=true]]:bg-text [&[aria-pressed=true]]:text-bg [:not(:where(.o022402))&[aria-pressed=true]]:border-text" data-hours="24">24 heures</button>
@@ -374,31 +377,30 @@
       <div id="history-chart" class="history-chart [:not(:where(.o022500))&_svg]:w-full [:not(:where(.o022501))&_svg]:h-[auto] [&_svg]:block [&_.segment.active]:[fill:var(--ok)]"></div>
       <p id="history-summary" class="history-summary text-muted text-corps my-2.5 mx-0"></p>
       <ol id="history-changes" class="history-changes list-none m-0 p-0 text-corps [:not(:where(.o023600))&_li]:flex [:not(:where(.o023601))&_li]:gap-3 [:not(:where(.o023602))&_li]:py-1.5 [:not(:where(.o023602))&_li]:px-0 [:not(:where(.o023603))&_li]:[border-top:1px_solid_var(--line)] [:not(:where(.o023700))&_time]:text-muted [&_time]:min-w-[7.5rem] [:not(:where(.o023702))&_time]:[font-family:var(--font-mono)] [:not(:where(.o023703))&_time]:text-petit"></ol>
-      <button id="history-logbook" class="ghost" type="button">Voir dans le journal de bord</button>
+      <div class="fenetre-pied flex flex-wrap items-center justify-end gap-2.5 mt-5"><button id="history-logbook" class="ghost min-h-11 px-5 rounded-champ" type="button">Voir dans le journal de bord</button></div>
     </dialog>
     <!-- Une pièce, en fenêtre (mise en page « tableau », house.js) -->
-    <dialog id="room" class="history-dialog room-dialog [:not(:where(.o021801))&]:[max-height:calc(100dvh_-_2rem)] [border:0] [:not(:where(.o021803))&]:rounded-fenetre bg-card text-text [box-shadow:var(--shadow-float)] [:not(:where(.o099900))&]:[width:min(980px,_calc(100vw_-_2rem))] p-0 overflow-hidden [&::backdrop]:[background:rgb(14_20_32_/_0.45)] [&::backdrop]:[backdrop-filter:blur(3px)] [:not(:where(.o102400))&[open]]:[animation:room-in_0.18s_ease-out] [@media(max-width:640px)]:[:not(:where(.o102500))&]:w-[100vw] [@media(max-width:640px)]:max-w-[100vw] [@media(max-width:640px)]:[:not(:where(.o102502))&]:max-h-[90dvh] [@media(max-width:640px)]:mt-auto [@media(max-width:640px)]:mx-0 [@media(max-width:640px)]:mb-0 [@media(max-width:640px)]:[:not(:where(.o102504))&]:rounded-t-carte [@media(max-width:640px)]:[:not(:where(.o102504))&]:rounded-b-none [@media(max-width:640px)]:[:not(:where(.o102900))&[open]]:[animation:room-up_0.22s_ease-out] [@media(prefers-reduced-motion:reduce)]:[:not(:where(.o104900))&[open]]:[animation:none]" aria-labelledby="room-title">
+    <dialog id="room" data-fond-ferme class="history-dialog room-dialog [:not(:where(.o021801))&]:[max-height:calc(100dvh_-_2rem)] [border:0] [:not(:where(.o021803))&]:rounded-fenetre bg-card text-text [box-shadow:var(--shadow-float)] [:not(:where(.o099900))&]:[width:min(980px,_calc(100vw_-_2rem))] p-0 overflow-hidden [&::backdrop]:[background:rgb(14_20_32_/_0.45)] [&::backdrop]:[backdrop-filter:blur(3px)] [:not(:where(.o102400))&[open]]:[animation:room-in_0.18s_ease-out] [@media(max-width:640px)]:[:not(:where(.o102500))&]:w-[100vw] [@media(max-width:640px)]:max-w-[100vw] [@media(max-width:640px)]:[:not(:where(.o102502))&]:max-h-[90dvh] [@media(max-width:640px)]:mt-auto [@media(max-width:640px)]:mx-0 [@media(max-width:640px)]:mb-0 [@media(max-width:640px)]:[:not(:where(.o102504))&]:rounded-t-carte [@media(max-width:640px)]:[:not(:where(.o102504))&]:rounded-b-none [@media(max-width:640px)]:[:not(:where(.o102900))&[open]]:[animation:room-up_0.22s_ease-out] [@media(prefers-reduced-motion:reduce)]:[:not(:where(.o104900))&[open]]:[animation:none]" aria-labelledby="room-title">
       <div class="room-sheet grid gap-3.5 [:not(:where(.o100002))&]:pt-5 [:not(:where(.o100002))&]:px-5 [:not(:where(.o100002))&]:pb-6 [:not(:where(.o100003))&]:[max-height:calc(100dvh_-_2rem)] [overflow-y:auto] [overscroll-behavior:contain] [@media(max-width:640px)]:[:not(:where(.o102600))&]:max-h-[90dvh] [@media(max-width:640px)]:[:not(:where(.o102601))&]:[padding:0.6rem_1rem_calc(1.2rem_+_env(safe-area-inset-bottom))] [.room-view_&]:max-h-[none] [.room-view_&]:[overflow:visible] [.room-view_&]:pt-1.5 [.room-view_&]:px-0 [.room-view_&]:pb-0 [@media(min-width:1000px)]:[.room-view_&]:[grid-template-columns:minmax(0,_1fr)_minmax(0,_1fr)] [@media(min-width:1000px)]:[.room-view_&]:items-center">
         <div class="room-top flex items-center gap-3 relative [@media(max-width:640px)]:[.room-dialog_&]:pt-3.5 [@media(max-width:640px)]:[.room-dialog_&]:[touch-action:none]">
           <span class="room-grab [:not(:where(.o100200))&]:hidden [@media(max-width:640px)]:[:not(:where(.o102800))&]:block [@media(max-width:640px)]:absolute [@media(max-width:640px)]:[:not(:where(.o102802))&]:[top:0] [@media(max-width:640px)]:[:not(:where(.o102803))&]:[left:50%] [@media(max-width:640px)]:w-[42px] [@media(max-width:640px)]:h-[5px] [@media(max-width:640px)]:-ml-5 [@media(max-width:640px)]:rounded-trait [@media(max-width:640px)]:bg-line [.room-view_&]:hidden" aria-hidden="true"></span>
           <span id="room-icon" class="room-icon flex-none w-[34px] h-[34px] rounded-puce grid [place-items:center] bg-card-2 text-text-2 [:not(:where(.o071600))&_svg]:w-[18px] [:not(:where(.o071601))&_svg]:h-[18px] [:not(:where(.o100300)).room-top_&]:w-[44px] [:not(:where(.o100301)).room-top_&]:h-[44px] [:not(:where(.o100302)).room-top_&]:rounded-champ [:not(:where(.o100400)).room-top_&_svg]:w-[22px] [:not(:where(.o100401)).room-top_&_svg]:h-[22px] [:not(:where(.o100500))&.lit]:bg-glow [:not(:where(.o100501))&.lit]:[color:#3b2a05] [:not(:where(.o100600))&.heat]:[background:color-mix(in_srgb,_var(--series-2)_22%,_transparent)] [:not(:where(.o100601))&.heat]:[color:var(--series-2)] [:not(:where(.o100700))&.alert]:bg-alert [:not(:where(.o100701))&.alert]:[color:#ffffff]"></span>
-          <div class="room-heading flex-1 min-w-0 [:root_&_h2]:m-0 [:not(:where(.o100901)):root_&_h2]:[font-family:var(--font-display)] [:not(:where(.o100902)):root_&_h2]:text-titre [:not(:where(.o100903)):root_&_h2]:font-semibold [:not(:where(.o100904)):root_&_h2]:[text-transform:none] [:not(:where(.o100905)):root_&_h2]:[letter-spacing:normal] [:not(:where(.o100906)):root_&_h2]:text-text">
-            <h2 id="room-title">Pièce</h2>
-            <p id="room-measures" class="room-measures mt-0.5 mx-0 mb-0 text-muted [:not(:where(.o101002))&]:text-corps [:not(:where(.o101003))&]:[font-variant-numeric:tabular-nums]"></p>
+          <div class="room-heading flex-1 min-w-0">
+            <h2 id="room-title" class="m-0 font-titre text-titre font-semibold normal-case [letter-spacing:-0.02em] leading-tight text-text [overflow-wrap:anywhere]">Pièce</h2>
+            <p id="room-measures" class="room-measures mt-1 mx-0 mb-0 text-muted text-corps [:not(:where(.o101003))&]:[font-variant-numeric:tabular-nums]"></p>
           </div>
-          <button id="room-close" class="ghost" type="button">Fermer</button>
+          <button id="room-close" class="fenetre-fermer flex-none grid place-items-center w-11 h-11 p-0 rounded-full border-0 bg-card-2 text-text-2 hover:text-text [&_svg]:w-5 [&_svg]:h-5" type="button" aria-label="Fermer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg></button>
         </div>
         <div id="room-chart" class="room-chart" hidden></div>
         <div id="room-actions" class="room-actions flex flex-wrap gap-2 [@media(min-width:1000px)]:[.room-view_&]:[grid-column:1_/_-1]" hidden></div>
         <div id="room-body" class="room-body [columns:290px_3] gap-x-4 [@media(min-width:1000px)]:[.room-view_&]:[columns:290px_5] [@media(min-width:1000px)]:[.room-view_&]:[grid-column:1_/_-1]"></div>
       </div>
     </dialog>
-    <dialog id="logbook" class="history-dialog [width:min(720px,_calc(100vw_-_2rem))] [max-height:calc(100dvh_-_2rem)] [border:0] rounded-fenetre bg-card text-text [box-shadow:var(--shadow-float)] p-5 [&::backdrop]:[background:rgb(14_20_32_/_0.45)] [&::backdrop]:[backdrop-filter:blur(3px)]" aria-labelledby="logbook-title">
-      <div class="history-top flex items-center justify-between gap-4 [:not(:where(.o022100))&_h2]:[font-family:var(--font-display)] [:not(:where(.o022101))&_h2]:text-titre [:not(:where(.o022102))&_h2]:font-semibold [:not(:where(.o022103))&_h2]:[text-transform:none] [:not(:where(.o022104))&_h2]:[letter-spacing:-0.02em] [:not(:where(.o022105))&_h2]:text-text">
-        <h2 id="logbook-title">Journal de bord</h2>
-        <button id="logbook-close" class="ghost" type="button">Fermer</button>
+    <dialog id="logbook" data-fond-ferme class="history-dialog [width:min(720px,_calc(100vw_-_2rem))] [max-height:calc(100dvh_-_2rem)] [border:0] rounded-fenetre bg-card text-text [box-shadow:var(--shadow-float)] p-5 [&::backdrop]:[background:rgb(14_20_32_/_0.45)] [&::backdrop]:[backdrop-filter:blur(3px)]" aria-labelledby="logbook-title">
+      <div class="fenetre-entete flex items-center justify-between gap-4 mb-4">
+        <div class="min-w-0"><h2 id="logbook-title" class="m-0 font-titre text-titre font-semibold normal-case [letter-spacing:-0.02em] leading-tight text-text [overflow-wrap:anywhere]">Journal de bord</h2><p class="mt-1 mb-0 mx-0 text-corps text-muted">Ce qui s'est passé dans la maison, et pourquoi.</p></div>
+        <button id="logbook-close" class="fenetre-fermer flex-none grid place-items-center w-11 h-11 p-0 rounded-full border-0 bg-card-2 text-text-2 hover:text-text [&_svg]:w-5 [&_svg]:h-5" type="button" aria-label="Fermer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg></button>
       </div>
-      <p class="journal-hint text-muted text-corps mt-0 mx-0 mb-3 [:not(:where(.o035900)).auto-block_&]:m-0 [.auto-fields_&]:[grid-column:1_/_-1] [:not(:where(.o036501)).auto-fields_&]:m-0 [.auto-fields_&]:[overflow-wrap:anywhere]">Ce qui s'est passé dans la maison, et pourquoi.</p>
       <div class="logbook-filters flex flex-wrap items-center gap-y-2 gap-x-4 mb-3 [:not(:where(.o027900))&_select]:[flex:1_1_12rem] [:not(:where(.o027901))&_select]:max-w-[100%] [:not(:where(.o027902))&_select]:min-w-0">
         <div class="periods flex flex-wrap gap-1.5 my-3.5 mx-0 [.logbook-filters_&]:m-0" role="group" aria-label="Période">
           <button type="button" class="period [:not(:where(.o014400)).presets_&]:[border:0] [:not(:where(.o014401)).presets_&]:[background:transparent] [.presets_&]:text-petit [.presets_&]:min-h-[36px] [.presets_&]:py-1 [.presets_&]:px-0.5 [.presets_&]:min-w-0 [.presets_&]:overflow-hidden [.presets_&]:text-ellipsis [.presets_&]:whitespace-nowrap [:not(:where(.o014500)).presets_&[aria-pressed=true]]:bg-card [:not(:where(.o014501)).presets_&[aria-pressed=true]]:text-text [.presets_&[aria-pressed=true]]:[box-shadow:0_1px_3px_rgb(0_0_0_/_0.12)] min-h-[36px] py-1.5 px-3.5 rounded-full [border:1px_solid_var(--line)] bg-card text-text [:not(:where(.o022400))&[aria-pressed=true]]:bg-text [&[aria-pressed=true]]:text-bg [:not(:where(.o022402))&[aria-pressed=true]]:border-text" data-logbook-hours="24">24 heures</button>
@@ -409,10 +411,10 @@
       <div id="logbook-list" class="logbook-list max-h-[60vh] [overflow-y:auto] [:not(:where(.o028100))&_h3]:text-petit [:not(:where(.o028101))&_h3]:font-semibold [:not(:where(.o028102))&_h3]:text-muted [:not(:where(.o028103))&_h3]:mt-4 [:not(:where(.o028103))&_h3]:mx-0 [:not(:where(.o028103))&_h3]:mb-1.5 [:not(:where(.o028200))&_h3::first-letter]:uppercase [&_section:first-child_h3]:mt-0 [:not(:where(.o028400))&_li]:[flex-wrap:nowrap] [:not(:where(.o028500))&_li>span]:[flex:1_1_auto] [&_li>span]:min-w-0 [&_li>span]:[overflow-wrap:anywhere] [:not(:where(.o028600))&_li_small]:[flex:0_1_auto] [:not(:where(.o028601))&_li_small]:text-right [@media(max-width:560px)]:[:not(:where(.o028800))&_li]:grid [@media(max-width:560px)]:[:not(:where(.o028801))&_li]:[grid-template-columns:auto_minmax(0,_1fr)] [@media(max-width:560px)]:[&_li_small]:[grid-column:2] [@media(max-width:560px)]:[&_li_small]:ml-0 [@media(max-width:560px)]:[:not(:where(.o028902))&_li_small]:text-left" aria-live="polite"></div>
     </dialog>
     <!-- Bilan énergétique -->
-    <dialog id="energy" class="history-dialog energy-dialog [width:min(720px,_calc(100vw_-_2rem))] [max-height:calc(100dvh_-_2rem)] [border:0] rounded-fenetre bg-card text-text [box-shadow:var(--shadow-float)] p-5 [&::backdrop]:[background:rgb(14_20_32_/_0.45)] [&::backdrop]:[backdrop-filter:blur(3px)]" aria-labelledby="energy-title">
-      <div class="history-top flex items-center justify-between gap-4 [:not(:where(.o022100))&_h2]:[font-family:var(--font-display)] [:not(:where(.o022101))&_h2]:text-titre [:not(:where(.o022102))&_h2]:font-semibold [:not(:where(.o022103))&_h2]:[text-transform:none] [:not(:where(.o022104))&_h2]:[letter-spacing:-0.02em] [:not(:where(.o022105))&_h2]:text-text">
-        <h2 id="energy-title">Énergie</h2>
-        <button id="energy-close" class="ghost" type="button">Fermer</button>
+    <dialog id="energy" data-fond-ferme class="history-dialog energy-dialog [width:min(720px,_calc(100vw_-_2rem))] [max-height:calc(100dvh_-_2rem)] [border:0] rounded-fenetre bg-card text-text [box-shadow:var(--shadow-float)] p-5 [&::backdrop]:[background:rgb(14_20_32_/_0.45)] [&::backdrop]:[backdrop-filter:blur(3px)]" aria-labelledby="energy-title">
+      <div class="fenetre-entete flex items-center justify-between gap-4 mb-4">
+        <h2 id="energy-title" class="m-0 font-titre text-titre font-semibold normal-case [letter-spacing:-0.02em] leading-tight text-text [overflow-wrap:anywhere]">Énergie</h2>
+        <button id="energy-close" class="fenetre-fermer flex-none grid place-items-center w-11 h-11 p-0 rounded-full border-0 bg-card-2 text-text-2 hover:text-text [&_svg]:w-5 [&_svg]:h-5" type="button" aria-label="Fermer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg></button>
       </div>
       <div id="energy-now" class="energy-now flex flex-wrap gap-2.5 items-center mb-3 text-text-2 [&[hidden]]:hidden" hidden></div>
       <div id="energy-totals" class="energy-totals grid [:not(:where(.o043301))&]:[grid-template-columns:repeat(3,_minmax(0,_1fr))] gap-2.5 mb-3.5 [&[hidden]]:hidden [@media(max-width:520px)]:[:not(:where(.o046300))&]:[grid-template-columns:minmax(0,_1fr)]"></div>
@@ -432,9 +434,9 @@
     <!-- Notifications et alertes de réparation -->
     <!-- Assist (étape 54) : « ferme le volet de la chambre », compris sur le serveur -->
     <dialog id="assist" class="history-dialog assist-dialog [max-height:calc(100dvh_-_2rem)] [border:0] rounded-fenetre bg-card text-text [box-shadow:var(--shadow-float)] p-5 [width:min(520px,_calc(100vw_-_2rem))] [&::backdrop]:[background:rgb(14_20_32_/_0.45)] [&::backdrop]:[backdrop-filter:blur(3px)] [&[open]]:grid [&[open]]:[grid-template-columns:minmax(0,_1fr)] [&[open]]:gap-3" aria-labelledby="assist-title">
-      <div class="history-top flex items-center justify-between gap-4 [:not(:where(.o022100))&_h2]:[font-family:var(--font-display)] [:not(:where(.o022101))&_h2]:text-titre [:not(:where(.o022102))&_h2]:font-semibold [:not(:where(.o022103))&_h2]:[text-transform:none] [:not(:where(.o022104))&_h2]:[letter-spacing:-0.02em] [:not(:where(.o022105))&_h2]:text-text">
-        <h2 id="assist-title">Assist</h2>
-        <button id="assist-close" class="ghost" type="button">Fermer</button>
+      <div class="fenetre-entete flex items-center justify-between gap-4 mb-1">
+        <h2 id="assist-title" class="m-0 font-titre text-titre font-semibold normal-case [letter-spacing:-0.02em] leading-tight text-text [overflow-wrap:anywhere]">Assist</h2>
+        <button id="assist-close" class="fenetre-fermer flex-none grid place-items-center w-11 h-11 p-0 rounded-full border-0 bg-card-2 text-text-2 hover:text-text [&_svg]:w-5 [&_svg]:h-5" type="button" aria-label="Fermer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg></button>
       </div>
       <!-- L'orbe de la voix (étape 98, orbe.js) : seulement avec le micro. -->
       <div id="voice-orb" class="voice-orb" data-state="idle" aria-hidden="true" hidden></div>
@@ -458,19 +460,19 @@
       </form>
       <p class="account m-0 text-muted [:not(:where(.o024100))&_strong]:text-text [.assist-dialog_&]:m-0 [.assist-dialog_&]:text-petit">Compris sur le serveur, sans cloud. Le micro aussi : la phrase est écoutée sur le serveur de la maison.</p>
     </dialog>
-    <dialog id="notices" class="history-dialog notices-dialog [width:min(720px,_calc(100vw_-_2rem))] [max-height:calc(100dvh_-_2rem)] [border:0] rounded-fenetre bg-card text-text [box-shadow:var(--shadow-float)] p-5 [&::backdrop]:[background:rgb(14_20_32_/_0.45)] [&::backdrop]:[backdrop-filter:blur(3px)]" aria-labelledby="notices-title">
-      <div class="history-top flex items-center justify-between gap-4 [:not(:where(.o022100))&_h2]:[font-family:var(--font-display)] [:not(:where(.o022101))&_h2]:text-titre [:not(:where(.o022102))&_h2]:font-semibold [:not(:where(.o022103))&_h2]:[text-transform:none] [:not(:where(.o022104))&_h2]:[letter-spacing:-0.02em] [:not(:where(.o022105))&_h2]:text-text">
-        <h2 id="notices-title">Notifications</h2>
-        <button id="notices-close" class="ghost" type="button">Fermer</button>
+    <dialog id="notices" data-fond-ferme class="history-dialog notices-dialog [width:min(720px,_calc(100vw_-_2rem))] [max-height:calc(100dvh_-_2rem)] [border:0] rounded-fenetre bg-card text-text [box-shadow:var(--shadow-float)] p-5 [&::backdrop]:[background:rgb(14_20_32_/_0.45)] [&::backdrop]:[backdrop-filter:blur(3px)]" aria-labelledby="notices-title">
+      <div class="fenetre-entete flex items-center justify-between gap-4 mb-4">
+        <h2 id="notices-title" class="m-0 font-titre text-titre font-semibold normal-case [letter-spacing:-0.02em] leading-tight text-text [overflow-wrap:anywhere]">Notifications</h2>
+        <button id="notices-close" class="fenetre-fermer flex-none grid place-items-center w-11 h-11 p-0 rounded-full border-0 bg-card-2 text-text-2 hover:text-text [&_svg]:w-5 [&_svg]:h-5" type="button" aria-label="Fermer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg></button>
       </div>
       <ul id="notice-list" class="notice-list list-none m-0 p-0 grid gap-2.5" aria-live="polite"></ul>
       <p id="notice-ignored" class="auto-meta text-muted text-petit [&.run-loop]:text-alert [:not(:where(.o089100)).drawing-part>&]:m-0 [:not(:where(.o092300)).chart-card_&]:m-0" hidden></p>
     </dialog>
     <!-- Éditeur d'automatisations -->
     <dialog id="automations" class="history-dialog automations-dialog [max-height:calc(100dvh_-_2rem)] [border:0] rounded-fenetre bg-card text-text [box-shadow:var(--shadow-float)] p-5 [width:min(840px,_calc(100vw_-_2rem))] [&::backdrop]:[background:rgb(14_20_32_/_0.45)] [&::backdrop]:[backdrop-filter:blur(3px)] [:not(:where(.o048700))&.canvas-mode]:[width:min(1520px,_calc(100vw_-_2rem))] [@media(max-width:700px)]:[:not(:where(.o059500))&.canvas-mode]:w-[100vw] [@media(max-width:700px)]:[&.canvas-mode]:max-w-[100vw] [@media(max-width:700px)]:[&.canvas-mode]:max-h-[100dvh] [@media(max-width:700px)]:[:not(:where(.o059503))&.canvas-mode]:rounded-none [@media(max-width:700px)]:[&.canvas-mode]:p-3.5" aria-labelledby="automations-title">
-      <div class="history-top flex items-center justify-between gap-4 [:not(:where(.o022100))&_h2]:[font-family:var(--font-display)] [:not(:where(.o022101))&_h2]:text-titre [:not(:where(.o022102))&_h2]:font-semibold [:not(:where(.o022103))&_h2]:[text-transform:none] [:not(:where(.o022104))&_h2]:[letter-spacing:-0.02em] [:not(:where(.o022105))&_h2]:text-text">
-        <h2 id="automations-title">Automatisations</h2>
-        <button id="automations-close" class="ghost" type="button">Fermer</button>
+      <div class="fenetre-entete flex items-center justify-between gap-4 mb-4">
+        <h2 id="automations-title" class="m-0 font-titre text-titre font-semibold normal-case [letter-spacing:-0.02em] leading-tight text-text [overflow-wrap:anywhere]">Automatisations</h2>
+        <button id="automations-close" class="fenetre-fermer flex-none grid place-items-center w-11 h-11 p-0 rounded-full border-0 bg-card-2 text-text-2 hover:text-text [&_svg]:w-5 [&_svg]:h-5" type="button" aria-label="Fermer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg></button>
       </div>
       <!-- Liste -->
       <section id="auto-list-view">
@@ -543,12 +545,12 @@
         </label>
         <p id="auto-status" class="auto-status text-corps mt-3 mx-0 mb-1 [white-space:pre-wrap] [overflow-wrap:anywhere] [:not(:where(.o037900))&.ok]:text-ok [:not(:where(.o038000))&.error]:text-alert" role="status" aria-live="polite"></p>
         <ul id="auto-warnings" class="auto-warnings list-none m-0 p-0 text-corps text-heat-ink"></ul>
-        <div class="auto-actions flex flex-wrap gap-2 mt-3.5">
-          <button id="auto-save" class="primary small" type="button">Enregistrer</button>
-          <button id="auto-duplicate" class="ghost" type="button">Dupliquer</button>
-          <button id="auto-versions" class="ghost" type="button">Versions</button>
-          <button id="auto-delete" class="ghost danger" type="button">Supprimer</button>
-          <button id="auto-cancel" class="ghost" type="button">Retour</button>
+        <div class="fenetre-pied flex flex-wrap items-center justify-end gap-2.5 mt-5">
+          <button id="auto-delete" class="ghost danger min-h-11 px-5 rounded-champ mr-auto" type="button">Supprimer</button>
+          <button id="auto-cancel" class="ghost min-h-11 px-5 rounded-champ" type="button">Retour</button>
+          <button id="auto-versions" class="ghost min-h-11 px-5 rounded-champ" type="button">Versions</button>
+          <button id="auto-duplicate" class="ghost min-h-11 px-5 rounded-champ" type="button">Dupliquer</button>
+          <button id="auto-save" class="primary min-h-11 px-5 rounded-champ" type="button">Enregistrer</button>
         </div>
         <ol id="auto-version-list" class="history-changes list-none m-0 p-0 text-corps [:not(:where(.o023600))&_li]:flex [:not(:where(.o023601))&_li]:gap-3 [:not(:where(.o023602))&_li]:py-1.5 [:not(:where(.o023602))&_li]:px-0 [:not(:where(.o023603))&_li]:[border-top:1px_solid_var(--line)] [:not(:where(.o023700))&_time]:text-muted [&_time]:min-w-[7.5rem] [:not(:where(.o023702))&_time]:[font-family:var(--font-mono)] [:not(:where(.o023703))&_time]:text-petit" hidden></ol>
       </section>
@@ -559,17 +561,17 @@
           l'automatisation s'est lancée, ses conditions, et chaque action.</p>
         <div id="trace-runs" class="trace-runs flex flex-wrap gap-1.5 my-3 mx-0" role="group" aria-label="Exécutions"></div>
         <div id="trace-detail" class="trace-detail" aria-live="polite"></div>
-        <div class="auto-actions flex flex-wrap gap-2 mt-3.5">
-          <button id="trace-refresh" class="ghost" type="button">Actualiser</button>
-          <button id="trace-back" class="ghost" type="button">Retour</button>
+        <div class="fenetre-pied flex flex-wrap items-center justify-end gap-2.5 mt-5">
+          <button id="trace-back" class="ghost min-h-11 px-5 rounded-champ" type="button">Retour</button>
+          <button id="trace-refresh" class="ghost min-h-11 px-5 rounded-champ" type="button">Actualiser</button>
         </div>
       </section>
     </dialog>
     <!-- Le dessin de la maison : images, calques, valeurs (house.js) -->
     <dialog id="drawing" class="history-dialog drawing-dialog [max-height:calc(100dvh_-_2rem)] [border:0] rounded-fenetre bg-card text-text [box-shadow:var(--shadow-float)] p-5 [width:min(860px,_calc(100vw_-_2rem))] [&::backdrop]:[background:rgb(14_20_32_/_0.45)] [&::backdrop]:[backdrop-filter:blur(3px)]" aria-labelledby="drawing-title">
-      <div class="history-top flex items-center justify-between gap-4 [:not(:where(.o022100))&_h2]:[font-family:var(--font-display)] [:not(:where(.o022101))&_h2]:text-titre [:not(:where(.o022102))&_h2]:font-semibold [:not(:where(.o022103))&_h2]:[text-transform:none] [:not(:where(.o022104))&_h2]:[letter-spacing:-0.02em] [:not(:where(.o022105))&_h2]:text-text">
-        <h2 id="drawing-title">Dessin de la maison</h2>
-        <button id="drawing-close" class="ghost" type="button">Fermer</button>
+      <div class="fenetre-entete flex items-center justify-between gap-4 mb-4">
+        <h2 id="drawing-title" class="m-0 font-titre text-titre font-semibold normal-case [letter-spacing:-0.02em] leading-tight text-text [overflow-wrap:anywhere]">Dessin de la maison</h2>
+        <button id="drawing-close" class="fenetre-fermer flex-none grid place-items-center w-11 h-11 p-0 rounded-full border-0 bg-card-2 text-text-2 hover:text-text [&_svg]:w-5 [&_svg]:h-5" type="button" aria-label="Fermer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg></button>
       </div>
       <p class="journal-hint text-muted text-corps mt-0 mx-0 mb-3 [:not(:where(.o035900)).auto-block_&]:m-0 [.auto-fields_&]:[grid-column:1_/_-1] [:not(:where(.o036501)).auto-fields_&]:m-0 [.auto-fields_&]:[overflow-wrap:anywhere]">Un fond (de jour, et de nuit si tu veux), des calques transparents de la
         même taille qui apparaissent selon l'état d'un appareil, et des valeurs posées sur le dessin.
@@ -578,19 +580,15 @@
       <p id="drawing-place-hint" class="notice" hidden>Touche le dessin là où poser la valeur.</p>
       <div id="drawing-form" class="drawing-form grid gap-3.5"></div>
       <p id="drawing-status" class="auto-status text-corps mt-3 mx-0 mb-1 [white-space:pre-wrap] [overflow-wrap:anywhere] [:not(:where(.o037900))&.ok]:text-ok [:not(:where(.o038000))&.error]:text-alert" role="status" aria-live="polite"></p>
-      <div class="auto-actions flex flex-wrap gap-2 mt-3.5">
-        <button id="drawing-save" class="primary small" type="button">Enregistrer</button>
-        <button id="drawing-cancel" class="ghost" type="button">Annuler</button>
+      <div class="fenetre-pied flex flex-wrap items-center justify-end gap-2.5 mt-5">
+        <button id="drawing-cancel" class="ghost min-h-11 px-5 rounded-champ" type="button">Annuler</button>
+        <button id="drawing-save" class="primary min-h-11 px-5 rounded-champ" type="button">Enregistrer</button>
       </div>
     </dialog>
     <!-- Confirmation d'identité avant une modification -->
     <dialog id="confirm" class="history-dialog confirm-dialog [max-height:calc(100dvh_-_2rem)] [border:0] rounded-fenetre bg-card text-text [box-shadow:var(--shadow-float)] p-5 [width:min(420px,_calc(100vw_-_2rem))] [&::backdrop]:[background:rgb(14_20_32_/_0.45)] [&::backdrop]:[backdrop-filter:blur(3px)]" aria-labelledby="confirm-title">
-      <form id="confirm-form" method="dialog" class="confirm-form grid gap-3.5 [:not(:where(.o030600))&_h2]:[font-family:var(--font-display)] [:not(:where(.o030601))&_h2]:text-grand [:not(:where(.o030602))&_h2]:font-semibold [:not(:where(.o030603))&_h2]:[text-transform:none] [:not(:where(.o030604))&_h2]:[letter-spacing:-0.02em] [:not(:where(.o030605))&_h2]:text-text">
-        <h2 id="confirm-title">Confirme ton identité</h2>
-        <p class="journal-hint text-muted text-corps mt-0 mx-0 mb-3 [:not(:where(.o035900)).auto-block_&]:m-0 [.auto-fields_&]:[grid-column:1_/_-1] [:not(:where(.o036501)).auto-fields_&]:m-0 [.auto-fields_&]:[overflow-wrap:anywhere]">
-          Pour modifier les automatisations, retape ton mot de passe. Il ne sera plus
-          demandé pendant 15 minutes.
-        </p>
+      <form id="confirm-form" method="dialog" class="confirm-form grid gap-3.5">
+        <div class="fenetre-entete flex items-center justify-between gap-4 mb-0.5"><div class="min-w-0"><h2 id="confirm-title" class="m-0 font-titre text-titre font-semibold normal-case [letter-spacing:-0.02em] leading-tight text-text [overflow-wrap:anywhere]">Confirme ton identité</h2><p class="mt-1 mb-0 mx-0 text-corps text-muted">Pour modifier les automatisations, retape ton mot de passe. Il ne sera plus demandé pendant 15 minutes.</p></div></div>
         <label>
           Mot de passe
           <input name="password" type="password" autocomplete="current-password" required>
@@ -601,9 +599,9 @@
                  pattern="[0-9 ]{6,7}" placeholder="123 456">
         </label>
         <p id="confirm-error" class="error" role="alert" hidden></p>
-        <div class="auto-actions flex flex-wrap gap-2 mt-3.5">
-          <button type="submit" class="primary small" value="ok">Confirmer</button>
-          <button id="confirm-cancel" type="button" class="ghost">Annuler</button>
+        <div class="fenetre-pied flex flex-wrap items-center justify-end gap-2.5 mt-1.5">
+          <button id="confirm-cancel" type="button" class="ghost min-h-11 px-5 rounded-champ">Annuler</button>
+          <button type="submit" class="primary min-h-11 px-5 rounded-champ" value="ok">Confirmer</button>
         </div>
       </form>
     </dialog>
@@ -661,13 +659,13 @@
       </form>
     </dialog>
     <!-- La sonnette (étape 82) : qui est à la porte, en grand, sur la tablette. -->
-    <dialog id="doorbell" class="doorbell [width:min(980px,_94vw)] max-h-[92vh] pt-5 px-5 pb-3.5 [border:0] rounded-fenetre bg-card text-text [box-shadow:var(--shadow-float)] [&[open]]:flex [&[open]]:flex-col [&[open]]:gap-3 [&::backdrop]:[background:rgb(0_0_0_/_0.6)]" aria-labelledby="doorbell-title">
-      <div class="doorbell-head flex items-center justify-between gap-3 [:not(:where(.o146200))&_h2]:m-0 [:not(:where(.o146201))&_h2]:[font:600_1.5rem_var(--font)] [:not(:where(.o146202))&_h2]:[letter-spacing:normal] [:not(:where(.o146203))&_h2]:[text-transform:none] [:not(:where(.o146204))&_h2]:text-text">
-        <div>
-          <h2 id="doorbell-title">On sonne à la porte</h2>
-          <p id="doorbell-when" class="doorbell-when mt-0.5 mx-0 mb-0 text-muted"></p>
+    <dialog id="doorbell" data-fond-ferme class="doorbell [width:min(980px,_94vw)] max-h-[92vh] p-5 [border:0] rounded-fenetre bg-card text-text [box-shadow:var(--shadow-float)] [&[open]]:flex [&[open]]:flex-col [&[open]]:gap-3 [&::backdrop]:[background:rgb(0_0_0_/_0.6)]" aria-labelledby="doorbell-title">
+      <div class="doorbell-head fenetre-entete flex items-center justify-between gap-4">
+        <div class="min-w-0">
+          <h2 id="doorbell-title" class="m-0 font-titre text-titre font-semibold normal-case [letter-spacing:-0.02em] leading-tight text-text [overflow-wrap:anywhere]">On sonne à la porte</h2>
+          <p id="doorbell-when" class="doorbell-when mt-1 mb-0 mx-0 text-corps text-muted"></p>
         </div>
-        <button id="doorbell-close" class="ghost" type="button">Fermer</button>
+        <button id="doorbell-close" class="fenetre-fermer flex-none grid place-items-center w-11 h-11 p-0 rounded-full border-0 bg-card-2 text-text-2 hover:text-text [&_svg]:w-5 [&_svg]:h-5" type="button" aria-label="Fermer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg></button>
       </div>
       <div class="doorbell-photo relative min-h-[220px] grid [place-items:center] rounded-panneau overflow-hidden [background:#111] [:not(:where(.o146500))&_img]:block [:not(:where(.o146501))&_img]:w-full [:not(:where(.o146502))&_img]:max-h-[70vh] [:not(:where(.o146503))&_img]:[object-fit:contain]">
         <img id="doorbell-img" alt="La photo de la porte" hidden>

@@ -170,8 +170,7 @@ function openDoorbell(state, at = doorbellRang(state)) {
   $("#doorbell-title").textContent = live ? `On sonne : ${doorbellPlace(state)}` : doorbellPlace(state);
   $("#doorbell-when").textContent = at === null ? "La dernière photo" : `${live ? "" : "On a sonné "}à ${hourMinute.format(new Date(at))}`;
   renderDoorbellPhoto();
-  const dialog = $("#doorbell");
-  if (!dialog.open) dialog.showModal();
+  ouvrirFenetre($("#doorbell"), false);
   clearTimeout(doorbell.closeTimer);
   doorbell.closeTimer = setTimeout(closeDoorbell, DOORBELL_OPEN);
 }

@@ -172,7 +172,7 @@ async function openDrawingEditor() {
   drawingEdit.cut = null;
   drawingStatus("");
   renderDrawingEditor();
-  $("#drawing").showModal();
+  ouvrirFenetre($("#drawing"), false);
 }
 
 function drawingStatus(text, kind = "") {
@@ -523,7 +523,7 @@ function renderDrawingEditor() {
     const remove = el("button", { type: "button", class: "ghost small danger", text: "Retirer" });
     remove.addEventListener("click", async () => {
       // Effacée du serveur, pas seulement du brouillon : on demande.
-      if (!window.confirm(`Retirer l'image « ${image.name} » du serveur ? Les calques qui s'en servent ne l'afficheront plus.`)) return;
+      if (!await confirmer(`« ${image.name} » sera retirée du serveur. Les calques qui s'en servent ne l'afficheront plus.`, { titre: "Retirer l'image ?", ok: "Retirer", danger: true })) return;
       const response = await authFetch(`/api/home/images/${encodeURIComponent(image.name)}`, { method: "DELETE" });
       if (!response) return drawingStatus("Serveur injoignable : l'image n'est pas retirée.", "error");
       const data = await response.json().catch(() => ({}));

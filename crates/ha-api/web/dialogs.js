@@ -39,7 +39,7 @@ function openHistory(entityId) {
   historyView.entityId = entityId;
   const state = entities.get(entityId);
   $("#history-title").textContent = state ? nameOf(state) : entityId;
-  $("#history").showModal();
+  ouvrirFenetre($("#history"));
   loadHistory().catch(() => {
     $("#history-summary").textContent = "Historique indisponible.";
   });
@@ -303,7 +303,7 @@ async function loadJournal() {
       );
     }),
   );
-  if (entries.length === 0) list.replaceChildren(el("li", { text: "Aucune action pour l'instant." }));
+  if (entries.length === 0) list.replaceChildren(etatVide(ICONS.list, "Aucune action pour l'instant.", null, "li"));
 }
 
 $("#journal").addEventListener("toggle", (event) => {
@@ -328,7 +328,7 @@ function openLogbook(entityId = "") {
   // Un appareil supprimé depuis : on le garde dans la liste.
   if (entityId && !entities.has(entityId)) select.append(el("option", { value: entityId, text: entityId }));
   select.value = entityId;
-  $("#logbook").showModal();
+  ouvrirFenetre($("#logbook"), false);
   loadLogbook();
 }
 
@@ -354,7 +354,7 @@ async function loadLogbook() {
   }
   const entries = Array.isArray(data.entries) ? data.entries : [];
   if (entries.length === 0) {
-    list.replaceChildren(el("p", { class: "journal-hint text-muted text-corps mt-0 mx-0 mb-3 [:not(:where(.o035900)).auto-block_&]:m-0 [.auto-fields_&]:[grid-column:1_/_-1] [:not(:where(.o036501)).auto-fields_&]:m-0 [.auto-fields_&]:[overflow-wrap:anywhere]", text: "Rien de noté sur cette période." }));
+    list.replaceChildren(etatVide(ICONS.list, "Rien de noté sur cette période."));
     return;
   }
   const groups = [];
@@ -455,7 +455,7 @@ function renderNotices() {
   if (!$("#notices").open) return;
   const list = $("#notice-list");
   list.replaceChildren(...active.map(noticeItem));
-  if (active.length === 0) list.replaceChildren(el("li", { class: "auto-empty text-muted py-4 px-0", text: "Rien à signaler." }));
+  if (active.length === 0) list.replaceChildren(etatVide(ICONS.bell, "Rien à signaler.", null, "li"));
   const ignored = all.filter((state) => state.state === "ignored").length;
   $("#notice-ignored").hidden = ignored === 0;
   $("#notice-ignored").textContent = ignored === 1
@@ -506,7 +506,7 @@ function approvalButtons(id) {
 }
 
 $("#open-notices").addEventListener("click", () => {
-  $("#notices").showModal();
+  ouvrirFenetre($("#notices"));
   renderNotices();
 });
 $("#notices-close").addEventListener("click", () => $("#notices").close());
@@ -524,7 +524,7 @@ const monthName = new Intl.DateTimeFormat("fr", { month: "short" });
 const SERIES = 6;
 
 async function openEnergy() {
-  $("#energy").showModal();
+  ouvrirFenetre($("#energy"));
   await loadEnergy();
 }
 
@@ -611,7 +611,7 @@ function renderEnergy() {
   for (const id of ["#energy-totals", "#energy-legend", "#energy-details"]) $(id).hidden = empty;
   if (empty) {
     $("#energy-chart").replaceChildren(
-      el("p", { class: "auto-empty text-muted py-4 px-0", text: "Aucun compteur d'énergie pour l'instant. Branche le Linky (HA_TELEINFO), ou indique tes compteurs et leurs prix dans energy.yaml." }),
+      etatVide(ICONS.bolt, "Aucun compteur d'énergie pour l'instant. Branche le Linky (HA_TELEINFO), ou indique tes compteurs et leurs prix dans energy.yaml."),
     );
     $("#energy-note").textContent = "";
     return;

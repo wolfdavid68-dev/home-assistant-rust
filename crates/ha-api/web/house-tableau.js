@@ -914,8 +914,7 @@ function openRoom(name) {
   if (!roomArea()) return;
   renderRoom();
   const dialog = $("#room");
-  if (!dialog.open) dialog.showModal();
-  $("#room-close").focus();
+  ouvrirFenetre(dialog, $("#room-close"));
 }
 
 /** Toute la fenêtre : à l'ouverture seulement. Ensuite, les tuiles sont
@@ -936,7 +935,9 @@ function renderRoom() {
   const shown = groups.filter((group) => group.items.length > 0);
   $("#room-body").replaceChildren(...(shown.length > 0
     ? shown.map(({ title, items }) => el("section", { class: "room-group [:not(:where(.o101900))&_h3]:mt-0 [:not(:where(.o101900))&_h3]:mx-0 [:not(:where(.o101900))&_h3]:mb-2 [:not(:where(.o101901))&_h3]:text-legende [:not(:where(.o101902))&_h3]:font-semibold [&_h3]:uppercase [&_h3]:[letter-spacing:0.08em] [:not(:where(.o101905))&_h3]:text-muted [break-inside:avoid] mb-4 [@media(min-width:1000px)]:[.room-view_&]:[break-inside:auto] [@media(min-width:1000px)]:[.room-view_&_h3]:[break-after:avoid]" }, el("h3", { text: title }), el("div", { class: "grid" }, ...items.map(renderTile))))
-    : [el("p", { class: "auto-meta text-muted text-petit [&.run-loop]:text-alert [:not(:where(.o089100)).drawing-part>&]:m-0 [:not(:where(.o092300)).chart-card_&]:m-0", text: "Aucun appareil dans cette pièce." })]));
+    : [etatVide(ICONS.home, "Aucun appareil dans cette pièce.")]));
+  // Les groupes vont en colonnes : l'état vide les prend toutes.
+  $("#room-body").querySelector(".etat-vide")?.classList.add("[column-span:all]");
   renderRoomHead();
 }
 
@@ -987,8 +988,7 @@ function renderRoomHead() {
 }
 
 $("#room-close").addEventListener("click", () => $("#room").close());
-// Un toucher à côté de la fenêtre (sur le fond) la ferme.
-$("#room").addEventListener("click", (event) => { if (event.target === $("#room")) $("#room").close(); });
+// Un toucher à côté de la fenêtre (sur le fond) la ferme : data-fond-ferme (fenetres.js).
 $("#room").addEventListener("close", () => { roomView.name = null; $("#room-body").replaceChildren(); $(".room-sheet").style.transform = ""; });
 
 // Sur téléphone, la fenêtre monte du bas : on la ferme en la tirant vers le bas

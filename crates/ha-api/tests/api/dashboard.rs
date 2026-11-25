@@ -14,6 +14,7 @@ async fn dashboard_files_are_served_with_security_headers() {
     for (uri, content_type) in [
         ("/", "text/html; charset=utf-8"),
         ("/utils.js", "text/javascript; charset=utf-8"),
+        ("/fenetres.js", "text/javascript; charset=utf-8"),
         ("/app.js", "text/javascript; charset=utf-8"),
         ("/tiles.js", "text/javascript; charset=utf-8"),
         ("/tiles-appareils.js", "text/javascript; charset=utf-8"),
@@ -142,6 +143,7 @@ fn dashboard_never_uses_inner_html() {
     // doit jamais les insérer comme du HTML.
     let scripts = [
         ("utils.js", include_str!("../../web/utils.js")),
+        ("fenetres.js", include_str!("../../web/fenetres.js")),
         ("app.js", include_str!("../../web/app.js")),
         ("tiles.js", include_str!("../../web/tiles.js")),
         (

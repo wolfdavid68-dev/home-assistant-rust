@@ -489,7 +489,10 @@ function listView(calendars) {
       shown++;
     }
   }
-  if (shown === 0) list.append(el("p", { class: "muted", text: "Rien de prévu dans les trois semaines qui viennent." }));
+  if (shown === 0) {
+    const add = $("#agenda-add");
+    list.append(etatVide(ICONS.calendar, "Rien de prévu dans les trois semaines qui viennent.", add.hidden ? null : { texte: "Ajouter un rendez-vous", onClick: () => add.click() }));
+  }
   return el("div", { class: "agenda-list list-none m-0 grid gap-0.5 pt-0 px-3 pb-3 [overflow-y:auto]" }, strip, list);
 }
 
@@ -619,9 +622,7 @@ function calendarToggles(calendars) {
 
 function openEventDetails(e) {
   const dialog = $("#agenda-event");
-  const close = el("button", { type: "button", class: "ghost", text: "Fermer" });
-  close.addEventListener("click", () => dialog.close());
-  const title = el("h2", { id: "agenda-event-title" }, colorDot(e.color, "agenda-event-dot"), e.summary);
+  const title = el("span", { class: "inline-flex items-center gap-2.5" }, colorDot(e.color, "agenda-event-dot"), e.summary);
   const lastDay = new Date(e.endDate.getTime() - 1);
   const when = e.allDay
     ? (sameDay(e.startDate, lastDay) ? agendaLongDay.format(e.startDate) : `du ${agendaLongDay.format(e.startDate)} au ${agendaLongDay.format(lastDay)}`)
@@ -642,22 +643,23 @@ function openEventDetails(e) {
       el("span", { class: "agenda-person inline-flex items-center gap-1.5 pt-0.5 pr-2.5 pb-0.5 pl-1 mt-0 mr-1 mb-1 ml-0 rounded-full bg-card-2 text-petit" }, el("span", { class: "agenda-person-initial w-[20px] h-[20px] rounded-full bg-accent text-accent-ink grid [place-items:center] [:not(:where(.o129607))&]:text-micro [:not(:where(.o129608))&]:font-bold", text: name.charAt(0).toUpperCase(), "aria-hidden": "true" }), name))));
   }
   if (typeof e.description === "string" && e.description.trim() !== "") rows.push(line(ICONS.list, el("span", { class: "agenda-event-note [white-space:pre-line]", text: e.description })));
-  const buttons = el("div", { class: "agenda-event-buttons flex gap-2 mt-3 [:not(:where(.o129800))&_a]:[text-decoration:none]" });
+  const buttons = fenetrePied();
+  buttons.classList.add("[&_a]:no-underline");
   if (e.calendar.source === "TimeTree") {
-    buttons.append(el("a", { class: "action-button [justify-self:start] min-h-[40px] py-2 px-4 rounded-full [border:0] bg-card-2 font-semibold [&:active]:[transform:scale(0.97)]", href: "https://timetreeapp.com/", target: "_blank", rel: "noopener noreferrer", text: "Ouvrir TimeTree" }));
+    buttons.append(el("a", { class: "ghost min-h-11 px-5 rounded-champ inline-flex items-center", href: "https://timetreeapp.com/", target: "_blank", rel: "noopener noreferrer", text: "Ouvrir TimeTree" }));
   }
   if (!e.calendar.readOnly && (typeof canControl !== "function" || canControl(e.calendar.state)) && typeof e.uid === "string") {
-    const remove = el("button", { type: "button", class: "ghost danger", text: "Supprimer" });
-    remove.addEventListener("click", () => {
-      if (!window.confirm(`Supprimer « ${e.summary} » ?`)) return;
+    const remove = fenetreBouton("Supprimer", "dangerDiscret");
+    remove.addEventListener("click", async () => {
+      if (!await confirmer(`« ${e.summary} » sera retiré de l'agenda.`, { titre: "Supprimer le rendez-vous ?", ok: "Supprimer", danger: true })) return;
       callService("calendar", "delete_event", { entity_id: e.calendar.id, uid: e.uid });
       dialog.close();
     });
-    buttons.append(remove);
+    buttons.prepend(remove);
   }
-  dialog.replaceChildren(el("div", { class: "history-top flex items-center justify-between gap-4 [:not(:where(.o022100))&_h2]:[font-family:var(--font-display)] [:not(:where(.o022101))&_h2]:text-titre [:not(:where(.o022102))&_h2]:font-semibold [:not(:where(.o022103))&_h2]:[text-transform:none] [:not(:where(.o022104))&_h2]:[letter-spacing:-0.02em] [:not(:where(.o022105))&_h2]:text-text" }, title, close), ...rows);
+  dialog.replaceChildren(fenetreEntete(title, "", () => dialog.close(), "agenda-event-title"), ...rows);
   if (buttons.childElementCount > 0) dialog.append(buttons);
-  if (!dialog.open) dialog.showModal();
+  ouvrirFenetre(dialog);
 }
 
 // ----- Nouveau rendez-vous (agenda de la maison)
@@ -668,10 +670,9 @@ $("#agenda-add").addEventListener("click", () => {
   $("#agenda-new-summary").value = "";
   $("#agenda-new-start").value = "";
   $("#agenda-new-end").value = "";
-  $("#agenda-new").showModal();
-  $("#agenda-new-summary").focus();
+  ouvrirFenetre($("#agenda-new"), $("#agenda-new-summary"));
 });
-$("#agenda-new-close").addEventListener("click", () => $("#agenda-new").close());
+for (const id of ["#agenda-new-close", "#agenda-new-cancel"]) $(id).addEventListener("click", () => $("#agenda-new").close());
 $("#agenda-new-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const summary = $("#agenda-new-summary").value.trim();

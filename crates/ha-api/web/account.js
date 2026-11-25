@@ -98,7 +98,7 @@ $("#dock-automations").addEventListener("click", () => $("#open-automations").cl
 $("#dock-energy").addEventListener("click", () => openEnergy());
 for (const opener of ["#dock-account", "#open-account"]) {
   $(opener).addEventListener("click", () => {
-    $("#account-dialog").showModal();
+    ouvrirFenetre($("#account-dialog"), false);
     watchIntegrations();
     loadPush().catch(() => {});
     loadCerveau().catch(() => {});
@@ -179,8 +179,7 @@ async function assistAsk(text) {
 }
 
 $("#open-assist").addEventListener("click", () => {
-  $("#assist").showModal();
-  $("#assist-text").focus();
+  ouvrirFenetre($("#assist"), $("#assist-text"));
 });
 $("#assist-close").addEventListener("click", () => $("#assist").close());
 $("#assist-form").addEventListener("submit", (event) => {
@@ -392,7 +391,7 @@ for (const box of document.querySelectorAll("#push-categories input")) {
 /** Toucher une notification « ordre à valider » ouvre la cloche. */
 function openFromNotification(url) {
   if (typeof url === "string" && url.endsWith("#notifications") && !$("#dashboard-view").hidden) {
-    $("#notices").showModal();
+    ouvrirFenetre($("#notices"));
     renderNotices();
   }
 }
@@ -512,7 +511,7 @@ async function loadTablets() {
   $("#tablet-list").replaceChildren(...data.map((tablet) => {
     const forget = el("button", { type: "button", class: "ghost small", text: "Déconnecter" });
     forget.addEventListener("click", async () => {
-      if (!window.confirm(`Déconnecter « ${tablet.label} » ? Il faudra la reconnecter avec le mot de passe de son compte.`)) return;
+      if (!await confirmer(`Déconnecter « ${tablet.label} » ? Il faudra la reconnecter avec le mot de passe de son compte.`, { titre: "Déconnecter la tablette ?", ok: "Déconnecter", danger: true })) return;
       forget.disabled = true;
       const { status: done } = await api("DELETE", `/api/auth/tablets/${tablet.id}`).catch(() => ({ status: 0 }));
       if (done !== 204 && done !== 404) flash("Déconnexion impossible.");
