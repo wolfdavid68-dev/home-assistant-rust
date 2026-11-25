@@ -29,7 +29,7 @@ if (typeof MutationObserver === "function") new MutationObserver(() => {
 }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-hub-v4"] });
 
 // Les classes communes. Les couleurs sont celles de l'accueil v3 (hub-v3.css).
-const HUB_V4_FOCUS = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v-sky";
+const HUB_V4_FOCUS = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v-amber";
 const HUB_V4_BTN = "flex items-center justify-center gap-1.5 min-h-11 px-4 rounded-[14px] border-0 "
   + "bg-voile/8 text-corps font-medium text-inherit cursor-pointer transition-colors "
   + "hover:bg-voile/14 disabled:opacity-40 disabled:cursor-default [&.pending]:opacity-60 [&_svg]:size-4 "
@@ -133,13 +133,13 @@ function hubV4Overlay({ icon, tone = "amber", title, sub, body, more, spot, refr
   hubV4Close();
   const dialog = el("dialog", {
     class: "hub-v4-ovs fixed inset-0 m-0 p-0 w-screen h-dvh max-w-none max-h-none border-0 bg-transparent "
-      + "overflow-hidden text-v-ink font-sans [color-scheme:dark] [font-variant-numeric:tabular-nums] "
+      + "overflow-hidden text-v-ink font-sans [color-scheme:var(--v4-scheme)] [font-variant-numeric:tabular-nums] "
       + "backdrop:bg-transparent",
     "aria-labelledby": "hub-v4-title",
   });
   const veil = el("div", {
     class: "absolute inset-0 animate-v4-fade motion-reduce:animate-none "
-      + "bg-[radial-gradient(ellipse_at_center,rgb(7_10_28/0.35),rgb(7_10_28/0.78))] data-spot:bg-none",
+      + "bg-(image:--v4-veil) data-spot:bg-none",
   });
   const parts = [veil];
   if (spot) {
@@ -147,10 +147,10 @@ function hubV4Overlay({ icon, tone = "amber", title, sub, body, more, spot, refr
     // Le reste s'efface autour de la pièce (une ombre immense), qui respire en ambre.
     const halo = el("div", {
       class: "pointer-events-none absolute left-(--sx) top-(--sy) w-(--sw) h-(--sh) rounded-[18px] "
-        + "shadow-[0_0_0_200vmax_rgb(7_10_28/0.72)] animate-v4-fade motion-reduce:animate-none",
+        + "shadow-[0_0_0_200vmax_var(--v4-shade)] animate-v4-fade motion-reduce:animate-none",
     }, el("div", {
       class: "absolute -inset-1 rounded-[22px] border-2 border-v-amber "
-        + "shadow-[0_0_28px_rgb(255_191_94/0.55),inset_0_0_22px_rgb(255_191_94/0.25)] "
+        + "shadow-[0_0_28px_color-mix(in_srgb,var(--v3-amber)_55%,transparent),inset_0_0_22px_color-mix(in_srgb,var(--v3-amber)_25%,transparent)] "
         + "animate-v4-breathe motion-reduce:animate-none",
     }));
     halo.style.setProperty("--sx", `${spot.left}px`);
@@ -175,7 +175,7 @@ function hubV4Overlay({ icon, tone = "amber", title, sub, body, more, spot, refr
       "aria-hidden": "true",
     }, svgIcon(icon)),
     el("div", { class: "flex flex-col flex-1 min-w-0" },
-      el("b", { id: "hub-v4-title", class: "text-moyen font-semibold leading-tight truncate", text: title }), sub),
+      el("b", { id: "hub-v4-title", class: "font-recit text-titre font-normal leading-[1.05] tracking-[-0.01em] truncate", text: title }), sub),
     close);
   const pop = el("section", {
     class: "hub-v4-pop absolute left-(--x) top-(--y) w-[320px] max-h-[calc(100dvh-16px)] overflow-auto "
@@ -512,7 +512,7 @@ const HUB_V4_MAIN = "flex items-center justify-center gap-1.5 min-h-12 px-4 roun
   + HUB_V4_FOCUS;
 // Un curseur : la vraie glissière est invisible, posée sur le dessin.
 const HUB_V4_RANGE = "absolute inset-0 size-full m-0 opacity-0 cursor-pointer disabled:cursor-default";
-const HUB_V4_TRACK = "has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-v-sky "
+const HUB_V4_TRACK = "has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-v-amber "
   + "has-disabled:opacity-40";
 const HUB_V4_LABEL = "px-1 pt-1 text-petit font-semibold";
 // Pendant qu'on glisse, l'état reçu ne fait pas sauter le curseur.
@@ -782,7 +782,7 @@ function hubV4Cover(entityId, spot = null) {
     return true;
   };
 
-  const big = el("b", { class: "text-titre font-semibold leading-none" });
+  const big = el("b", { class: "font-chiffres text-titre font-light leading-none" });
   const small = el("span", { class: "text-legende text-v-ink2" });
   const pane = el("div", {
     class: "relative w-[118px] h-[168px] shrink-0 rounded-[14px] overflow-hidden border-4 border-voile/10 "
@@ -1031,7 +1031,7 @@ function hubV4Approval() {
   let busy = false;
   const sub = el("span", { class: `text-petit ${HUB_V4_MUTE}` });
   const who = el("span");
-  const order = el("p", { class: "m-0 font-titre text-titre font-semibold leading-snug tracking-[-0.02em]" });
+  const order = el("p", { class: "m-0 font-recit text-titre font-normal leading-snug" });
   const reason = el("p", { class: `m-0 text-petit ${HUB_V4_MUTE}` });
   const expiry = el("p", { class: `m-0 px-1 text-legende ${HUB_V4_MUTE}` });
   const deny = el("button", { type: "button", class: HUB_V4_BTN, text: "Refuser" });

@@ -888,6 +888,19 @@
     linear-gradient(180deg, #cddff1 0%, #dbe6f2 24%, #e9ecf0 44%, #f5e9de 66%, #f8e4d2 84%, #f5e8d8 100%);
 }
 
+/* Les incrustations v4 (hub-v4.js, hub-v4-sonnette.js) : voile, ombre autour
+   de la pièce montrée, schéma des champs. Bleu nuit la nuit, crème le jour. */
+:root[data-hub-v4] {
+  --v4-scheme: dark;
+  --v4-veil: radial-gradient(ellipse at center, rgb(7 10 28 / 0.35), rgb(7 10 28 / 0.78));
+  --v4-shade: rgb(7 10 28 / 0.72);
+}
+:root[data-hub-v4][data-theme="light"] {
+  --v4-scheme: light;
+  --v4-veil: radial-gradient(ellipse at center, rgb(248 240 228 / 0.30), rgb(236 226 212 / 0.72));
+  --v4-shade: rgb(240 232 220 / 0.70);
+}
+
 /* Accent ambre (le bleu ciel garde son sens : volets, Tempo bleu). */
 :root[data-hub-v4] .hub {
   --accent: var(--v3-amber);

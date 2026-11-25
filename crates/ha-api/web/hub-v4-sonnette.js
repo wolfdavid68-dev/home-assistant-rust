@@ -87,6 +87,11 @@ function hubV4DoorbellReady() {
   return typeof hubV4Can === "function" && hubV4Can();
 }
 
+/** Le récit de l'accueil (« On sonne à la porte. ») suit la fenêtre. */
+function hubV4DoorbellHello() {
+  if (typeof hubV3RenderHello === "function" && typeof hubV3 !== "undefined" && hubV3.ui) hubV3RenderHello();
+}
+
 /** Le minuteur de fermeture : 3 minutes après le dernier toucher. */
 function hubV4DoorbellTimer() {
   clearTimeout(doorbell.closeTimer);
@@ -101,7 +106,7 @@ function hubV4Doorbell(state, at = doorbellRang(state)) {
   const sub = el("span", { class: `text-petit ${HUB_V4_MUTE} truncate` });
   const img = el("img", { alt: "Photo prise par la sonnette", class: "absolute inset-0 size-full object-cover" });
   img.hidden = true;
-  const empty = el("span", { class: `grid justify-items-center gap-2 text-corps ${HUB_V4_MUTE} [&_svg]:size-9 [&_svg]:opacity-40` },
+  const empty = el("span", { class: "grid justify-items-center gap-2 text-corps text-white/75 [&_svg]:size-9 [&_svg]:opacity-60" },
     svgIcon(HUB_V4_BELL_ICONS.camera), el("span"));
   const wait = el("span", { class: `absolute left-2.5 top-2.5 ${HUB_V4_TAG}`, text: "La nouvelle photo arrive…" });
   const stamp = el("span", { class: `absolute left-2.5 bottom-2.5 ${HUB_V4_TAG} [font-variant-numeric:tabular-nums]` });
@@ -150,12 +155,14 @@ function hubV4Doorbell(state, at = doorbellRang(state)) {
       doorbell.owner = null;
       clearTimeout(doorbell.closeTimer);
       if (doorbell.current === id) doorbell.current = null;
+      hubV4DoorbellHello();
     },
   });
   // Après hubV4Overlay : il ferme d'abord la fenêtre d'avant (qui oublie la sonnette).
   const mine = {};
   doorbell.owner = mine;
   doorbell.current = id;
+  hubV4DoorbellHello();
   hubV4DoorbellTimer();
   return true;
 }
@@ -168,7 +175,7 @@ function hubV4Camera(entityId) {
   hubV4Close();
   const dialog = el("dialog", {
     class: "fixed inset-0 m-0 p-0 w-screen h-dvh max-w-none max-h-none border-0 bg-transparent overflow-hidden "
-      + "text-v-ink font-sans [color-scheme:dark] [font-variant-numeric:tabular-nums] backdrop:bg-transparent",
+      + "text-v-ink font-sans [color-scheme:var(--v4-scheme)] [font-variant-numeric:tabular-nums] backdrop:bg-transparent",
     "aria-labelledby": "hub-v4-cam-title",
   });
   const veil = el("div", {
@@ -185,10 +192,10 @@ function hubV4Camera(entityId) {
   // La photo, avec sa barre du haut : l'heure de la photo, fermer.
   const img = el("img", { alt: "", class: "absolute inset-0 size-full object-contain" });
   img.hidden = true;
-  const empty = el("span", { class: `grid justify-items-center gap-2.5 text-courant ${HUB_V4_MUTE} [&_svg]:size-11 [&_svg]:opacity-40` },
+  const empty = el("span", { class: "grid justify-items-center gap-2.5 text-courant text-white/75 [&_svg]:size-11 [&_svg]:opacity-60" },
     svgIcon(HUB_V4_BELL_ICONS.camera), el("span"));
   const shotTag = el("span", { class: HUB_V4_TAG },
-    el("i", { class: "size-2 rounded-full bg-v-amber shadow-[0_0_8px_#ffbf5e]", "aria-hidden": "true" }), el("span"));
+    el("i", { class: "size-2 rounded-full bg-v-amber shadow-[0_0_8px_var(--v3-amber)]", "aria-hidden": "true" }), el("span"));
   const close = el("button", { type: "button", class: `${HUB_V4_ICON_BTN} bg-scrim/60`, "aria-label": "Fermer" },
     svgIcon(HUB_V4_ICONS.close));
   close.addEventListener("click", () => hubV4Close());

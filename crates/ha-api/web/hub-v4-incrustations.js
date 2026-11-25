@@ -16,7 +16,7 @@ const HUB_V4_ICON_BTN = "grid place-items-center size-11 shrink-0 p-0 rounded-fu
   + "cursor-pointer transition-colors hover:bg-voile/14 disabled:opacity-35 disabled:cursor-default [&_svg]:size-5 "
   + HUB_V4_FOCUS;
 const HUB_V4_INPUT = "w-full min-h-12 px-4 rounded-[16px] border-0 bg-voile/8 text-courant text-inherit "
-  + "placeholder:text-v-mute/80 [color-scheme:dark] " + HUB_V4_FOCUS;
+  + "placeholder:text-v-mute/80 [color-scheme:var(--v4-scheme)] " + HUB_V4_FOCUS;
 const HUB_V4_CHIP = "min-h-10 px-3 rounded-full border-0 bg-voile/8 text-petit text-inherit cursor-pointer "
   + "transition-colors hover:bg-voile/14 " + HUB_V4_FOCUS;
 // Un « + » et une coche, en traits (comme ICONS).
@@ -259,7 +259,7 @@ function hubV4Weather() {
   const get = () => [...entities.values()].find((s) => domainOf(s) === "weather");
   if (!get()) return false;
   const icon = el("span", { class: "text-v-sky [&_svg]:size-12", "aria-hidden": "true" });
-  const temp = el("b", { class: "font-titre text-affiche-l font-light leading-none" });
+  const temp = el("b", { class: "font-chiffres text-affiche-l font-extralight leading-none tracking-[-0.03em]" });
   const label = el("b", { class: "text-courant font-semibold" });
   const feel = el("span", { class: `text-petit ${HUB_V4_MUTE}` });
   const now = el("div", { class: "flex items-center gap-3 px-1" }, icon, temp, el("p", { class: "m-0 flex flex-col" }, label, feel));
@@ -746,8 +746,8 @@ function hubV4People() {
       swap(list, ...people.map((state) => {
         const name = nameOf(state);
         const avatar = el("span", {
-          class: "relative grid place-items-center size-10 shrink-0 rounded-full bg-(--pc) text-moyen font-semibold text-scrim "
-            + "data-away:opacity-45",
+          class: "relative grid place-items-center size-10 shrink-0 rounded-full bg-(--pc) text-moyen font-semibold text-white "
+            + "data-away:bg-voile/12 data-away:text-v-ink2",
           "aria-hidden": "true", ...(state.state === "home" ? {} : { "data-away": "" }),
         }, name.charAt(0).toUpperCase(), el("span", {
           class: "absolute -right-0.5 -bottom-0.5 size-3 rounded-full border-2 border-scrim bg-v-ok "
@@ -796,7 +796,7 @@ function hubV4MachineView(state, now = Date.now(), shown = 3_600_000) {
 function hubV4Machine(entityId) {
   if (!hubV4Can() || !entities.get(entityId)) return false;
   const sub = el("span", { class: `text-petit ${HUB_V4_MUTE} truncate` });
-  const end = el("b", { class: "font-titre text-affiche-l font-light leading-none" });
+  const end = el("b", { class: "font-chiffres text-affiche-l font-extralight leading-none tracking-[-0.03em]" });
   const left = el("span", { class: `text-petit ${HUB_V4_MUTE}` });
   const bar = el("div", { class: "relative h-2 rounded-full bg-voile/10 overflow-hidden" },
     el("span", { class: "absolute inset-y-0 left-0 w-(--mp) rounded-full bg-v-sky transition-[width] motion-reduce:transition-none" }));
@@ -851,7 +851,7 @@ function hubV4Water() {
     class: "relative w-16 h-28 shrink-0 rounded-[18px_18px_14px_14px] bg-voile/8 overflow-hidden shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--v3-voile)_12%,transparent)]",
     role: "img",
   }, fill);
-  const temp = el("b", { class: "font-titre text-affiche-l font-light leading-none" });
+  const temp = el("b", { class: "font-chiffres text-affiche-l font-extralight leading-none tracking-[-0.03em]" });
   const target = el("span", { class: `text-petit ${HUB_V4_MUTE}` });
   const mode = el("span", { class: `text-petit ${HUB_V4_MUTE}` });
   const nudge = (direction) => {
@@ -984,8 +984,10 @@ function hubV4Security() {
           el("span", { class: `shrink-0 ${HUB_V4_MUTE} [&_svg]:size-5`, "aria-hidden": "true" }, svgIcon(iconOf(state))),
           el("b", { class: "flex-1 min-w-0 text-corps font-medium truncate", text: nameOf(state) }),
           el("span", {
-            class: "shrink-0 px-2.5 py-1 rounded-full text-legende font-semibold bg-v-ok/16 text-v-ok "
-              + "data-issue:bg-v-alert/18 data-issue:text-v-alert",
+            class: "shrink-0 px-2.5 py-1 rounded-full text-legende font-semibold bg-v-ok/12 "
+              // Le texte tire un peu vers l'encre : lisible (AA) sur la teinte, en Clair comme en Sombre.
+              + "text-[color-mix(in_srgb,var(--v3-ok)_78%,var(--v3-ink))] data-issue:bg-v-alert/12 "
+              + "data-issue:text-[color-mix(in_srgb,var(--v3-alert)_78%,var(--v3-ink))]",
             ...(issue ? { "data-issue": "" } : {}),
             text: hubV3SecurityWord(state),
           }));

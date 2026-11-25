@@ -417,7 +417,11 @@ function hubV3RenderHello() {
   const ui = hubV3.ui;
   const count = alerts().length;
   const soon = count === 0 ? agendaSoon() : null;
-  const em = soon ? el("em", {}, soon, ".") : el("em", { text: hubV3Attention(count) });
+  // En v4, tant que la fenêtre de la sonnette est ouverte, le récit le dit (maquette).
+  const ringing = typeof hubV4On === "function" && hubV4On() && typeof doorbell !== "undefined" && doorbell.current
+    && entities.get(doorbell.current)?.state === "on";
+  const em = ringing ? el("em", { text: "On sonne à la porte." })
+    : soon ? el("em", {}, soon, ".") : el("em", { text: hubV3Attention(count) });
   swap(ui.hello, hubV3Hello(new Date().getHours()), " ", em);
 }
 

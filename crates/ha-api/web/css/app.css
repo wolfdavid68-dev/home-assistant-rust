@@ -73,6 +73,8 @@
   --font-code: var(--font-mono);
   /* Le récit de l'accueil v4 (titres, « Tout est calme. ») : Instrument Serif, OFL. */
   --font-recit: "Instrument Serif", Georgia, "Times New Roman", serif;
+  /* Les grands chiffres fins de la v4 (heure, degrés) : la Geist variable, graisse libre. */
+  --font-chiffres: "Geist v4", var(--font);
   --radius-carte: var(--radius);
   --shadow-carte: var(--shadow);
   --shadow-flottant: var(--shadow-float);

@@ -4886,10 +4886,10 @@
   .bg-v-ok {
     background-color: var(--v3-ok);
   }
-  .bg-v-ok\/16 {
+  .bg-v-ok\/12 {
     background-color: var(--v3-ok);
     @supports (color: color-mix(in lab, red, red)) {
-      background-color: color-mix(in oklab, var(--v3-ok) 16%, transparent);
+      background-color: color-mix(in oklab, var(--v3-ok) 12%, transparent);
     }
   }
   .bg-v-sky {
@@ -4978,6 +4978,9 @@
   .bg-\(image\:--v3-sky-bg\) {
     background-image: var(--v3-sky-bg);
   }
+  .bg-\(image\:--v4-veil\) {
+    background-image: var(--v4-veil);
+  }
   .bg-\[linear-gradient\(90deg\,\#ffb35c\,\#ffe7c2_48\%\,\#e6f1ff_70\%\,\#a9d4ff\)\] {
     background-image: linear-gradient(90deg,#ffb35c,#ffe7c2 48%,#e6f1ff 70%,#a9d4ff);
   }
@@ -4992,9 +4995,6 @@
   }
   .bg-\[radial-gradient\(circle_at_30\%_20\%\,rgb\(185_163_255\/0\.45\)\,rgb\(16_18_42\/0\.6\)\)\] {
     background-image: radial-gradient(circle at 30% 20%,rgb(185 163 255/0.45),rgb(16 18 42/0.6));
-  }
-  .bg-\[radial-gradient\(ellipse_at_center\,rgb\(7_10_28\/0\.35\)\,rgb\(7_10_28\/0\.78\)\)\] {
-    background-image: radial-gradient(ellipse at center,rgb(7 10 28/0.35),rgb(7 10 28/0.78));
   }
   .bg-\[repeating-linear-gradient\(180deg\,\#5a5d8c_0_9px\,\#45487a_9px_11px\)\] {
     background-image: repeating-linear-gradient(180deg,#5a5d8c 0 9px,#45487a 9px 11px);
@@ -5556,6 +5556,9 @@
   .align-middle {
     vertical-align: middle;
   }
+  .font-chiffres {
+    font-family: "Geist v4", var(--font);
+  }
   .font-recit {
     font-family: "Instrument Serif", Georgia, "Times New Roman", serif;
   }
@@ -5650,6 +5653,10 @@
   .font-bold {
     --tw-font-weight: var(--font-weight-bold);
     font-weight: var(--font-weight-bold);
+  }
+  .font-extralight {
+    --tw-font-weight: var(--font-weight-extralight);
+    font-weight: var(--font-weight-extralight);
   }
   .font-light {
     --tw-font-weight: var(--font-weight-light);
@@ -5807,6 +5814,12 @@
   .text-\[\#170f33\] {
     color: #170f33;
   }
+  .text-\[color-mix\(in_srgb\,var\(--v3-ok\)_78\%\,var\(--v3-ink\)\)\] {
+    color: var(--v3-ok);
+    @supports (color: color-mix(in lab, red, red)) {
+      color: color-mix(in srgb,var(--v3-ok) 78%,var(--v3-ink));
+    }
+  }
   .text-accent {
     color: var(--accent);
   }
@@ -5830,9 +5843,6 @@
   }
   .text-muted {
     color: var(--muted);
-  }
-  .text-scrim {
-    color: var(--v3-scrim);
   }
   .text-text {
     color: var(--text);
@@ -5873,6 +5883,15 @@
   .text-v-violet {
     color: var(--v3-violet);
   }
+  .text-white {
+    color: var(--color-white);
+  }
+  .text-white\/75 {
+    color: color-mix(in srgb, #fff 75%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      color: color-mix(in oklab, var(--color-white) 75%, transparent);
+    }
+  }
   .capitalize {
     text-transform: capitalize;
   }
@@ -5902,6 +5921,9 @@
   .\[color-scheme\:dark\] {
     color-scheme: dark;
   }
+  .\[color-scheme\:var\(--v4-scheme\)\] {
+    color-scheme: var(--v4-scheme);
+  }
   .\[opacity\:0\.5\] {
     opacity: 0.5;
   }
@@ -5930,16 +5952,19 @@
     --tw-shadow: 0 1px 3px 0 var(--tw-shadow-color, rgb(0 0 0 / 0.1)), 0 1px 2px -1px var(--tw-shadow-color, rgb(0 0 0 / 0.1));
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
-  .shadow-\[0_0_0_200vmax_rgb\(7_10_28\/0\.72\)\] {
-    --tw-shadow: 0 0 0 200vmax var(--tw-shadow-color, rgb(7 10 28/0.72));
+  .shadow-\[0_0_0_200vmax_var\(--v4-shade\)\] {
+    --tw-shadow: 0 0 0 200vmax var(--tw-shadow-color, var(--v4-shade));
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
-  .shadow-\[0_0_8px_\#ffbf5e\] {
-    --tw-shadow: 0 0 8px var(--tw-shadow-color, #ffbf5e);
+  .shadow-\[0_0_8px_var\(--v3-amber\)\] {
+    --tw-shadow: 0 0 8px var(--tw-shadow-color, var(--v3-amber));
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
-  .shadow-\[0_0_28px_rgb\(255_191_94\/0\.55\)\,inset_0_0_22px_rgb\(255_191_94\/0\.25\)\] {
-    --tw-shadow: 0 0 28px var(--tw-shadow-color, rgb(255 191 94/0.55)), inset 0 0 22px var(--tw-shadow-color, rgb(255 191 94/0.25));
+  .shadow-\[0_0_28px_color-mix\(in_srgb\,var\(--v3-amber\)_55\%\,transparent\)\,inset_0_0_22px_color-mix\(in_srgb\,var\(--v3-amber\)_25\%\,transparent\)\] {
+    --tw-shadow: 0 0 28px var(--tw-shadow-color, var(--v3-amber)), inset 0 0 22px var(--tw-shadow-color, var(--v3-amber));
+    @supports (color: color-mix(in lab, red, red)) {
+      --tw-shadow: 0 0 28px var(--tw-shadow-color, color-mix(in srgb,var(--v3-amber) 55%,transparent)), inset 0 0 22px var(--tw-shadow-color, color-mix(in srgb,var(--v3-amber) 25%,transparent));
+    }
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
   .shadow-\[0_0_36px_color-mix\(in_srgb\,var\(--v3-amber\)_45\%\,transparent\)\,inset_0_0_26px_color-mix\(in_srgb\,var\(--v3-amber\)_20\%\,transparent\)\] {
@@ -6651,6 +6676,9 @@
   .focus-visible\:outline-accent:focus-visible {
     outline-color: var(--accent);
   }
+  .focus-visible\:outline-v-amber:focus-visible {
+    outline-color: var(--v3-amber);
+  }
   .focus-visible\:outline-v-sky:focus-visible {
     outline-color: var(--v3-sky);
   }
@@ -6683,8 +6711,8 @@
   .has-focus-visible\:outline-offset-2:has(:focus-visible) {
     outline-offset: 2px;
   }
-  .has-focus-visible\:outline-v-sky:has(:focus-visible) {
-    outline-color: var(--v3-sky);
+  .has-focus-visible\:outline-v-amber:has(:focus-visible) {
+    outline-color: var(--v3-amber);
   }
   .has-disabled\:opacity-40:has(:disabled) {
     opacity: 40%;
@@ -6805,8 +6833,14 @@
   .aria-\[current\=page\]\:text-v-ink[aria-current="page"] {
     color: var(--v3-ink);
   }
-  .data-away\:opacity-45[data-away] {
-    opacity: 45%;
+  .data-away\:bg-voile\/12[data-away] {
+    background-color: var(--v3-voile);
+    @supports (color: color-mix(in lab, red, red)) {
+      background-color: color-mix(in oklab, var(--v3-voile) 12%, transparent);
+    }
+  }
+  .data-away\:text-v-ink2[data-away] {
+    color: var(--v3-ink2);
   }
   .data-error\:shadow-\[inset_3px_0_0_\#ff6b6b\][data-error] {
     --tw-shadow: inset 3px 0 0 var(--tw-shadow-color, #ff6b6b);
@@ -6818,14 +6852,17 @@
       background-color: color-mix(in oklab, var(--v3-amber) 16%, transparent);
     }
   }
-  .data-issue\:bg-v-alert\/18[data-issue] {
+  .data-issue\:bg-v-alert\/12[data-issue] {
     background-color: var(--v3-alert);
     @supports (color: color-mix(in lab, red, red)) {
-      background-color: color-mix(in oklab, var(--v3-alert) 18%, transparent);
+      background-color: color-mix(in oklab, var(--v3-alert) 12%, transparent);
     }
   }
-  .data-issue\:text-v-alert[data-issue] {
+  .data-issue\:text-\[color-mix\(in_srgb\,var\(--v3-alert\)_78\%\,var\(--v3-ink\)\)\][data-issue] {
     color: var(--v3-alert);
+    @supports (color: color-mix(in lab, red, red)) {
+      color: color-mix(in srgb,var(--v3-alert) 78%,var(--v3-ink));
+    }
   }
   .data-on\:bg-v-violet[data-on] {
     background-color: var(--v3-violet);
@@ -7704,8 +7741,8 @@
   .\[\&_svg\]\:\[stroke\:currentColor\] svg {
     stroke: currentColor;
   }
-  .\[\&_svg\]\:opacity-40 svg {
-    opacity: 40%;
+  .\[\&_svg\]\:opacity-60 svg {
+    opacity: 60%;
   }
   .\[\&_svg\]\:\[stroke-linecap\:round\] svg {
     stroke-linecap: round;
