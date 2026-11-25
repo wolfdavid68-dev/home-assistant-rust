@@ -896,6 +896,10 @@
   --v4-shade: rgb(7 10 28 / 0.72);
 }
 :root[data-hub-v4][data-theme="light"] {
+  /* Plus foncés qu'en v3 : sur le verre crème de la v4, l'orangé du chauffage
+     et le vert « RAS » restaient juste sous AA (4,4:1) en petit texte. */
+  --v3-heat: #a23d10;
+  --v3-ok: #17693f;
   --v4-scheme: light;
   --v4-veil: radial-gradient(ellipse at center, rgb(248 240 228 / 0.30), rgb(236 226 212 / 0.72));
   --v4-shade: rgb(240 232 220 / 0.70);

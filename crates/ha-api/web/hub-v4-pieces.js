@@ -70,6 +70,11 @@ function hubV4Fold(text) {
   return text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 }
 
+/** Les mots d'un nom, repliés ; « RdC » compte comme « rez » (« Rez-de-chaussée »). */
+function hubV4Words(text) {
+  return hubV4Fold(text).split(/[^a-z]+/).filter(Boolean).map((w) => (w === "rdc" ? "rez" : w));
+}
+
 /**
  * Le chauffage d'une pièce : le sien, sinon celui de son étage (rangé dans
  * une pièce du même onglet, ou dont le nom dit l'étage : « Chauffage rez »),
@@ -82,8 +87,8 @@ function hubV4HeatFor(zones, room, floor, floorRooms) {
   const sameFloor = zones.find((z) => z.area && floorRooms.includes(z.area));
   if (sameFloor) return { zone: sameFloor, shared: true };
   if (floor) {
-    const word = hubV4Fold(floor).split(/[^a-z]+/).find(Boolean) ?? "";
-    const named = word ? zones.find((z) => !z.area && hubV4Fold(z.name).split(/[^a-z]+/).includes(word)) : undefined;
+    const word = hubV4Words(floor)[0] ?? "";
+    const named = word ? zones.find((z) => !z.area && hubV4Words(z.name).includes(word)) : undefined;
     if (named) return { zone: named, shared: true };
   }
   const free = zones.filter((z) => !z.area);
@@ -192,6 +197,88 @@ function hubV4SilentSince(changed, now) {
   if (sameDay) return `depuis ${shortTime.format(at)}`;
   const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
   return at.toDateString() === yesterday.toDateString() ? "depuis hier" : "depuis plusieurs jours";
+}
+
+/**
+ * L'étage d'un chauffage (« Toute la maison ») : celui de sa pièce, sinon celui
+ * que dit son nom (« Etage », « RdC », « Chauffage rez »), sinon "".
+ */
+function hubV4ZoneFloor(zone, pages) {
+  const own = zone.area ? hubV4PageOf(pages, zone.area) : null;
+  if (own) return own.name;
+  const said = hubV4Words(zone.name);
+  const page = pages.find((p) => {
+    const first = hubV4Words(p.name)[0] ?? "";
+    return first !== "" && said.includes(first);
+  });
+  return page?.name ?? "";
+}
+
+/** Le titre d'un chauffage : « Chauffage · Étage », « Chauffage · Rez », « Chauffage · Salon ». */
+function hubV4HeatTitle(zone, floor) {
+  const short = floor ? floor.split(/[-\s]/)[0] : zone.area || zone.name;
+  return /^chauffage/i.test(short) ? short : `Chauffage · ${short}`;
+}
+
+/** Le nom court d'une pièce dans « Les pièces » : « Ch. parents », « S. à manger ». */
+function hubV4RoomShort(name) {
+  return name.replace(/^Chambre\s+(?=\S)/i, "Ch. ").replace(/^Salle à manger$/i, "S. à manger");
+}
+
+/** Une prise : un switch ou une lumière « prise » (prise connectée sur une lampe). */
+function hubV4IsPlug(state) {
+  const domain = domainOf(state);
+  if (domain !== "switch" && domain !== "light") return false;
+  if (state.attributes?.device_class === "outlet") return true;
+  const words = (text) => hubV4Fold(String(text ?? "")).split(/[^a-z]+/);
+  return [state.entity_id.split(".")[1], state.attributes?.friendly_name]
+    .some((text) => words(text).some((w) => ["prise", "prises", "plug", "outlet", "socket"].includes(w)));
+}
+
+/** Le capteur de gel (calque « givre » du dessin) : `binary_sensor.gel` ou de classe `cold`. */
+function hubV4IsFrost(state) {
+  if (domainOf(state) !== "binary_sensor") return false;
+  return state.attributes?.device_class === "cold" || state.entity_id === "binary_sensor.gel"
+    || hubV4Fold(String(state.attributes?.friendly_name ?? "")).trim() === "gel";
+}
+
+/** Les débits d'internet : « 35,8 / 0,1 Mbit/s », ou "" sans mesure. */
+function hubV4RateText(down, up) {
+  const show = (v) => (Number.isFinite(v) ? HUB_V3_NUMBER.format(v) : "–");
+  return Number.isFinite(down) || Number.isFinite(up) ? `${show(down)} / ${show(up)} Mbit/s` : "";
+}
+
+/** L'heure d'une sauvegarde : « 27/10 · 03:30 » (heure locale), ou "". */
+function hubV4BackupText(iso) {
+  const at = new Date(iso);
+  if (typeof iso !== "string" || Number.isNaN(at.getTime())) return "";
+  const two = (n) => String(n).padStart(2, "0");
+  return `${two(at.getDate())}/${two(at.getMonth() + 1)} · ${two(at.getHours())}:${two(at.getMinutes())}`;
+}
+
+/** Le prochain jour férié en une ligne : « Toussaint · dim. 1 nov. », ou "". */
+function hubV4HolidayText(state) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(state?.state ?? "");
+  if (!match) return "";
+  const day = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  const name = typeof state.attributes?.nom === "string" ? state.attributes.nom : "";
+  return [name, day.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" })].filter(Boolean).join(" · ");
+}
+
+/**
+ * Le mot d'un appareil de la carte Sécurité et sa teinte (`ok`, `bad`, `info`,
+ * `mute`) : « RAS » pour un détecteur calme, « Inactif » pour le gel, sinon le
+ * mot de l'accueil (« Fermée », « Verrouillé », « Fumée ! »).
+ */
+function hubV4SafeWord(state) {
+  const s = state.state;
+  if (s === "unavailable" || s === "unknown") return { word: statusText(state), tone: "mute" };
+  if (hubV4IsFrost(state)) return s === "on" ? { word: "Il gèle", tone: "info" } : { word: "Inactif", tone: "ok" };
+  const bad = hubV3SecurityIssue(state) !== null;
+  if (!bad && domainOf(state) === "binary_sensor" && HUB_V3_ALERTS.includes(state.attributes.device_class)) {
+    return { word: "RAS", tone: "ok" };
+  }
+  return { word: hubV3SecurityWord(state), tone: bad ? "bad" : "ok" };
 }
 
 // --------------------------------------------------------- Les morceaux
@@ -543,11 +630,34 @@ function hubV4PageNav(name) {
  * zoomé sur la pièce, le ciel autour ; ou entier pour toute la maison.
  * `place(free)` le pose ; `free` : le milieu (px) de l'espace entre les colonnes.
  */
+/** La lune (le soleil en Clair) d'une page sans dessin ; voilée par les nuages, absente sous la pluie. */
+function hubV4SkyStar() {
+  return el("span", {
+    class: "absolute top-[14%] left-[62%] size-12 rounded-full bg-[image:var(--v4-moon)] shadow-[var(--v4-moon-halo)] "
+      + "[[data-theme=light]_&]:size-14 [[data-theme=light]_&]:bg-[image:var(--v4-sun)] [[data-theme=light]_&]:shadow-[var(--v4-sun-halo)] "
+      + "[[data-meteo=eclaircies]_&]:opacity-80 "
+      + "[:is([data-meteo=nuageux],[data-meteo=vent],[data-meteo=brouillard])_&]:opacity-20 "
+      + "[:is([data-meteo=nuageux],[data-meteo=vent],[data-meteo=brouillard])_&]:blur-[3px] "
+      + "[:is([data-meteo=pluie],[data-meteo=averses],[data-meteo=orage],[data-meteo=grele],[data-meteo=neige],[data-meteo=pluie-neige])_&]:hidden max-lg:hidden",
+  });
+}
+
+/** La lueur douce au bas du ciel de la page Énergie (celle de la maquette). */
+function hubV4SkyGlow() {
+  return el("div", {
+    class: "absolute left-1/2 top-[58%] size-[min(46vw,560px)] -translate-x-1/2 -translate-y-1/2 rounded-full "
+      + "bg-[radial-gradient(closest-side,color-mix(in_srgb,var(--v3-amber)_22%,transparent),transparent)] blur-2xl",
+  });
+}
+
 function hubV4PageStage(name) {
   const pages = house.pages ?? [];
   const page = hubV4Whole(name) ? pages[0] : hubV4PageOf(pages, name);
-  const url = hubV4PageImage(page);
+  // Toute la maison montre le dessin dans sa première colonne ; l'énergie, le
+  // ciel seul avec sa lune (son soleil le jour), comme la maquette.
+  const url = name === HUB_V4_ALL || name === HUB_V4_ENERGY ? null : hubV4PageImage(page);
   const stage = el("div", { class: "absolute inset-0 overflow-hidden pointer-events-none", "aria-hidden": "true" });
+  if (name === HUB_V4_ENERGY) stage.append(hubV4SkyGlow(), hubV4SkyStar());
   if (!url) return { node: stage, place: () => {} };
   // Les bords du dessin se fondent dans le ciel de la page.
   const image = el("img", {
@@ -759,31 +869,141 @@ function hubV4RoomBody(name) {
   return { left, right, refresh: () => paints.forEach((paint) => paint()) };
 }
 
-/** « Toute la maison » : les pièces d'un coup d'œil, chauffage, eau chaude, prises, sécurité. */
+/** Une ligne d'une carte de « Toute la maison » : icône, nom (et sous-ligne), valeur à droite. */
+const HUB_V4_ALL_ROW = "flex items-center gap-3 min-h-11 px-3 py-1.5 rounded-[14px] bg-voile/6 text-left text-inherit "
+  + `[&>svg]:size-[18px] [&>svg]:shrink-0 [&>svg]:text-v-mute`;
+// La valeur d'une ligne : verte si tout va bien, rouge si ça cloche (classes en entier pour Tailwind).
+// En Clair, le vert v-ok seul est juste sous AA (4,46:1) sur le ciel crème : un peu d'encre en plus.
+const HUB_V4_ALL_TONES = { ok: "text-v-ok", bad: "font-semibold text-v-alert", info: "text-v-sky", mute: "text-v-mute" };
+// Un bouton d'un choix segmenté (Annonces).
+const HUB_V4_ALL_SEG = "flex-1 min-h-10 px-2 rounded-[11px] border-0 bg-transparent text-petit font-medium text-inherit cursor-pointer "
+  + "transition-colors hover:bg-voile/10 aria-pressed:bg-v-sky/16 aria-pressed:ring-1 aria-pressed:ring-inset "
+  + "aria-pressed:ring-v-sky/45 aria-pressed:font-semibold disabled:opacity-40 disabled:cursor-default "
+  + `[&.pending]:opacity-60 ${HUB_V4_FOCUS}`;
+const HUB_V4_ALL_ICONS = {
+  rooms: ["M4 7a3 3 0 1 0 6 0 3 3 0 1 0-6 0", "M14 7a3 3 0 1 0 6 0 3 3 0 1 0-6 0", "M4 17a3 3 0 1 0 6 0 3 3 0 1 0-6 0", "M14 17a3 3 0 1 0 6 0 3 3 0 1 0-6 0"],
+  wifi: ["M2 8.8a15 15 0 0 1 20 0", "M5 12.5a10 10 0 0 1 14 0", "M8.5 16a5 5 0 0 1 7 0", "M12 19.5h.01"],
+  save: ["M5 3h11l3 3v15H5z", "M8 3v5h7V3", "M8 21v-7h8v7"],
+  sunrise: ["M12 2v6", "M9 5l3-3 3 3", "M4.9 10.9l1.4 1.4", "M2 18h2", "M20 18h2", "M19.1 10.9l-1.4 1.4", "M22 22H2", "M16 18a4 4 0 0 0-8 0"],
+  sunset: ["M12 2v6", "M15 5l-3 3-3-3", "M4.9 10.9l1.4 1.4", "M2 18h2", "M20 18h2", "M19.1 10.9l-1.4 1.4", "M22 22H2", "M16 18a4 4 0 0 0-8 0"],
+  snow: ["M12 2v20", "M4.9 4.9l14.2 14.2", "M2 12h20", "M4.9 19.1L19.1 4.9"],
+  window: ["M4 3h16v18H4z", "M12 3v18", "M4 12h16"],
+};
+// L'icône d'un appareil de la carte Sécurité, par classe.
+const HUB_V4_ALL_SAFE = { smoke: "button", gas: "button", carbon_monoxide: "button", moisture: "humidity", window: "window" };
+
+/** L'icône d'un appareil de la carte Sécurité. */
+function hubV4SafeIcon(state) {
+  if (hubV4IsFrost(state)) return HUB_V4_ALL_ICONS.snow;
+  const domain = domainOf(state);
+  if (domain === "lock") return ICONS.lock;
+  if (domain === "siren") return ICONS.siren;
+  if (domain === "cover") return ICONS.car;
+  if (domain !== "binary_sensor") return ICONS.shield;
+  const name = lookup(HUB_V4_ALL_SAFE, state.attributes.device_class);
+  return name === "window" ? HUB_V4_ALL_ICONS.window : name ? ICONS[name] : ICONS.door;
+}
+
+/** Une ligne (icône, nom, sous-ligne, valeur) ; `button` : elle se touche. */
+function hubV4Row(icon, button = false) {
+  const name = el("b", { class: "block text-corps font-semibold truncate" });
+  const sub = el("span", { class: `block text-legende leading-snug ${HUB_V4_MUTE}` });
+  const value = el("span", { class: `shrink-0 text-petit text-right ${HUB_V4_MUTE}` });
+  const node = el(button ? "button" : "div", {
+    class: HUB_V4_ALL_ROW + (button ? ` w-full border-0 cursor-pointer transition-colors hover:bg-voile/10 ${HUB_V4_FOCUS}` : ""),
+    ...(button ? { type: "button" } : {}),
+  }, svgIcon(icon), el("span", { class: "flex-1 min-w-0" }, name, sub), value);
+  const set = (title, line, text, tone = "mute") => {
+    setText(name, title);
+    setText(sub, line);
+    sub.hidden = line === "";
+    setText(value, text);
+    const cls = `shrink-0 text-petit text-right ${lookup(HUB_V4_ALL_TONES, tone) ?? HUB_V4_MUTE}`;
+    if (value.className !== cls) value.className = cls;
+  };
+  return { node, set };
+}
+
+/** Une prise de la grille : la toucher l'allume ou l'éteint (comme une lampe de la page Pièce). */
+function hubV4PlugButton(entityId) {
+  const name = el("b", { class: "text-corps font-semibold truncate" });
+  const word = el("span", { class: `text-legende ${HUB_V4_MUTE} group-aria-pressed:text-v-amber2` });
+  const node = el("button", {
+    type: "button", "aria-pressed": "false",
+    class: "group flex items-center gap-2 min-h-14 px-2 rounded-[14px] border-0 bg-voile/6 text-left text-inherit "
+      + "cursor-pointer transition-colors hover:bg-voile/10 aria-pressed:bg-v-amber/14 "
+      + "aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-v-amber/35 "
+      + `disabled:opacity-40 disabled:cursor-default [&.pending]:opacity-60 ${HUB_V4_FOCUS}`,
+  },
+  el("span", {
+    class: `grid place-items-center size-8 shrink-0 rounded-full bg-voile/8 ${HUB_V4_MUTE} [&_svg]:size-4 `
+      + "group-aria-pressed:bg-[#ffbf5e] group-aria-pressed:text-[#2a1a00] group-aria-pressed:shadow-[0_0_18px_rgb(255_191_94/0.6)]",
+    "aria-hidden": "true",
+  }, svgIcon(ICONS.plug)),
+  el("span", { class: "flex flex-col min-w-0" }, name, word));
+  node.addEventListener("click", () => {
+    const state = entities.get(entityId);
+    if (!state || !hubV4Ready(state)) return;
+    markPending(entityId);
+    callService(domainOf(state), state.state === "on" ? "turn_off" : "turn_on", { entity_id: entityId });
+  });
+  const refresh = () => {
+    const state = entities.get(entityId);
+    if (!state) return;
+    setText(name, nameOf(state));
+    setText(word, state.state === "on" ? "Allumée" : state.state === "off" ? "Éteinte" : statusText(state));
+    setAttr(node, "aria-pressed", String(state.state === "on"));
+    node.disabled = !hubV4Ready(state);
+    if (node.dataset.state !== state.state) {
+      node.dataset.state = state.state;
+      node.classList.remove("pending");
+    }
+  };
+  return { node, refresh };
+}
+
+/** Le service d'annonce (même sans voix : le carillon reste possible), ou null. */
+function hubV4Speakers() {
+  const tts = [...entities.values()].find((s) => domainOf(s) === "tts" && canControl(s));
+  if (!tts) return null;
+  const speakers = (Array.isArray(tts.attributes.enceintes) ? tts.attributes.enceintes : []).filter((id) => entities.has(id));
+  return speakers.length > 0 ? { tts, speakers } : null;
+}
+
+// Le volume du carillon choisi dans « Toute la maison » (30, 50 ou 70 %).
+let hubV4ChimeVolume = 50;
+
+/**
+ * « Toute la maison » (maquette) : quatre colonnes. Le titre et les pièces
+ * (le dessin de la maison dessous) ; le chauffage de chaque étage ; l'eau
+ * chaude, les prises, la sécurité ; la maison (internet, sauvegarde, courses,
+ * soleil) et les annonces. Une carte sans appareil s'efface.
+ */
 function hubV4HouseBody() {
   const paints = [];
+  const pages = house.pages ?? [];
   const when = new Intl.DateTimeFormat("fr", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
   const date = el("span", {});
   const line = el("p", { class: `m-0 text-corps ${HUB_V4_MUTE}` });
-  const left = [hubV4PageHead(date, "Toute la maison", line)];
+  const first = [hubV4PageHead(date, "Toute la maison", line)];
   paints.push(() => {
     setText(date, hubV4DateLine(when.formatToParts(new Date())));
     setText(line, hubV4HouseLine(hubV3Counts(), hubV3Issues().length));
   });
 
-  // Les pièces : « Salon 2/3 », ambrées quand tout est allumé.
-  const roomsTile = hubV4Tile(ICONS.home, "amber", "Les pièces");
-  const grid = el("div", { class: "grid grid-cols-2 gap-2" });
+  // Les pièces : « Salon 3/5 », le compte en ambre quand tout est allumé.
+  const roomsTile = hubV4Tile(HUB_V4_ALL_ICONS.rooms, "amber", "Les pièces");
+  const grid = el("div", { class: "grid grid-cols-2 gap-1.5" });
   roomsTile.node.append(grid);
-  left.push(roomsTile.node);
+  first.push(roomsTile.node);
   const syncRooms = hubV4Keyed(grid, (room) => {
-    const count = el("span", { class: `text-petit ${HUB_V4_MUTE} group-data-full:text-v-amber2` });
+    const count = el("span", { class: `shrink-0 text-petit ${HUB_V4_MUTE} group-data-full:text-v-amber2 group-data-full:font-semibold` });
     const node = el("button", {
       type: "button",
-      class: "group flex items-center justify-between gap-2 min-h-12 px-3.5 rounded-[14px] border-0 bg-voile/6 text-left "
-        + "text-corps font-semibold text-inherit cursor-pointer transition-colors hover:bg-voile/10 "
-        + `data-full:bg-v-amber/16 ${HUB_V4_FOCUS}`,
-    }, el("span", { class: "truncate", text: room }), count);
+      class: "group flex items-center justify-between gap-1.5 min-h-11 px-2.5 rounded-[12px] border-0 bg-voile/6 text-left "
+        + `text-petit font-semibold text-inherit cursor-pointer transition-colors hover:bg-voile/10 ${HUB_V4_FOCUS}`,
+      title: room,
+    }, el("span", { class: "truncate", text: hubV4RoomShort(room) }), count);
     node.addEventListener("click", () => hubV4Page(room));
     return {
       node,
@@ -799,121 +1019,255 @@ function hubV4HouseBody() {
   });
   paints.push(() => syncRooms(areas.filter((a) => !a.hidden).map((a) => a.name)));
 
-  const right = [];
-  for (const zone of hubV4HeatZones()) {
-    const tile = hubV4HeatTile(zone.id, zone.name);
-    right.push(tile.node);
+  // Sous les pièces, le dessin de la maison (sur un grand écran) : le fond reste le ciel.
+  const drawing = el("img", {
+    alt: "", "aria-hidden": "true",
+    class: "hidden xl:block w-full min-h-0 max-h-[200px] object-contain pointer-events-none select-none "
+      + "[mask-image:radial-gradient(closest-side,black_70%,transparent)]",
+  });
+  first.push(drawing);
+  paints.push(() => {
+    const url = hubV4PageImage(pages[0]);
+    drawing.hidden = !url;
+    if (url && drawing.getAttribute("src") !== url) drawing.src = url;
+  });
+
+  // Le chauffage de chaque étage : « Chauffage · Étage », « Ce réglage vaut pour tout l'étage. »
+  const heat = [];
+  // Les étages du haut d'abord, comme une coupe de la maison (maquette : Étage, puis Rez).
+  const floors = hubV4HeatZones().map((zone) => ({ zone, floor: pages.length > 1 ? hubV4ZoneFloor(zone, pages) : "" }))
+    .map((item) => ({ ...item, rank: pages.findIndex((p) => p.name === item.floor) }))
+    .sort((a, b) => b.rank - a.rank);
+  for (const { zone, floor } of floors) {
+    const tile = hubV4HeatTile(zone.id, hubV4HeatTitle(zone, floor));
+    // Quatre colonnes : le titre en plus petit, pour tenir à côté de Confort / Éco.
+    const title = tile.node.querySelector("header > b");
+    if (title) title.className = "flex-1 min-w-0 text-corps font-semibold leading-tight";
+    if (floor) {
+      tile.node.append(el("p", { class: `flex items-start gap-1.5 m-0 text-legende ${HUB_V4_MUTE} [&>svg]:size-3.5 [&>svg]:shrink-0 [&>svg]:mt-px [&>svg]:text-v-heat` },
+        svgIcon(ICONS.flame), `Ce réglage vaut pour ${hubV4AllOf(floor)}.`));
+    }
+    heat.push(tile.node);
     paints.push(() => {
       tile.node.hidden = !tile.refresh();
     });
   }
 
-  // L'eau chaude : la température du ballon, et ce que fait la pompe à chaleur.
+  // L'eau chaude : la température du ballon (sinon la consigne), la pompe à chaleur.
+  const third = [];
   const waterTile = hubV4Tile(ICONS.humidity, "sky", "Eau chaude");
-  const waterBig = el("b", { class: "font-titre text-affiche font-light leading-none" });
+  const waterBig = el("b", { class: "font-chiffres text-affiche-l font-extralight leading-none tracking-[-0.03em]" });
   const waterSub = el("span", { class: `text-petit ${HUB_V4_MUTE}` });
-  waterTile.node.append(el("div", { class: "flex items-baseline gap-3" }, waterBig, waterSub));
-  right.push(waterTile.node);
+  const pumpRow = hubV4Row(ICONS.fan);
+  waterTile.node.append(el("div", { class: "flex items-baseline gap-2 px-1" }, waterBig, waterSub), pumpRow.node);
+  third.push(waterTile.node);
   paints.push(() => {
     const water = entities.get(HUB_V3_WATER);
     waterTile.node.hidden = !water;
     if (!water) return;
     const current = water.attributes.current_temperature;
-    setText(waterBig, finite(current) ? `${number.format(current)}°` : "—");
+    const target = water.state === "off" ? null : heatTarget(water);
+    const shown = finite(current) ? current : target;
+    setText(waterBig, finite(shown) ? `${number.format(shown)}°` : "—");
+    setText(waterSub, finite(current) ? "dans le ballon" : finite(target) ? "consigne" : heatMode(water));
     const pump = hubV3Pump();
-    setText(waterSub, [finite(current) ? "dans le ballon" : heatMode(water), pump ? `Pompe à chaleur : ${pump.state}` : ""]
-      .filter(Boolean).join(" · "));
+    pumpRow.node.hidden = !pump;
+    if (pump) pumpRow.set(nameOf(pump), "", pump.state, "ok");
   });
 
-  // Les prises rangées dans les pièces.
-  const plugsTile = hubV4Tile(ICONS.plug, "violet", "Prises");
-  const plugsCount = el("span", { class: `text-petit ${HUB_V4_MUTE}` });
-  const plugsAll = el("button", { type: "button", class: `${HUB_V4_BTN} min-h-9 px-3 text-petit` });
-  plugsTile.head.append(plugsCount, plugsAll);
+  // Les prises : allumées d'abord ; « Tout éteindre » s'il y en a une d'allumée.
+  const plugsTile = hubV4Tile(ICONS.plug, "amber", "Prises");
+  plugsTile.titleNode.className = "min-w-0 text-courant font-semibold truncate";
+  const plugsCount = el("span", { class: `flex-1 text-petit ${HUB_V4_MUTE}` });
+  const plugsOff = el("button", { type: "button", class: `${HUB_V4_BTN} min-h-9 px-3 rounded-[11px] text-petit`, text: "Tout éteindre" });
+  plugsTile.head.append(plugsCount, plugsOff);
   const plugGrid = el("div", { class: "grid grid-cols-2 gap-2" });
   plugsTile.node.append(plugGrid);
-  right.push(plugsTile.node);
-  const plugs = () => {
-    const placed = new Set(areas.flatMap((a) => a.entities.map((e) => e.entity_id)));
-    return [...entities.values()].filter((s) => domainOf(s) === "switch" && placed.has(s.entity_id))
-      .sort((a, b) => nameOf(a).localeCompare(nameOf(b), "fr"));
-  };
-  plugsAll.addEventListener("click", () => {
-    const list = plugs().filter(hubV4Ready);
-    const on = list.filter((s) => s.state === "on");
-    const targets = on.length > 0 ? on : list;
-    for (const state of targets) {
+  third.push(plugsTile.node);
+  const plugs = () => [...entities.values()].filter((s) => hubV4IsPlug(s) && !s.attributes.hidden)
+    .sort((a, b) => ((b.state === "on") - (a.state === "on")) || nameOf(a).localeCompare(nameOf(b), "fr"));
+  plugsOff.addEventListener("click", () => {
+    const on = plugs().filter((s) => s.state === "on" && hubV4Ready(s));
+    for (const state of on) {
       markPending(state.entity_id);
-      callService("switch", on.length > 0 ? "turn_off" : "turn_on", { entity_id: state.entity_id });
+      callService(domainOf(state), "turn_off", { entity_id: state.entity_id });
     }
-    if (targets.length > 0) hubV3Wait(plugsAll);
+    if (on.length > 0) hubV3Wait(plugsOff);
   });
-  const syncPlugs = hubV4Keyed(plugGrid, (id) => {
-    const name = el("b", { class: "text-corps font-semibold truncate" });
-    const word = el("span", { class: `text-legende ${HUB_V4_MUTE}` });
-    const node = el("button", {
-      type: "button", "aria-pressed": "false",
-      class: "flex flex-col items-start min-h-14 px-3 py-2 rounded-[16px] border-0 bg-voile/6 text-left text-inherit "
-        + "cursor-pointer transition-colors hover:bg-voile/10 aria-pressed:bg-v-violet/18 "
-        + `disabled:opacity-40 disabled:cursor-default [&.pending]:opacity-60 ${HUB_V4_FOCUS}`,
-    }, name, word);
-    node.addEventListener("click", () => {
-      const state = entities.get(id);
-      if (!state || !hubV4Ready(state)) return;
-      markPending(id);
-      callService("switch", state.state === "on" ? "turn_off" : "turn_on", { entity_id: id });
-    });
-    return {
-      node,
-      refresh: () => {
-        const state = entities.get(id);
-        if (!state) return;
-        setText(name, nameOf(state));
-        setText(word, state.state === "on" ? "Allumée" : state.state === "off" ? "Éteinte" : statusText(state));
-        setAttr(node, "aria-pressed", String(state.state === "on"));
-        node.disabled = !hubV4Ready(state);
-        if (node.dataset.state !== state.state) {
-          node.dataset.state = state.state;
-          node.classList.remove("pending");
-        }
-      },
-    };
-  });
+  const syncPlugs = hubV4Keyed(plugGrid, (id) => hubV4PlugButton(id));
   paints.push(() => {
     const list = plugs();
     plugsTile.node.hidden = list.length === 0;
     const on = list.filter((s) => s.state === "on").length;
     setText(plugsCount, `${on} sur ${list.length}`);
-    setText(plugsAll, on > 0 ? "Tout éteindre" : "Tout allumer");
-    plugsAll.disabled = !list.some(hubV4Ready);
-    if (plugsAll.dataset.on !== String(on)) {
-      plugsAll.dataset.on = String(on);
-      plugsAll.classList.remove("pending");
+    plugsOff.disabled = !list.some((s) => s.state === "on" && hubV4Ready(s));
+    if (plugsOff.dataset.on !== String(on)) {
+      plugsOff.dataset.on = String(on);
+      plugsOff.classList.remove("pending");
     }
-    syncPlugs(list.map((s) => s.entity_id));
+    // Quatre au plus (les allumées d'abord) : le compte dit le reste.
+    syncPlugs(list.slice(0, 4).map((s) => s.entity_id));
   });
 
-  // La sécurité : un mot par appareil, ce qui cloche en premier.
+  // La sécurité : détecteurs, gel, portes (une fenêtre seulement ouverte), ce qui cloche en premier.
   const safeTile = hubV4Tile(ICONS.shield, "sky", "Sécurité");
-  const safeList = el("ul", { class: "m-0 p-0 list-none flex flex-col gap-2" });
+  const safeList = el("ul", { class: "m-0 p-0 list-none flex flex-col gap-1.5" });
   safeTile.node.append(safeList);
-  right.push(safeTile.node);
+  third.push(safeTile.node);
+  const syncSafe = hubV4Keyed(safeList, (id) => {
+    const row = hubV4Row(ICONS.shield);
+    const node = el("li", {}, row.node);
+    return {
+      node,
+      refresh: () => {
+        const state = entities.get(id);
+        if (!state) return;
+        const icon = row.node.firstChild;
+        const want = hubV4SafeIcon(state);
+        if (icon.dataset.icon !== want.join()) {
+          const next = svgIcon(want);
+          next.dataset.icon = want.join();
+          icon.replaceWith(next);
+        }
+        // Un seul détecteur de sa sorte : son mot (« Fumée ») plutôt que son nom.
+        const dc = state.attributes.device_class;
+        const alone = domainOf(state) === "binary_sensor" && HUB_V3_ALERTS.includes(dc)
+          && [...entities.values()].filter((s) => domainOf(s) === "binary_sensor" && s.attributes.device_class === dc).length === 1;
+        const word = alone ? lookup(HUB_V3_ALERT_WORDS, dc) : null;
+        const said = hubV4SafeWord(state);
+        row.set(word ? `${word.charAt(0).toUpperCase()}${word.slice(1)}` : nameOf(state), "", said.word, said.tone);
+      },
+    };
+  });
   paints.push(() => {
-    const states = [...entities.values()].filter(hubV3IsSecurity);
+    const states = [...entities.values()].filter((s) => hubV4IsFrost(s) || (hubV3IsSecurity(s)
+      && !(domainOf(s) === "binary_sensor" && s.attributes.device_class === "window" && s.state !== "on")));
     safeTile.node.hidden = states.length === 0;
-    const rows = states
-      .map((s) => ({ name: nameOf(s), word: hubV3SecurityWord(s), bad: hubV3SecurityIssue(s) !== null }))
-      .sort((a, b) => (b.bad - a.bad) || a.name.localeCompare(b.name, "fr"))
-      .slice(0, 6);
-    const mark = rows.map((r) => `${r.name}:${r.word}:${r.bad}`).join("|");
-    if (safeList.dataset.mark === mark) return;
-    safeList.dataset.mark = mark;
-    safeList.replaceChildren(...rows.map((row) => el("li", { class: "flex items-baseline justify-between gap-3 text-corps" },
-      el("span", { class: "truncate", text: row.name }),
-      el("span", { class: row.bad ? "font-semibold text-v-alert" : HUB_V4_MUTE, text: row.word }))));
+    const rank = (s) => (hubV3SecurityIssue(s) !== null ? 0 : hubV4IsFrost(s) ? 2
+      : domainOf(s) === "binary_sensor" && HUB_V3_ALERTS.includes(s.attributes.device_class) ? 1 : 3);
+    // Trois lignes quand tout va bien (la maquette : fumée, gel, porte), jusqu'à cinq si ça cloche.
+    const issues = states.filter((s) => hubV3SecurityIssue(s) !== null).length;
+    syncSafe(states.sort((a, b) => (rank(a) - rank(b)) || nameOf(a).localeCompare(nameOf(b), "fr"))
+      .slice(0, Math.max(3, Math.min(5, issues))).map((s) => s.entity_id));
   });
 
-  return { left, right, refresh: () => paints.forEach((paint) => paint()) };
+  // La maison : internet, la dernière sauvegarde, les courses, le soleil.
+  const fourth = [];
+  const homeTile = hubV4Tile(HUB_V4_ALL_ICONS.wifi, "sky", "Maison");
+  const homeList = el("div", { class: "flex flex-col gap-1.5" });
+  homeTile.node.append(homeList);
+  fourth.push(homeTile.node);
+  const net = hubV4Row(HUB_V4_ALL_ICONS.wifi);
+  const saved = hubV4Row(HUB_V4_ALL_ICONS.save);
+  const courses = hubV4Row(HUB_V4_HOME_ICONS.cart, true);
+  courses.node.addEventListener("click", () => $("#hub-courses")?.click());
+  const sun = hubV4Row(HUB_V4_ALL_ICONS.sunrise);
+  homeList.append(net.node, saved.node, courses.node, sun.node);
+  const rate = (pattern) => {
+    const state = [...entities.values()].find((s) => domainOf(s) === "sensor" && /bit\/s$/i.test(String(s.attributes.unit_of_measurement ?? ""))
+      && pattern.test(`${s.entity_id} ${hubV4Fold(nameOf(s))}`));
+    return state ? Number(state.state) : NaN;
+  };
+  paints.push(() => {
+    const all = [...entities.values()];
+    // Internet : la Freebox dit s'il est là, et ses débits.
+    const link = entities.get("binary_sensor.freebox_internet")
+      ?? all.find((s) => domainOf(s) === "binary_sensor" && s.attributes.device_class === "connectivity" && /internet/i.test(nameOf(s)));
+    const rates = hubV4RateText(rate(/descend|download/), rate(/montant|upload/));
+    net.node.hidden = !link && rates === "";
+    const down = link && link.state === "off";
+    net.set("Internet", rates && !down ? "descente / montée" : "", down ? "Coupé" : rates || (link ? statusText(link) : ""), down ? "bad" : "mute");
+    // La sauvegarde : son heure, en rouge si la dernière a échoué.
+    const backup = entities.get("sensor.derniere_sauvegarde")
+      ?? all.find((s) => domainOf(s) === "sensor" && s.attributes.device_class === "timestamp" && /sauvegarde|backup/i.test(nameOf(s)));
+    saved.node.hidden = !backup;
+    if (backup) {
+      const failed = typeof backup.attributes.erreur === "string" && backup.attributes.erreur !== "";
+      const at = hubV4BackupText(backup.state);
+      saved.set("Sauvegarde", failed ? "la dernière a échoué" : "", at || "jamais", failed || !at ? "bad" : "ok");
+    }
+    // Les courses (la liste du dock).
+    const list = entities.get(HUB_LIST);
+    courses.node.hidden = !list || !$("#hub-courses");
+    if (list) {
+      const left = todoItems(list).filter((item) => item.status !== "completed").length;
+      courses.set("Courses et tâches", "", hubV4CoursesText(left));
+      setAttr(courses.node, "aria-label", left > 0 ? `Courses et tâches : ${left} à faire` : "Courses et tâches : rien à faire");
+    }
+    // Le soleil : son prochain lever (ou coucher), et le prochain jour férié dessous.
+    const sunState = entities.get("sun.sun");
+    const up = sunState?.state === "above_horizon";
+    const next = sunState ? sunState.attributes[up ? "next_setting" : "next_rising"] : null;
+    const valid = typeof next === "string" && !Number.isNaN(Date.parse(next));
+    sun.node.hidden = !valid;
+    if (valid) {
+      const icon = sun.node.firstChild;
+      const want = up ? HUB_V4_ALL_ICONS.sunset : HUB_V4_ALL_ICONS.sunrise;
+      if (icon.dataset.icon !== want.join()) {
+        const fresh = svgIcon(want);
+        fresh.dataset.icon = want.join();
+        icon.replaceWith(fresh);
+      }
+      sun.set(up ? "Coucher du soleil" : "Lever du soleil", hubV4HolidayText(entities.get("sensor.prochain_jour_ferie")),
+        shortTime.format(new Date(next)));
+    }
+    homeTile.node.hidden = [net, saved, courses, sun].every((row) => row.node.hidden);
+  });
+
+  // Les annonces : un message partout (la fenêtre d'annonce), ou le carillon seul, à 30, 50 ou 70 %.
+  const sayTile = hubV4Tile(ICONS.speaker, "violet", "Annonces");
+  // « Partout » : le bouton principal (il ouvre la fenêtre d'annonce) ; « Carillon seul » sonne tout de suite.
+  const everywhere = el("button", {
+    type: "button",
+    class: "flex-1 min-h-10 px-2 rounded-[11px] border-0 bg-v-sky/16 ring-1 ring-inset ring-v-sky/45 text-petit font-semibold "
+      + "text-inherit cursor-pointer transition-colors hover:bg-v-sky/24 disabled:opacity-40 disabled:cursor-default "
+      + HUB_V4_FOCUS,
+    text: "Partout", "aria-haspopup": "dialog", title: "Dire un message sur toutes les enceintes",
+  });
+  const chime = el("button", { type: "button", class: HUB_V4_ALL_SEG, text: "Carillon seul" });
+  everywhere.addEventListener("click", () => {
+    if (typeof hubV4Announce === "function") hubV4Announce();
+    else $("#hub-announce")?.click();
+  });
+  chime.addEventListener("click", () => {
+    const say = hubV4Speakers();
+    if (!say || say.tts.state === "unavailable") return;
+    callService("tts", "speak", { entity_id: say.tts.entity_id, media_player_entity_id: say.speakers, volume: hubV4ChimeVolume });
+    hubV3Wait(chime);
+  });
+  const volumes = [30, 50, 70].map((level) => {
+    const node = el("button", { type: "button", class: HUB_V4_ALL_SEG, "aria-pressed": "false", text: `${level} %` });
+    node.addEventListener("click", () => {
+      hubV4ChimeVolume = level;
+      for (const other of volumes) setAttr(other, "aria-pressed", String(other === node));
+    });
+    node.dataset.level = String(level);
+    return node;
+  });
+  for (const node of volumes) setAttr(node, "aria-pressed", String(Number(node.dataset.level) === hubV4ChimeVolume));
+  const voice = el("p", { class: `m-0 px-1 text-legende ${HUB_V4_MUTE} truncate` });
+  sayTile.node.append(
+    el("div", { class: "flex gap-1 p-1 rounded-[14px] bg-voile/6", role: "group", "aria-label": "Annoncer" }, everywhere, chime),
+    el("div", { class: "flex gap-1 p-1 rounded-[14px] bg-voile/6", role: "group", "aria-label": "Volume du carillon" }, ...volumes),
+    voice);
+  fourth.push(sayTile.node);
+  paints.push(() => {
+    const say = hubV4Speakers();
+    sayTile.node.hidden = !say;
+    if (!say) return;
+    // L'état du service est l'heure de la dernière annonce (« unknown » avant la première).
+    const ready = say.tts.state !== "unavailable";
+    everywhere.disabled = !ready || hubAnnouncer() === null;
+    chime.disabled = !ready;
+    const spoken = typeof say.tts.attributes.voix === "string" ? say.tts.attributes.voix : "";
+    const speakers = `${say.speakers.length} ${say.speakers.length > 1 ? "enceintes" : "enceinte"}`;
+    setText(voice, [spoken && !spoken.startsWith("aucune") ? `Voix ${spoken}` : "Pas de voix : carillon seul", speakers].join(" · "));
+  });
+
+  return {
+    columns: [first, heat, third, fourth],
+    refresh: () => paints.forEach((paint) => paint()),
+  };
 }
 
 /**
@@ -937,12 +1291,26 @@ function hubV4Page(name) {
     class: `flex flex-col gap-3 lg:min-h-0 lg:overflow-y-auto lg:pb-6 [scrollbar-width:thin] ${side === "right" ? "lg:col-start-3 lg:row-start-1" : ""}`,
   }, ...nodes);
   const nav = hubV4PageNav(name);
-  const left = column(body.left, "left");
-  const right = column(body.right, "right");
+  // Toute la maison : quatre colonnes (deux sur la tablette, une sur le téléphone), la page défile.
+  const columns = body.columns ? body.columns.map((nodes) => el("div", { class: "flex flex-col gap-3 min-w-0" }, ...nodes)) : null;
+  const left = columns ? columns[0] : column(body.left, "left");
+  const right = columns ? columns[columns.length - 1] : column(body.right, "right");
   // Au milieu, sous le dessin : une phrase (l'énergie), s'il y en a une.
   const middle = body.middle ? [el("div", {
     class: "hidden lg:flex lg:col-start-2 lg:row-start-1 flex-col justify-end items-center pb-24 min-h-0 pointer-events-none",
   }, ...body.middle)] : [];
+  const grid = columns
+    ? el("div", {
+      class: "relative z-10 grid h-full gap-4 px-6 pt-[76px] pb-6 grid-cols-1 md:grid-cols-2 xl:grid-cols-4 content-start "
+        + "overflow-y-auto [scrollbar-width:thin] max-lg:px-4 max-lg:pb-[max(24px,env(safe-area-inset-bottom))]",
+    }, ...columns)
+    : el("div", {
+      class: "relative z-10 grid h-full gap-5 px-6 pt-[76px] grid-cols-1 max-lg:content-start overflow-y-auto "
+        + "max-lg:px-4 max-lg:pb-[max(24px,env(safe-area-inset-bottom))] lg:overflow-hidden "
+        // Une pièce : des colonnes plus étroites, la pièce zoomée au milieu.
+        + (room ? "lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)_minmax(0,310px)]"
+          : "lg:grid-cols-[minmax(0,390px)_minmax(0,1fr)_minmax(0,350px)]"),
+    }, left, ...middle, right);
   const dialog = el("dialog", {
     class: "hub-v4-page fixed inset-0 m-0 p-0 w-screen h-dvh max-w-none max-h-none border-0 bg-scrim bg-(image:--v3-sky-bg) overflow-hidden "
       + "text-v-ink font-sans [color-scheme:dark] in-data-[theme=light]:[color-scheme:light] [font-variant-numeric:tabular-nums] "
@@ -951,13 +1319,7 @@ function hubV4Page(name) {
   },
   stage.node,
   nav,
-  el("div", {
-    class: "relative z-10 grid h-full gap-5 px-6 pt-[76px] grid-cols-1 max-lg:content-start overflow-y-auto "
-      + "max-lg:px-4 max-lg:pb-[max(24px,env(safe-area-inset-bottom))] lg:overflow-hidden "
-      // Une pièce : des colonnes plus étroites, la pièce zoomée au milieu.
-      + (room ? "lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)_minmax(0,310px)]"
-        : "lg:grid-cols-[minmax(0,390px)_minmax(0,1fr)_minmax(0,350px)]"),
-  }, left, ...middle, right));
+  grid);
   dialog.addEventListener("close", () => hubV4PageClose(true, dialog));
 
   // Le milieu de l'espace libre entre les colonnes (côte à côte), sinon de l'écran.

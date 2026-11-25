@@ -67,6 +67,8 @@ describe("hubV4HeatFor", () => {
     assert.equal(hubV4HeatFor(zones, "Salon", "Rez-de-chaussée", ["Salon"]).zone.id, "climate.rez");
     assert.equal(hubV4HeatFor(zones, "Chambre", "Étage", ["Chambre"]).zone.id, "climate.etage");
     assert.equal(hubV4HeatFor(zones, "Chambre", "Étage", ["Chambre"]).shared, true);
+    const rdc = [{ id: "climate.rdc", name: "Chauffage RdC", area: null }, zones[1]];
+    assert.equal(hubV4HeatFor(rdc, "Salon", "Rez-de-chaussée", ["Salon"]).zone.id, "climate.rdc");
   });
   test("sinon celui rangé dans une pièce du même étage", () => {
     const placed = [{ id: "climate.pac", name: "PAC", area: "Cuisine" }];
@@ -173,5 +175,85 @@ describe("hubV4DateLine", () => {
   test("« Mardi 27 octobre · 21:56 »", () => {
     const when = new Intl.DateTimeFormat("fr", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
     assert.equal(hubV4DateLine(when.formatToParts(new Date(2026, 9, 27, 21, 56))), "Mardi 27 octobre · 21:56");
+  });
+});
+
+// ------------------------------------------------ « Toute la maison » (maquette)
+
+describe("hubV4ZoneFloor / hubV4HeatTitle", () => {
+  const hubV4ZoneFloor = run("hubV4ZoneFloor");
+  const hubV4HeatTitle = run("hubV4HeatTitle");
+  const pages = [rez, etage];
+  test("l'étage de la pièce, sinon celui que dit le nom (RdC = rez)", () => {
+    assert.equal(hubV4ZoneFloor({ name: "Chauffage salon", area: "Salon" }, pages), "Rez-de-chaussée");
+    assert.equal(hubV4ZoneFloor({ name: "RdC", area: null }, pages), "Rez-de-chaussée");
+    assert.equal(hubV4ZoneFloor({ name: "Etage", area: null }, pages), "Étage");
+    assert.equal(hubV4ZoneFloor({ name: "Grenier", area: null }, pages), "");
+  });
+  test("« Chauffage · Étage », « Chauffage · Rez », sinon la pièce ou le nom", () => {
+    assert.equal(hubV4HeatTitle({ name: "Etage", area: null }, "Étage"), "Chauffage · Étage");
+    assert.equal(hubV4HeatTitle({ name: "RdC", area: null }, "Rez-de-chaussée"), "Chauffage · Rez");
+    assert.equal(hubV4HeatTitle({ name: "Radiateur", area: "Salon" }, ""), "Chauffage · Salon");
+    assert.equal(hubV4HeatTitle({ name: "Chauffage bureau", area: null }, ""), "Chauffage bureau");
+  });
+});
+
+describe("hubV4RoomShort", () => {
+  const hubV4RoomShort = run("hubV4RoomShort");
+  test("« Ch. parents », « S. à manger », le reste tel quel", () => {
+    assert.equal(hubV4RoomShort("Chambre parents"), "Ch. parents");
+    assert.equal(hubV4RoomShort("Salle à manger"), "S. à manger");
+    assert.equal(hubV4RoomShort("Salle de bain"), "Salle de bain");
+    assert.equal(hubV4RoomShort("Chambre"), "Chambre");
+  });
+});
+
+describe("hubV4IsPlug / hubV4IsFrost", () => {
+  const hubV4IsPlug = run("hubV4IsPlug");
+  const hubV4IsFrost = run("hubV4IsFrost");
+  const st = (entity_id, attributes = {}) => ({ entity_id, state: "off", attributes });
+  test("une prise : switch ou lumière « prise », ou de classe outlet", () => {
+    assert.equal(hubV4IsPlug(st("light.prise", { friendly_name: "Prise" })), true);
+    assert.equal(hubV4IsPlug(st("switch.prise_cafe", { friendly_name: "prise café" })), true);
+    assert.equal(hubV4IsPlug(st("switch.tv", { device_class: "outlet" })), true);
+    assert.equal(hubV4IsPlug(st("switch.couloir_play_ding_sound", { friendly_name: "Couloir Play Ding Sound" })), false);
+    assert.equal(hubV4IsPlug(st("light.salon", { friendly_name: "Surprise" })), false);
+    assert.equal(hubV4IsPlug(st("sensor.prise_puissance", { friendly_name: "Prise" })), false);
+  });
+  test("le gel : binary_sensor.gel, ou de classe cold", () => {
+    assert.equal(hubV4IsFrost(st("binary_sensor.gel", { friendly_name: "Gel" })), true);
+    assert.equal(hubV4IsFrost(st("binary_sensor.givre", { device_class: "cold" })), true);
+    assert.equal(hubV4IsFrost(st("binary_sensor.porte", { device_class: "door" })), false);
+  });
+});
+
+describe("hubV4SafeWord", () => {
+  const hubV4SafeWord = run("hubV4SafeWord");
+  test("un détecteur calme dit « RAS », le gel « Inactif » ou « Il gèle »", () => {
+    const smoke = { entity_id: "binary_sensor.fumee", state: "off", attributes: { device_class: "smoke" } };
+    assert.deepEqual(plain(hubV4SafeWord(smoke)), { word: "RAS", tone: "ok" });
+    const frost = { entity_id: "binary_sensor.gel", state: "off", attributes: { friendly_name: "Gel" } };
+    assert.deepEqual(plain(hubV4SafeWord(frost)), { word: "Inactif", tone: "ok" });
+    assert.deepEqual(plain(hubV4SafeWord({ ...frost, state: "on" })), { word: "Il gèle", tone: "info" });
+  });
+});
+
+describe("hubV4RateText / hubV4BackupText / hubV4HolidayText", () => {
+  const hubV4RateText = run("hubV4RateText");
+  const hubV4BackupText = run("hubV4BackupText");
+  const hubV4HolidayText = run("hubV4HolidayText");
+  test("les débits : « 35,8 / 0,1 Mbit/s »", () => {
+    assert.equal(hubV4RateText(35.8, 0.1), "35,8 / 0,1 Mbit/s");
+    assert.equal(hubV4RateText(12, NaN), "12 / – Mbit/s");
+    assert.equal(hubV4RateText(NaN, NaN), "");
+  });
+  test("la sauvegarde : « 27/10 · 03:30 » à l'heure locale", () => {
+    assert.equal(hubV4BackupText(new Date(2026, 9, 27, 3, 30).toISOString()), "27/10 · 03:30");
+    assert.equal(hubV4BackupText("unknown"), "");
+  });
+  test("le jour férié : « Toussaint · dim. 1 nov. »", () => {
+    assert.equal(hubV4HolidayText({ state: "2026-11-01", attributes: { nom: "Toussaint" } }), "Toussaint · dim. 1 nov.");
+    assert.equal(hubV4HolidayText({ state: "unknown", attributes: {} }), "");
+    assert.equal(hubV4HolidayText(undefined), "");
   });
 });
