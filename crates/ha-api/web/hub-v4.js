@@ -25,7 +25,7 @@ const hubV4 = { dialog: null, refresh: null };
 // Les classes communes. Les couleurs sont celles de l'accueil v3 (hub-v3.css).
 const HUB_V4_FOCUS = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v-sky";
 const HUB_V4_BTN = "flex items-center justify-center gap-1.5 min-h-11 px-4 rounded-[14px] border-0 "
-  + "bg-voile/8 text-[14px] font-medium text-inherit cursor-pointer transition-colors "
+  + "bg-voile/8 text-corps font-medium text-inherit cursor-pointer transition-colors "
   + "hover:bg-voile/14 disabled:opacity-40 disabled:cursor-default [&.pending]:opacity-60 [&_svg]:size-4 "
   + HUB_V4_FOCUS;
 const HUB_V4_MUTE = "text-v-mute";
@@ -169,7 +169,7 @@ function hubV4Overlay({ icon, tone = "amber", title, sub, body, more, spot, refr
       "aria-hidden": "true",
     }, svgIcon(icon)),
     el("div", { class: "flex flex-col flex-1 min-w-0" },
-      el("b", { id: "hub-v4-title", class: "text-[17px] font-semibold leading-tight truncate", text: title }), sub),
+      el("b", { id: "hub-v4-title", class: "text-moyen font-semibold leading-tight truncate", text: title }), sub),
     close);
   const pop = el("section", {
     class: "hub-v4-pop absolute left-(--x) top-(--y) w-[320px] max-h-[calc(100dvh-16px)] overflow-auto "
@@ -346,7 +346,7 @@ function hubV4Room(name) {
   const paints = [];
 
   if (lights().length > 0) {
-    const tgSub = el("span", { class: `text-[13px] ${HUB_V4_MUTE}` });
+    const tgSub = el("span", { class: `text-petit ${HUB_V4_MUTE}` });
     const toggle = el("button", {
       type: "button", role: "switch", "aria-label": `Lumières : ${name}`,
       class: "group flex items-center gap-3 w-full min-h-14 px-3 rounded-[18px] border-0 bg-v-amber/10 "
@@ -355,7 +355,7 @@ function hubV4Room(name) {
     },
     el("span", { class: "text-v-amber [&_svg]:size-5", "aria-hidden": "true" }, svgIcon(ICONS.bulb)),
     el("span", { class: "flex flex-col flex-1 min-w-0" },
-      el("b", { class: "text-[15px] font-semibold", text: "Lumières" }), tgSub),
+      el("b", { class: "text-courant font-semibold", text: "Lumières" }), tgSub),
     el("span", {
       class: "relative shrink-0 w-[52px] h-8 rounded-full bg-voile/16 transition-colors group-aria-checked:bg-v-amber "
         + "after:absolute after:top-1 after:left-1 after:size-6 after:rounded-full after:bg-white after:transition-transform "
@@ -375,7 +375,7 @@ function hubV4Room(name) {
       const node = el("button", {
         type: "button",
         class: "flex flex-col items-center justify-center gap-1 min-h-14 px-2 py-1.5 rounded-[14px] border-0 "
-          + `bg-voile/6 text-[12px] ${HUB_V4_MUTE} cursor-pointer transition-colors `
+          + `bg-voile/6 text-legende ${HUB_V4_MUTE} cursor-pointer transition-colors `
           + "aria-pressed:bg-v-amber/14 aria-pressed:text-v-amber2 "
           + "disabled:opacity-40 disabled:cursor-default [&.pending]:opacity-60 [&_svg]:size-[18px] " + HUB_V4_FOCUS,
       }, svgIcon(ICONS.bulb), el("span", { class: "max-w-full truncate", text: hubV4ShortName(nameOf(state), name) }));
@@ -430,7 +430,7 @@ function hubV4Room(name) {
     const head = el("button", {
       type: "button",
       class: "flex items-baseline justify-between gap-2 w-full px-1 pt-1 rounded-[10px] border-0 bg-transparent "
-        + "text-left text-[13px] text-inherit cursor-pointer disabled:cursor-default enabled:hover:bg-voile/6 "
+        + "text-left text-petit text-inherit cursor-pointer disabled:cursor-default enabled:hover:bg-voile/6 "
         + HUB_V4_FOCUS,
     }, label, word);
     // Un seul volet : sa ligne ouvre sa fenêtre (position, mi-hauteur).
@@ -449,7 +449,7 @@ function hubV4Room(name) {
     };
     const buttons = [["Monter", "up", "open_cover"], ["Arrêter", "stop", "stop_cover"], ["Descendre", "down", "close_cover"]]
       .map(([text, icon, service]) => {
-        const node = el("button", { type: "button", class: `${HUB_V4_BTN} px-2 text-[13px]` },
+        const node = el("button", { type: "button", class: `${HUB_V4_BTN} px-2 text-petit` },
           svgIcon(ICONS[icon]), el("span", { text }));
         node.addEventListener("click", () => {
           if (move(service)) hubV3Wait(node);
@@ -474,7 +474,7 @@ function hubV4Room(name) {
     });
   }
 
-  const sub = el("span", { class: `text-[13px] ${HUB_V4_MUTE} truncate` });
+  const sub = el("span", { class: `text-petit ${HUB_V4_MUTE} truncate` });
   const refresh = () => {
     if (!area()) {
       hubV4Close();
@@ -501,14 +501,14 @@ function hubV4Room(name) {
 
 // Le bouton principal d'une incrustation (Éteindre, Lancer, Valider).
 const HUB_V4_MAIN = "flex items-center justify-center gap-1.5 min-h-12 px-4 rounded-[14px] border-0 "
-  + "bg-[#ffbf5e] text-[15px] font-semibold text-[#1f1305] cursor-pointer transition-colors "
+  + "bg-[#ffbf5e] text-courant font-semibold text-[#1f1305] cursor-pointer transition-colors "
   + "hover:bg-[#ffcb7d] disabled:opacity-40 disabled:cursor-default [&.pending]:opacity-60 [&_svg]:size-4 "
   + HUB_V4_FOCUS;
 // Un curseur : la vraie glissière est invisible, posée sur le dessin.
 const HUB_V4_RANGE = "absolute inset-0 size-full m-0 opacity-0 cursor-pointer disabled:cursor-default";
 const HUB_V4_TRACK = "has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-v-sky "
   + "has-disabled:opacity-40";
-const HUB_V4_LABEL = "px-1 pt-1 text-[13px] font-semibold";
+const HUB_V4_LABEL = "px-1 pt-1 text-petit font-semibold";
 // Pendant qu'on glisse, l'état reçu ne fait pas sauter le curseur.
 const HUB_V4_HOLD = 2500;
 
@@ -519,7 +519,7 @@ function hubV4Choices(label, tone, items) {
   const nodes = items.map(([text, run]) => {
     const node = el("button", {
       type: "button", "aria-pressed": "false",
-      class: "min-h-10 px-2 rounded-[12px] border-0 bg-transparent text-[13px] font-medium text-inherit cursor-pointer "
+      class: "min-h-10 px-2 rounded-[12px] border-0 bg-transparent text-petit font-medium text-inherit cursor-pointer "
         + `transition-colors hover:bg-voile/8 ${pressed} disabled:opacity-40 disabled:cursor-default ${HUB_V4_FOCUS}`,
       text,
     });
@@ -614,7 +614,7 @@ function hubV4Lamp(entityId, spot = null) {
 
   if (hubV4Dimmable(first)) {
     let hold = 0;
-    const value = el("b", { class: "relative text-[15px] font-semibold" });
+    const value = el("b", { class: "relative text-courant font-semibold" });
     const range = el("input", { type: "range", min: "1", max: "100", step: "1", "aria-label": "Intensité", class: HUB_V4_RANGE });
     const bar = el("label", {
       class: `relative flex items-center justify-between h-14 px-4 rounded-[18px] bg-voile/8 overflow-hidden ${HUB_V4_TRACK}`,
@@ -624,7 +624,7 @@ function hubV4Lamp(entityId, spot = null) {
         + "transition-[width] motion-reduce:transition-none",
       "aria-hidden": "true",
     }),
-    el("span", { class: "relative text-[14px] font-medium", text: "Intensité" }), value, range);
+    el("span", { class: "relative text-corps font-medium", text: "Intensité" }), value, range);
     const show = (percent) => {
       bar.style.setProperty("--v", `${percent}%`);
       setText(value, `${percent} %`);
@@ -687,7 +687,7 @@ function hubV4Lamp(entityId, spot = null) {
       send({ color_temp_kelvin: Number(range.value) });
     });
     body.push(el("b", { class: HUB_V4_LABEL, text: "Couleur du blanc" }), track,
-      el("div", { class: `flex justify-between px-1 text-[12px] ${HUB_V4_MUTE}` },
+      el("div", { class: `flex justify-between px-1 text-legende ${HUB_V4_MUTE}` },
         el("span", { text: "Chaud" }), el("span", { text: "Froid" })));
     paints.push((now) => {
       range.disabled = !hubV4Ready(now);
@@ -717,7 +717,7 @@ function hubV4Lamp(entityId, spot = null) {
     }
   });
 
-  const sub = el("span", { class: `text-[13px] ${HUB_V4_MUTE} truncate` });
+  const sub = el("span", { class: `text-petit ${HUB_V4_MUTE} truncate` });
   hubV4Overlay({
     icon: ICONS.bulb,
     title: nameOf(first),
@@ -776,8 +776,8 @@ function hubV4Cover(entityId, spot = null) {
     return true;
   };
 
-  const big = el("b", { class: "text-[22px] font-semibold leading-none" });
-  const small = el("span", { class: "text-[12px] text-v-ink2" });
+  const big = el("b", { class: "text-titre font-semibold leading-none" });
+  const small = el("span", { class: "text-legende text-v-ink2" });
   const pane = el("div", {
     class: "relative w-[118px] h-[168px] shrink-0 rounded-[14px] overflow-hidden border-4 border-voile/10 "
       + "bg-[linear-gradient(180deg,#22305e,#2d2a5a,#4a3157)]",
@@ -806,7 +806,7 @@ function hubV4Cover(entityId, spot = null) {
   items.push(["Fermé", () => send("close_cover")]);
   const choices = hubV4Choices("Position", "sky", items);
 
-  const sub = el("span", { class: `text-[13px] ${HUB_V4_MUTE} truncate` });
+  const sub = el("span", { class: `text-petit ${HUB_V4_MUTE} truncate` });
   hubV4Overlay({
     icon: ICONS.blinds,
     tone: "sky",
@@ -933,7 +933,7 @@ function hubV4Moment(state) {
   if (hubV4MomentRows(targets(), (id) => entities.get(id)).length === 0) return false;
 
   const list = el("ul", { class: "flex flex-col gap-1 m-0 p-0 list-none", "aria-label": "Ce qui va changer" });
-  const count = el("b", { class: "text-[15px] font-semibold", "aria-live": "polite" });
+  const count = el("b", { class: "text-courant font-semibold", "aria-live": "polite" });
   let left = HUB_V4_COUNTDOWN;
   let ticker = 0;
   const launch = () => {
@@ -951,13 +951,13 @@ function hubV4Moment(state) {
     icon: ICONS.sparkle,
     tone: "violet",
     title: nameOf(state),
-    sub: el("span", { class: `text-[13px] ${HUB_V4_MUTE}`, text: "Ce qui va se passer" }),
+    sub: el("span", { class: `text-petit ${HUB_V4_MUTE}`, text: "Ce qui va se passer" }),
     body: [
       list,
       el("div", { class: "flex items-center gap-3 p-3 rounded-[18px] bg-v-violet/12" },
         hubV4Ring(),
         el("div", { class: "flex flex-col" }, count,
-          el("span", { class: `text-[13px] ${HUB_V4_MUTE}`, text: "Touche Annuler pour arrêter." }))),
+          el("span", { class: `text-petit ${HUB_V4_MUTE}`, text: "Touche Annuler pour arrêter." }))),
       el("div", { class: "grid grid-cols-2 gap-2" }, cancel, go),
     ],
     spot: null,
@@ -971,10 +971,10 @@ function hubV4Moment(state) {
         el("span", { class: `${HUB_V4_MUTE} [&_svg]:size-5`, "aria-hidden": "true" },
           svgIcon(HUB_V4_GROUPS.find(([domain]) => domain === row.domain)[2])),
         el("span", { class: "flex flex-col flex-1 min-w-0" },
-          el("b", { class: "text-[14px] font-semibold", text: row.label }),
-          el("span", { class: `text-[12px] ${HUB_V4_MUTE} truncate`, text: row.now })),
+          el("b", { class: "text-corps font-semibold", text: row.label }),
+          el("span", { class: `text-legende ${HUB_V4_MUTE} truncate`, text: row.now })),
         el("span", {
-          class: `text-[13px] text-right ${row.done ? "text-v-ok" : "text-v-ink"}`, text: row.then,
+          class: `text-petit text-right ${row.done ? "text-v-ok" : "text-v-ink"}`, text: row.then,
         }))));
     },
     onClose: () => clearInterval(ticker),
@@ -1023,11 +1023,11 @@ function hubV4Approval() {
   if (hubV4Approvals().length === 0) return false;
   let shown = "";
   let busy = false;
-  const sub = el("span", { class: `text-[13px] ${HUB_V4_MUTE}` });
+  const sub = el("span", { class: `text-petit ${HUB_V4_MUTE}` });
   const who = el("span");
-  const order = el("p", { class: "m-0 font-titre text-[22px] font-semibold leading-snug tracking-[-0.02em]" });
-  const reason = el("p", { class: `m-0 text-[13px] ${HUB_V4_MUTE}` });
-  const expiry = el("p", { class: `m-0 px-1 text-[12px] ${HUB_V4_MUTE}` });
+  const order = el("p", { class: "m-0 font-titre text-titre font-semibold leading-snug tracking-[-0.02em]" });
+  const reason = el("p", { class: `m-0 text-petit ${HUB_V4_MUTE}` });
+  const expiry = el("p", { class: `m-0 px-1 text-legende ${HUB_V4_MUTE}` });
   const deny = el("button", { type: "button", class: HUB_V4_BTN, text: "Refuser" });
   const approve = el("button", { type: "button", class: HUB_V4_MAIN, text: "Valider" });
   const answer = async (yes) => {
@@ -1055,7 +1055,7 @@ function hubV4Approval() {
     sub,
     body: [
       el("div", { class: "flex flex-col gap-2 p-3.5 rounded-[18px] bg-voile/6" },
-        el("span", { class: `flex items-center gap-2 text-[13px] ${HUB_V4_MUTE}` },
+        el("span", { class: `flex items-center gap-2 text-petit ${HUB_V4_MUTE}` },
           el("span", { class: "text-v-sky [&_svg]:size-4", "aria-hidden": "true" }, svgIcon(ICONS.mic)), who),
         order, reason),
       el("div", { class: "grid grid-cols-2 gap-2" }, deny, approve),

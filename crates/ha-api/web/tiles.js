@@ -206,9 +206,9 @@ function renderPlan() {
         "aria-label": [area.name, detail, temp ? `${temp.slice(0, -1)} degrés` : ""].filter(Boolean).join(", ") },
       el("span", { class: `grid place-items-center size-9 shrink-0 rounded-[10px] [&_svg]:size-[18px] ${iconTone}` }, svgIcon(roomIcon(area.name))),
       el("span", { class: "grid min-w-0 flex-1 gap-px leading-tight" },
-        el("span", { class: "font-semibold text-[0.95rem] line-clamp-2 [overflow-wrap:anywhere]", text: area.name }),
-        el("span", { class: `flex items-baseline gap-1.5 min-w-0 text-[0.8rem] ${state ? "" : "text-muted"}` },
-          temp ? el("b", { class: "shrink-0 font-semibold text-[0.9rem] tabular-nums", text: temp }) : "",
+        el("span", { class: "font-semibold text-courant line-clamp-2 [overflow-wrap:anywhere]", text: area.name }),
+        el("span", { class: `flex items-baseline gap-1.5 min-w-0 text-petit ${state ? "" : "text-muted"}` },
+          temp ? el("b", { class: "shrink-0 font-semibold text-corps tabular-nums", text: temp }) : "",
           el("span", { class: "truncate opacity-90", text: detail || `${info.count} appareil${info.count > 1 ? "s" : ""}` }))),
     );
     // Mise en page « tableau » : la pièce s'ouvre en fenêtre, par-dessus la
@@ -224,7 +224,7 @@ function renderPlan() {
     legend.append(el("span", {}, el("b", { text: `${number.format(mean)}°` }), " en moyenne"));
   }
   swap(card,
-    el("div", { class: "plan-head flex justify-between items-baseline gap-2 [:not(:where(.o005500))&_h2]:[font-family:var(--font-display)] [:not(:where(.o005501))&_h2]:text-[1.1rem] [:not(:where(.o005502))&_h2]:[text-transform:none] [:not(:where(.o005503))&_h2]:[letter-spacing:-0.01em] [:not(:where(.o005504))&_h2]:text-text [:not(:where(.o063600))[data-theme|=plan]_&_h2]:[font-family:var(--font-mono)] [:not(:where(.o063601))[data-theme|=plan]_&_h2]:text-[0.8rem] [:not(:where(.o063602))[data-theme|=plan]_&_h2]:font-medium [:not(:where(.o063603))[data-theme|=plan]_&_h2]:uppercase [:not(:where(.o063604))[data-theme|=plan]_&_h2]:[letter-spacing:0.14em] [:not(:where(.o063605))[data-theme|=plan]_&_h2]:[color:var(--ink)] [[data-layout=board]_&]:hidden" }, el("h2", { text: "La maison" })),
+    el("div", { class: "plan-head flex justify-between items-baseline gap-2 [:not(:where(.o005500))&_h2]:[font-family:var(--font-display)] [:not(:where(.o005501))&_h2]:text-moyen [:not(:where(.o005502))&_h2]:[text-transform:none] [:not(:where(.o005503))&_h2]:[letter-spacing:-0.01em] [:not(:where(.o005504))&_h2]:text-text [:not(:where(.o063600))[data-theme|=plan]_&_h2]:[font-family:var(--font-mono)] [:not(:where(.o063601))[data-theme|=plan]_&_h2]:text-petit [:not(:where(.o063602))[data-theme|=plan]_&_h2]:font-medium [:not(:where(.o063603))[data-theme|=plan]_&_h2]:uppercase [:not(:where(.o063604))[data-theme|=plan]_&_h2]:[letter-spacing:0.14em] [:not(:where(.o063605))[data-theme|=plan]_&_h2]:[color:var(--ink)] [[data-layout=board]_&]:hidden" }, el("h2", { text: "La maison" })),
     el("div", { class: "plan grid grid-cols-[repeat(auto-fill,minmax(min(100%,150px),1fr))] auto-rows-auto gap-2" }, ...rooms),
     legend,
   );

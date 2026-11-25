@@ -21,9 +21,9 @@ const hubV4Pg = { dialog: null, name: null, back: null, refresh: null, place: nu
 const HUB_V4_TILE = "flex flex-col gap-3 p-4 rounded-[24px] bg-scrim/72 backdrop-blur-[18px] backdrop-saturate-150 "
   + "shadow-[inset_0_1px_0_color-mix(in_srgb,var(--v3-voile)_8%,transparent),inset_0_0_0_1px_color-mix(in_srgb,var(--v3-voile)_6%,transparent),0_18px_40px_-22px_rgb(0_0_0/0.7)]";
 const HUB_V4_TILE_HEAD = "flex items-center gap-2.5 min-h-9 [&>svg]:size-5 [&>svg]:shrink-0";
-const HUB_V4_TILE_TITLE = "flex-1 min-w-0 text-[15px] font-semibold truncate";
+const HUB_V4_TILE_TITLE = "flex-1 min-w-0 text-courant font-semibold truncate";
 // Une pastille de la barre du haut (pièce, étage).
-const HUB_V4_PILL = "flex items-center gap-1 min-h-10 px-3.5 rounded-full border-0 bg-transparent text-[14px] font-medium "
+const HUB_V4_PILL = "flex items-center gap-1 min-h-10 px-3.5 rounded-full border-0 bg-transparent text-corps font-medium "
   + `text-inherit whitespace-nowrap cursor-pointer transition-colors hover:bg-voile/10 ${HUB_V4_MUTE} `
   + "aria-[current=page]:bg-voile/14 aria-[current=page]:text-v-ink [&_svg]:size-4 " + HUB_V4_FOCUS;
 // La part de l'écran qu'occupe la pièce zoomée (largeur, hauteur).
@@ -183,7 +183,7 @@ function hubV4HeatTile(entityId, title) {
   const modeRow = el("div", { class: "flex gap-2", role: "group", "aria-label": "Mode" }, ...modes);
   const nudge = (direction) => {
     const node = el("button", {
-      type: "button", class: `grid place-items-center size-14 shrink-0 p-0 rounded-full border-0 bg-voile/8 text-[26px] `
+      type: "button", class: `grid place-items-center size-14 shrink-0 p-0 rounded-full border-0 bg-voile/8 text-titre-l `
         + `font-light text-inherit cursor-pointer transition-colors hover:bg-voile/14 disabled:opacity-35 disabled:cursor-default ${HUB_V4_FOCUS}`,
       "aria-label": direction > 0 ? "Monter la consigne" : "Baisser la consigne",
       text: direction > 0 ? "+" : "−",
@@ -193,9 +193,9 @@ function hubV4HeatTile(entityId, title) {
   };
   const minus = nudge(-1);
   const plus = nudge(1);
-  const target = el("b", { class: "font-titre text-[52px] font-light leading-none tracking-tight" });
-  const now = el("span", { class: `text-[13px] ${HUB_V4_MUTE}` });
-  const mode = el("span", { class: `text-[13px] ${HUB_V4_MUTE}` });
+  const target = el("b", { class: "font-titre text-geant font-light leading-none tracking-tight" });
+  const now = el("span", { class: `text-petit ${HUB_V4_MUTE}` });
+  const mode = el("span", { class: `text-petit ${HUB_V4_MUTE}` });
   tile.head.append(mode);
   tile.node.append(modeRow, el("div", { class: "flex items-center justify-between gap-3" },
     minus, el("div", { class: "flex flex-col items-center gap-1", "aria-live": "polite" }, target, now), plus));
@@ -226,8 +226,8 @@ function hubV4HeatTile(entityId, title) {
 
 /** Une lampe de la grille : la toucher l'allume ou l'éteint. */
 function hubV4LampButton(entityId, room) {
-  const name = el("b", { class: "text-[14px] font-semibold truncate" });
-  const word = el("span", { class: `text-[12px] ${HUB_V4_MUTE} group-aria-pressed:text-v-amber2` });
+  const name = el("b", { class: "text-corps font-semibold truncate" });
+  const word = el("span", { class: `text-legende ${HUB_V4_MUTE} group-aria-pressed:text-v-amber2` });
   const node = el("button", {
     type: "button", "aria-pressed": "false",
     class: "group flex items-center gap-2.5 min-h-14 px-3 rounded-[16px] border-0 bg-voile/6 text-left text-inherit "
@@ -271,8 +271,8 @@ function hubV4LampButton(entityId, room) {
 
 /** Un volet de la liste : son état et Ouvrir / Mi-hauteur / Fermer. */
 function hubV4CoverRow(entityId, room) {
-  const name = el("b", { class: "flex-1 min-w-0 text-[14px] font-semibold truncate" });
-  const word = el("span", { class: `text-[13px] ${HUB_V4_MUTE}` });
+  const name = el("b", { class: "flex-1 min-w-0 text-corps font-semibold truncate" });
+  const word = el("span", { class: `text-petit ${HUB_V4_MUTE}` });
   const send = (service, data, node) => {
     const state = entities.get(entityId);
     if (!state || !hubV4Ready(state)) return;
@@ -282,7 +282,7 @@ function hubV4CoverRow(entityId, room) {
   };
   const buttons = [["Ouvrir", "open_cover", {}], ["Mi-hauteur", "set_cover_position", { position: 50 }], ["Fermer", "close_cover", {}]]
     .map(([text, service, data]) => {
-      const node = el("button", { type: "button", class: `${HUB_V4_BTN} flex-1 px-2 text-[13px]`, text });
+      const node = el("button", { type: "button", class: `${HUB_V4_BTN} flex-1 px-2 text-petit`, text });
       node.dataset.service = service;
       node.addEventListener("click", () => send(service, data, node));
       return node;
@@ -488,15 +488,15 @@ function hubV4RoomBody(name) {
   const paints = [];
 
   // À gauche : l'étage, le nom, l'état ; les lumières ; les volets.
-  const line = el("p", { class: `m-0 text-[15px] ${HUB_V4_MUTE}` });
+  const line = el("p", { class: `m-0 text-courant ${HUB_V4_MUTE}` });
   const left = [el("div", { class: "flex flex-col gap-1.5 px-1 pb-2" },
-    floor ? el("p", { class: `m-0 text-[12px] font-semibold uppercase tracking-[0.14em] ${HUB_V4_MUTE}`, text: floor }) : "",
-    el("h1", { id: "hub-v4-page-title", class: "m-0 font-titre text-[46px] font-normal leading-[1.05] tracking-tight", text: name }),
+    floor ? el("p", { class: `m-0 text-legende font-semibold uppercase tracking-[0.14em] ${HUB_V4_MUTE}`, text: floor }) : "",
+    el("h1", { id: "hub-v4-page-title", class: "m-0 font-titre text-affiche-l font-normal leading-[1.05] tracking-tight", text: name }),
     line)];
 
   const lightsTile = hubV4Tile(ICONS.bulb, "amber", "Lumières");
-  const lightsCount = el("span", { class: `text-[13px] ${HUB_V4_MUTE}` });
-  const allButton = el("button", { type: "button", class: `${HUB_V4_BTN} min-h-9 px-3 text-[13px]` });
+  const lightsCount = el("span", { class: `text-petit ${HUB_V4_MUTE}` });
+  const allButton = el("button", { type: "button", class: `${HUB_V4_BTN} min-h-9 px-3 text-petit` });
   allButton.addEventListener("click", () => {
     if (hubV3ToggleRoom(name)) hubV3Wait(allButton);
   });
@@ -538,7 +538,7 @@ function hubV4RoomBody(name) {
     const short = heat.zone.area === name ? name : floor ? floor.split(/[-\s]/)[0] : heat.zone.name;
     const tile = hubV4HeatTile(heat.zone.id, `Chauffage · ${short}`);
     if (heat.shared) {
-      tile.node.append(el("p", { class: `m-0 text-[13px] ${HUB_V4_MUTE}`, text: `Ce réglage vaut pour ${hubV4AllOf(floor)}.` }));
+      tile.node.append(el("p", { class: `m-0 text-petit ${HUB_V4_MUTE}`, text: `Ce réglage vaut pour ${hubV4AllOf(floor)}.` }));
     }
     right.push(tile.node);
     paints.push(() => {
@@ -565,9 +565,9 @@ function hubV4RoomBody(name) {
     if (alertList.dataset.mark === mark) return;
     alertList.dataset.mark = mark;
     alertList.replaceChildren(...rows.map(([id, text]) => {
-      const item = el("li", { class: "flex items-center gap-3 text-[14px]" }, el("span", { class: "flex-1 min-w-0", text }));
+      const item = el("li", { class: "flex items-center gap-3 text-corps" }, el("span", { class: "flex-1 min-w-0", text }));
       if (typeof account !== "undefined" && account.permissions?.history) {
-        const see = el("button", { type: "button", class: `${HUB_V4_BTN} min-h-9 px-3 text-[13px]`, text: "Voir" });
+        const see = el("button", { type: "button", class: `${HUB_V4_BTN} min-h-9 px-3 text-petit`, text: "Voir" });
         see.addEventListener("click", () => openLogbook(id));
         item.append(see);
       }
@@ -586,7 +586,7 @@ function hubV4RoomBody(name) {
     if (hubV4Pg.name !== name) return;
     logTile.node.hidden = !entries || entries.length === 0;
     if (!entries) return;
-    logList.replaceChildren(...entries.map((entry) => el("li", { class: "flex gap-3 text-[14px]" },
+    logList.replaceChildren(...entries.map((entry) => el("li", { class: "flex gap-3 text-corps" },
       el("time", { class: `shrink-0 w-12 ${HUB_V4_MUTE}`, datetime: entry.at, text: shortTime.format(new Date(entry.at)) }),
       el("span", { class: "min-w-0" }, el("b", { class: "font-semibold", text: hubV4LogName(entry, name) }), ` ${entry.message}`))));
   };
@@ -600,10 +600,10 @@ function hubV4RoomBody(name) {
 function hubV4HouseBody() {
   const paints = [];
   const when = new Intl.DateTimeFormat("fr", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
-  const date = el("p", { class: `m-0 text-[12px] font-semibold uppercase tracking-[0.14em] ${HUB_V4_MUTE}` });
-  const line = el("p", { class: `m-0 text-[15px] ${HUB_V4_MUTE}` });
+  const date = el("p", { class: `m-0 text-legende font-semibold uppercase tracking-[0.14em] ${HUB_V4_MUTE}` });
+  const line = el("p", { class: `m-0 text-courant ${HUB_V4_MUTE}` });
   const left = [el("div", { class: "flex flex-col gap-1.5 px-1 pb-2" }, date,
-    el("h1", { id: "hub-v4-page-title", class: "m-0 font-titre text-[46px] font-normal leading-[1.05] tracking-tight", text: "Toute la maison" }),
+    el("h1", { id: "hub-v4-page-title", class: "m-0 font-titre text-affiche-l font-normal leading-[1.05] tracking-tight", text: "Toute la maison" }),
     line)];
   paints.push(() => {
     setText(date, when.format(new Date()));
@@ -616,11 +616,11 @@ function hubV4HouseBody() {
   roomsTile.node.append(grid);
   left.push(roomsTile.node);
   const syncRooms = hubV4Keyed(grid, (room) => {
-    const count = el("span", { class: `text-[13px] ${HUB_V4_MUTE} group-data-full:text-v-amber2` });
+    const count = el("span", { class: `text-petit ${HUB_V4_MUTE} group-data-full:text-v-amber2` });
     const node = el("button", {
       type: "button",
       class: "group flex items-center justify-between gap-2 min-h-12 px-3.5 rounded-[14px] border-0 bg-voile/6 text-left "
-        + "text-[14px] font-semibold text-inherit cursor-pointer transition-colors hover:bg-voile/10 "
+        + "text-corps font-semibold text-inherit cursor-pointer transition-colors hover:bg-voile/10 "
         + `data-full:bg-v-amber/16 ${HUB_V4_FOCUS}`,
     }, el("span", { class: "truncate", text: room }), count);
     node.addEventListener("click", () => hubV4Page(room));
@@ -649,8 +649,8 @@ function hubV4HouseBody() {
 
   // L'eau chaude : la température du ballon, et ce que fait la pompe à chaleur.
   const waterTile = hubV4Tile(ICONS.humidity, "sky", "Eau chaude");
-  const waterBig = el("b", { class: "font-titre text-[34px] font-light leading-none" });
-  const waterSub = el("span", { class: `text-[13px] ${HUB_V4_MUTE}` });
+  const waterBig = el("b", { class: "font-titre text-affiche font-light leading-none" });
+  const waterSub = el("span", { class: `text-petit ${HUB_V4_MUTE}` });
   waterTile.node.append(el("div", { class: "flex items-baseline gap-3" }, waterBig, waterSub));
   right.push(waterTile.node);
   paints.push(() => {
@@ -666,8 +666,8 @@ function hubV4HouseBody() {
 
   // Les prises rangées dans les pièces.
   const plugsTile = hubV4Tile(ICONS.plug, "violet", "Prises");
-  const plugsCount = el("span", { class: `text-[13px] ${HUB_V4_MUTE}` });
-  const plugsAll = el("button", { type: "button", class: `${HUB_V4_BTN} min-h-9 px-3 text-[13px]` });
+  const plugsCount = el("span", { class: `text-petit ${HUB_V4_MUTE}` });
+  const plugsAll = el("button", { type: "button", class: `${HUB_V4_BTN} min-h-9 px-3 text-petit` });
   plugsTile.head.append(plugsCount, plugsAll);
   const plugGrid = el("div", { class: "grid grid-cols-2 gap-2" });
   plugsTile.node.append(plugGrid);
@@ -688,8 +688,8 @@ function hubV4HouseBody() {
     if (targets.length > 0) hubV3Wait(plugsAll);
   });
   const syncPlugs = hubV4Keyed(plugGrid, (id) => {
-    const name = el("b", { class: "text-[14px] font-semibold truncate" });
-    const word = el("span", { class: `text-[12px] ${HUB_V4_MUTE}` });
+    const name = el("b", { class: "text-corps font-semibold truncate" });
+    const word = el("span", { class: `text-legende ${HUB_V4_MUTE}` });
     const node = el("button", {
       type: "button", "aria-pressed": "false",
       class: "flex flex-col items-start min-h-14 px-3 py-2 rounded-[16px] border-0 bg-voile/6 text-left text-inherit "
@@ -747,7 +747,7 @@ function hubV4HouseBody() {
     const mark = rows.map((r) => `${r.name}:${r.word}:${r.bad}`).join("|");
     if (safeList.dataset.mark === mark) return;
     safeList.dataset.mark = mark;
-    safeList.replaceChildren(...rows.map((row) => el("li", { class: "flex items-baseline justify-between gap-3 text-[14px]" },
+    safeList.replaceChildren(...rows.map((row) => el("li", { class: "flex items-baseline justify-between gap-3 text-corps" },
       el("span", { class: "truncate", text: row.name }),
       el("span", { class: row.bad ? "font-semibold text-v-alert" : HUB_V4_MUTE, text: row.word }))));
   });

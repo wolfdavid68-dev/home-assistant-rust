@@ -105,7 +105,7 @@ function drawConsumption(points, since, until) {
   const x = (time) => CHART.left + ((time - since) / Math.max(1, until - since)) * (CHART.width - CHART.left - CHART.right);
   const chart = svg("svg", { viewBox: `0 0 ${CHART.width} ${CHART.height}`, role: "img", "aria-label": `Consommation de ${$("#history-title").textContent}` });
   for (const [time, anchor] of [[since, "start"], [(since + until) / 2, "middle"], [until, "end"]]) {
-    const label = svg("text", { x: x(time), y: CHART.height - 8, class: "axis [.history-chart_&]:[fill:var(--muted)] [.history-chart_&]:[stroke:none] [:not(:where(.o022602)).history-chart_&]:text-[11px] [:not(:where(.o022603)).history-chart_&]:[font-family:var(--font-mono)]", "text-anchor": anchor });
+    const label = svg("text", { x: x(time), y: CHART.height - 8, class: "axis [.history-chart_&]:[fill:var(--muted)] [.history-chart_&]:[stroke:none] [:not(:where(.o022602)).history-chart_&]:text-micro [:not(:where(.o022603)).history-chart_&]:[font-family:var(--font-mono)]", "text-anchor": anchor });
     label.textContent = shortDay.format(new Date(time));
     chart.append(label);
   }
@@ -113,7 +113,7 @@ function drawConsumption(points, since, until) {
   const y = (value) => CHART.top + ((high - value) / high) * (CHART.height - CHART.top - CHART.bottom);
   for (const value of [high / 1.1, high / 2.2]) {
     chart.append(svg("line", { x1: CHART.left, x2: CHART.width - CHART.right, y1: y(value), y2: y(value), class: "chart-grid [.history-chart_&]:[stroke:var(--line)] [.history-chart_&]:[stroke-width:1]" }));
-    const label = svg("text", { x: CHART.left - 6, y: y(value) + 4, class: "axis [.history-chart_&]:[fill:var(--muted)] [.history-chart_&]:[stroke:none] [:not(:where(.o022602)).history-chart_&]:text-[11px] [:not(:where(.o022603)).history-chart_&]:[font-family:var(--font-mono)]", "text-anchor": "end" });
+    const label = svg("text", { x: CHART.left - 6, y: y(value) + 4, class: "axis [.history-chart_&]:[fill:var(--muted)] [.history-chart_&]:[stroke:none] [:not(:where(.o022602)).history-chart_&]:text-micro [:not(:where(.o022603)).history-chart_&]:[font-family:var(--font-mono)]", "text-anchor": "end" });
     label.textContent = `${number.format(value)}${unit ? ` ${unit}` : ""}`;
     chart.append(label);
   }
@@ -154,7 +154,7 @@ function drawHistory(data) {
   // Graduations du temps : début, milieu, fin.
   const format = historyView.hours > LONG_TERM_HOURS ? shortDay : historyView.hours > 24 ? dayTime : shortTime;
   for (const [time, anchor] of [[since, "start"], [(since + until) / 2, "middle"], [until, "end"]]) {
-    const label = svg("text", { x: x(time), y: CHART.height - 8, class: "axis [.history-chart_&]:[fill:var(--muted)] [.history-chart_&]:[stroke:none] [:not(:where(.o022602)).history-chart_&]:text-[11px] [:not(:where(.o022603)).history-chart_&]:[font-family:var(--font-mono)]", "text-anchor": anchor });
+    const label = svg("text", { x: x(time), y: CHART.height - 8, class: "axis [.history-chart_&]:[fill:var(--muted)] [.history-chart_&]:[stroke:none] [:not(:where(.o022602)).history-chart_&]:text-micro [:not(:where(.o022603)).history-chart_&]:[font-family:var(--font-mono)]", "text-anchor": anchor });
     label.textContent = format.format(new Date(time));
     chart.append(label);
   }
@@ -202,7 +202,7 @@ function drawCurve(chart, points, x, unit) {
 
   for (const value of [high - margin, (high + low) / 2, low + margin]) {
     chart.append(svg("line", { x1: CHART.left, x2: CHART.width - CHART.right, y1: y(value), y2: y(value), class: "chart-grid [.history-chart_&]:[stroke:var(--line)] [.history-chart_&]:[stroke-width:1]" }));
-    const label = svg("text", { x: CHART.left - 6, y: y(value) + 4, class: "axis [.history-chart_&]:[fill:var(--muted)] [.history-chart_&]:[stroke:none] [:not(:where(.o022602)).history-chart_&]:text-[11px] [:not(:where(.o022603)).history-chart_&]:[font-family:var(--font-mono)]", "text-anchor": "end" });
+    const label = svg("text", { x: CHART.left - 6, y: y(value) + 4, class: "axis [.history-chart_&]:[fill:var(--muted)] [.history-chart_&]:[stroke:none] [:not(:where(.o022602)).history-chart_&]:text-micro [:not(:where(.o022603)).history-chart_&]:[font-family:var(--font-mono)]", "text-anchor": "end" });
     label.textContent = `${number.format(value)}${unit ? ` ${unit}` : ""}`;
     chart.append(label);
   }
@@ -354,7 +354,7 @@ async function loadLogbook() {
   }
   const entries = Array.isArray(data.entries) ? data.entries : [];
   if (entries.length === 0) {
-    list.replaceChildren(el("p", { class: "journal-hint text-muted text-[0.85rem] [margin:0_0_0.75rem] [:not(:where(.o035900)).auto-block_&]:m-0 [.auto-fields_&]:[grid-column:1_/_-1] [:not(:where(.o036501)).auto-fields_&]:m-0 [.auto-fields_&]:[overflow-wrap:anywhere]", text: "Rien de noté sur cette période." }));
+    list.replaceChildren(el("p", { class: "journal-hint text-muted text-corps [margin:0_0_0.75rem] [:not(:where(.o035900)).auto-block_&]:m-0 [.auto-fields_&]:[grid-column:1_/_-1] [:not(:where(.o036501)).auto-fields_&]:m-0 [.auto-fields_&]:[overflow-wrap:anywhere]", text: "Rien de noté sur cette période." }));
     return;
   }
   const groups = [];
@@ -374,7 +374,7 @@ async function loadLogbook() {
     groups.at(-1).items.push(item);
   }
   list.replaceChildren(
-    ...groups.map(({ day, items }) => el("section", {}, el("h3", { text: day }), el("ol", { class: "journal-list list-none m-0 p-0 bg-card [border-radius:18px] [box-shadow:var(--shadow)] overflow-hidden [:not(:where(.o029500))&_li]:flex [:not(:where(.o029501))&_li]:flex-wrap [:not(:where(.o029502))&_li]:[gap:0.25rem_0.75rem] [:not(:where(.o029503))&_li]:items-baseline [:not(:where(.o029504))&_li]:[padding:0.7rem_1rem] [:not(:where(.o029505))&_li]:[border-top:1px_solid_var(--line)] [:not(:where(.o029506))&_li]:text-[0.9rem] [&_li:first-child]:[border-top:0] [:not(:where(.o029700))&_time]:text-muted [:not(:where(.o029701))&_time]:[font-family:var(--font-mono)] [:not(:where(.o029702))&_time]:text-[0.82rem] [:not(:where(.o029900))&_small]:text-muted [&_small]:ml-[auto] [:not(:where(.o030000))&_li.failed_strong]:text-alert [:not(:where(.o030000))&_li.failed_span]:text-alert" }, ...items))),
+    ...groups.map(({ day, items }) => el("section", {}, el("h3", { text: day }), el("ol", { class: "journal-list list-none m-0 p-0 bg-card [border-radius:18px] [box-shadow:var(--shadow)] overflow-hidden [:not(:where(.o029500))&_li]:flex [:not(:where(.o029501))&_li]:flex-wrap [:not(:where(.o029502))&_li]:[gap:0.25rem_0.75rem] [:not(:where(.o029503))&_li]:items-baseline [:not(:where(.o029504))&_li]:[padding:0.7rem_1rem] [:not(:where(.o029505))&_li]:[border-top:1px_solid_var(--line)] [:not(:where(.o029506))&_li]:text-corps [&_li:first-child]:[border-top:0] [:not(:where(.o029700))&_time]:text-muted [:not(:where(.o029701))&_time]:[font-family:var(--font-mono)] [:not(:where(.o029702))&_time]:text-petit [:not(:where(.o029900))&_small]:text-muted [&_small]:ml-[auto] [:not(:where(.o030000))&_li.failed_strong]:text-alert [:not(:where(.o030000))&_li.failed_span]:text-alert" }, ...items))),
   );
 }
 
@@ -558,13 +558,13 @@ function renderEnergyNow() {
   const box = $("#energy-now");
   const parts = [];
   if (power && Number.isFinite(Number(power.state))) {
-    parts.push(el("span", { class: "energy-power [:not(:where(.o043200))&_strong]:[font-family:var(--font-display)] [:not(:where(.o043201))&_strong]:text-[1.4rem] [:not(:where(.o043202))&_strong]:text-text [:not(:where(.o043203))&_strong]:[font-variant-numeric:tabular-nums]" }, el("strong", { text: kwhFormat.format(Number(power.state)) }), " VA en ce moment"));
+    parts.push(el("span", { class: "energy-power [:not(:where(.o043200))&_strong]:[font-family:var(--font-display)] [:not(:where(.o043201))&_strong]:text-titre [:not(:where(.o043202))&_strong]:text-text [:not(:where(.o043203))&_strong]:[font-variant-numeric:tabular-nums]" }, el("strong", { text: kwhFormat.format(Number(power.state)) }), " VA en ce moment"));
   }
   if (period && period.state !== "unavailable") parts.push(el("span", { class: "badge", text: period.state }));
   const tempo = entities.get(TEMPO_TODAY);
   if (tempo && lookup(TEMPO_COLORS, tempo.state)) parts.push(tempoBadge(tempo.state));
   const tomorrow = entities.get(TEMPO_TOMORROW);
-  if (tempo && tomorrow) parts.push(el("span", { class: "sub text-[0.82rem] text-muted [.tile.light.on_&]:[color:inherit] [.tile.light.on_&]:[opacity:0.85] [&.is-stale]:[color:color-mix(in_srgb,_var(--tint-alertes)_70%,_var(--text))] [&.is-stale::before]:[content:''] [&.is-stale::before]:inline-block [&.is-stale::before]:w-[0.45em] [&.is-stale::before]:h-[0.45em] [&.is-stale::before]:mr-[0.35em] [&.is-stale::before]:[border-radius:50%] [&.is-stale::before]:[background:var(--tint-alertes)] [&.is-stale::before]:[vertical-align:0.1em]", text: tempoTomorrowText(tomorrow) }));
+  if (tempo && tomorrow) parts.push(el("span", { class: "sub text-petit text-muted [.tile.light.on_&]:[color:inherit] [.tile.light.on_&]:[opacity:0.85] [&.is-stale]:[color:color-mix(in_srgb,_var(--tint-alertes)_70%,_var(--text))] [&.is-stale::before]:[content:''] [&.is-stale::before]:inline-block [&.is-stale::before]:w-[0.45em] [&.is-stale::before]:h-[0.45em] [&.is-stale::before]:mr-[0.35em] [&.is-stale::before]:[border-radius:50%] [&.is-stale::before]:[background:var(--tint-alertes)] [&.is-stale::before]:[vertical-align:0.1em]", text: tempoTomorrowText(tomorrow) }));
   box.hidden = parts.length === 0;
   box.replaceChildren(...parts);
 }
@@ -593,7 +593,7 @@ function energyPeriods(report) {
 const known = (value) => value !== null && value !== undefined;
 
 function totalTile(title, total) {
-  const tile = el("div", { class: "energy-total bg-card-2 [border-radius:16px] [padding:0.7rem_0.85rem] grid gap-[0.15rem] min-w-0 [:not(:where(.o043700))&_strong]:[font-family:var(--font-display)] [:not(:where(.o043701))&_strong]:text-[1.25rem] [:not(:where(.o043702))&_strong]:[font-variant-numeric:tabular-nums] [:not(:where(.o043703))&_strong]:[overflow-wrap:anywhere] [:not(:where(.o043800))&_small]:text-text-2 [:not(:where(.o043801))&_small]:text-[0.78rem]" }, el("span", { class: "label", text: title }),
+  const tile = el("div", { class: "energy-total bg-card-2 [border-radius:16px] [padding:0.7rem_0.85rem] grid gap-[0.15rem] min-w-0 [:not(:where(.o043700))&_strong]:[font-family:var(--font-display)] [:not(:where(.o043701))&_strong]:text-grand [:not(:where(.o043702))&_strong]:[font-variant-numeric:tabular-nums] [:not(:where(.o043703))&_strong]:[overflow-wrap:anywhere] [:not(:where(.o043800))&_small]:text-text-2 [:not(:where(.o043801))&_small]:text-legende" }, el("span", { class: "label", text: title }),
     el("strong", { text: `${kwhFormat.format(total.consumed_kwh)} kWh` }));
   if (known(total.cost)) tile.append(el("small", { text: `≈ ${euros.format(total.cost)}` }));
   if (total.produced_kwh > 0) {
@@ -642,7 +642,7 @@ function renderEnergy() {
 
   for (const v of [high, high / 2, ...(low > 0 ? [-low] : [])]) {
     chart.append(svg("line", { x1: C.left, x2: C.width - C.right, y1: y(v), y2: y(v), class: "chart-grid [.history-chart_&]:[stroke:var(--line)] [.history-chart_&]:[stroke-width:1]" }));
-    const label = svg("text", { x: C.left - 6, y: y(v) + 4, class: "axis [.history-chart_&]:[fill:var(--muted)] [.history-chart_&]:[stroke:none] [:not(:where(.o022602)).history-chart_&]:text-[11px] [:not(:where(.o022603)).history-chart_&]:[font-family:var(--font-mono)]", "text-anchor": "end" });
+    const label = svg("text", { x: C.left - 6, y: y(v) + 4, class: "axis [.history-chart_&]:[fill:var(--muted)] [.history-chart_&]:[stroke:none] [:not(:where(.o022602)).history-chart_&]:text-micro [:not(:where(.o022603)).history-chart_&]:[font-family:var(--font-mono)]", "text-anchor": "end" });
     label.textContent = `${axisFormat.format(Math.abs(v))} kWh`;
     chart.append(label);
   }
@@ -652,7 +652,7 @@ function renderEnergy() {
     if (labelAt.has(index)) {
       const anchor = index === 0 ? "start" : index === periods.length - 1 ? "end" : "middle";
       const at = anchor === "start" ? x(index) : anchor === "end" ? x(index) + width : x(index) + width / 2;
-      const label = svg("text", { x: at, y: C.height - 8, class: "axis [.history-chart_&]:[fill:var(--muted)] [.history-chart_&]:[stroke:none] [:not(:where(.o022602)).history-chart_&]:text-[11px] [:not(:where(.o022603)).history-chart_&]:[font-family:var(--font-mono)]", "text-anchor": anchor });
+      const label = svg("text", { x: at, y: C.height - 8, class: "axis [.history-chart_&]:[fill:var(--muted)] [.history-chart_&]:[stroke:none] [:not(:where(.o022602)).history-chart_&]:text-micro [:not(:where(.o022603)).history-chart_&]:[font-family:var(--font-mono)]", "text-anchor": anchor });
       label.textContent = period.label;
       chart.append(label);
     }

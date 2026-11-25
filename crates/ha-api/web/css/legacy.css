@@ -154,7 +154,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font);
-  font-size: 15px;
+  font-size: var(--text-courant);
   line-height: 1.4;
   -webkit-font-smoothing: antialiased;
 }
@@ -163,7 +163,7 @@ body {
 
 h1, h2, h3 { margin: 0; }
 h2 {
-  font-size: 0.78rem;
+  font-size: var(--text-legende);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.07em;
@@ -177,8 +177,8 @@ a { color: var(--accent); }
 
 /* ---------- Connexion ---------- */
 
-label { display: grid; gap: 0.35rem; font-size: 0.9rem; color: var(--muted); }
-label small { font-size: 0.8rem; }
+label { display: grid; gap: 0.35rem; font-size: var(--text-corps); color: var(--muted); }
+label small { font-size: var(--text-petit); }
 
 input:not([type="range"]):not([type="checkbox"]), select, textarea {
   padding: 0.7rem 0.85rem;
@@ -206,19 +206,19 @@ input:not([type="range"]):not([type="checkbox"]), select, textarea {
   background: var(--card);
   border-radius: 999px;
   padding: 0.45rem 1rem;
-  font-size: 0.88rem;
+  font-size: var(--text-corps);
   font-weight: 500;
 }
 .ghost:hover { border-color: var(--muted); }
-.ghost.small { min-height: 32px; padding: 0.2rem 0.75rem; font-size: 0.8rem; }
+.ghost.small { min-height: 32px; padding: 0.2rem 0.75rem; font-size: var(--text-petit); }
 .ghost.danger { color: var(--alert); }
 
-.error { color: var(--alert); margin: 0; font-size: 0.9rem; }
+.error { color: var(--alert); margin: 0; font-size: var(--text-corps); }
 
 /* ---------- Le ciel : date, météo, salutation ---------- */
 
 .status {
-  font-size: 0.8rem;
+  font-size: var(--text-petit);
   color: var(--muted);
   display: inline-flex;
   align-items: center;
@@ -231,7 +231,7 @@ input:not([type="range"]):not([type="checkbox"]), select, textarea {
 .actions { display: flex; align-items: center; gap: 0.5rem; }
 .actions .ghost { display: none; }
 
-.summary { margin-top: 0.45rem; color: var(--text-2); font-size: 0.95rem; }
+.summary { margin-top: 0.45rem; color: var(--text-2); font-size: var(--text-courant); }
 
 /* ---------- Mise en page ---------- */
 
@@ -274,7 +274,7 @@ input:not([type="range"]):not([type="checkbox"]), select, textarea {
   color: var(--alert-ink);
 }
 
-.legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; font-size: 0.78rem; color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; font-size: var(--text-legende); color: var(--muted); }
 .legend span { display: inline-flex; align-items: center; gap: 0.4rem; }
 .legend i { width: 10px; height: 10px; border-radius: 3px; background: var(--glow); }
 .legend i.alert { background: var(--alert); }
@@ -294,7 +294,7 @@ input:not([type="range"]):not([type="checkbox"]), select, textarea {
   flex: 1 1 auto;
   padding: 0.4rem 1rem;
   font-weight: 500;
-  font-size: 0.9rem;
+  font-size: var(--text-corps);
   white-space: nowrap;
 }
 .scene svg { width: 18px; height: 18px; flex: none; }
@@ -342,19 +342,19 @@ input:not([type="range"]):not([type="checkbox"]), select, textarea {
 }
 .icon svg { width: 20px; height: 20px; }
 svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.name { font-weight: 600; font-size: 0.97rem; line-height: 1.25; overflow-wrap: break-word; hyphens: auto; }
+.name { font-weight: 600; font-size: var(--text-courant); line-height: 1.25; overflow-wrap: break-word; hyphens: auto; }
 
 .value {
   font-family: var(--font-display);
-  font-size: 2rem;
+  font-size: var(--text-affiche);
   font-weight: 600;
   letter-spacing: -0.025em;
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
-.value small { font-family: var(--font); font-size: 0.95rem; color: var(--muted); font-weight: 500; margin-left: 0.2rem; letter-spacing: 0; }
-.value.small-value { font-size: 1.3rem; }
-.value.countdown { font-family: var(--font-mono); font-weight: 500; font-size: 1.7rem; letter-spacing: 0; }
+.value small { font-family: var(--font); font-size: var(--text-courant); color: var(--muted); font-weight: 500; margin-left: 0.2rem; letter-spacing: 0; }
+.value.small-value { font-size: var(--text-grand); }
+.value.countdown { font-family: var(--font-mono); font-weight: 500; font-size: var(--text-titre-l); letter-spacing: 0; }
 
 /* Tuiles qu'on touche pour allumer / éteindre. */
 
@@ -410,13 +410,13 @@ input[type="range"]::-moz-range-track { background: transparent; }
 /* Thermostat : un cadran, la consigne au centre. */
 
 .dial .now { fill: var(--card); stroke: var(--text); stroke-width: 2.5; }
-.dial .value { position: absolute; inset: 0 0 12px 0; display: grid; place-items: center; font-size: 2.3rem; }
+.dial .value { position: absolute; inset: 0 0 12px 0; display: grid; place-items: center; font-size: var(--text-affiche); }
 
-.setpoint .round { flex: 0 0 40px; height: 44px; padding: 0; font-size: 1.4rem; line-height: 1; }
+.setpoint .round { flex: 0 0 40px; height: 44px; padding: 0; font-size: var(--text-titre); line-height: 1; }
 
 .tile.climate.heating .icon { background: var(--heat-soft); color: var(--heat-ink); }
-.heat-badge { padding: 2px 9px; border-radius: 999px; background: var(--heat-soft); color: var(--heat-ink); font-size: 0.75rem; font-weight: 600; }
-.climate-info { font-size: 0.8rem; }
+.heat-badge { padding: 2px 9px; border-radius: 999px; background: var(--heat-soft); color: var(--heat-ink); font-size: var(--text-legende); font-weight: 600; }
+.climate-info { font-size: var(--text-petit); }
 
 /* Ce que le compte ne peut pas commander (un invité et le thermostat…) :
    l'état reste lisible, les commandes disparaissent. */
@@ -436,20 +436,20 @@ input[type="range"]::-moz-range-track { background: transparent; }
 }
 .agenda-list li.event:hover { background: var(--card-2); }
 
-.item-due { margin-left: auto; font-size: 0.78rem; color: var(--muted); white-space: nowrap; }
+.item-due { margin-left: auto; font-size: var(--text-legende); color: var(--muted); white-space: nowrap; }
 .item-due.out { color: var(--alert); font-weight: 600; }
 /* Iglou (étape 81) : un titre par frigo ou congélateur. */
 
 .agenda-list li.day {
-  margin-top: 0.5rem; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em;
+  margin-top: 0.5rem; font-size: var(--text-legende); font-weight: 600; letter-spacing: 0.06em;
   text-transform: uppercase; color: var(--muted);
 }
 .agenda-list li.day:first-child { margin-top: 0; }
 
 .agenda-list li.now { background: var(--accent-soft); }
 
-.muted { margin: 0; color: var(--muted); font-size: 0.9rem; }
-.ghost.small { justify-self: start; padding: 0.3rem 0.8rem; font-size: 0.85rem; }
+.muted { margin: 0; color: var(--muted); font-size: var(--text-corps); }
+.ghost.small { justify-self: start; padding: 0.3rem 0.8rem; font-size: var(--text-corps); }
 
 /* Minuteur : un anneau qui se vide. */
 
@@ -467,7 +467,7 @@ input[type="range"]::-moz-range-track { background: transparent; }
 .forecast .day { color: var(--muted); text-transform: capitalize; }
 .forecast .max { font-weight: 600; }
 .forecast .min { color: var(--muted); }
-.forecast .rain { color: var(--accent); min-height: 1em; font-size: 0.75rem; }
+.forecast .rain { color: var(--accent); min-height: 1em; font-size: var(--text-legende); }
 
 /* ---------- Barre de navigation (téléphone) ---------- */
 
@@ -544,14 +544,14 @@ input[type="range"]::-moz-range-track { background: transparent; }
   padding: 0.65rem 0.9rem;
   border-radius: 14px;
   background: var(--card-2);
-  font-size: 0.9rem;
+  font-size: var(--text-corps);
 }
 .notice.ok { background: var(--ok-soft); }
 .notice.error { background: var(--card-2); box-shadow: inset 3px 0 0 var(--alert); }
 
 /* Les automatisations toutes prêtes (étape 85) */
 
-.badge { font-size: 0.72rem; padding: 0.15rem 0.6rem; border-radius: 999px; background: var(--card); color: var(--muted); }
+.badge { font-size: var(--text-legende); padding: 0.15rem 0.6rem; border-radius: 999px; background: var(--card); color: var(--muted); }
 .badge.off { outline: 1px dashed var(--muted); }
 .badge.bad { color: var(--alert); background: var(--alert-soft); }
 
@@ -560,7 +560,7 @@ input[type="range"]::-moz-range-track { background: transparent; }
 .yaml {
   width: 100%;
   font-family: var(--font-mono);
-  font-size: 0.85rem;
+  font-size: var(--text-corps);
   line-height: 1.5;
   resize: vertical;
   tab-size: 2;
@@ -575,7 +575,7 @@ input[type="range"]::-moz-range-track { background: transparent; }
 
 /* ----- Notifications (cloche) */
 
-.primary.small { min-height: 32px; padding: 0.2rem 0.9rem; font-size: 0.85rem; border-radius: 10px; }
+.primary.small { min-height: 32px; padding: 0.2rem 0.9rem; font-size: var(--text-corps); border-radius: 10px; }
 
 /* ----- Historique des exécutions */
 
@@ -586,7 +586,7 @@ input[type="range"]::-moz-range-track { background: transparent; }
 
 /* ----- Énergie */
 
-.energy-total .label { color: var(--muted); font-size: 0.8rem; }
+.energy-total .label { color: var(--muted); font-size: var(--text-petit); }
 
 /* ---------------------------------------------------------------- Vigilance */
 
@@ -670,7 +670,7 @@ input[type="range"]::-moz-range-track { background: transparent; }
   transform: translateY(-50%);
   padding: 0.12rem 0.55rem;
   border-radius: 999px;
-  font-size: 0.68rem;
+  font-size: var(--text-micro);
   font-weight: 700;
   white-space: nowrap;
   pointer-events: none;
@@ -713,8 +713,8 @@ input[type="range"]::-moz-range-track { background: transparent; }
 .canvas-tool:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .canvas-tool.primary { background: var(--accent); color: var(--accent-ink); }
 .canvas-tool.primary:hover { background: color-mix(in srgb, var(--accent) 88%, #000); }
-.canvas-tool.icon { width: 34px; padding: 0; font-size: 1.1rem; }
-.canvas-tool.zoom-level { min-width: 4rem; font-family: var(--font-mono); font-size: 0.78rem; font-variant-numeric: tabular-nums; color: var(--muted); }
+.canvas-tool.icon { width: 34px; padding: 0; font-size: var(--text-moyen); }
+.canvas-tool.zoom-level { min-width: 4rem; font-family: var(--font-mono); font-size: var(--text-legende); font-variant-numeric: tabular-nums; color: var(--muted); }
 .canvas-tools > .canvas-tool { min-height: 44px; border-radius: 15px; }
 .canvas-tool.danger { color: var(--alert); }
 .canvas-run { min-height: 44px; max-width: 100%; padding: 0 0.9rem; border-radius: 15px; color: var(--text); font: 600 0.85rem var(--font); }
@@ -735,7 +735,7 @@ input[type="range"]::-moz-range-track { background: transparent; }
 
 .canvas-menu-title {
   margin: 0.55rem 0.4rem 0.15rem;
-  font-size: 0.66rem;
+  font-size: var(--text-micro);
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -925,7 +925,7 @@ input[type="range"]::-moz-range-track { background: transparent; }
   border-radius: 999px;
   background: var(--card);
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: var(--text-petit);
   white-space: nowrap;
 }
 .gauge svg { width: 17px; height: 17px; color: var(--ink); }
@@ -1048,7 +1048,7 @@ input[type="range"]::-moz-range-track { background: transparent; }
   /* « Régler » en surimpression, dans le coin du dessin. */
   [data-layout="board"] .house { position: relative; }
 
-  [data-layout="board"] .house-caption .ghost { min-height: 30px; padding: 0.2rem 0.75rem; font-size: 0.78rem; backdrop-filter: blur(6px); }
+  [data-layout="board"] .house-caption .ghost { min-height: 30px; padding: 0.2rem 0.75rem; font-size: var(--text-legende); backdrop-filter: blur(6px); }
   /* L'en-tête sur une seule ligne : la date, l'état de la maison, la météo. */
 
   [data-layout="board"] .status, [data-layout="board"] .actions { order: 2; }
@@ -1058,9 +1058,9 @@ input[type="range"]::-moz-range-track { background: transparent; }
 
   [data-layout="board"] .cover-row-buttons .round { width: 34px; height: 30px; }
 
-  [data-layout="board"] .gauge { min-height: 28px; font-size: 0.74rem; padding-block: 0.15rem; }
-  [data-layout="board"] .scene { min-height: 40px; font-size: 0.82rem; }
-  [data-layout="board"] .legend { font-size: 0.72rem; }
+  [data-layout="board"] .gauge { min-height: 28px; font-size: var(--text-legende); padding-block: 0.15rem; }
+  [data-layout="board"] .scene { min-height: 40px; font-size: var(--text-petit); }
+  [data-layout="board"] .legend { font-size: var(--text-legende); }
 
 }
 
@@ -1084,7 +1084,7 @@ input[type="range"]::-moz-range-track { background: transparent; }
   align-items: center;
   cursor: pointer;
   padding: 0.5rem 1rem;
-  font-size: 0.9rem;
+  font-size: var(--text-corps);
   font-weight: 500;
   color: var(--muted);
   white-space: nowrap;
@@ -1171,7 +1171,7 @@ input[type="range"]::-moz-range-track { background: transparent; }
   [data-theme="maquette"][data-layout="board"] .room { min-height: 58px; padding: 8px 12px; }
 
   [data-theme="maquette"][data-layout="board"] .cover-row-buttons .round { width: 40px; height: 36px; }
-  [data-theme="maquette"][data-layout="board"] .gauge { min-height: 32px; font-size: 0.8rem; padding-inline: 0.6rem 0.8rem; }
+  [data-theme="maquette"][data-layout="board"] .gauge { min-height: 32px; font-size: var(--text-petit); padding-inline: 0.6rem 0.8rem; }
 }
 
 /* Les tuiles : un voile noir, le nom en gras, l'état en gris. */
@@ -1196,7 +1196,7 @@ input[type="range"]::-moz-range-track { background: transparent; }
 [data-theme="maquette"] .cover-row-buttons .round:hover { background: rgb(255 255 255 / 0.12); }
 
 /* Les pastilles du haut : une icône de couleur, la valeur en gras. */
-[data-theme="maquette"] .gauge { background: rgb(0 0 0 / 0.36); border: 0; box-shadow: none; color: #e9e9ee; min-height: 30px; font-size: 0.76rem; }
+[data-theme="maquette"] .gauge { background: rgb(0 0 0 / 0.36); border: 0; box-shadow: none; color: #e9e9ee; min-height: 30px; font-size: var(--text-legende); }
 [data-theme="maquette"] .gauge > span { display: none; }
 [data-theme="maquette"] .gauge strong { font-family: var(--font); font-weight: 600; }
 [data-theme="maquette"] .gauge.g-inside svg { color: var(--m-cyan); }
@@ -1254,7 +1254,7 @@ input[type="range"]::-moz-range-track { background: transparent; }
   to { background: transparent; box-shadow: 0 0 0 14px transparent; }
 }
 /* Dans l'aperçu du réglage : chaque zone en pointillé, avec son numéro. */
-.house-zone.edit { cursor: inherit; pointer-events: none; display: grid; place-items: start; padding: 4px 6px; border: 1.5px dashed var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); font-size: 0.72rem; font-weight: 700; color: var(--accent); border-radius: 6px; }
+.house-zone.edit { cursor: inherit; pointer-events: none; display: grid; place-items: start; padding: 4px 6px; border: 1.5px dashed var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); font-size: var(--text-legende); font-weight: 700; color: var(--accent); border-radius: 6px; }
 .house-zone.edit.placing { border-style: solid; background: color-mix(in srgb, var(--accent) 22%, transparent); }
 .house-zone.edit.tracing { border-style: solid; }
 
@@ -1310,7 +1310,7 @@ input[type="range"]::-moz-range-track { background: transparent; }
 .gauge.g-outside .g-temp {
   --ink-temp: linear-gradient(165deg, color-mix(in oklab, var(--temp) 40%, #fff), var(--temp) 72%);
   padding-right: 0.08em;
-  font-size: 1.5rem; font-weight: 700; letter-spacing: -0.045em; font-variant-numeric: tabular-nums;
+  font-size: var(--text-titre); font-weight: 700; letter-spacing: -0.045em; font-variant-numeric: tabular-nums;
   /* Le reflet (une bande claire, trois fois plus haute que les chiffres,
      hors de vue au repos) par-dessus la couleur de la température. */
   background-image: linear-gradient(transparent 41%, var(--shine) 50%, transparent 59%), var(--ink-temp);
@@ -1488,7 +1488,7 @@ input[type="range"]::-moz-range-track { background: transparent; }
 
 /* La ligne d'état : la maison ne répond plus. Une seule pastille ambre en
    haut, au-dessus de l'écran de veille, sans bouton ni fenêtre. */
-.link-line { position: fixed; top: max(8px, env(safe-area-inset-top)); left: 50%; z-index: 55; display: flex; align-items: center; gap: 0.45rem; max-width: calc(100vw - 32px); margin: 0; padding: 0.35rem 0.85rem; border-radius: 999px; background: var(--tint-alertes); color: #2b1800; font-size: 0.85rem; font-weight: 600; box-shadow: 0 2px 10px rgb(0 0 0 / 0.2); transform: translateX(-50%); pointer-events: none; animation: link-in 0.3s ease-out; }
+.link-line { position: fixed; top: max(8px, env(safe-area-inset-top)); left: 50%; z-index: 55; display: flex; align-items: center; gap: 0.45rem; max-width: calc(100vw - 32px); margin: 0; padding: 0.35rem 0.85rem; border-radius: 999px; background: var(--tint-alertes); color: #2b1800; font-size: var(--text-corps); font-weight: 600; box-shadow: 0 2px 10px rgb(0 0 0 / 0.2); transform: translateX(-50%); pointer-events: none; animation: link-in 0.3s ease-out; }
 .link-line[hidden] { display: none; }
 .link-line::before { content: ""; flex: none; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: currentColor; animation: link-blink 1.6s ease-in-out infinite; }
 @keyframes link-in { from { opacity: 0; transform: translate(-50%, -10px); } }
@@ -1499,10 +1499,10 @@ input[type="range"]::-moz-range-track { background: transparent; }
 /* ---------- Ce que le serveur consomme (étape 47), dans « Mon compte ». */
 
 .system-row { display: grid; gap: 0.15rem; padding: 0.55rem 0.75rem; border-radius: 12px; background: var(--card-2); }
-.system-row dt { font-size: 0.74rem; color: var(--muted); }
+.system-row dt { font-size: var(--text-legende); color: var(--muted); }
 .system-row dd { margin: 0; display: grid; gap: 0.1rem; }
-.system-row b { font-size: 0.92rem; font-variant-numeric: tabular-nums; }
-.system-row span { font-size: 0.72rem; color: var(--muted); }
+.system-row b { font-size: var(--text-courant); font-variant-numeric: tabular-nums; }
+.system-row span { font-size: var(--text-legende); color: var(--muted); }
 .system-row.over { box-shadow: inset 3px 0 0 var(--alert); }
 .system-row.over span { color: var(--alert); }
 
@@ -1515,7 +1515,7 @@ input[type="range"]::-moz-range-track { background: transparent; }
 
 /* Le mini-mois */
 
-.agenda-mini-day { all: unset; cursor: pointer; position: relative; font-size: 0.8rem; height: 28px; line-height: 28px; border-radius: 8px; font-variant-numeric: tabular-nums; }
+.agenda-mini-day { all: unset; cursor: pointer; position: relative; font-size: var(--text-petit); height: 28px; line-height: 28px; border-radius: 8px; font-variant-numeric: tabular-nums; }
 .agenda-mini-day:hover { background: var(--card-2); }
 .agenda-mini-day.out { color: color-mix(in srgb, var(--muted) 55%, transparent); }
 .agenda-mini-day.week { background: var(--card-2); border-radius: 0; }
@@ -1536,18 +1536,18 @@ input[type="range"]::-moz-range-track { background: transparent; }
 
 /* Semaine et jour */
 
-.agenda-day { all: unset; cursor: pointer; text-align: center; padding: 2px 0 6px; font-size: 0.7rem; color: var(--muted); text-transform: uppercase; }
+.agenda-day { all: unset; cursor: pointer; text-align: center; padding: 2px 0 6px; font-size: var(--text-micro); color: var(--muted); text-transform: uppercase; }
 .agenda-day b { display: block; margin: 2px auto 0; font: 600 1.15rem var(--font-display); color: var(--text); width: 32px; height: 32px; line-height: 32px; border-radius: 50%; text-transform: none; }
 .agenda-day.is-today b { background: var(--accent); color: var(--accent-ink); }
 
-.agenda-band { all: unset; cursor: pointer; grid-column: var(--col) / span var(--span); grid-row: var(--lane); margin: 0 3px; border-radius: 6px; padding: 0 8px; font-size: 0.75rem; line-height: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: color-mix(in srgb, var(--ev) 38%, transparent); color: color-mix(in srgb, var(--ev) 45%, var(--text)); }
+.agenda-band { all: unset; cursor: pointer; grid-column: var(--col) / span var(--span); grid-row: var(--lane); margin: 0 3px; border-radius: 6px; padding: 0 8px; font-size: var(--text-legende); line-height: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: color-mix(in srgb, var(--ev) 38%, transparent); color: color-mix(in srgb, var(--ev) 45%, var(--text)); }
 .agenda-band b { font-weight: 600; }
 /* Toutes les heures, 30 pixels chacune, sans défiler (étape 90). */
 
 .agenda-column { position: relative; border-left: 1px solid var(--line); }
 .agenda-column.is-today { background: color-mix(in srgb, var(--accent) 5%, transparent); }
 
-.agenda-block { all: unset; cursor: pointer; box-sizing: border-box; position: absolute; overflow: hidden; border-radius: 8px; padding: 3px 6px; font-size: 0.74rem; line-height: 1.25; border-left: 3px solid var(--ev); background: color-mix(in srgb, var(--ev) var(--ev-alpha, 24%), var(--card)); color: color-mix(in srgb, var(--ev) 40%, var(--text)); display: flex; flex-direction: column; }
+.agenda-block { all: unset; cursor: pointer; box-sizing: border-box; position: absolute; overflow: hidden; border-radius: 8px; padding: 3px 6px; font-size: var(--text-legende); line-height: 1.25; border-left: 3px solid var(--ev); background: color-mix(in srgb, var(--ev) var(--ev-alpha, 24%), var(--card)); color: color-mix(in srgb, var(--ev) 40%, var(--text)); display: flex; flex-direction: column; }
 .agenda-block b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .agenda-block small { font: 0.66rem var(--font-mono); opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .agenda-block:hover, .agenda-band:hover { filter: brightness(1.12); }
@@ -1556,14 +1556,14 @@ input[type="range"]::-moz-range-track { background: transparent; }
 /* Mois */
 
 .agenda-month-row { --lanes: 0; }
-.agenda-month-band { all: unset; cursor: pointer; position: absolute; top: calc(30px + var(--lane) * 20px); left: calc((var(--col) - 1) * 100% / 7 + 3px); width: calc(var(--span) * 100% / 7 - 6px); height: 17px; line-height: 17px; border-radius: 5px; padding: 0 7px; box-sizing: border-box; font-size: 0.7rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: color-mix(in srgb, var(--ev) 38%, transparent); color: color-mix(in srgb, var(--ev) 45%, var(--text)); }
+.agenda-month-band { all: unset; cursor: pointer; position: absolute; top: calc(30px + var(--lane) * 20px); left: calc((var(--col) - 1) * 100% / 7 + 3px); width: calc(var(--span) * 100% / 7 - 6px); height: 17px; line-height: 17px; border-radius: 5px; padding: 0 7px; box-sizing: border-box; font-size: var(--text-micro); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: color-mix(in srgb, var(--ev) 38%, transparent); color: color-mix(in srgb, var(--ev) 45%, var(--text)); }
 .agenda-month-band b { font-weight: 600; }
 
 /* Liste (le téléphone) */
 
-.agenda-list-day { margin: 8px 4px 0; font-size: 0.82rem; font-weight: 600; color: var(--muted); }
+.agenda-list-day { margin: 8px 4px 0; font-size: var(--text-petit); font-weight: 600; color: var(--muted); }
 .agenda-list-day.is-today { color: var(--accent); }
-.agenda-list-allday { all: unset; cursor: pointer; display: block; border-radius: 10px; padding: 7px 12px; font-size: 0.85rem; background: color-mix(in srgb, var(--ev) 38%, transparent); color: color-mix(in srgb, var(--ev) 40%, var(--text)); }
+.agenda-list-allday { all: unset; cursor: pointer; display: block; border-radius: 10px; padding: 7px 12px; font-size: var(--text-corps); background: color-mix(in srgb, var(--ev) 38%, transparent); color: color-mix(in srgb, var(--ev) 40%, var(--text)); }
 .agenda-list-allday small { font-weight: 400; opacity: 0.85; }
 
 .agenda-list-icon { width: 12px; height: 12px; }
@@ -1601,7 +1601,7 @@ input[type="range"]::-moz-range-track { background: transparent; }
 /* Un rendez-vous qui partage sa ligne avec « dans 23 min » ou « en cours » : son titre
    passe sur deux lignes plutôt que d'être coupé. */
 
-.hub-event-when { margin-left: auto; color: #03a9f4; font-weight: 600; font-size: 0.82rem; white-space: nowrap; }
+.hub-event-when { margin-left: auto; color: #03a9f4; font-weight: 600; font-size: var(--text-petit); white-space: nowrap; }
 .hub-event-when.now { color: #66bb6a; }
 :root:is([data-theme="light"], [data-theme="plan"]) .hub-event.next { background: var(--accent-soft); }
 :root:is([data-theme="light"], [data-theme="plan"]) .hub-event-when { color: var(--accent); }
@@ -1640,17 +1640,17 @@ input[type="range"]::-moz-range-track { background: transparent; }
 
 /* La tuile d'une caméra : sa dernière photo. */
 
-.camera-caption { margin: 6px 0 0; font-size: 0.85rem; }
+.camera-caption { margin: 6px 0 0; font-size: var(--text-corps); }
 
 /* ---------------------------------------------------------------- Les colis Amazon (étape 87) */
 /* Comme l'Echo : la photo de l'article à gauche, la phrase en grand à droite. */
 
-.parcel-text .primary { margin-top: auto; align-self: flex-start; min-width: 9rem; min-height: 48px; font-size: 1.05rem; }
+.parcel-text .primary { margin-top: auto; align-self: flex-start; min-width: 9rem; min-height: 48px; font-size: var(--text-moyen); }
 
 /* L'adresse de retour de SmartThings (étape 86) */
 .st-page { min-height: 100vh; display: grid; place-items: center; padding: 16px; background: var(--bg); color: var(--text); }
 .st-card { max-width: 34rem; background: var(--card); border-radius: 20px; padding: 1.5rem; display: grid; gap: 0.8rem; }
-.st-card h1 { margin: 0; font-size: 1.3rem; }
+.st-card h1 { margin: 0; font-size: var(--text-grand); }
 .st-card p { margin: 0; line-height: 1.5; }
 
 /* Une machine (lave-linge SmartThings, étape 86) : la progression du cycle. */
@@ -1706,7 +1706,7 @@ input[type="range"]::-moz-range-track { background: transparent; }
 @container (max-width: 520px) {
   .ml-card { gap: 10px; padding: 6px 16px 6px 6px; }
   .ml-dial { width: 44px; height: 44px; }
-  .ml-main { font-size: 1.15rem; }
+  .ml-main { font-size: var(--text-moyen); }
 }
 
 @keyframes ml-spin { to { transform: rotate(360deg); } }

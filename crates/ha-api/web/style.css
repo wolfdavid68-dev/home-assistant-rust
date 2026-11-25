@@ -6,8 +6,6 @@
   :root, :host {
     --color-white: #fff;
     --spacing: 0.25rem;
-    --text-xs: 0.75rem;
-    --text-xs--line-height: calc(1 / 0.75);
     --font-weight-extralight: 200;
     --font-weight-light: 300;
     --font-weight-normal: 400;
@@ -24,6 +22,18 @@
     --radius-2xl: 1rem;
     --default-transition-duration: 150ms;
     --default-transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    --text-micro: 0.6875rem;
+    --text-legende: 0.75rem;
+    --text-petit: 0.8125rem;
+    --text-corps: 0.875rem;
+    --text-courant: 0.9375rem;
+    --text-moyen: 1.0625rem;
+    --text-grand: 1.25rem;
+    --text-titre: 1.375rem;
+    --text-titre-l: 1.75rem;
+    --text-affiche: 2.125rem;
+    --text-affiche-l: 2.75rem;
+    --text-geant: 3.25rem;
     --animate-v4-pop: v4-pop 0.6s cubic-bezier(0.2, 0, 0, 1) both;
     --animate-v4-fade: v4-fade 0.3s ease-out both;
     --animate-v4-breathe: v4-breathe 2.4s ease-in-out infinite;
@@ -167,7 +177,7 @@
     background: var(--bg);
     color: var(--text);
     font-family: var(--font);
-    font-size: 15px;
+    font-size: var(--text-courant);
     line-height: 1.4;
     -webkit-font-smoothing: antialiased;
   }
@@ -178,7 +188,7 @@
     margin: 0;
   }
   h2 {
-    font-size: 0.78rem;
+    font-size: var(--text-legende);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.07em;
@@ -201,11 +211,11 @@
   label {
     display: grid;
     gap: 0.35rem;
-    font-size: 0.9rem;
+    font-size: var(--text-corps);
     color: var(--muted);
   }
   label small {
-    font-size: 0.8rem;
+    font-size: var(--text-petit);
   }
   input:not([type="range"]):not([type="checkbox"]), select, textarea {
     padding: 0.7rem 0.85rem;
@@ -237,7 +247,7 @@
     background: var(--card);
     border-radius: 999px;
     padding: 0.45rem 1rem;
-    font-size: 0.88rem;
+    font-size: var(--text-corps);
     font-weight: 500;
   }
   .ghost:hover {
@@ -246,7 +256,7 @@
   .ghost.small {
     min-height: 32px;
     padding: 0.2rem 0.75rem;
-    font-size: 0.8rem;
+    font-size: var(--text-petit);
   }
   .ghost.danger {
     color: var(--alert);
@@ -254,10 +264,10 @@
   .error {
     color: var(--alert);
     margin: 0;
-    font-size: 0.9rem;
+    font-size: var(--text-corps);
   }
   .status {
-    font-size: 0.8rem;
+    font-size: var(--text-petit);
     color: var(--muted);
     display: inline-flex;
     align-items: center;
@@ -289,7 +299,7 @@
   .summary {
     margin-top: 0.45rem;
     color: var(--text-2);
-    font-size: 0.95rem;
+    font-size: var(--text-courant);
   }
   @media (min-width: 760px) {
     .actions .ghost {
@@ -343,7 +353,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: 0.4rem 1rem;
-    font-size: 0.78rem;
+    font-size: var(--text-legende);
     color: var(--muted);
   }
   .legend span {
@@ -377,7 +387,7 @@
     flex: 1 1 auto;
     padding: 0.4rem 1rem;
     font-weight: 500;
-    font-size: 0.9rem;
+    font-size: var(--text-corps);
     white-space: nowrap;
   }
   .scene svg {
@@ -443,14 +453,14 @@
   }
   .name {
     font-weight: 600;
-    font-size: 0.97rem;
+    font-size: var(--text-courant);
     line-height: 1.25;
     overflow-wrap: break-word;
     hyphens: auto;
   }
   .value {
     font-family: var(--font-display);
-    font-size: 2rem;
+    font-size: var(--text-affiche);
     font-weight: 600;
     letter-spacing: -0.025em;
     line-height: 1;
@@ -458,19 +468,19 @@
   }
   .value small {
     font-family: var(--font);
-    font-size: 0.95rem;
+    font-size: var(--text-courant);
     color: var(--muted);
     font-weight: 500;
     margin-left: 0.2rem;
     letter-spacing: 0;
   }
   .value.small-value {
-    font-size: 1.3rem;
+    font-size: var(--text-grand);
   }
   .value.countdown {
     font-family: var(--font-mono);
     font-weight: 500;
-    font-size: 1.7rem;
+    font-size: var(--text-titre-l);
     letter-spacing: 0;
   }
   .tile.light.on {
@@ -581,13 +591,13 @@
     inset: 0 0 12px 0;
     display: grid;
     place-items: center;
-    font-size: 2.3rem;
+    font-size: var(--text-affiche);
   }
   .setpoint .round {
     flex: 0 0 40px;
     height: 44px;
     padding: 0;
-    font-size: 1.4rem;
+    font-size: var(--text-titre);
     line-height: 1;
   }
   .tile.climate.heating .icon {
@@ -599,11 +609,11 @@
     border-radius: 999px;
     background: var(--heat-soft);
     color: var(--heat-ink);
-    font-size: 0.75rem;
+    font-size: var(--text-legende);
     font-weight: 600;
   }
   .climate-info {
-    font-size: 0.8rem;
+    font-size: var(--text-petit);
   }
   .tile.readonly button:disabled:not(.tile-toggle), .tile.readonly input:disabled:not(.tile-toggle), .tile.readonly select:disabled:not(.tile-toggle) {
     display: none;
@@ -632,7 +642,7 @@
   }
   .item-due {
     margin-left: auto;
-    font-size: 0.78rem;
+    font-size: var(--text-legende);
     color: var(--muted);
     white-space: nowrap;
   }
@@ -642,7 +652,7 @@
   }
   .agenda-list li.day {
     margin-top: 0.5rem;
-    font-size: 0.75rem;
+    font-size: var(--text-legende);
     font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -657,12 +667,12 @@
   .muted {
     margin: 0;
     color: var(--muted);
-    font-size: 0.9rem;
+    font-size: var(--text-corps);
   }
   .ghost.small {
     justify-self: start;
     padding: 0.3rem 0.8rem;
-    font-size: 0.85rem;
+    font-size: var(--text-corps);
   }
   .tile.action.on {
     background: var(--accent-soft);
@@ -687,7 +697,7 @@
   .forecast .rain {
     color: var(--accent);
     min-height: 1em;
-    font-size: 0.75rem;
+    font-size: var(--text-legende);
   }
   .flash {
     position: fixed;
@@ -753,7 +763,7 @@
     padding: 0.65rem 0.9rem;
     border-radius: 14px;
     background: var(--card-2);
-    font-size: 0.9rem;
+    font-size: var(--text-corps);
   }
   .notice.ok {
     background: var(--ok-soft);
@@ -763,7 +773,7 @@
     box-shadow: inset 3px 0 0 var(--alert);
   }
   .badge {
-    font-size: 0.72rem;
+    font-size: var(--text-legende);
     padding: 0.15rem 0.6rem;
     border-radius: 999px;
     background: var(--card);
@@ -783,7 +793,7 @@
   .yaml {
     width: 100%;
     font-family: var(--font-mono);
-    font-size: 0.85rem;
+    font-size: var(--text-corps);
     line-height: 1.5;
     resize: vertical;
     tab-size: 2;
@@ -803,7 +813,7 @@
   .primary.small {
     min-height: 32px;
     padding: 0.2rem 0.9rem;
-    font-size: 0.85rem;
+    font-size: var(--text-corps);
     border-radius: 10px;
   }
   .trace-outcome.run-finished {
@@ -825,7 +835,7 @@
   }
   .energy-total .label {
     color: var(--muted);
-    font-size: 0.8rem;
+    font-size: var(--text-petit);
   }
   .tile.vigilance.level-orange {
     box-shadow: 0 0 0 2px var(--vig-orange), var(--shadow);
@@ -996,7 +1006,7 @@
     transform: translateY(-50%);
     padding: 0.12rem 0.55rem;
     border-radius: 999px;
-    font-size: 0.68rem;
+    font-size: var(--text-micro);
     font-weight: 700;
     white-space: nowrap;
     pointer-events: none;
@@ -1074,12 +1084,12 @@
   .canvas-tool.icon {
     width: 34px;
     padding: 0;
-    font-size: 1.1rem;
+    font-size: var(--text-moyen);
   }
   .canvas-tool.zoom-level {
     min-width: 4rem;
     font-family: var(--font-mono);
-    font-size: 0.78rem;
+    font-size: var(--text-legende);
     font-variant-numeric: tabular-nums;
     color: var(--muted);
   }
@@ -1112,7 +1122,7 @@
   }
   .canvas-menu-title {
     margin: 0.55rem 0.4rem 0.15rem;
-    font-size: 0.66rem;
+    font-size: var(--text-micro);
     font-weight: 700;
     letter-spacing: 0.05em;
     text-transform: uppercase;
@@ -1330,7 +1340,7 @@
     border-radius: 999px;
     background: var(--card);
     color: var(--muted);
-    font-size: 0.82rem;
+    font-size: var(--text-petit);
     white-space: nowrap;
   }
   .gauge svg {
@@ -1444,7 +1454,7 @@
     [data-layout="board"] .house-caption .ghost {
       min-height: 30px;
       padding: 0.2rem 0.75rem;
-      font-size: 0.78rem;
+      font-size: var(--text-legende);
       backdrop-filter: blur(6px);
     }
     [data-layout="board"] .status, [data-layout="board"] .actions {
@@ -1460,15 +1470,15 @@
     }
     [data-layout="board"] .gauge {
       min-height: 28px;
-      font-size: 0.74rem;
+      font-size: var(--text-legende);
       padding-block: 0.15rem;
     }
     [data-layout="board"] .scene {
       min-height: 40px;
-      font-size: 0.82rem;
+      font-size: var(--text-petit);
     }
     [data-layout="board"] .legend {
-      font-size: 0.72rem;
+      font-size: var(--text-legende);
     }
   }
   [data-theme|="plan"] .room {
@@ -1482,7 +1492,7 @@
     align-items: center;
     cursor: pointer;
     padding: 0.5rem 1rem;
-    font-size: 0.9rem;
+    font-size: var(--text-corps);
     font-weight: 500;
     color: var(--muted);
     white-space: nowrap;
@@ -1595,7 +1605,7 @@
     }
     [data-theme="maquette"][data-layout="board"] .gauge {
       min-height: 32px;
-      font-size: 0.8rem;
+      font-size: var(--text-petit);
       padding-inline: 0.6rem 0.8rem;
     }
   }
@@ -1647,7 +1657,7 @@
     box-shadow: none;
     color: #e9e9ee;
     min-height: 30px;
-    font-size: 0.76rem;
+    font-size: var(--text-legende);
   }
   [data-theme="maquette"] .gauge > span {
     display: none;
@@ -1806,7 +1816,7 @@
     @supports (color: color-mix(in lab, red, red)) {
       background: color-mix(in srgb, var(--accent) 12%, transparent);
     }
-    font-size: 0.72rem;
+    font-size: var(--text-legende);
     font-weight: 700;
     color: var(--accent);
     border-radius: 6px;
@@ -1917,7 +1927,7 @@
       --ink-temp: linear-gradient(165deg, color-mix(in oklab, var(--temp) 40%, #fff), var(--temp) 72%);
     }
     padding-right: 0.08em;
-    font-size: 1.5rem;
+    font-size: var(--text-titre);
     font-weight: 700;
     letter-spacing: -0.045em;
     font-variant-numeric: tabular-nums;
@@ -2200,7 +2210,7 @@
     border-radius: 999px;
     background: var(--tint-alertes);
     color: #2b1800;
-    font-size: 0.85rem;
+    font-size: var(--text-corps);
     font-weight: 600;
     box-shadow: 0 2px 10px rgb(0 0 0 / 0.2);
     transform: translateX(-50%);
@@ -2243,7 +2253,7 @@
     background: var(--card-2);
   }
   .system-row dt {
-    font-size: 0.74rem;
+    font-size: var(--text-legende);
     color: var(--muted);
   }
   .system-row dd {
@@ -2252,11 +2262,11 @@
     gap: 0.1rem;
   }
   .system-row b {
-    font-size: 0.92rem;
+    font-size: var(--text-courant);
     font-variant-numeric: tabular-nums;
   }
   .system-row span {
-    font-size: 0.72rem;
+    font-size: var(--text-legende);
     color: var(--muted);
   }
   .system-row.over {
@@ -2278,7 +2288,7 @@
     all: unset;
     cursor: pointer;
     position: relative;
-    font-size: 0.8rem;
+    font-size: var(--text-petit);
     height: 28px;
     line-height: 28px;
     border-radius: 8px;
@@ -2341,7 +2351,7 @@
     cursor: pointer;
     text-align: center;
     padding: 2px 0 6px;
-    font-size: 0.7rem;
+    font-size: var(--text-micro);
     color: var(--muted);
     text-transform: uppercase;
   }
@@ -2368,7 +2378,7 @@
     margin: 0 3px;
     border-radius: 6px;
     padding: 0 8px;
-    font-size: 0.75rem;
+    font-size: var(--text-legende);
     line-height: 22px;
     white-space: nowrap;
     overflow: hidden;
@@ -2403,7 +2413,7 @@
     overflow: hidden;
     border-radius: 8px;
     padding: 3px 6px;
-    font-size: 0.74rem;
+    font-size: var(--text-legende);
     line-height: 1.25;
     border-left: 3px solid var(--ev);
     background: var(--ev);
@@ -2452,7 +2462,7 @@
     border-radius: 5px;
     padding: 0 7px;
     box-sizing: border-box;
-    font-size: 0.7rem;
+    font-size: var(--text-micro);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -2470,7 +2480,7 @@
   }
   .agenda-list-day {
     margin: 8px 4px 0;
-    font-size: 0.82rem;
+    font-size: var(--text-petit);
     font-weight: 600;
     color: var(--muted);
   }
@@ -2483,7 +2493,7 @@
     display: block;
     border-radius: 10px;
     padding: 7px 12px;
-    font-size: 0.85rem;
+    font-size: var(--text-corps);
     background: var(--ev);
     @supports (color: color-mix(in lab, red, red)) {
       background: color-mix(in srgb, var(--ev) 38%, transparent);
@@ -2560,7 +2570,7 @@
     margin-left: auto;
     color: #03a9f4;
     font-weight: 600;
-    font-size: 0.82rem;
+    font-size: var(--text-petit);
     white-space: nowrap;
   }
   .hub-event-when.now {
@@ -2596,14 +2606,14 @@
   }
   .camera-caption {
     margin: 6px 0 0;
-    font-size: 0.85rem;
+    font-size: var(--text-corps);
   }
   .parcel-text .primary {
     margin-top: auto;
     align-self: flex-start;
     min-width: 9rem;
     min-height: 48px;
-    font-size: 1.05rem;
+    font-size: var(--text-moyen);
   }
   .st-page {
     min-height: 100vh;
@@ -2623,7 +2633,7 @@
   }
   .st-card h1 {
     margin: 0;
-    font-size: 1.3rem;
+    font-size: var(--text-grand);
   }
   .st-card p {
     margin: 0;
@@ -2685,7 +2695,7 @@
       height: 44px;
     }
     .ml-main {
-      font-size: 1.15rem;
+      font-size: var(--text-moyen);
     }
   }
   @keyframes ml-spin {
@@ -5429,117 +5439,51 @@
   .font-titre {
     font-family: var(--font-display);
   }
-  .text-xs {
-    font-size: var(--text-xs);
-    line-height: var(--tw-leading, var(--text-xs--line-height));
-  }
-  .text-\[0\.7rem\] {
-    font-size: 0.7rem;
-  }
-  .text-\[0\.8rem\] {
-    font-size: 0.8rem;
-  }
-  .text-\[0\.9rem\] {
-    font-size: 0.9rem;
-  }
-  .text-\[0\.65rem\] {
-    font-size: 0.65rem;
-  }
-  .text-\[0\.72rem\] {
-    font-size: 0.72rem;
-  }
-  .text-\[0\.74rem\] {
-    font-size: 0.74rem;
-  }
-  .text-\[0\.75rem\] {
-    font-size: 0.75rem;
-  }
-  .text-\[0\.78rem\] {
-    font-size: 0.78rem;
-  }
-  .text-\[0\.82rem\] {
-    font-size: 0.82rem;
-  }
-  .text-\[0\.84rem\] {
-    font-size: 0.84rem;
-  }
-  .text-\[0\.85rem\] {
-    font-size: 0.85rem;
-  }
-  .text-\[0\.88rem\] {
-    font-size: 0.88rem;
-  }
-  .text-\[0\.95rem\] {
-    font-size: 0.95rem;
-  }
-  .text-\[1\.1rem\] {
-    font-size: 1.1rem;
-  }
-  .text-\[1\.2rem\] {
-    font-size: 1.2rem;
-  }
-  .text-\[1\.4rem\] {
-    font-size: 1.4rem;
-  }
-  .text-\[1\.05rem\] {
-    font-size: 1.05rem;
-  }
-  .text-\[11px\] {
-    font-size: 11px;
-  }
-  .text-\[12px\] {
-    font-size: 12px;
-  }
-  .text-\[13px\] {
-    font-size: 13px;
-  }
-  .text-\[14px\] {
-    font-size: 14px;
-  }
-  .text-\[15px\] {
-    font-size: 15px;
-  }
-  .text-\[16px\] {
-    font-size: 16px;
-  }
-  .text-\[17px\] {
-    font-size: 17px;
-  }
-  .text-\[20px\] {
-    font-size: 20px;
-  }
-  .text-\[22px\] {
-    font-size: 22px;
-  }
-  .text-\[24px\] {
-    font-size: 24px;
-  }
-  .text-\[26px\] {
-    font-size: 26px;
-  }
-  .text-\[32px\] {
-    font-size: 32px;
-  }
-  .text-\[34px\] {
-    font-size: 34px;
-  }
-  .text-\[38px\] {
-    font-size: 38px;
-  }
-  .text-\[44px\] {
-    font-size: 44px;
-  }
-  .text-\[46px\] {
-    font-size: 46px;
-  }
-  .text-\[52px\] {
-    font-size: 52px;
-  }
   .text-\[clamp\(0\.56rem\,_1\.5cqw\,_0\.68rem\)\] {
     font-size: clamp(0.56rem, 1.5cqw, 0.68rem);
   }
   .text-\[clamp\(1\.1rem\,_2\.4vw\,_1\.8rem\)\] {
     font-size: clamp(1.1rem, 2.4vw, 1.8rem);
+  }
+  .text-affiche {
+    font-size: var(--text-affiche);
+  }
+  .text-affiche-l {
+    font-size: var(--text-affiche-l);
+  }
+  .text-corps {
+    font-size: var(--text-corps);
+  }
+  .text-courant {
+    font-size: var(--text-courant);
+  }
+  .text-geant {
+    font-size: var(--text-geant);
+  }
+  .text-grand {
+    font-size: var(--text-grand);
+  }
+  .text-legende {
+    font-size: var(--text-legende);
+  }
+  .text-micro {
+    font-size: var(--text-micro);
+  }
+  .text-moyen {
+    font-size: var(--text-moyen);
+  }
+  .text-petit {
+    font-size: var(--text-petit);
+  }
+  .text-titre {
+    font-size: var(--text-titre);
+  }
+  .text-titre-l {
+    font-size: var(--text-titre-l);
+  }
+  .leading-4 {
+    --tw-leading: calc(var(--spacing) * 4);
+    line-height: calc(var(--spacing) * 4);
   }
   .leading-\[1\.05\] {
     --tw-leading: 1.05;
@@ -7264,8 +7208,8 @@
   .\[\&_input\[type\=checkbox\]\]\:\[accent-color\:var\(--accent\)\] input[type=checkbox] {
     accent-color: var(--accent);
   }
-  .\[\&_input\[type\=file\]\]\:text-\[0\.85rem\] input[type=file] {
-    font-size: 0.85rem;
+  .\[\&_input\[type\=file\]\]\:text-corps input[type=file] {
+    font-size: var(--text-corps);
   }
   .\[\&_input\[type\=range\]\]\:\[background\:linear-gradient\(90deg\,_var\(--accent\)_0_var\(--fill\,_0\%\)\,_color-mix\(in_srgb\,_var\(--text\)_14\%\,_transparent\)_var\(--fill\,_0\%\)_100\%\)_center_\/_100\%_6px_no-repeat\] input[type=range] {
     background: linear-gradient(90deg, var(--accent) 0 var(--fill, 0%), var(--text) var(--fill, 0%) 100%) center / 100% 6px no-repeat;
@@ -7285,8 +7229,8 @@
   .\[\&_label\]\:cursor-pointer label {
     cursor: pointer;
   }
-  .\[\&_label\]\:text-\[0\.85rem\] label {
-    font-size: 0.85rem;
+  .\[\&_label\]\:text-corps label {
+    font-size: var(--text-corps);
   }
   .\[\&_label\]\:text-muted label {
     color: var(--muted);
@@ -7345,8 +7289,8 @@
   .\[\&_li\:not\(\.todo-group\)\]\:min-h-\[50px\] li:not(.todo-group) {
     min-height: 50px;
   }
-  .\[\&_li\:not\(\.todo-group\)\]\:text-\[1\.05rem\] li:not(.todo-group) {
-    font-size: 1.05rem;
+  .\[\&_li\:not\(\.todo-group\)\]\:text-moyen li:not(.todo-group) {
+    font-size: var(--text-moyen);
   }
   .\[\&_li\>span\]\:min-w-0 li > span {
     min-width: 0px;
@@ -8072,8 +8016,8 @@
     .max-sm\:\[\&\>\.tile\.sensor\>\.value\]\:mr-\[2rem\] > .tile.sensor > .value {
       margin-right: 2rem;
     }
-    .max-sm\:\[\&\>\.tile\.sensor\>\.value\]\:text-\[1\.4rem\] > .tile.sensor > .value {
-      font-size: 1.4rem;
+    .max-sm\:\[\&\>\.tile\.sensor\>\.value\]\:text-titre > .tile.sensor > .value {
+      font-size: var(--text-titre);
     }
     .max-sm\:\[\&\>\.tile\.sensor\>\:not\(\.tile-head\,\.value\,\.history-button\)\]\:col-span-full > .tile.sensor > :not(.tile-head, .value, .history-button) {
       grid-column: 1 / -1;
@@ -8250,8 +8194,8 @@
   .assist-dialog .\[\.assist-dialog_\&\]\:m-0 {
     margin: 0px;
   }
-  .assist-dialog .\[\.assist-dialog_\&\]\:text-\[0\.82rem\] {
-    font-size: 0.82rem;
+  .assist-dialog .\[\.assist-dialog_\&\]\:text-petit {
+    font-size: var(--text-petit);
   }
   .auto-block.nested .\[\.auto-block\.nested_\&\]\:bg-card-2 {
     background-color: var(--card-2);
@@ -8352,14 +8296,14 @@
   .gauge.g-outside .\[\.gauge\.g-outside_\&\]\:relative {
     position: relative;
   }
-  .glass-card:first-child .\[\.glass-card\:first-child_\&\]\:text-\[1\.15rem\] {
-    font-size: 1.15rem;
+  .glass-card:first-child .\[\.glass-card\:first-child_\&\]\:text-affiche-l {
+    font-size: var(--text-affiche-l);
   }
-  .glass-card:first-child .\[\.glass-card\:first-child_\&\]\:text-\[2\.6rem\] {
-    font-size: 2.6rem;
+  .glass-card:first-child .\[\.glass-card\:first-child_\&\]\:text-moyen {
+    font-size: var(--text-moyen);
   }
-  .glass-card:first-child .\[\.glass-card\:first-child_\&_li\]\:text-\[1rem\] li {
-    font-size: 1rem;
+  .glass-card:first-child .\[\.glass-card\:first-child_\&_li\]\:text-moyen li {
+    font-size: var(--text-moyen);
   }
   .heat-dial.warming .\[\.heat-dial\.warming_\&\]\:\[filter\:drop-shadow\(0_0_3px_color-mix\(in_srgb\,_var\(--heat-hot\)_70\%\,_transparent\)\)\] {
     filter: drop-shadow(0 0 3px var(--heat-hot));
@@ -8614,8 +8558,8 @@
   .person-chip.home .\[\.person-chip\.home_\&\]\:\[box-shadow\:0_0_0_2px_var\(--card\)\,_0_0_0_3\.5px_var\(--ok\)\] {
     box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--ok);
   }
-  .preset-form .\[\.preset-form_\&\]\:text-\[0\.9rem\] {
-    font-size: 0.9rem;
+  .preset-form .\[\.preset-form_\&\]\:text-corps {
+    font-size: var(--text-corps);
   }
   .presets .\[\.presets_\&\]\:min-h-\[36px\] {
     min-height: 36px;
@@ -8629,8 +8573,8 @@
   .presets .\[\.presets_\&\]\:\[padding\:0\.3rem_0\.1rem\] {
     padding: 0.3rem 0.1rem;
   }
-  .presets .\[\.presets_\&\]\:text-\[0\.8rem\] {
-    font-size: 0.8rem;
+  .presets .\[\.presets_\&\]\:text-petit {
+    font-size: var(--text-petit);
   }
   .presets .\[\.presets_\&\]\:text-ellipsis {
     text-overflow: ellipsis;
@@ -8861,8 +8805,8 @@
   .tile.readonly .\[\.tile\.readonly_\&\]\:justify-center {
     justify-content: center;
   }
-  .title-block .\[\.title-block_\&_dd\]\:text-\[1\.05rem\] dd {
-    font-size: 1.05rem;
+  .title-block .\[\.title-block_\&_dd\]\:text-moyen dd {
+    font-size: var(--text-moyen);
   }
   .todo-list li.\[\.todo-list_li\&\]\:\[padding\:0\.6rem_0\.4rem_0\.15rem\] {
     padding: 0.6rem 0.4rem 0.15rem;
@@ -8897,14 +8841,14 @@
   .weather-pill .\[\.weather-pill_\&\]\:\[padding\:0\.1rem_0\.55rem\] {
     padding: 0.1rem 0.55rem;
   }
-  .weather-pill .\[\.weather-pill_\&\]\:text-\[0\.78rem\] {
-    font-size: 0.78rem;
+  .weather-pill .\[\.weather-pill_\&\]\:text-legende {
+    font-size: var(--text-legende);
   }
   :not(:where(.o001500)).\[\:not\(\:where\(\.o001500\)\)\&_h1\]\:\[font-family\:var\(--font-display\)\] h1 {
     font-family: var(--font-display);
   }
-  :not(:where(.o001501)).\[\:not\(\:where\(\.o001501\)\)\&_h1\]\:text-\[2rem\] h1 {
-    font-size: 2rem;
+  :not(:where(.o001501)).\[\:not\(\:where\(\.o001501\)\)\&_h1\]\:text-affiche h1 {
+    font-size: var(--text-affiche);
   }
   :not(:where(.o001502)).\[\:not\(\:where\(\.o001502\)\)\&_h1\]\:font-semibold h1 {
     --tw-font-weight: var(--font-weight-semibold);
@@ -8920,8 +8864,8 @@
     --tw-font-weight: var(--font-weight-medium);
     font-weight: var(--font-weight-medium);
   }
-  :not(:where(.o003107)).\[\:not\(\:where\(\.o003107\)\)\&\]\:text-\[0\.9rem\] {
-    font-size: 0.9rem;
+  :not(:where(.o003107)).\[\:not\(\:where\(\.o003107\)\)\&\]\:text-corps {
+    font-size: var(--text-corps);
   }
   :not(:where(.o003300)).\[\:not\(\:where\(\.o003300\)\)\&\]\:hidden {
     display: none;
@@ -8970,8 +8914,8 @@
   :not(:where(.o005500)).\[\:not\(\:where\(\.o005500\)\)\&_h2\]\:\[font-family\:var\(--font-display\)\] h2 {
     font-family: var(--font-display);
   }
-  :not(:where(.o005501)).\[\:not\(\:where\(\.o005501\)\)\&_h2\]\:text-\[1\.1rem\] h2 {
-    font-size: 1.1rem;
+  :not(:where(.o005501)).\[\:not\(\:where\(\.o005501\)\)\&_h2\]\:text-moyen h2 {
+    font-size: var(--text-moyen);
   }
   :not(:where(.o005502)).\[\:not\(\:where\(\.o005502\)\)\&_h2\]\:\[text-transform\:none\] h2 {
     text-transform: none;
@@ -8985,8 +8929,8 @@
   :not(:where(.o008200)).\[\:not\(\:where\(\.o008200\)\)\&_h2\]\:\[font-family\:var\(--font-display\)\] h2 {
     font-family: var(--font-display);
   }
-  :not(:where(.o008201)).\[\:not\(\:where\(\.o008201\)\)\&_h2\]\:text-\[1\.6rem\] h2 {
-    font-size: 1.6rem;
+  :not(:where(.o008201)).\[\:not\(\:where\(\.o008201\)\)\&_h2\]\:text-titre-l h2 {
+    font-size: var(--text-titre-l);
   }
   :not(:where(.o008202)).\[\:not\(\:where\(\.o008202\)\)\&_h2\]\:font-semibold h2 {
     --tw-font-weight: var(--font-weight-semibold);
@@ -9013,8 +8957,8 @@
   :not(:where(.o012701)).\[\:not\(\:where\(\.o012701\)\)\&_input\[type\=range\]\]\:min-w-0 input[type=range] {
     min-width: 0px;
   }
-  :not(:where(.o013005)).\[\:not\(\:where\(\.o013005\)\)\&\]\:text-\[0\.85rem\] {
-    font-size: 0.85rem;
+  :not(:where(.o013005)).\[\:not\(\:where\(\.o013005\)\)\&\]\:text-corps {
+    font-size: var(--text-corps);
   }
   :not(:where(.o013300)).\[\:not\(\:where\(\.o013300\)\)\&_select\]\:\[flex\:1_1_9rem\] select {
     flex: 1 1 9rem;
@@ -9058,8 +9002,8 @@
   :not(:where(.o015500)).\[\:not\(\:where\(\.o015500\)\)\&\]\:\[font-family\:var\(--font-display\)\] {
     font-family: var(--font-display);
   }
-  :not(:where(.o015501)).\[\:not\(\:where\(\.o015501\)\)\&\]\:text-\[2\.1rem\] {
-    font-size: 2.1rem;
+  :not(:where(.o015501)).\[\:not\(\:where\(\.o015501\)\)\&\]\:text-affiche {
+    font-size: var(--text-affiche);
   }
   :not(:where(.o015502)).\[\:not\(\:where\(\.o015502\)\)\&\]\:font-semibold {
     --tw-font-weight: var(--font-weight-semibold);
@@ -9098,15 +9042,15 @@
   :not(:where(.o016201)).\[\:not\(\:where\(\.o016201\)\)\&_input\[type\=checkbox\]\]\:h-\[20px\] input[type=checkbox] {
     height: 20px;
   }
-  :not(:where(.o016601)).todo-list li.\[\:not\(\:where\(\.o016601\)\)\.todo-list_li\&\]\:text-\[0\.75rem\] {
-    font-size: 0.75rem;
+  :not(:where(.o016601)).todo-list li.\[\:not\(\:where\(\.o016601\)\)\.todo-list_li\&\]\:text-legende {
+    font-size: var(--text-legende);
   }
   :not(:where(.o016602)).todo-list li.\[\:not\(\:where\(\.o016602\)\)\.todo-list_li\&\]\:font-semibold {
     --tw-font-weight: var(--font-weight-semibold);
     font-weight: var(--font-weight-semibold);
   }
-  :not(:where(.o016807)).\[\:not\(\:where\(\.o016807\)\)\&\]\:text-\[1\.1rem\] {
-    font-size: 1.1rem;
+  :not(:where(.o016807)).\[\:not\(\:where\(\.o016807\)\)\&\]\:text-moyen {
+    font-size: var(--text-moyen);
   }
   :not(:where(.o016808)).\[\:not\(\:where\(\.o016808\)\)\&\]\:\[line-height\:1\] {
     line-height: 1;
@@ -9114,8 +9058,8 @@
   :not(:where(.o017202)).\[\:not\(\:where\(\.o017202\)\)\&\]\:\[font-family\:var\(--font-mono\)\] {
     font-family: var(--font-mono);
   }
-  :not(:where(.o017203)).\[\:not\(\:where\(\.o017203\)\)\&\]\:text-\[0\.85rem\] {
-    font-size: 0.85rem;
+  :not(:where(.o017203)).\[\:not\(\:where\(\.o017203\)\)\&\]\:text-corps {
+    font-size: var(--text-corps);
   }
   :not(:where(.o017700)).\[\:not\(\:where\(\.o017700\)\)\&_input\[type\=text\]\]\:\[flex\:1_1_10rem\] input[type=text] {
     flex: 1 1 10rem;
@@ -9217,11 +9161,11 @@
   :not(:where(.o020804)).\[\:not\(\:where\(\.o020804\)\)\&_button\]\:gap-\[3px\] button {
     gap: 3px;
   }
-  :not(:where(.o020805)).\[\:not\(\:where\(\.o020805\)\)\&_a\]\:text-\[0\.7rem\] a {
-    font-size: 0.7rem;
+  :not(:where(.o020805)).\[\:not\(\:where\(\.o020805\)\)\&_a\]\:text-micro a {
+    font-size: var(--text-micro);
   }
-  :not(:where(.o020805)).\[\:not\(\:where\(\.o020805\)\)\&_button\]\:text-\[0\.7rem\] button {
-    font-size: 0.7rem;
+  :not(:where(.o020805)).\[\:not\(\:where\(\.o020805\)\)\&_button\]\:text-micro button {
+    font-size: var(--text-micro);
   }
   :not(:where(.o020806)).\[\:not\(\:where\(\.o020806\)\)\&_a\]\:font-medium a {
     --tw-font-weight: var(--font-weight-medium);
@@ -9282,8 +9226,8 @@
   :not(:where(.o022100)).\[\:not\(\:where\(\.o022100\)\)\&_h2\]\:\[font-family\:var\(--font-display\)\] h2 {
     font-family: var(--font-display);
   }
-  :not(:where(.o022101)).\[\:not\(\:where\(\.o022101\)\)\&_h2\]\:text-\[1\.35rem\] h2 {
-    font-size: 1.35rem;
+  :not(:where(.o022101)).\[\:not\(\:where\(\.o022101\)\)\&_h2\]\:text-titre h2 {
+    font-size: var(--text-titre);
   }
   :not(:where(.o022102)).\[\:not\(\:where\(\.o022102\)\)\&_h2\]\:font-semibold h2 {
     --tw-font-weight: var(--font-weight-semibold);
@@ -9310,8 +9254,8 @@
   :not(:where(.o022501)).\[\:not\(\:where\(\.o022501\)\)\&_svg\]\:h-\[auto\] svg {
     height: auto;
   }
-  :not(:where(.o022602)).history-chart .\[\:not\(\:where\(\.o022602\)\)\.history-chart_\&\]\:text-\[11px\] {
-    font-size: 11px;
+  :not(:where(.o022602)).history-chart .\[\:not\(\:where\(\.o022602\)\)\.history-chart_\&\]\:text-micro {
+    font-size: var(--text-micro);
   }
   :not(:where(.o022603)).history-chart .\[\:not\(\:where\(\.o022603\)\)\.history-chart_\&\]\:\[font-family\:var\(--font-mono\)\] {
     font-family: var(--font-mono);
@@ -9337,8 +9281,8 @@
   :not(:where(.o023702)).\[\:not\(\:where\(\.o023702\)\)\&_time\]\:\[font-family\:var\(--font-mono\)\] time {
     font-family: var(--font-mono);
   }
-  :not(:where(.o023703)).\[\:not\(\:where\(\.o023703\)\)\&_time\]\:text-\[0\.82rem\] time {
-    font-size: 0.82rem;
+  :not(:where(.o023703)).\[\:not\(\:where\(\.o023703\)\)\&_time\]\:text-petit time {
+    font-size: var(--text-petit);
   }
   :not(:where(.o024100)).\[\:not\(\:where\(\.o024100\)\)\&_strong\]\:text-text strong {
     color: var(--text);
@@ -9547,8 +9491,8 @@
   :not(:where(.o027902)).\[\:not\(\:where\(\.o027902\)\)\&_select\]\:min-w-0 select {
     min-width: 0px;
   }
-  :not(:where(.o028100)).\[\:not\(\:where\(\.o028100\)\)\&_h3\]\:text-\[0\.82rem\] h3 {
-    font-size: 0.82rem;
+  :not(:where(.o028100)).\[\:not\(\:where\(\.o028100\)\)\&_h3\]\:text-petit h3 {
+    font-size: var(--text-petit);
   }
   :not(:where(.o028101)).\[\:not\(\:where\(\.o028101\)\)\&_h3\]\:font-semibold h3 {
     --tw-font-weight: var(--font-weight-semibold);
@@ -9612,8 +9556,8 @@
   :not(:where(.o029505)).\[\:not\(\:where\(\.o029505\)\)\&_li\]\:\[border-top\:1px_solid_var\(--line\)\] li {
     border-top: 1px solid var(--line);
   }
-  :not(:where(.o029506)).\[\:not\(\:where\(\.o029506\)\)\&_li\]\:text-\[0\.9rem\] li {
-    font-size: 0.9rem;
+  :not(:where(.o029506)).\[\:not\(\:where\(\.o029506\)\)\&_li\]\:text-corps li {
+    font-size: var(--text-corps);
   }
   :not(:where(.o029700)).\[\:not\(\:where\(\.o029700\)\)\&_time\]\:text-muted time {
     color: var(--muted);
@@ -9621,8 +9565,8 @@
   :not(:where(.o029701)).\[\:not\(\:where\(\.o029701\)\)\&_time\]\:\[font-family\:var\(--font-mono\)\] time {
     font-family: var(--font-mono);
   }
-  :not(:where(.o029702)).\[\:not\(\:where\(\.o029702\)\)\&_time\]\:text-\[0\.82rem\] time {
-    font-size: 0.82rem;
+  :not(:where(.o029702)).\[\:not\(\:where\(\.o029702\)\)\&_time\]\:text-petit time {
+    font-size: var(--text-petit);
   }
   :not(:where(.o029900)).\[\:not\(\:where\(\.o029900\)\)\&_small\]\:text-muted small {
     color: var(--muted);
@@ -9636,8 +9580,8 @@
   :not(:where(.o030600)).\[\:not\(\:where\(\.o030600\)\)\&_h2\]\:\[font-family\:var\(--font-display\)\] h2 {
     font-family: var(--font-display);
   }
-  :not(:where(.o030601)).\[\:not\(\:where\(\.o030601\)\)\&_h2\]\:text-\[1\.3rem\] h2 {
-    font-size: 1.3rem;
+  :not(:where(.o030601)).\[\:not\(\:where\(\.o030601\)\)\&_h2\]\:text-grand h2 {
+    font-size: var(--text-grand);
   }
   :not(:where(.o030602)).\[\:not\(\:where\(\.o030602\)\)\&_h2\]\:font-semibold h2 {
     --tw-font-weight: var(--font-weight-semibold);
@@ -9655,8 +9599,8 @@
   :not(:where(.o031200)).\[\:not\(\:where\(\.o031200\)\)\&_h3\]\:m-0 h3 {
     margin: 0px;
   }
-  :not(:where(.o031201)).\[\:not\(\:where\(\.o031201\)\)\&_h3\]\:text-\[1rem\] h3 {
-    font-size: 1rem;
+  :not(:where(.o031201)).\[\:not\(\:where\(\.o031201\)\)\&_h3\]\:text-moyen h3 {
+    font-size: var(--text-moyen);
   }
   :not(:where(.o032000)).\[\:not\(\:where\(\.o032000\)\)\&_svg\]\:w-\[20px\] svg {
     width: 20px;
@@ -9667,8 +9611,8 @@
   :not(:where(.o032200)).\[\:not\(\:where\(\.o032200\)\)\&_small\]\:text-muted small {
     color: var(--muted);
   }
-  :not(:where(.o032201)).\[\:not\(\:where\(\.o032201\)\)\&_small\]\:text-\[0\.8rem\] small {
-    font-size: 0.8rem;
+  :not(:where(.o032201)).\[\:not\(\:where\(\.o032201\)\)\&_small\]\:text-petit small {
+    font-size: var(--text-petit);
   }
   :not(:where(.o032500)).\[\:not\(\:where\(\.o032500\)\)\&_input\]\:absolute input {
     position: absolute;
@@ -9712,8 +9656,8 @@
   :not(:where(.o033201)).\[\:not\(\:where\(\.o033201\)\)\&_summary\]\:text-accent summary {
     color: var(--accent);
   }
-  :not(:where(.o033202)).\[\:not\(\:where\(\.o033202\)\)\&_summary\]\:text-\[0\.88rem\] summary {
-    font-size: 0.88rem;
+  :not(:where(.o033202)).\[\:not\(\:where\(\.o033202\)\)\&_summary\]\:text-corps summary {
+    font-size: var(--text-corps);
   }
   :not(:where(.o033203)).\[\:not\(\:where\(\.o033203\)\)\&_summary\]\:font-semibold summary {
     --tw-font-weight: var(--font-weight-semibold);
@@ -9738,8 +9682,8 @@
   :not(:where(.o035900)).auto-block .\[\:not\(\:where\(\.o035900\)\)\.auto-block_\&\]\:m-0 {
     margin: 0px;
   }
-  :not(:where(.o036201)).\[\:not\(\:where\(\.o036201\)\)\&_strong\]\:text-\[0\.9rem\] strong {
-    font-size: 0.9rem;
+  :not(:where(.o036201)).\[\:not\(\:where\(\.o036201\)\)\&_strong\]\:text-corps strong {
+    font-size: var(--text-corps);
   }
   :not(:where(.o036401)).\[\:not\(\:where\(\.o036401\)\)\&_select\]\:min-w-0 select {
     min-width: 0px;
@@ -9783,8 +9727,8 @@
   :not(:where(.o038902)).\[\:not\(\:where\(\.o038902\)\)\&\]\:\[right\:-4px\] {
     right: -4px;
   }
-  :not(:where(.o038909)).\[\:not\(\:where\(\.o038909\)\)\&\]\:text-\[0\.72rem\] {
-    font-size: 0.72rem;
+  :not(:where(.o038909)).\[\:not\(\:where\(\.o038909\)\)\&\]\:text-legende {
+    font-size: var(--text-legende);
   }
   :not(:where(.o038910)).\[\:not\(\:where\(\.o038910\)\)\&\]\:font-semibold {
     --tw-font-weight: var(--font-weight-semibold);
@@ -9811,8 +9755,8 @@
   :not(:where(.o040409)).\[\:not\(\:where\(\.o040409\)\)\&\]\:\[font-family\:var\(--font-mono\)\] {
     font-family: var(--font-mono);
   }
-  :not(:where(.o040410)).\[\:not\(\:where\(\.o040410\)\)\&\]\:text-\[0\.8rem\] {
-    font-size: 0.8rem;
+  :not(:where(.o040410)).\[\:not\(\:where\(\.o040410\)\)\&\]\:text-petit {
+    font-size: var(--text-petit);
   }
   :not(:where(.o040700)).run-running .\[\:not\(\:where\(\.o040700\)\)\.run-running_\&\]\:bg-accent {
     background-color: var(--accent);
@@ -9883,14 +9827,14 @@
   :not(:where(.o042800)).\[\:not\(\:where\(\.o042800\)\)\&\]\:\[font-family\:var\(--font-mono\)\] {
     font-family: var(--font-mono);
   }
-  :not(:where(.o042801)).\[\:not\(\:where\(\.o042801\)\)\&\]\:text-\[0\.75rem\] {
-    font-size: 0.75rem;
+  :not(:where(.o042801)).\[\:not\(\:where\(\.o042801\)\)\&\]\:text-legende {
+    font-size: var(--text-legende);
   }
   :not(:where(.o043200)).\[\:not\(\:where\(\.o043200\)\)\&_strong\]\:\[font-family\:var\(--font-display\)\] strong {
     font-family: var(--font-display);
   }
-  :not(:where(.o043201)).\[\:not\(\:where\(\.o043201\)\)\&_strong\]\:text-\[1\.4rem\] strong {
-    font-size: 1.4rem;
+  :not(:where(.o043201)).\[\:not\(\:where\(\.o043201\)\)\&_strong\]\:text-titre strong {
+    font-size: var(--text-titre);
   }
   :not(:where(.o043202)).\[\:not\(\:where\(\.o043202\)\)\&_strong\]\:text-text strong {
     color: var(--text);
@@ -9904,8 +9848,8 @@
   :not(:where(.o043700)).\[\:not\(\:where\(\.o043700\)\)\&_strong\]\:\[font-family\:var\(--font-display\)\] strong {
     font-family: var(--font-display);
   }
-  :not(:where(.o043701)).\[\:not\(\:where\(\.o043701\)\)\&_strong\]\:text-\[1\.25rem\] strong {
-    font-size: 1.25rem;
+  :not(:where(.o043701)).\[\:not\(\:where\(\.o043701\)\)\&_strong\]\:text-grand strong {
+    font-size: var(--text-grand);
   }
   :not(:where(.o043702)).\[\:not\(\:where\(\.o043702\)\)\&_strong\]\:\[font-variant-numeric\:tabular-nums\] strong {
     font-variant-numeric: tabular-nums;
@@ -9916,8 +9860,8 @@
   :not(:where(.o043800)).\[\:not\(\:where\(\.o043800\)\)\&_small\]\:text-text-2 small {
     color: var(--text-2);
   }
-  :not(:where(.o043801)).\[\:not\(\:where\(\.o043801\)\)\&_small\]\:text-\[0\.78rem\] small {
-    font-size: 0.78rem;
+  :not(:where(.o043801)).\[\:not\(\:where\(\.o043801\)\)\&_small\]\:text-legende small {
+    font-size: var(--text-legende);
   }
   :not(:where(.o044100)).\[\:not\(\:where\(\.o044100\)\)\&_\.hit\:hover\]\:\[fill\:color-mix\(in_srgb\,_var\(--text\)_6\%\,_transparent\)\] .hit:hover {
     fill: var(--text);
@@ -9973,8 +9917,8 @@
   :not(:where(.o045103)).\[\:not\(\:where\(\.o045103\)\)\&_li\]\:items-center li {
     align-items: center;
   }
-  :not(:where(.o045104)).\[\:not\(\:where\(\.o045104\)\)\&_li\]\:text-\[0\.9rem\] li {
-    font-size: 0.9rem;
+  :not(:where(.o045104)).\[\:not\(\:where\(\.o045104\)\)\&_li\]\:text-corps li {
+    font-size: var(--text-corps);
   }
   :not(:where(.o045200)).\[\:not\(\:where\(\.o045200\)\)\&_small\]\:text-muted small {
     color: var(--muted);
@@ -9988,8 +9932,8 @@
   :not(:where(.o045601)).\[\:not\(\:where\(\.o045601\)\)\&_summary\]\:text-text-2 summary {
     color: var(--text-2);
   }
-  :not(:where(.o045602)).\[\:not\(\:where\(\.o045602\)\)\&_summary\]\:text-\[0\.9rem\] summary {
-    font-size: 0.9rem;
+  :not(:where(.o045602)).\[\:not\(\:where\(\.o045602\)\)\&_summary\]\:text-corps summary {
+    font-size: var(--text-corps);
   }
   :not(:where(.o045900)).\[\:not\(\:where\(\.o045900\)\)\&_td\]\:\[padding\:0\.3rem_0\.5rem\] td {
     padding: 0.3rem 0.5rem;
@@ -10021,8 +9965,8 @@
   :not(:where(.o046201)).\[\:not\(\:where\(\.o046201\)\)\&_td\]\:\[font-variant-numeric\:tabular-nums\] td {
     font-variant-numeric: tabular-nums;
   }
-  :not(:where(.o046403)).\[\:not\(\:where\(\.o046403\)\)\&\]\:text-\[0\.95rem\] {
-    font-size: 0.95rem;
+  :not(:where(.o046403)).\[\:not\(\:where\(\.o046403\)\)\&\]\:text-courant {
+    font-size: var(--text-courant);
   }
   :not(:where(.o046404)).\[\:not\(\:where\(\.o046404\)\)\&\]\:font-semibold {
     --tw-font-weight: var(--font-weight-semibold);
@@ -10061,8 +10005,8 @@
   :not(:where(.o047800)).\[\:not\(\:where\(\.o047800\)\)\&_li\.level-red\:\:before\]\:\[background\:var\(--vig-red\)\] li.level-red::before {
     background: var(--vig-red);
   }
-  :not(:where(.o047903)).\[\:not\(\:where\(\.o047903\)\)\&\]\:text-\[0\.95rem\] {
-    font-size: 0.95rem;
+  :not(:where(.o047903)).\[\:not\(\:where\(\.o047903\)\)\&\]\:text-courant {
+    font-size: var(--text-courant);
   }
   :not(:where(.o047904)).\[\:not\(\:where\(\.o047904\)\)\&\]\:font-semibold {
     --tw-font-weight: var(--font-weight-semibold);
@@ -10086,11 +10030,11 @@
   :not(:where(.o048201)).\[\:not\(\:where\(\.o048201\)\)\&\.tempo-red\]\:\[color\:var\(--vig-red-ink\)\].tempo-red {
     color: var(--vig-red-ink);
   }
-  :not(:where(.o048300)).energy-now .\[\:not\(\:where\(\.o048300\)\)\.energy-now_\&\]\:text-\[0\.78rem\] {
-    font-size: 0.78rem;
+  :not(:where(.o048300)).energy-now .\[\:not\(\:where\(\.o048300\)\)\.energy-now_\&\]\:text-legende {
+    font-size: var(--text-legende);
   }
-  :not(:where(.o048300)).vigilance-tomorrow .\[\:not\(\:where\(\.o048300\)\)\.vigilance-tomorrow_\&\]\:text-\[0\.78rem\] {
-    font-size: 0.78rem;
+  :not(:where(.o048300)).vigilance-tomorrow .\[\:not\(\:where\(\.o048300\)\)\.vigilance-tomorrow_\&\]\:text-legende {
+    font-size: var(--text-legende);
   }
   :not(:where(.o048301)).energy-now .\[\:not\(\:where\(\.o048301\)\)\.energy-now_\&\]\:\[padding\:0\.1rem_0\.55rem\] {
     padding: 0.1rem 0.55rem;
@@ -10159,15 +10103,15 @@
   :not(:where(.o052502)).\[\:not\(\:where\(\.o052502\)\)\&_svg\]\:\[stroke-width\:2\.2\] svg {
     stroke-width: 2.2;
   }
-  :not(:where(.o052700)).\[\:not\(\:where\(\.o052700\)\)\&\]\:text-\[0\.66rem\] {
-    font-size: 0.66rem;
+  :not(:where(.o052700)).\[\:not\(\:where\(\.o052700\)\)\&\]\:text-micro {
+    font-size: var(--text-micro);
   }
   :not(:where(.o052701)).\[\:not\(\:where\(\.o052701\)\)\&\]\:font-bold {
     --tw-font-weight: var(--font-weight-bold);
     font-weight: var(--font-weight-bold);
   }
-  :not(:where(.o052800)).\[\:not\(\:where\(\.o052800\)\)\&\]\:text-\[0\.93rem\] {
-    font-size: 0.93rem;
+  :not(:where(.o052800)).\[\:not\(\:where\(\.o052800\)\)\&\]\:text-courant {
+    font-size: var(--text-courant);
   }
   :not(:where(.o052801)).\[\:not\(\:where\(\.o052801\)\)\&\]\:font-semibold {
     --tw-font-weight: var(--font-weight-semibold);
@@ -10228,8 +10172,8 @@
   :not(:where(.o054602)).\[\:not\(\:where\(\.o054602\)\)\&\]\:\[bottom\:-12px\] {
     bottom: -12px;
   }
-  :not(:where(.o054606)).\[\:not\(\:where\(\.o054606\)\)\&\]\:text-\[0\.7rem\] {
-    font-size: 0.7rem;
+  :not(:where(.o054606)).\[\:not\(\:where\(\.o054606\)\)\&\]\:text-micro {
+    font-size: var(--text-micro);
   }
   :not(:where(.o054607)).\[\:not\(\:where\(\.o054607\)\)\&\]\:font-bold {
     --tw-font-weight: var(--font-weight-bold);
@@ -10295,8 +10239,8 @@
   :not(:where(.o056502)).\[\:not\(\:where\(\.o056502\)\)\&_li\]\:gap-2 li {
     gap: calc(var(--spacing) * 2);
   }
-  :not(:where(.o056608)).\[\:not\(\:where\(\.o056608\)\)\&\]\:text-\[0\.72rem\] {
-    font-size: 0.72rem;
+  :not(:where(.o056608)).\[\:not\(\:where\(\.o056608\)\)\&\]\:text-legende {
+    font-size: var(--text-legende);
   }
   :not(:where(.o056609)).\[\:not\(\:where\(\.o056609\)\)\&\]\:font-extrabold {
     --tw-font-weight: var(--font-weight-extrabold);
@@ -10332,8 +10276,8 @@
   :not(:where(.o057216)).\[\:not\(\:where\(\.o057216\)\)\&\]\:\[animation\:panel-in_0\.24s_cubic-bezier\(0\.2\,_0\.8\,_0\.2\,_1\)\] {
     animation: panel-in 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
-  :not(:where(.o057500)).\[\:not\(\:where\(\.o057500\)\)\&_small\]\:text-\[0\.68rem\] small {
-    font-size: 0.68rem;
+  :not(:where(.o057500)).\[\:not\(\:where\(\.o057500\)\)\&_small\]\:text-micro small {
+    font-size: var(--text-micro);
   }
   :not(:where(.o057501)).\[\:not\(\:where\(\.o057501\)\)\&_small\]\:font-bold small {
     --tw-font-weight: var(--font-weight-bold);
@@ -10351,8 +10295,8 @@
   :not(:where(.o057600)).\[\:not\(\:where\(\.o057600\)\)\&_strong\]\:\[font-family\:var\(--font-display\)\] strong {
     font-family: var(--font-display);
   }
-  :not(:where(.o057601)).\[\:not\(\:where\(\.o057601\)\)\&_strong\]\:text-\[1\.05rem\] strong {
-    font-size: 1.05rem;
+  :not(:where(.o057601)).\[\:not\(\:where\(\.o057601\)\)\&_strong\]\:text-moyen strong {
+    font-size: var(--text-moyen);
   }
   :not(:where(.o057602)).\[\:not\(\:where\(\.o057602\)\)\&_strong\]\:\[line-height\:1\.25\] strong {
     line-height: 1.25;
@@ -10402,8 +10346,8 @@
   :not(:where(.o060800))[data-theme|=plan] .\[\:not\(\:where\(\.o060800\)\)\[data-theme\|\=plan\]_\&\]\:\[font-family\:var\(--font-mono\)\] {
     font-family: var(--font-mono);
   }
-  :not(:where(.o060801))[data-theme|=plan] .\[\:not\(\:where\(\.o060801\)\)\[data-theme\|\=plan\]_\&\]\:text-\[0\.8rem\] {
-    font-size: 0.8rem;
+  :not(:where(.o060801))[data-theme|=plan] .\[\:not\(\:where\(\.o060801\)\)\[data-theme\|\=plan\]_\&\]\:text-petit {
+    font-size: var(--text-petit);
   }
   :not(:where(.o060900))[data-theme|=plan] .\[\:not\(\:where\(\.o060900\)\)\[data-theme\|\=plan\]_\&\]\:\[font-family\:var\(--font-mono\)\] {
     font-family: var(--font-mono);
@@ -10459,8 +10403,8 @@
   :not(:where(.o063600))[data-theme|=plan] .\[\:not\(\:where\(\.o063600\)\)\[data-theme\|\=plan\]_\&_h2\]\:\[font-family\:var\(--font-mono\)\] h2 {
     font-family: var(--font-mono);
   }
-  :not(:where(.o063601))[data-theme|=plan] .\[\:not\(\:where\(\.o063601\)\)\[data-theme\|\=plan\]_\&_h2\]\:text-\[0\.8rem\] h2 {
-    font-size: 0.8rem;
+  :not(:where(.o063601))[data-theme|=plan] .\[\:not\(\:where\(\.o063601\)\)\[data-theme\|\=plan\]_\&_h2\]\:text-petit h2 {
+    font-size: var(--text-petit);
   }
   :not(:where(.o063602))[data-theme|=plan] .\[\:not\(\:where\(\.o063602\)\)\[data-theme\|\=plan\]_\&_h2\]\:font-medium h2 {
     --tw-font-weight: var(--font-weight-medium);
@@ -10508,8 +10452,8 @@
   :not(:where(.o066604)).\[\:not\(\:where\(\.o066604\)\)\&\]\:\[font-family\:var\(--font-mono\)\] {
     font-family: var(--font-mono);
   }
-  :not(:where(.o066605)).\[\:not\(\:where\(\.o066605\)\)\&\]\:text-\[0\.72rem\] {
-    font-size: 0.72rem;
+  :not(:where(.o066605)).\[\:not\(\:where\(\.o066605\)\)\&\]\:text-legende {
+    font-size: var(--text-legende);
   }
   :not(:where(.o066700)).\[\:not\(\:where\(\.o066700\)\)\&_b\]\:\[color\:var\(--ink\)\] b {
     color: var(--ink);
@@ -10624,8 +10568,8 @@
   :not(:where(.o068700)).\[\:not\(\:where\(\.o068700\)\)\&_dt\]\:\[font-family\:var\(--font-mono\)\] dt {
     font-family: var(--font-mono);
   }
-  :not(:where(.o068701)).\[\:not\(\:where\(\.o068701\)\)\&_dt\]\:text-\[0\.66rem\] dt {
-    font-size: 0.66rem;
+  :not(:where(.o068701)).\[\:not\(\:where\(\.o068701\)\)\&_dt\]\:text-micro dt {
+    font-size: var(--text-micro);
   }
   :not(:where(.o068704)).\[\:not\(\:where\(\.o068704\)\)\&_dt\]\:text-muted dt {
     color: var(--muted);
@@ -10646,8 +10590,8 @@
   :not(:where(.o069300))[data-layout=board] .\[\:not\(\:where\(\.o069300\)\)\[data-layout\=board\]_\&\]\:\[font-family\:var\(--font\)\] {
     font-family: var(--font);
   }
-  :not(:where(.o069301))[data-layout=board] .\[\:not\(\:where\(\.o069301\)\)\[data-layout\=board\]_\&\]\:text-\[1\.05rem\] {
-    font-size: 1.05rem;
+  :not(:where(.o069301))[data-layout=board] .\[\:not\(\:where\(\.o069301\)\)\[data-layout\=board\]_\&\]\:text-moyen {
+    font-size: var(--text-moyen);
   }
   :not(:where(.o069302))[data-layout=board] .\[\:not\(\:where\(\.o069302\)\)\[data-layout\=board\]_\&\]\:font-semibold {
     --tw-font-weight: var(--font-weight-semibold);
@@ -10672,8 +10616,8 @@
     --tw-font-weight: var(--font-weight-bold);
     font-weight: var(--font-weight-bold);
   }
-  :not(:where(.o070007)).\[\:not\(\:where\(\.o070007\)\)\&\]\:text-\[0\.9rem\] {
-    font-size: 0.9rem;
+  :not(:where(.o070007)).\[\:not\(\:where\(\.o070007\)\)\&\]\:text-corps {
+    font-size: var(--text-corps);
   }
   :not(:where(.o070200))[data-theme|=plan] .\[\:not\(\:where\(\.o070200\)\)\[data-theme\|\=plan\]_\&\]\:\[border\:1px_solid_var\(--ink-line\)\] {
     border: 1px solid var(--ink-line);
@@ -10730,8 +10674,8 @@
     --tw-font-weight: var(--font-weight-semibold);
     font-weight: var(--font-weight-semibold);
   }
-  :not(:where(.o073301)).\[\:not\(\:where\(\.o073301\)\)\&_b\]\:text-\[0\.86rem\] b {
-    font-size: 0.86rem;
+  :not(:where(.o073301)).\[\:not\(\:where\(\.o073301\)\)\&_b\]\:text-corps b {
+    font-size: var(--text-corps);
   }
   :not(:where(.o073302)).\[\:not\(\:where\(\.o073302\)\)\&_b\]\:overflow-hidden b {
     overflow: hidden;
@@ -10742,8 +10686,8 @@
   :not(:where(.o073304)).\[\:not\(\:where\(\.o073304\)\)\&_b\]\:whitespace-nowrap b {
     white-space: nowrap;
   }
-  :not(:where(.o073400)).\[\:not\(\:where\(\.o073400\)\)\&_span\]\:text-\[0\.74rem\] span {
-    font-size: 0.74rem;
+  :not(:where(.o073400)).\[\:not\(\:where\(\.o073400\)\)\&_span\]\:text-legende span {
+    font-size: var(--text-legende);
   }
   :not(:where(.o073401)).\[\:not\(\:where\(\.o073401\)\)\&_span\]\:text-muted span {
     color: var(--muted);
@@ -10988,8 +10932,8 @@
   :not(:where(.o091101)).\[\:not\(\:where\(\.o091101\)\)\&_select\]\:min-w-0 select {
     min-width: 0px;
   }
-  :not(:where(.o091300)).\[\:not\(\:where\(\.o091300\)\)\&\>b\]\:text-\[0\.85rem\] > b {
-    font-size: 0.85rem;
+  :not(:where(.o091300)).\[\:not\(\:where\(\.o091300\)\)\&\>b\]\:text-corps > b {
+    font-size: var(--text-corps);
   }
   :not(:where(.o092000)).chart-card .\[\:not\(\:where\(\.o092000\)\)\.chart-card_\&\]\:\[color\:var\(--chart\)\] {
     color: var(--chart);
@@ -11054,8 +10998,8 @@
   :not(:where(.o096800)).bell-card.no-photo .\[\:not\(\:where\(\.o096800\)\)\.bell-card\.no-photo_\&\]\:hidden {
     display: none;
   }
-  :not(:where(.o097000)).\[\:not\(\:where\(\.o097000\)\)\&_b\]\:text-\[0\.8rem\] b {
-    font-size: 0.8rem;
+  :not(:where(.o097000)).\[\:not\(\:where\(\.o097000\)\)\&_b\]\:text-petit b {
+    font-size: var(--text-petit);
   }
   :not(:where(.o097001)).\[\:not\(\:where\(\.o097001\)\)\&_b\]\:\[color\:var\(--bell\)\] b {
     color: var(--bell);
@@ -11063,8 +11007,8 @@
   :not(:where(.o097002)).\[\:not\(\:where\(\.o097002\)\)\&_b\]\:whitespace-nowrap b {
     white-space: nowrap;
   }
-  :not(:where(.o097100)).\[\:not\(\:where\(\.o097100\)\)\&_small\]\:text-\[0\.7rem\] small {
-    font-size: 0.7rem;
+  :not(:where(.o097100)).\[\:not\(\:where\(\.o097100\)\)\&_small\]\:text-micro small {
+    font-size: var(--text-micro);
   }
   :not(:where(.o097101)).\[\:not\(\:where\(\.o097101\)\)\&_small\]\:\[color\:rgb\(255_255_255_\/_0\.75\)\] small {
     color: rgb(255 255 255 / 0.75);
@@ -11100,8 +11044,8 @@
   :not(:where(.o098403)).\[\:not\(\:where\(\.o098403\)\)\&\]\:\[line-height\:1\] {
     line-height: 1;
   }
-  :not(:where(.o098500)).\[\:not\(\:where\(\.o098500\)\)\&_small\]\:text-\[0\.56rem\] small {
-    font-size: 0.56rem;
+  :not(:where(.o098500)).\[\:not\(\:where\(\.o098500\)\)\&_small\]\:text-micro small {
+    font-size: var(--text-micro);
   }
   :not(:where(.o098501)).\[\:not\(\:where\(\.o098501\)\)\&_small\]\:font-bold small {
     --tw-font-weight: var(--font-weight-bold);
@@ -11185,8 +11129,8 @@
   :not(:where(.o100901)):root .\[\:not\(\:where\(\.o100901\)\)\:root_\&_h2\]\:\[font-family\:var\(--font-display\)\] h2 {
     font-family: var(--font-display);
   }
-  :not(:where(.o100902)):root .\[\:not\(\:where\(\.o100902\)\)\:root_\&_h2\]\:text-\[1\.35rem\] h2 {
-    font-size: 1.35rem;
+  :not(:where(.o100902)):root .\[\:not\(\:where\(\.o100902\)\)\:root_\&_h2\]\:text-titre h2 {
+    font-size: var(--text-titre);
   }
   :not(:where(.o100903)):root .\[\:not\(\:where\(\.o100903\)\)\:root_\&_h2\]\:font-semibold h2 {
     --tw-font-weight: var(--font-weight-semibold);
@@ -11201,8 +11145,8 @@
   :not(:where(.o100906)):root .\[\:not\(\:where\(\.o100906\)\)\:root_\&_h2\]\:text-text h2 {
     color: var(--text);
   }
-  :not(:where(.o101002)).\[\:not\(\:where\(\.o101002\)\)\&\]\:text-\[0\.86rem\] {
-    font-size: 0.86rem;
+  :not(:where(.o101002)).\[\:not\(\:where\(\.o101002\)\)\&\]\:text-corps {
+    font-size: var(--text-corps);
   }
   :not(:where(.o101003)).\[\:not\(\:where\(\.o101003\)\)\&\]\:\[font-variant-numeric\:tabular-nums\] {
     font-variant-numeric: tabular-nums;
@@ -11217,8 +11161,8 @@
   :not(:where(.o101900)).\[\:not\(\:where\(\.o101900\)\)\&_h3\]\:\[margin\:0_0_0\.5rem\] h3 {
     margin: 0 0 0.5rem;
   }
-  :not(:where(.o101901)).\[\:not\(\:where\(\.o101901\)\)\&_h3\]\:text-\[0\.78rem\] h3 {
-    font-size: 0.78rem;
+  :not(:where(.o101901)).\[\:not\(\:where\(\.o101901\)\)\&_h3\]\:text-legende h3 {
+    font-size: var(--text-legende);
   }
   :not(:where(.o101902)).\[\:not\(\:where\(\.o101902\)\)\&_h3\]\:font-semibold h3 {
     --tw-font-weight: var(--font-weight-semibold);
@@ -11254,8 +11198,8 @@
   :not(:where(.o105203)).\[\:not\(\:where\(\.o105203\)\)\&\]\:\[font-family\:var\(--font-mono\)\] {
     font-family: var(--font-mono);
   }
-  :not(:where(.o105204)).\[\:not\(\:where\(\.o105204\)\)\&\]\:text-\[0\.78rem\] {
-    font-size: 0.78rem;
+  :not(:where(.o105204)).\[\:not\(\:where\(\.o105204\)\)\&\]\:text-legende {
+    font-size: var(--text-legende);
   }
   :not(:where(.o105205)).\[\:not\(\:where\(\.o105205\)\)\&\]\:\[line-height\:1\.45\] {
     line-height: 1.45;
@@ -11365,8 +11309,8 @@
   :not(:where(.o110802)).\[\:not\(\:where\(\.o110802\)\)\&\.is-leaving\]\:\[filter\:blur\(4px\)\].is-leaving {
     filter: blur(4px);
   }
-  :not(:where(.o110902)).\[\:not\(\:where\(\.o110902\)\)\&\]\:text-\[0\.78rem\] {
-    font-size: 0.78rem;
+  :not(:where(.o110902)).\[\:not\(\:where\(\.o110902\)\)\&\]\:text-legende {
+    font-size: var(--text-legende);
   }
   :not(:where(.o110903)).\[\:not\(\:where\(\.o110903\)\)\&\]\:font-semibold {
     --tw-font-weight: var(--font-weight-semibold);
@@ -11381,27 +11325,27 @@
   :not(:where(.o111107)).\[\:not\(\:where\(\.o111107\)\)\&\]\:\[font-variant-numeric\:tabular-nums\] {
     font-variant-numeric: tabular-nums;
   }
-  :not(:where(.o111200)).\[\:not\(\:where\(\.o111200\)\)\&\]\:text-\[1\.7rem\] {
-    font-size: 1.7rem;
+  :not(:where(.o111200)).\[\:not\(\:where\(\.o111200\)\)\&\]\:text-titre-l {
+    font-size: var(--text-titre-l);
   }
   :not(:where(.o111201)).\[\:not\(\:where\(\.o111201\)\)\&\]\:\[font-weight\:650\] {
     font-weight: 650;
   }
-  :not(:where(.o111401)).\[\:not\(\:where\(\.o111401\)\)\&\]\:text-\[0\.95rem\] {
-    font-size: 0.95rem;
+  :not(:where(.o111401)).\[\:not\(\:where\(\.o111401\)\)\&\]\:text-courant {
+    font-size: var(--text-courant);
   }
   :not(:where(.o111402)).\[\:not\(\:where\(\.o111402\)\)\&\]\:font-medium {
     --tw-font-weight: var(--font-weight-medium);
     font-weight: var(--font-weight-medium);
   }
-  :not(:where(.o111602)).\[\:not\(\:where\(\.o111602\)\)\&\]\:text-\[0\.85rem\] {
-    font-size: 0.85rem;
+  :not(:where(.o111602)).\[\:not\(\:where\(\.o111602\)\)\&\]\:text-corps {
+    font-size: var(--text-corps);
   }
   :not(:where(.o111603)).\[\:not\(\:where\(\.o111603\)\)\&\]\:\[line-height\:1\.3\] {
     line-height: 1.3;
   }
-  :not(:where(.o111702)).\[\:not\(\:where\(\.o111702\)\)\&\]\:text-\[0\.75rem\] {
-    font-size: 0.75rem;
+  :not(:where(.o111702)).\[\:not\(\:where\(\.o111702\)\)\&\]\:text-legende {
+    font-size: var(--text-legende);
   }
   :not(:where(.o111703)).\[\:not\(\:where\(\.o111703\)\)\&\]\:\[font-variant-numeric\:tabular-nums\] {
     font-variant-numeric: tabular-nums;
@@ -11427,8 +11371,8 @@
   :not(:where(.o111904)).\[\:not\(\:where\(\.o111904\)\)\&_li\]\:text-text li {
     color: var(--text);
   }
-  :not(:where(.o111905)).\[\:not\(\:where\(\.o111905\)\)\&_li\]\:text-\[0\.9rem\] li {
-    font-size: 0.9rem;
+  :not(:where(.o111905)).\[\:not\(\:where\(\.o111905\)\)\&_li\]\:text-corps li {
+    font-size: var(--text-corps);
   }
   :not(:where(.o113601)).\[\:not\(\:where\(\.o113601\)\)\&\]\:\[left\:max\(12px\,_env\(safe-area-inset-left\)\)\] {
     left: max(12px, env(safe-area-inset-left));
@@ -11472,11 +11416,11 @@
   :not(:where(.o115500)).i-crashed .\[\:not\(\:where\(\.o115500\)\)\.i-crashed_\&\]\:bg-alert {
     background-color: var(--alert);
   }
-  :not(:where(.o115700)).\[\:not\(\:where\(\.o115700\)\)\&_b\]\:text-\[0\.9rem\] b {
-    font-size: 0.9rem;
+  :not(:where(.o115700)).\[\:not\(\:where\(\.o115700\)\)\&_b\]\:text-corps b {
+    font-size: var(--text-corps);
   }
-  :not(:where(.o115800)).\[\:not\(\:where\(\.o115800\)\)\&_span\]\:text-\[0\.78rem\] span {
-    font-size: 0.78rem;
+  :not(:where(.o115800)).\[\:not\(\:where\(\.o115800\)\)\&_span\]\:text-legende span {
+    font-size: var(--text-legende);
   }
   :not(:where(.o115801)).\[\:not\(\:where\(\.o115801\)\)\&_span\]\:text-muted span {
     color: var(--muted);
@@ -11487,8 +11431,8 @@
   :not(:where(.o115900)).i-retrying .\[\:not\(\:where\(\.o115900\)\)\.i-retrying_\&_span\]\:text-text-2 span {
     color: var(--text-2);
   }
-  :not(:where(.o116001)).\[\:not\(\:where\(\.o116001\)\)\&\]\:text-\[0\.76rem\] {
-    font-size: 0.76rem;
+  :not(:where(.o116001)).\[\:not\(\:where\(\.o116001\)\)\&\]\:text-legende {
+    font-size: var(--text-legende);
   }
   :not(:where(.o116003)).\[\:not\(\:where\(\.o116003\)\)\&\]\:\[font-variant-numeric\:tabular-nums\] {
     font-variant-numeric: tabular-nums;
@@ -11502,8 +11446,8 @@
   :not(:where(.o117500)).\[\:not\(\:where\(\.o117500\)\)\&_h3\]\:m-0 h3 {
     margin: 0px;
   }
-  :not(:where(.o117501)).\[\:not\(\:where\(\.o117501\)\)\&_h3\]\:text-\[1rem\] h3 {
-    font-size: 1rem;
+  :not(:where(.o117501)).\[\:not\(\:where\(\.o117501\)\)\&_h3\]\:text-moyen h3 {
+    font-size: var(--text-moyen);
   }
   :not(:where(.o117502)).\[\:not\(\:where\(\.o117502\)\)\&_h3\]\:font-semibold h3 {
     --tw-font-weight: var(--font-weight-semibold);
@@ -11512,8 +11456,8 @@
   :not(:where(.o117600)).\[\:not\(\:where\(\.o117600\)\)\&_h3\:\:first-letter\]\:uppercase h3::first-letter {
     text-transform: uppercase;
   }
-  :not(:where(.o117703)).\[\:not\(\:where\(\.o117703\)\)\&\]\:text-\[0\.82rem\] {
-    font-size: 0.82rem;
+  :not(:where(.o117703)).\[\:not\(\:where\(\.o117703\)\)\&\]\:text-petit {
+    font-size: var(--text-petit);
   }
   :not(:where(.o117704)).\[\:not\(\:where\(\.o117704\)\)\&\]\:font-medium {
     --tw-font-weight: var(--font-weight-medium);
@@ -11529,8 +11473,8 @@
     --tw-font-weight: var(--font-weight-semibold);
     font-weight: var(--font-weight-semibold);
   }
-  :not(:where(.o118601)).\[\:not\(\:where\(\.o118601\)\)\&_b\]\:text-\[0\.9rem\] b {
-    font-size: 0.9rem;
+  :not(:where(.o118601)).\[\:not\(\:where\(\.o118601\)\)\&_b\]\:text-corps b {
+    font-size: var(--text-corps);
   }
   :not(:where(.o118602)).\[\:not\(\:where\(\.o118602\)\)\&_b\]\:whitespace-nowrap b {
     white-space: nowrap;
@@ -11544,8 +11488,8 @@
   :not(:where(.o118700)).\[\:not\(\:where\(\.o118700\)\)\&_small\]\:text-muted small {
     color: var(--muted);
   }
-  :not(:where(.o118701)).\[\:not\(\:where\(\.o118701\)\)\&_small\]\:text-\[0\.75rem\] small {
-    font-size: 0.75rem;
+  :not(:where(.o118701)).\[\:not\(\:where\(\.o118701\)\)\&_small\]\:text-legende small {
+    font-size: var(--text-legende);
   }
   :not(:where(.o118702)).\[\:not\(\:where\(\.o118702\)\)\&_small\]\:whitespace-nowrap small {
     white-space: nowrap;
@@ -11571,8 +11515,8 @@
   :not(:where(.o121601)).\[\:not\(\:where\(\.o121601\)\)\&_h2\]\:\[font-family\:var\(--font-display\)\] h2 {
     font-family: var(--font-display);
   }
-  :not(:where(.o121602)).\[\:not\(\:where\(\.o121602\)\)\&_h2\]\:text-\[1\.35rem\] h2 {
-    font-size: 1.35rem;
+  :not(:where(.o121602)).\[\:not\(\:where\(\.o121602\)\)\&_h2\]\:text-titre h2 {
+    font-size: var(--text-titre);
   }
   :not(:where(.o121900)):where(.\[\:not\(\:where\(\.o121900\)\)\:where\(\&_button\)\]\:\[all\:unset\] button) {
     all: unset;
@@ -11586,8 +11530,8 @@
   :not(:where(.o121903)).\[\:not\(\:where\(\.o121903\)\)\&_button\]\:\[border-radius\:8px\] button {
     border-radius: 8px;
   }
-  :not(:where(.o121904)).\[\:not\(\:where\(\.o121904\)\)\&_button\]\:text-\[0\.82rem\] button {
-    font-size: 0.82rem;
+  :not(:where(.o121904)).\[\:not\(\:where\(\.o121904\)\)\&_button\]\:text-petit button {
+    font-size: var(--text-petit);
   }
   :not(:where(.o121905)).\[\:not\(\:where\(\.o121905\)\)\&_button\]\:text-muted button {
     color: var(--muted);
@@ -11596,8 +11540,8 @@
     --tw-font-weight: var(--font-weight-semibold);
     font-weight: var(--font-weight-semibold);
   }
-  :not(:where(.o122107)).\[\:not\(\:where\(\.o122107\)\)\&\]\:text-\[0\.85rem\] {
-    font-size: 0.85rem;
+  :not(:where(.o122107)).\[\:not\(\:where\(\.o122107\)\)\&\]\:text-corps {
+    font-size: var(--text-corps);
   }
   :not(:where(.o122501)).\[\:not\(\:where\(\.o122501\)\)\&\]\:\[grid-template-columns\:52px_repeat\(var\(--days\)\,_minmax\(0\,_1fr\)\)\] {
     grid-template-columns: 52px repeat(var(--days), minmax(0, 1fr));
@@ -11641,14 +11585,14 @@
   :not(:where(.o124503)).\[\:not\(\:where\(\.o124503\)\)\&\:\:before\]\:\[top\:-5px\]::before {
     top: -5px;
   }
-  :not(:where(.o124801)).\[\:not\(\:where\(\.o124801\)\)\&_span\]\:text-\[0\.7rem\] span {
-    font-size: 0.7rem;
+  :not(:where(.o124801)).\[\:not\(\:where\(\.o124801\)\)\&_span\]\:text-micro span {
+    font-size: var(--text-micro);
   }
   :not(:where(.o124802)).\[\:not\(\:where\(\.o124802\)\)\&_span\]\:text-muted span {
     color: var(--muted);
   }
-  :not(:where(.o125402)).\[\:not\(\:where\(\.o125402\)\)\&\]\:text-\[0\.8rem\] {
-    font-size: 0.8rem;
+  :not(:where(.o125402)).\[\:not\(\:where\(\.o125402\)\)\&\]\:text-petit {
+    font-size: var(--text-petit);
   }
   :not(:where(.o125403)).\[\:not\(\:where\(\.o125403\)\)\&\]\:font-semibold {
     --tw-font-weight: var(--font-weight-semibold);
@@ -11697,8 +11641,8 @@
     --tw-font-weight: var(--font-weight-semibold);
     font-weight: var(--font-weight-semibold);
   }
-  :not(:where(.o128201)).\[\:not\(\:where\(\.o128201\)\)\&_b\]\:text-\[0\.92rem\] b {
-    font-size: 0.92rem;
+  :not(:where(.o128201)).\[\:not\(\:where\(\.o128201\)\)\&_b\]\:text-courant b {
+    font-size: var(--text-courant);
   }
   :not(:where(.o128202)).\[\:not\(\:where\(\.o128202\)\)\&_b\]\:overflow-hidden b {
     overflow: hidden;
@@ -11709,8 +11653,8 @@
   :not(:where(.o128204)).\[\:not\(\:where\(\.o128204\)\)\&_b\]\:whitespace-nowrap b {
     white-space: nowrap;
   }
-  :not(:where(.o128300)).\[\:not\(\:where\(\.o128300\)\)\&_small\]\:text-\[0\.75rem\] small {
-    font-size: 0.75rem;
+  :not(:where(.o128300)).\[\:not\(\:where\(\.o128300\)\)\&_small\]\:text-legende small {
+    font-size: var(--text-legende);
   }
   :not(:where(.o128301)).\[\:not\(\:where\(\.o128301\)\)\&_small\]\:text-muted small {
     color: var(--muted);
@@ -11730,8 +11674,8 @@
   :not(:where(.o128801)).\[\:not\(\:where\(\.o128801\)\)\&_h2\]\:items-center h2 {
     align-items: center;
   }
-  :not(:where(.o128803)).\[\:not\(\:where\(\.o128803\)\)\&_h2\]\:text-\[1\.25rem\] h2 {
-    font-size: 1.25rem;
+  :not(:where(.o128803)).\[\:not\(\:where\(\.o128803\)\)\&_h2\]\:text-grand h2 {
+    font-size: var(--text-grand);
   }
   :not(:where(.o129200)).\[\:not\(\:where\(\.o129200\)\)\&_svg\]\:w-\[16px\] svg {
     width: 16px;
@@ -11742,15 +11686,15 @@
   :not(:where(.o129202)).\[\:not\(\:where\(\.o129202\)\)\&_svg\]\:text-muted svg {
     color: var(--muted);
   }
-  :not(:where(.o129403)).\[\:not\(\:where\(\.o129403\)\)\&\]\:text-\[0\.78rem\] {
-    font-size: 0.78rem;
+  :not(:where(.o129403)).\[\:not\(\:where\(\.o129403\)\)\&\]\:text-legende {
+    font-size: var(--text-legende);
   }
   :not(:where(.o129404)).\[\:not\(\:where\(\.o129404\)\)\&\]\:font-semibold {
     --tw-font-weight: var(--font-weight-semibold);
     font-weight: var(--font-weight-semibold);
   }
-  :not(:where(.o129607)).\[\:not\(\:where\(\.o129607\)\)\&\]\:text-\[0\.66rem\] {
-    font-size: 0.66rem;
+  :not(:where(.o129607)).\[\:not\(\:where\(\.o129607\)\)\&\]\:text-micro {
+    font-size: var(--text-micro);
   }
   :not(:where(.o129608)).\[\:not\(\:where\(\.o129608\)\)\&\]\:font-bold {
     --tw-font-weight: var(--font-weight-bold);
@@ -11834,8 +11778,8 @@
   :not(:where(.o133507)).\[\:not\(\:where\(\.o133507\)\)\&_h2\]\:text-text h2 {
     color: var(--text);
   }
-  :not(:where(.o133600)).\[\:not\(\:where\(\.o133600\)\)\&_h2_small\]\:text-\[0\.8rem\] h2 small {
-    font-size: 0.8rem;
+  :not(:where(.o133600)).\[\:not\(\:where\(\.o133600\)\)\&_h2_small\]\:text-petit h2 small {
+    font-size: var(--text-petit);
   }
   :not(:where(.o133601)).\[\:not\(\:where\(\.o133601\)\)\&_h2_small\]\:font-medium h2 small {
     --tw-font-weight: var(--font-weight-medium);
@@ -11848,8 +11792,8 @@
     --tw-font-weight: var(--font-weight-bold);
     font-weight: var(--font-weight-bold);
   }
-  :not(:where(.o134006)).\[\:not\(\:where\(\.o134006\)\)\&\]\:text-\[0\.9rem\] {
-    font-size: 0.9rem;
+  :not(:where(.o134006)).\[\:not\(\:where\(\.o134006\)\)\&\]\:text-corps {
+    font-size: var(--text-corps);
   }
   :not(:where(.o134202)).\[\:not\(\:where\(\.o134202\)\)\&\]\:\[padding\:7px_14px\] {
     padding: 7px 14px;
@@ -11903,8 +11847,8 @@
   :not(:where(.o135305)).\[\:not\(\:where\(\.o135305\)\)\&\]\:\[font-variant-numeric\:tabular-nums\] {
     font-variant-numeric: tabular-nums;
   }
-  :not(:where(.o135501)).\[\:not\(\:where\(\.o135501\)\)\&\]\:text-\[1rem\] {
-    font-size: 1rem;
+  :not(:where(.o135501)).\[\:not\(\:where\(\.o135501\)\)\&\]\:text-moyen {
+    font-size: var(--text-moyen);
   }
   :not(:where(.o135502)).\[\:not\(\:where\(\.o135502\)\)\&\]\:\[line-height\:1\.45\] {
     line-height: 1.45;
@@ -11937,14 +11881,14 @@
   :not(:where(.o135901)).\[\:not\(\:where\(\.o135901\)\)\&_strong\]\:\[font-weight\:300\] strong {
     font-weight: 300;
   }
-  :not(:where(.o135902)).\[\:not\(\:where\(\.o135902\)\)\&_strong\]\:text-\[2\.6rem\] strong {
-    font-size: 2.6rem;
+  :not(:where(.o135902)).\[\:not\(\:where\(\.o135902\)\)\&_strong\]\:text-affiche-l strong {
+    font-size: var(--text-affiche-l);
   }
   :not(:where(.o136000)).\[\:not\(\:where\(\.o136000\)\)\&_span\]\:grid span {
     display: grid;
   }
-  :not(:where(.o136001)).\[\:not\(\:where\(\.o136001\)\)\&_span\]\:text-\[0\.92rem\] span {
-    font-size: 0.92rem;
+  :not(:where(.o136001)).\[\:not\(\:where\(\.o136001\)\)\&_span\]\:text-courant span {
+    font-size: var(--text-courant);
   }
   :not(:where(.o136100)).\[\:not\(\:where\(\.o136100\)\)\&_small\]\:text-muted small {
     color: var(--muted);
@@ -11967,8 +11911,8 @@
   :not(:where(.o136405)).\[\:not\(\:where\(\.o136405\)\)\&_li\]\:bg-card-2 li {
     background-color: var(--card-2);
   }
-  :not(:where(.o136406)).\[\:not\(\:where\(\.o136406\)\)\&_li\]\:text-\[0\.75rem\] li {
-    font-size: 0.75rem;
+  :not(:where(.o136406)).\[\:not\(\:where\(\.o136406\)\)\&_li\]\:text-legende li {
+    font-size: var(--text-legende);
   }
   :not(:where(.o136407)).\[\:not\(\:where\(\.o136407\)\)\&_li\]\:text-muted li {
     color: var(--muted);
@@ -11982,14 +11926,14 @@
   :not(:where(.o136700)).\[\:not\(\:where\(\.o136700\)\)\&_b\]\:text-text b {
     color: var(--text);
   }
-  :not(:where(.o136701)).\[\:not\(\:where\(\.o136701\)\)\&_b\]\:text-\[0\.95rem\] b {
-    font-size: 0.95rem;
+  :not(:where(.o136701)).\[\:not\(\:where\(\.o136701\)\)\&_b\]\:text-courant b {
+    font-size: var(--text-courant);
   }
   :not(:where(.o137202)).\[\:not\(\:where\(\.o137202\)\)\&\]\:\[font-family\:var\(--font-mono\,_monospace\)\] {
     font-family: var(--font-mono, monospace);
   }
-  :not(:where(.o137203)).\[\:not\(\:where\(\.o137203\)\)\&\]\:text-\[0\.85rem\] {
-    font-size: 0.85rem;
+  :not(:where(.o137203)).\[\:not\(\:where\(\.o137203\)\)\&\]\:text-corps {
+    font-size: var(--text-corps);
   }
   :not(:where(.o137400)).\[\:not\(\:where\(\.o137400\)\)\&_b\]\:font-semibold b {
     --tw-font-weight: var(--font-weight-semibold);
@@ -12007,8 +11951,8 @@
   :not(:where(.o137500)).\[\:not\(\:where\(\.o137500\)\)\&_small\]\:text-muted small {
     color: var(--muted);
   }
-  :not(:where(.o137501)).\[\:not\(\:where\(\.o137501\)\)\&_small\]\:text-\[0\.78rem\] small {
-    font-size: 0.78rem;
+  :not(:where(.o137501)).\[\:not\(\:where\(\.o137501\)\)\&_small\]\:text-legende small {
+    font-size: var(--text-legende);
   }
   :not(:where(.o137502)).\[\:not\(\:where\(\.o137502\)\)\&_small\]\:overflow-hidden small {
     overflow: hidden;
@@ -12211,8 +12155,8 @@
   :not(:where(.o139603)).\[\:not\(\:where\(\.o139603\)\)\&_button\]\:\[border-radius\:9px\] button {
     border-radius: 9px;
   }
-  :not(:where(.o139604)).\[\:not\(\:where\(\.o139604\)\)\&_button\]\:text-\[0\.85rem\] button {
-    font-size: 0.85rem;
+  :not(:where(.o139604)).\[\:not\(\:where\(\.o139604\)\)\&_button\]\:text-corps button {
+    font-size: var(--text-corps);
   }
   :not(:where(.o139605)).\[\:not\(\:where\(\.o139605\)\)\&_button\]\:text-muted button {
     color: var(--muted);
@@ -12226,14 +12170,14 @@
   :not(:where(.o140003)).\[\:not\(\:where\(\.o140003\)\)\&\]\:\[bottom\:12px\] {
     bottom: 12px;
   }
-  :not(:where(.o140300)).hub-scenes.narrow .\[\:not\(\:where\(\.o140300\)\)\.hub-scenes\.narrow_\&_b\]\:text-\[0\.92rem\] b {
-    font-size: 0.92rem;
+  :not(:where(.o140300)).hub-scenes.narrow .\[\:not\(\:where\(\.o140300\)\)\.hub-scenes\.narrow_\&_b\]\:text-courant b {
+    font-size: var(--text-courant);
   }
   :not(:where(.o140301)).hub-scenes.narrow .\[\:not\(\:where\(\.o140301\)\)\.hub-scenes\.narrow_\&_b\]\:\[line-height\:1\.2\] b {
     line-height: 1.2;
   }
-  :not(:where(.o140500)).\[\:not\(\:where\(\.o140500\)\)\&_b\]\:text-\[1rem\] b {
-    font-size: 1rem;
+  :not(:where(.o140500)).\[\:not\(\:where\(\.o140500\)\)\&_b\]\:text-moyen b {
+    font-size: var(--text-moyen);
   }
   :not(:where(.o140501)).\[\:not\(\:where\(\.o140501\)\)\&_b\]\:font-semibold b {
     --tw-font-weight: var(--font-weight-semibold);
@@ -12300,8 +12244,8 @@
   :not(:where(.o142400)).\[\:not\(\:where\(\.o142400\)\)\&_small\]\:text-muted small {
     color: var(--muted);
   }
-  :not(:where(.o142401)).\[\:not\(\:where\(\.o142401\)\)\&_small\]\:text-\[0\.8rem\] small {
-    font-size: 0.8rem;
+  :not(:where(.o142401)).\[\:not\(\:where\(\.o142401\)\)\&_small\]\:text-petit small {
+    font-size: var(--text-petit);
   }
   :not(:where(.o142500)).\[\:not\(\:where\(\.o142500\)\)\&_small\:empty\]\:hidden small:empty {
     display: none;
@@ -12309,8 +12253,8 @@
   :not(:where(.o142601)).\[\:not\(\:where\(\.o142601\)\)\&\]\:\[font-family\:var\(--font-mono\,_monospace\)\] {
     font-family: var(--font-mono, monospace);
   }
-  :not(:where(.o142602)).\[\:not\(\:where\(\.o142602\)\)\&\]\:text-\[0\.95rem\] {
-    font-size: 0.95rem;
+  :not(:where(.o142602)).\[\:not\(\:where\(\.o142602\)\)\&\]\:text-courant {
+    font-size: var(--text-courant);
   }
   :not(:where(.o143000)).hub-rooms.compact .\[\:not\(\:where\(\.o143000\)\)\.hub-rooms\.compact_\&_svg\]\:w-\[17px\] svg {
     width: 17px;
@@ -12318,8 +12262,8 @@
   :not(:where(.o143001)).hub-rooms.compact .\[\:not\(\:where\(\.o143001\)\)\.hub-rooms\.compact_\&_svg\]\:h-\[17px\] svg {
     height: 17px;
   }
-  :not(:where(.o143100)).hub-rooms.compact .\[\:not\(\:where\(\.o143100\)\)\.hub-rooms\.compact_\&_b\]\:text-\[0\.92rem\] b {
-    font-size: 0.92rem;
+  :not(:where(.o143100)).hub-rooms.compact .\[\:not\(\:where\(\.o143100\)\)\.hub-rooms\.compact_\&_b\]\:text-courant b {
+    font-size: var(--text-courant);
   }
   :not(:where(.o143101)).hub-rooms.compact .\[\:not\(\:where\(\.o143101\)\)\.hub-rooms\.compact_\&_b\]\:overflow-hidden b {
     overflow: hidden;
@@ -12330,8 +12274,8 @@
   :not(:where(.o143103)).hub-rooms.compact .\[\:not\(\:where\(\.o143103\)\)\.hub-rooms\.compact_\&_b\]\:whitespace-nowrap b {
     white-space: nowrap;
   }
-  :not(:where(.o143200)).hub-rooms.compact .\[\:not\(\:where\(\.o143200\)\)\.hub-rooms\.compact_\&_small\]\:text-\[0\.74rem\] small {
-    font-size: 0.74rem;
+  :not(:where(.o143200)).hub-rooms.compact .\[\:not\(\:where\(\.o143200\)\)\.hub-rooms\.compact_\&_small\]\:text-legende small {
+    font-size: var(--text-legende);
   }
   :not(:where(.o143201)).hub-rooms.compact .\[\:not\(\:where\(\.o143201\)\)\.hub-rooms\.compact_\&_small\]\:overflow-hidden small {
     overflow: hidden;
@@ -12348,8 +12292,8 @@
   :not(:where(.o143301)).\[\:not\(\:where\(\.o143301\)\)\&_summary\]\:text-text summary {
     color: var(--text);
   }
-  :not(:where(.o143302)).\[\:not\(\:where\(\.o143302\)\)\&_summary\]\:text-\[0\.92rem\] summary {
-    font-size: 0.92rem;
+  :not(:where(.o143302)).\[\:not\(\:where\(\.o143302\)\)\&_summary\]\:text-courant summary {
+    font-size: var(--text-courant);
   }
   :not(:where(.o143700)).\[\:not\(\:where\(\.o143700\)\)\&_button\]\:flex-1 button {
     flex: 1;
@@ -12415,11 +12359,11 @@
   :not(:where(.o145400)).\[\:not\(\:where\(\.o145400\)\)\&_h2\]\:m-0 h2 {
     margin: 0px;
   }
-  :not(:where(.o145401)).\[\:not\(\:where\(\.o145401\)\)\&_h2\]\:text-\[1\.1rem\] h2 {
-    font-size: 1.1rem;
+  :not(:where(.o145401)).\[\:not\(\:where\(\.o145401\)\)\&_h2\]\:text-moyen h2 {
+    font-size: var(--text-moyen);
   }
-  :not(:where(.o145500)).\[\:not\(\:where\(\.o145500\)\)\&_input\]\:text-\[1\.1rem\] input {
-    font-size: 1.1rem;
+  :not(:where(.o145500)).\[\:not\(\:where\(\.o145500\)\)\&_input\]\:text-moyen input {
+    font-size: var(--text-moyen);
   }
   :not(:where(.o146200)).\[\:not\(\:where\(\.o146200\)\)\&_h2\]\:m-0 h2 {
     margin: 0px;
@@ -12490,14 +12434,14 @@
   :not(:where(.o148404)).\[\:not\(\:where\(\.o148404\)\)\&_h2\]\:text-text h2 {
     color: var(--text);
   }
-  :not(:where(.o148602)).\[\:not\(\:where\(\.o148602\)\)\&\]\:text-\[0\.95rem\] {
-    font-size: 0.95rem;
+  :not(:where(.o148602)).\[\:not\(\:where\(\.o148602\)\)\&\]\:text-courant {
+    font-size: var(--text-courant);
   }
   :not(:where(.o148603)).\[\:not\(\:where\(\.o148603\)\)\&\]\:\[line-height\:1\.4\] {
     line-height: 1.4;
   }
-  :not(:where(.o148801)).\[\:not\(\:where\(\.o148801\)\)\&\]\:text-\[0\.8rem\] {
-    font-size: 0.8rem;
+  :not(:where(.o148801)).\[\:not\(\:where\(\.o148801\)\)\&\]\:text-petit {
+    font-size: var(--text-petit);
   }
   :not(:where(.o148802)).\[\:not\(\:where\(\.o148802\)\)\&\]\:font-semibold {
     --tw-font-weight: var(--font-weight-semibold);
@@ -12524,8 +12468,8 @@
   :not(:where(.o152400)).ml-card[data-phase=done] .\[\:not\(\:where\(\.o152400\)\)\.ml-card\[data-phase\=done\]_\&\:\:before\]\:\[animation\:ml-ping_1\.6s_ease-out_3\]::before {
     animation: ml-ping 1.6s ease-out 3;
   }
-  :not(:where(.o152600)).\[\:not\(\:where\(\.o152600\)\)\&\]\:text-\[0\.7rem\] {
-    font-size: 0.7rem;
+  :not(:where(.o152600)).\[\:not\(\:where\(\.o152600\)\)\&\]\:text-micro {
+    font-size: var(--text-micro);
   }
   :not(:where(.o152601)).\[\:not\(\:where\(\.o152601\)\)\&\]\:font-semibold {
     --tw-font-weight: var(--font-weight-semibold);
@@ -12612,8 +12556,8 @@
   :not(:where(.o155403)).\[\:not\(\:where\(\.o155403\)\)\&\]\:text-center {
     text-align: center;
   }
-  :not(:where(.o155501)).\[\:not\(\:where\(\.o155501\)\)\&\]\:text-\[0\.82rem\] {
-    font-size: 0.82rem;
+  :not(:where(.o155501)).\[\:not\(\:where\(\.o155501\)\)\&\]\:text-petit {
+    font-size: var(--text-petit);
   }
   :not(:where(.o155503)).\[\:not\(\:where\(\.o155503\)\)\&\]\:font-medium {
     --tw-font-weight: var(--font-weight-medium);
@@ -12628,8 +12572,8 @@
   :not(:where(.o155603)).\[\:not\(\:where\(\.o155603\)\)\&\]\:\[line-height\:1\.12\] {
     line-height: 1.12;
   }
-  :not(:where(.o155701)).\[\:not\(\:where\(\.o155701\)\)\&\]\:text-\[1rem\] {
-    font-size: 1rem;
+  :not(:where(.o155701)).\[\:not\(\:where\(\.o155701\)\)\&\]\:text-moyen {
+    font-size: var(--text-moyen);
   }
   :not(:where(.o156000)).\[\:not\(\:where\(\.o156000\)\)\&_input\[type\=range\]\]\:h-\[28px\] input[type=range] {
     height: 28px;
@@ -12673,8 +12617,8 @@
   :not(:where(.o156500)).\[\:not\(\:where\(\.o156500\)\)\&_input\[type\=range\]\:disabled\:\:-moz-range-thumb\]\:\[opacity\:0\] input[type=range]:disabled::-moz-range-thumb {
     opacity: 0;
   }
-  :not(:where(.o156702)).\[\:not\(\:where\(\.o156702\)\)\&\]\:text-\[0\.8rem\] {
-    font-size: 0.8rem;
+  :not(:where(.o156702)).\[\:not\(\:where\(\.o156702\)\)\&\]\:text-petit {
+    font-size: var(--text-petit);
   }
   :not(:where(.o156704)).\[\:not\(\:where\(\.o156704\)\)\&\]\:\[font-variant-numeric\:tabular-nums\] {
     font-variant-numeric: tabular-nums;
@@ -12751,8 +12695,8 @@
   :not(:where(.o158901)).\[\:not\(\:where\(\.o158901\)\)\&_input\[type\=range\]\]\:min-w-0 input[type=range] {
     min-width: 0px;
   }
-  :not(:where(.o159004)).\[\:not\(\:where\(\.o159004\)\)\&\]\:text-\[0\.85rem\] {
-    font-size: 0.85rem;
+  :not(:where(.o159004)).\[\:not\(\:where\(\.o159004\)\)\&\]\:text-corps {
+    font-size: var(--text-corps);
   }
   :not(:where(.o159005)).\[\:not\(\:where\(\.o159005\)\)\&\]\:\[font-variant-numeric\:tabular-nums\] {
     font-variant-numeric: tabular-nums;
@@ -12760,8 +12704,8 @@
   :not(:where(.o159100)).\[\:not\(\:where\(\.o159100\)\)\&_h3\]\:\[margin\:0_0_12px\] h3 {
     margin: 0 0 12px;
   }
-  :not(:where(.o159101)).\[\:not\(\:where\(\.o159101\)\)\&_h3\]\:text-\[1\.05rem\] h3 {
-    font-size: 1.05rem;
+  :not(:where(.o159101)).\[\:not\(\:where\(\.o159101\)\)\&_h3\]\:text-moyen h3 {
+    font-size: var(--text-moyen);
   }
   :not(:where(.o159102)).\[\:not\(\:where\(\.o159102\)\)\&_h3\]\:font-semibold h3 {
     --tw-font-weight: var(--font-weight-semibold);
@@ -12770,8 +12714,8 @@
   :not(:where(.o159201)).\[\:not\(\:where\(\.o159201\)\)\&\]\:\[grid-template-columns\:repeat\(auto-fill\,_minmax\(128px\,_1fr\)\)\] {
     grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
   }
-  :not(:where(.o159600)).\[\:not\(\:where\(\.o159600\)\)\&\]\:text-\[0\.88rem\] {
-    font-size: 0.88rem;
+  :not(:where(.o159600)).\[\:not\(\:where\(\.o159600\)\)\&\]\:text-corps {
+    font-size: var(--text-corps);
   }
   :not(:where(.o159601)).\[\:not\(\:where\(\.o159601\)\)\&\]\:font-medium {
     --tw-font-weight: var(--font-weight-medium);
@@ -12793,11 +12737,11 @@
     --tw-font-weight: var(--font-weight-semibold);
     font-weight: var(--font-weight-semibold);
   }
-  :not(:where(.o161801)).\[\:not\(\:where\(\.o161801\)\)\&_b\]\:text-\[0\.92rem\] b {
-    font-size: 0.92rem;
+  :not(:where(.o161801)).\[\:not\(\:where\(\.o161801\)\)\&_b\]\:text-courant b {
+    font-size: var(--text-courant);
   }
-  :not(:where(.o161900)).\[\:not\(\:where\(\.o161900\)\)\&_span\]\:text-\[0\.8rem\] span {
-    font-size: 0.8rem;
+  :not(:where(.o161900)).\[\:not\(\:where\(\.o161900\)\)\&_span\]\:text-petit span {
+    font-size: var(--text-petit);
   }
   :not(:where(.o161901)).\[\:not\(\:where\(\.o161901\)\)\&_span\]\:text-muted span {
     color: var(--muted);
@@ -12853,8 +12797,8 @@
   :not(:where(.o164000)).\[\:not\(\:where\(\.o164000\)\)\&_h2\]\:m-0 h2 {
     margin: 0px;
   }
-  :not(:where(.o164001)).\[\:not\(\:where\(\.o164001\)\)\&_h2\]\:text-\[0\.7rem\] h2 {
-    font-size: 0.7rem;
+  :not(:where(.o164001)).\[\:not\(\:where\(\.o164001\)\)\&_h2\]\:text-micro h2 {
+    font-size: var(--text-micro);
   }
   :not(:where(.o164002)).\[\:not\(\:where\(\.o164002\)\)\&_h2\]\:font-bold h2 {
     --tw-font-weight: var(--font-weight-bold);
@@ -12869,8 +12813,8 @@
   :not(:where(.o164005)).\[\:not\(\:where\(\.o164005\)\)\&_h2\]\:text-muted h2 {
     color: var(--muted);
   }
-  :not(:where(.o164205)).\[\:not\(\:where\(\.o164205\)\)\&\]\:text-\[0\.7rem\] {
-    font-size: 0.7rem;
+  :not(:where(.o164205)).\[\:not\(\:where\(\.o164205\)\)\&\]\:text-micro {
+    font-size: var(--text-micro);
   }
   :not(:where(.o164206)).\[\:not\(\:where\(\.o164206\)\)\&\]\:font-semibold {
     --tw-font-weight: var(--font-weight-semibold);
@@ -12931,8 +12875,8 @@
   :not(:where(.o167400)).\[\:not\(\:where\(\.o167400\)\)\&_b\]\:inline-flex b {
     display: inline-flex;
   }
-  :not(:where(.o167403)).\[\:not\(\:where\(\.o167403\)\)\&_b\]\:text-\[0\.82rem\] b {
-    font-size: 0.82rem;
+  :not(:where(.o167403)).\[\:not\(\:where\(\.o167403\)\)\&_b\]\:text-petit b {
+    font-size: var(--text-petit);
   }
   :not(:where(.o167500)).\[\:not\(\:where\(\.o167500\)\)\&_b_svg\]\:w-\[12px\] b svg {
     width: 12px;
@@ -12955,8 +12899,8 @@
   :not(:where(.o167603)).\[\:not\(\:where\(\.o167603\)\)\&_span\]\:whitespace-nowrap span {
     white-space: nowrap;
   }
-  :not(:where(.o167604)).\[\:not\(\:where\(\.o167604\)\)\&_span\]\:text-\[0\.7rem\] span {
-    font-size: 0.7rem;
+  :not(:where(.o167604)).\[\:not\(\:where\(\.o167604\)\)\&_span\]\:text-micro span {
+    font-size: var(--text-micro);
   }
   :not(:where(.o167605)).\[\:not\(\:where\(\.o167605\)\)\&_span\]\:text-muted span {
     color: var(--muted);
@@ -13012,8 +12956,8 @@
   :root:not([data-theme|=plan]) .gauge.g-outside.sky .\[\:root\:not\(\[data-theme\|\=plan\]\)_\.gauge\.g-outside\.sky_\&\]\:\[animation\:none\] {
     animation: none;
   }
-  :root:not([data-theme|=plan]) .gauge.g-outside.sky .\[\:root\:not\(\[data-theme\|\=plan\]\)_\.gauge\.g-outside\.sky_\&\]\:text-\[1\.75rem\] {
-    font-size: 1.75rem;
+  :root:not([data-theme|=plan]) .gauge.g-outside.sky .\[\:root\:not\(\[data-theme\|\=plan\]\)_\.gauge\.g-outside\.sky_\&\]\:text-titre-l {
+    font-size: var(--text-titre-l);
   }
   :root:not([data-theme|=plan]) .gauge.g-outside.sky .\[\:root\:not\(\[data-theme\|\=plan\]\)_\.gauge\.g-outside\.sky_\&\]\:\[filter\:none\] {
     filter: none;
@@ -13054,11 +12998,11 @@
     }
   }
   @media (max-width:420px) {
-    :not(:where(.o021200)).\[\@media\(max-width\:420px\)\]\:\[\:not\(\:where\(\.o021200\)\)\&_a\]\:text-\[0\.64rem\] a {
-      font-size: 0.64rem;
+    :not(:where(.o021200)).\[\@media\(max-width\:420px\)\]\:\[\:not\(\:where\(\.o021200\)\)\&_a\]\:text-micro a {
+      font-size: var(--text-micro);
     }
-    :not(:where(.o021200)).\[\@media\(max-width\:420px\)\]\:\[\:not\(\:where\(\.o021200\)\)\&_button\]\:text-\[0\.64rem\] button {
-      font-size: 0.64rem;
+    :not(:where(.o021200)).\[\@media\(max-width\:420px\)\]\:\[\:not\(\:where\(\.o021200\)\)\&_button\]\:text-micro button {
+      font-size: var(--text-micro);
     }
   }
   @media (max-width:520px) {
@@ -13292,8 +13236,8 @@
     :not(:where(.o005101)).\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o005101\)\)\&\]\:\[font-family\:var\(--font-display\)\] {
       font-family: var(--font-display);
     }
-    :not(:where(.o005102)).\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o005102\)\)\&\]\:text-\[1\.6rem\] {
-      font-size: 1.6rem;
+    :not(:where(.o005102)).\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o005102\)\)\&\]\:text-titre-l {
+      font-size: var(--text-titre-l);
     }
     :not(:where(.o005103)).\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o005103\)\)\&\]\:font-semibold {
       --tw-font-weight: var(--font-weight-semibold);
@@ -13401,15 +13345,15 @@
     :not(:where(.o077803))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o077803\)\)\[data-layout\=board\]_\&\]\:m-0 {
       margin: 0px;
     }
-    :not(:where(.o077807))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o077807\)\)\[data-layout\=board\]_\&\]\:text-\[0\.92rem\] {
-      font-size: 0.92rem;
+    :not(:where(.o077807))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o077807\)\)\[data-layout\=board\]_\&\]\:text-courant {
+      font-size: var(--text-courant);
     }
     :not(:where(.o077808))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o077808\)\)\[data-layout\=board\]_\&\]\:font-medium {
       --tw-font-weight: var(--font-weight-medium);
       font-weight: var(--font-weight-medium);
     }
-    :not(:where(.o077900))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o077900\)\)\[data-layout\=board\]_\&\]\:text-\[1\.3rem\] {
-      font-size: 1.3rem;
+    :not(:where(.o077900))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o077900\)\)\[data-layout\=board\]_\&\]\:text-grand {
+      font-size: var(--text-grand);
     }
     :not(:where(.o078200))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o078200\)\)\[data-layout\=board\]_\&\]\:w-\[30px\] {
       width: 30px;
@@ -13423,11 +13367,11 @@
     :not(:where(.o078301))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o078301\)\)\[data-layout\=board\]_\&_svg\]\:h-\[16px\] svg {
       height: 16px;
     }
-    :not(:where(.o078400)):where(.\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o078400\)\)\:where\(\&\)\[data-layout\=board\]_\:is\(\.room-line-name\,_\.house-action-text_b\)\]\:text-\[0\.8rem\])[data-layout=board] :is(.room-line-name, .house-action-text b) {
-      font-size: 0.8rem;
+    :not(:where(.o078400)):where(.\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o078400\)\)\:where\(\&\)\[data-layout\=board\]_\:is\(\.room-line-name\,_\.house-action-text_b\)\]\:text-petit)[data-layout=board] :is(.room-line-name, .house-action-text b) {
+      font-size: var(--text-petit);
     }
-    :not(:where(.o078500)):where(.\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o078500\)\)\:where\(\&\)\[data-layout\=board\]_\:is\(\.room-line-info\,_\.house-action-text_span\)\]\:text-\[0\.69rem\])[data-layout=board] :is(.room-line-info, .house-action-text span) {
-      font-size: 0.69rem;
+    :not(:where(.o078500)):where(.\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o078500\)\)\:where\(\&\)\[data-layout\=board\]_\:is\(\.room-line-info\,_\.house-action-text_span\)\]\:text-micro)[data-layout=board] :is(.room-line-info, .house-action-text span) {
+      font-size: var(--text-micro);
     }
     :not(:where(.o078800))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o078800\)\)\[data-layout\=board\]_\&_\.round_svg\]\:w-\[16px\] .round svg {
       width: 16px;
@@ -13459,11 +13403,11 @@
     :not(:where(.o084301))[data-theme=maquette][data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o084301\)\)\[data-theme\=maquette\]\[data-layout\=board\]_\&_svg\]\:h-\[20px\] svg {
       height: 20px;
     }
-    :not(:where(.o084400)):where(.\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o084400\)\)\:where\(\&\)\[data-theme\=maquette\]\[data-layout\=board\]_\:is\(\.room-line-name\,_\.house-action-text_b\)\]\:text-\[0\.9rem\])[data-theme=maquette][data-layout=board] :is(.room-line-name, .house-action-text b) {
-      font-size: 0.9rem;
+    :not(:where(.o084400)):where(.\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o084400\)\)\:where\(\&\)\[data-theme\=maquette\]\[data-layout\=board\]_\:is\(\.room-line-name\,_\.house-action-text_b\)\]\:text-corps)[data-theme=maquette][data-layout=board] :is(.room-line-name, .house-action-text b) {
+      font-size: var(--text-corps);
     }
-    :not(:where(.o084500)):where(.\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o084500\)\)\:where\(\&\)\[data-theme\=maquette\]\[data-layout\=board\]_\:is\(\.room-line-info\,_\.house-action-text_span\)\]\:text-\[0\.76rem\])[data-theme=maquette][data-layout=board] :is(.room-line-info, .house-action-text span) {
-      font-size: 0.76rem;
+    :not(:where(.o084500)):where(.\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o084500\)\)\:where\(\&\)\[data-theme\=maquette\]\[data-layout\=board\]_\:is\(\.room-line-info\,_\.house-action-text_span\)\]\:text-legende)[data-theme=maquette][data-layout=board] :is(.room-line-info, .house-action-text span) {
+      font-size: var(--text-legende);
     }
     :not(:where(.o103700))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o103700\)\)\[data-layout\=board\]_\&\]\:\[padding-left\:calc\(68px_\+_var\(--gutter\)\)\] {
       padding-left: calc(68px + var(--gutter));
@@ -13514,11 +13458,11 @@
     :not(:where(.o170300)).\[\@media\(min-width\:1400px\)\]\:\[\:not\(\:where\(\.o170300\)\)\&\]\:max-w-\[540px\] {
       max-width: 540px;
     }
-    :not(:where(.o170400)).\[\@media\(min-width\:1400px\)\]\:\[\:not\(\:where\(\.o170400\)\)\&\]\:text-\[2\.6rem\] {
-      font-size: 2.6rem;
+    :not(:where(.o170400)).\[\@media\(min-width\:1400px\)\]\:\[\:not\(\:where\(\.o170400\)\)\&\]\:text-affiche-l {
+      font-size: var(--text-affiche-l);
     }
-    :not(:where(.o170500)).\[\@media\(min-width\:1400px\)\]\:\[\:not\(\:where\(\.o170500\)\)\&\]\:text-\[1\.15rem\] {
-      font-size: 1.15rem;
+    :not(:where(.o170500)).\[\@media\(min-width\:1400px\)\]\:\[\:not\(\:where\(\.o170500\)\)\&\]\:text-moyen {
+      font-size: var(--text-moyen);
     }
   }
   @media (min-width:520px) {
@@ -13950,8 +13894,8 @@
     [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&_summary\]\:\[padding\:0\.5rem_0\] summary {
       padding: 0.5rem 0;
     }
-    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&_summary\]\:text-\[0\.85rem\] summary {
-      font-size: 0.85rem;
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&_summary\]\:text-corps summary {
+      font-size: var(--text-corps);
     }
     [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\:\:-webkit-scrollbar\]\:hidden::-webkit-scrollbar {
       display: none;
@@ -14142,8 +14086,8 @@
   [data-theme=maquette] .presets .\[\[data-theme\=maquette\]_\.presets_\&\[aria-pressed\=true\]\]\:\[background\:rgb\(255_255_255_\/_0\.12\)\][aria-pressed=true] {
     background: rgb(255 255 255 / 0.12);
   }
-  [data-theme=maquette][data-layout=board] .\[\[data-theme\=maquette\]\[data-layout\=board\]_\&\]\:text-\[0\.85rem\] {
-    font-size: 0.85rem;
+  [data-theme=maquette][data-layout=board] .\[\[data-theme\=maquette\]\[data-layout\=board\]_\&\]\:text-corps {
+    font-size: var(--text-corps);
   }
   [data-theme=maquette][data-layout=board] .\[\[data-theme\=maquette\]\[data-layout\=board\]_\&\]\:\[color\:\#a3a3ad\] {
     color: #a3a3ad;

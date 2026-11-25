@@ -28,7 +28,7 @@ const HUB_V4_GLASS = "rounded-[28px] bg-scrim/80 backdrop-blur-[20px] backdrop-s
   + "shadow-[inset_0_1px_0_color-mix(in_srgb,var(--v3-voile)_9%,transparent),inset_0_0_0_1px_color-mix(in_srgb,var(--v3-voile)_6%,transparent),0_18px_40px_-18px_rgb(0_0_0/0.65)]";
 const HUB_V4_PHOTO_BG = "bg-[radial-gradient(120%_90%_at_30%_20%,#2a2f55,#121530_60%,#0b0d22)] "
   + "shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--v3-voile)_10%,transparent)]";
-const HUB_V4_TAG = "inline-flex items-center gap-2 min-h-9 px-3 rounded-[12px] bg-scrim/60 text-[13px] font-medium";
+const HUB_V4_TAG = "inline-flex items-center gap-2 min-h-9 px-3 rounded-[12px] bg-scrim/60 text-petit font-medium";
 
 /** « à l'instant », « à 21:56 » ; « la dernière photo » sans heure. */
 function hubV4DoorbellWhen(at, now = Date.now()) {
@@ -98,10 +98,10 @@ function hubV4Doorbell(state, at = doorbellRang(state)) {
   if (!hubV4DoorbellReady()) return false;
   const id = state.entity_id;
   const live = state.state === "on";
-  const sub = el("span", { class: `text-[13px] ${HUB_V4_MUTE} truncate` });
+  const sub = el("span", { class: `text-petit ${HUB_V4_MUTE} truncate` });
   const img = el("img", { alt: "Photo prise par la sonnette", class: "absolute inset-0 size-full object-cover" });
   img.hidden = true;
-  const empty = el("span", { class: `grid justify-items-center gap-2 text-[14px] ${HUB_V4_MUTE} [&_svg]:size-9 [&_svg]:opacity-40` },
+  const empty = el("span", { class: `grid justify-items-center gap-2 text-corps ${HUB_V4_MUTE} [&_svg]:size-9 [&_svg]:opacity-40` },
     svgIcon(HUB_V4_BELL_ICONS.camera), el("span"));
   const wait = el("span", { class: `absolute left-2.5 top-2.5 ${HUB_V4_TAG}`, text: "La nouvelle photo arrive…" });
   const stamp = el("span", { class: `absolute left-2.5 bottom-2.5 ${HUB_V4_TAG} [font-variant-numeric:tabular-nums]` });
@@ -178,14 +178,14 @@ function hubV4Camera(entityId) {
     type: "button", class: `${HUB_V4_ICON_BTN} bg-voile/10`, "aria-label": "Retour à l'accueil",
   }, svgIcon(ICONS.back));
   back.addEventListener("click", () => hubV4Close());
-  const title = el("b", { id: "hub-v4-cam-title", class: "text-[13px] font-medium tracking-[0.02em] text-v-ink2" });
+  const title = el("b", { id: "hub-v4-cam-title", class: "text-petit font-medium tracking-[0.02em] text-v-ink2" });
   const head = el("header", { class: "col-span-full flex items-center gap-3" }, back,
     el("span", { class: "inline-flex items-center gap-2 [&_svg]:size-4" }, svgIcon(HUB_V4_BELL_ICONS.camera), title));
 
   // La photo, avec sa barre du haut : l'heure de la photo, fermer.
   const img = el("img", { alt: "", class: "absolute inset-0 size-full object-contain" });
   img.hidden = true;
-  const empty = el("span", { class: `grid justify-items-center gap-2.5 text-[15px] ${HUB_V4_MUTE} [&_svg]:size-11 [&_svg]:opacity-40` },
+  const empty = el("span", { class: `grid justify-items-center gap-2.5 text-courant ${HUB_V4_MUTE} [&_svg]:size-11 [&_svg]:opacity-40` },
     svgIcon(HUB_V4_BELL_ICONS.camera), el("span"));
   const shotTag = el("span", { class: HUB_V4_TAG },
     el("i", { class: "size-2 rounded-full bg-v-amber shadow-[0_0_8px_#ffbf5e]", "aria-hidden": "true" }), el("span"));
@@ -212,12 +212,12 @@ function hubV4Camera(entityId) {
     el("div", { class: "flex items-center gap-3 min-h-12" },
       el("span", { class: "grid place-items-center size-11 shrink-0 rounded-2xl bg-v-sky/16 text-v-sky [&_svg]:size-[22px]", "aria-hidden": "true" },
         svgIcon(ICONS.archive)),
-      el("p", { class: "m-0 flex flex-col" }, el("b", { class: "text-[17px] font-semibold leading-tight", text: "Derniers passages" }),
-        el("span", { class: `text-[13px] ${HUB_V4_MUTE}`, text: "les dernières 24 heures" }))),
+      el("p", { class: "m-0 flex flex-col" }, el("b", { class: "text-moyen font-semibold leading-tight", text: "Derniers passages" }),
+        el("span", { class: `text-petit ${HUB_V4_MUTE}`, text: "les dernières 24 heures" }))),
     passages);
   log.hidden = true;
   const note = (icon, text) => el("p", {
-    class: "m-0 flex items-center gap-2 min-h-11 px-3 rounded-[16px] bg-voile/4 text-[13px] text-v-ink2 [&_svg]:size-4 [&_svg]:shrink-0",
+    class: "m-0 flex items-center gap-2 min-h-11 px-3 rounded-[16px] bg-voile/4 text-petit text-v-ink2 [&_svg]:size-4 [&_svg]:shrink-0",
   }, svgIcon(icon), el("span", { text }));
   const know = el("section", { class: `flex flex-col gap-1.5 p-3 ${HUB_V4_GLASS} animate-v4-pop motion-reduce:animate-none`, "aria-label": "À savoir" },
     note(ICONS.home, "Les images restent à la maison, rien n'est publié."),
@@ -244,7 +244,7 @@ function hubV4Camera(entityId) {
         }, svgIcon(item.kind === "bell" ? ICONS.bell : item.kind === "motion" ? ICONS.motion : ICONS.door)),
         el("p", { class: "m-0 flex-1 min-w-0 flex flex-col leading-snug" },
           el("span", { class: "font-medium truncate", text: item.text }),
-          el("time", { class: `text-[13px] ${HUB_V4_MUTE}`, datetime: item.at, text: hubV4DayTime(item.at) })))));
+          el("time", { class: `text-petit ${HUB_V4_MUTE}`, datetime: item.at, text: hubV4DayTime(item.at) })))));
     }).catch(() => {});
   }
 

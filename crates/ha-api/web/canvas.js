@@ -464,15 +464,15 @@ function renderCanvas() {
         { class: "node-titles grid gap-[0.2rem] min-w-0" },
         // La famille (Quand, Si, Alors) est dite par la couleur, l'icône et
         // le nom pour les lecteurs d'écran : ici, la sorte seulement.
-        el("span", { class: "node-kind [:not(:where(.o052700))&]:text-[0.66rem] [:not(:where(.o052701))&]:font-bold [letter-spacing:0.05em] uppercase text-muted whitespace-nowrap overflow-hidden text-ellipsis", text: kind }),
-        el("span", { class: `[:not(:where(.o052800))&]:text-[0.93rem] [:not(:where(.o052801))&]:font-semibold [:not(:where(.o052802))&]:[line-height:1.28] text-text overflow-hidden [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] [overflow-wrap:anywhere] [:not(:where(.o052900))&.empty]:font-medium [:not(:where(.o052901))&.empty]:[font-style:italic] [&.empty]:text-muted node-text${nodeText(node) ? "" : " empty"}`, text: nodeText(node) || "À compléter" }),
+        el("span", { class: "node-kind [:not(:where(.o052700))&]:text-micro [:not(:where(.o052701))&]:font-bold [letter-spacing:0.05em] uppercase text-muted whitespace-nowrap overflow-hidden text-ellipsis", text: kind }),
+        el("span", { class: `[:not(:where(.o052800))&]:text-courant [:not(:where(.o052801))&]:font-semibold [:not(:where(.o052802))&]:[line-height:1.28] text-text overflow-hidden [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] [overflow-wrap:anywhere] [:not(:where(.o052900))&.empty]:font-medium [:not(:where(.o052901))&.empty]:[font-style:italic] [&.empty]:text-muted node-text${nodeText(node) ? "" : " empty"}`, text: nodeText(node) || "À compléter" }),
       ),
     );
     box.append(body);
     if (status) {
       // Le résultat est écrit (et pas seulement donné par la couleur).
       const mark = status.status === "done" ? "✓" : "✕";
-      box.append(el("span", { class: "node-run absolute [:not(:where(.o054601))&]:[left:16px] [:not(:where(.o054602))&]:[bottom:-12px] [max-width:calc(100%_-_32px)] [padding:0.12rem_0.6rem] [border-radius:999px] [:not(:where(.o054606))&]:text-[0.7rem] [:not(:where(.o054607))&]:font-bold whitespace-nowrap overflow-hidden text-ellipsis bg-ok [color:#fff] [box-shadow:0_4px_10px_-4px_color-mix(in_srgb,_var(--ok)_60%,_transparent)] [:not(:where(.o054700)).run-failed_&]:bg-alert [:not(:where(.o054701)).run-failed_&]:[box-shadow:0_4px_10px_-4px_color-mix(in_srgb,_var(--alert)_60%,_transparent)] [:not(:where(.o054700)).run-stopped_&]:bg-alert [:not(:where(.o054701)).run-stopped_&]:[box-shadow:0_4px_10px_-4px_color-mix(in_srgb,_var(--alert)_60%,_transparent)]", text: `${mark} ${status.detail || (status.status === "done" ? "fait" : "arrêté")}` }));
+      box.append(el("span", { class: "node-run absolute [:not(:where(.o054601))&]:[left:16px] [:not(:where(.o054602))&]:[bottom:-12px] [max-width:calc(100%_-_32px)] [padding:0.12rem_0.6rem] [border-radius:999px] [:not(:where(.o054606))&]:text-micro [:not(:where(.o054607))&]:font-bold whitespace-nowrap overflow-hidden text-ellipsis bg-ok [color:#fff] [box-shadow:0_4px_10px_-4px_color-mix(in_srgb,_var(--ok)_60%,_transparent)] [:not(:where(.o054700)).run-failed_&]:bg-alert [:not(:where(.o054701)).run-failed_&]:[box-shadow:0_4px_10px_-4px_color-mix(in_srgb,_var(--alert)_60%,_transparent)] [:not(:where(.o054700)).run-stopped_&]:bg-alert [:not(:where(.o054701)).run-stopped_&]:[box-shadow:0_4px_10px_-4px_color-mix(in_srgb,_var(--alert)_60%,_transparent)]", text: `${mark} ${status.detail || (status.status === "done" ? "fait" : "arrêté")}` }));
     }
     if (hasInput(node)) box.append(el("span", { class: "port port-in", "data-in": node.key, title: "Entrée" }));
     const list = outputs(node);
@@ -501,7 +501,7 @@ function renderCanvas() {
   canvas.fresh.clear();
   $("#canvas-empty").hidden = canvas.nodes.size > 0 || canvas.readOnly;
   applyView();
-  $("#canvas-errors").replaceChildren(...errors.map((error) => el("li", {}, el("span", { class: "canvas-error-mark flex-none w-[18px] h-[18px] [border-radius:50%] grid [place-items:center] bg-alert [color:#fff] [:not(:where(.o056608))&]:text-[0.72rem] [:not(:where(.o056609))&]:font-extrabold", "aria-hidden": "true", text: "!" }), error)));
+  $("#canvas-errors").replaceChildren(...errors.map((error) => el("li", {}, el("span", { class: "canvas-error-mark flex-none w-[18px] h-[18px] [border-radius:50%] grid [place-items:center] bg-alert [color:#fff] [:not(:where(.o056608))&]:text-legende [:not(:where(.o056609))&]:font-extrabold", "aria-hidden": "true", text: "!" }), error)));
   $("#canvas-wire-delete").hidden = canvas.selectedWire === null || canvas.readOnly;
   $("#canvas-add").hidden = canvas.readOnly;
   $("#canvas-tidy").hidden = canvas.readOnly;
@@ -534,7 +534,7 @@ function openPanel(key) {
       "div",
       { class: "canvas-panel-head sticky [top:0] [z-index:1] flex items-center gap-3 [padding:0.9rem_0.9rem_0.8rem] [border-bottom:1px_solid_var(--line)] [background:linear-gradient(180deg,_color-mix(in_srgb,_var(--cat)_8%,_var(--card)),_var(--card))]" },
       el("span", { class: "node-icon flex-none w-[44px] h-[44px] [border-radius:13px] grid [place-items:center] [color:#fff] [background:linear-gradient(140deg,_color-mix(in_srgb,_var(--cat)_88%,_#fff),_color-mix(in_srgb,_var(--cat)_72%,_#000))] [box-shadow:inset_0_1px_0_rgb(255_255_255_/_0.28),_0_4px_10px_-4px_color-mix(in_srgb,_var(--cat)_70%,_transparent)] [:not(:where(.o052500))&_svg]:w-[21px] [:not(:where(.o052501))&_svg]:h-[21px] [:not(:where(.o052502))&_svg]:[stroke-width:2.2] [.canvas-menu-item_&]:w-[30px] [.canvas-menu-item_&]:h-[30px] [.canvas-menu-item_&]:[border-radius:9px] [:not(:where(.o058700)).canvas-menu-item_&_svg]:w-[16px] [:not(:where(.o058701)).canvas-menu-item_&_svg]:h-[16px]" }, svgIcon(nodeIcon(node))),
-      el("span", { class: "canvas-panel-titles grid min-w-0 mr-[auto] [:not(:where(.o057500))&_small]:text-[0.68rem] [:not(:where(.o057501))&_small]:font-bold [:not(:where(.o057502))&_small]:[letter-spacing:0.05em] [:not(:where(.o057503))&_small]:uppercase [:not(:where(.o057504))&_small]:text-muted [:not(:where(.o057600))&_strong]:[font-family:var(--font-display)] [:not(:where(.o057601))&_strong]:text-[1.05rem] [:not(:where(.o057602))&_strong]:[line-height:1.25]" }, el("small", { text: label }), el("strong", { text: kind })),
+      el("span", { class: "canvas-panel-titles grid min-w-0 mr-[auto] [:not(:where(.o057500))&_small]:text-micro [:not(:where(.o057501))&_small]:font-bold [:not(:where(.o057502))&_small]:[letter-spacing:0.05em] [:not(:where(.o057503))&_small]:uppercase [:not(:where(.o057504))&_small]:text-muted [:not(:where(.o057600))&_strong]:[font-family:var(--font-display)] [:not(:where(.o057601))&_strong]:text-moyen [:not(:where(.o057602))&_strong]:[line-height:1.25]" }, el("small", { text: label }), el("strong", { text: kind })),
       close,
     ),
     box,
@@ -640,7 +640,7 @@ function panelFields(node, refresh) {
       const how = mode === "count"
         ? numberField("Nombre de fois (1 à 100)", r, "count")
         : nested(itemsBlock(mode === "while" ? "Tant que…" : "Jusqu'à ce que…", "Toutes doivent être vraies.", r, mode, CONDITION_KINDS, "condition", conditionFields));
-      return [kind, how, el("p", { class: "journal-hint text-muted text-[0.85rem] [margin:0_0_0.75rem] [:not(:where(.o035900)).auto-block_&]:m-0 [.auto-fields_&]:[grid-column:1_/_-1] [:not(:where(.o036501)).auto-fields_&]:m-0 [.auto-fields_&]:[overflow-wrap:anywhere]", text: "Les actions à répéter partent de la sortie « à répéter »." })];
+      return [kind, how, el("p", { class: "journal-hint text-muted text-corps [margin:0_0_0.75rem] [:not(:where(.o035900)).auto-block_&]:m-0 [.auto-fields_&]:[grid-column:1_/_-1] [:not(:where(.o036501)).auto-fields_&]:m-0 [.auto-fields_&]:[overflow-wrap:anywhere]", text: "Les actions à répéter partent de la sortie « à répéter »." })];
     }
     default:
       return actionFields(a, refresh);
@@ -670,7 +670,7 @@ function openAddMenu(screenX, screenY, at, from = null) {
   groups.push(["Si… (condition)", "condition", CONDITION_KINDS]);
   groups.push(["Alors… (action)", "action", ACTION_KINDS]);
   const list = el("div", { class: "canvas-menu-list grid gap-[1px]", role: "menu" });
-  const none = el("p", { class: "canvas-menu-none [margin:0.4rem_0.5rem] text-muted text-[0.9rem]", text: "Aucun bloc ne correspond.", hidden: "" });
+  const none = el("p", { class: "canvas-menu-none [margin:0.4rem_0.5rem] text-muted text-corps", text: "Aucun bloc ne correspond.", hidden: "" });
   const search = el("input", { type: "search", class: "canvas-menu-search w-full", placeholder: "Chercher un bloc…", "aria-label": "Chercher un bloc", autocomplete: "off" });
   search.addEventListener("input", () => {
     const words = search.value.trim().toLowerCase();

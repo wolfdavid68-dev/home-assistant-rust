@@ -178,7 +178,7 @@ async function openDrawingEditor() {
 function drawingStatus(text, kind = "") {
   const status = $("#drawing-status");
   status.textContent = text;
-  status.className = `auto-status text-[0.9rem] [margin:0.8rem_0_0.3rem] [white-space:pre-wrap] [overflow-wrap:anywhere] [:not(:where(.o037900))&.ok]:text-ok [:not(:where(.o038000))&.error]:text-alert ${kind}`;
+  status.className = `auto-status text-corps [margin:0.8rem_0_0.3rem] [white-space:pre-wrap] [overflow-wrap:anywhere] [:not(:where(.o037900))&.ok]:text-ok [:not(:where(.o038000))&.error]:text-alert ${kind}`;
 }
 
 function renderDrawingPreview() {
@@ -208,7 +208,7 @@ function imageOptions(selected, empty) {
 }
 
 function drawingFieldset(title, hint, ...children) {
-  return el("fieldset", { class: "drawing-part m-0 [padding:0.7rem_0.9rem_0.9rem] grid gap-[0.6rem] [border:1px_solid_var(--line)] [border-radius:14px] min-w-0 [:not(:where(.o089000))&_legend]:[padding:0_0.35rem] [:not(:where(.o089001))&_legend]:font-semibold" }, el("legend", { text: title }), hint ? el("p", { class: "auto-meta text-muted text-[0.8rem] [&.run-loop]:text-alert [:not(:where(.o089100)).drawing-part>&]:m-0 [:not(:where(.o092300)).chart-card_&]:m-0", text: hint }) : "", ...children);
+  return el("fieldset", { class: "drawing-part m-0 [padding:0.7rem_0.9rem_0.9rem] grid gap-[0.6rem] [border:1px_solid_var(--line)] [border-radius:14px] min-w-0 [:not(:where(.o089000))&_legend]:[padding:0_0.35rem] [:not(:where(.o089001))&_legend]:font-semibold" }, el("legend", { text: title }), hint ? el("p", { class: "auto-meta text-muted text-petit [&.run-loop]:text-alert [:not(:where(.o089100)).drawing-part>&]:m-0 [:not(:where(.o092300)).chart-card_&]:m-0", text: hint }) : "", ...children);
 }
 
 // ---------------------------------------------------------------- Découpe
@@ -460,7 +460,7 @@ function cutPart(draft, refresh) {
       const entity = el("input", { type: "text", list: "entity-list", value: entry.entity_id, placeholder: "light.porche", autocapitalize: "none", spellcheck: "false", "aria-label": `Appareil du calque ${index + 1}` });
       entity.addEventListener("change", () => { entry.entity_id = entity.value.trim(); });
       return el("li", { class: "drawing-item grid gap-2 [justify-items:stretch] p-[0.7rem] [border-radius:12px] bg-card-2 [&>button]:[justify-self:start]" },
-        el("label", { class: "check [.preset-form_&]:text-[0.9rem] [label&]:flex [label&]:items-center [label&]:gap-[0.45rem] [label&]:text-text" }, keep, el("b", { text: ` Endroit ${index + 1}` })),
+        el("label", { class: "check [.preset-form_&]:text-corps [label&]:flex [label&]:items-center [label&]:gap-[0.45rem] [label&]:text-text" }, keep, el("b", { text: ` Endroit ${index + 1}` })),
         el("div", { class: "drawing-grid grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_220px),_1fr))] gap-[0.6rem] [:not(:where(.o090000))&_input]:w-full [:not(:where(.o090001))&_input]:min-w-0 [:not(:where(.o090000))&_select]:w-full [:not(:where(.o090001))&_select]:min-w-0" }, field("Nom de l'image", name), field("Sorte", kind), field("Appareil", entity)));
     });
     const create = el("button", { type: "button", class: "ghost small", text: "Créer les calques cochés" });
@@ -533,7 +533,7 @@ function renderDrawingEditor() {
       refresh();
     });
     const size = `${Math.max(1, Math.round(image.size / 1024))} Kio`;
-    return el("li", {}, el("code", { text: image.name }), el("span", { class: "auto-meta text-muted text-[0.8rem] [&.run-loop]:text-alert [:not(:where(.o089100)).drawing-part>&]:m-0 [:not(:where(.o092300)).chart-card_&]:m-0", text: size }), remove);
+    return el("li", {}, el("code", { text: image.name }), el("span", { class: "auto-meta text-muted text-petit [&.run-loop]:text-alert [:not(:where(.o089100)).drawing-part>&]:m-0 [:not(:where(.o092300)).chart-card_&]:m-0", text: size }), remove);
   }));
   const nameInput = el("input", { type: "text", placeholder: "ex. jour, nuit, garage_ouvert", maxlength: "40", autocapitalize: "none", spellcheck: "false", "aria-label": "Nom de l'image" });
   const fileInput = el("input", { type: "file", accept: "image/png,image/jpeg,image/webp", "aria-label": "Fichier de l'image" });
@@ -568,7 +568,7 @@ function renderDrawingEditor() {
     "Images",
     "PNG, JPEG ou WebP, 3 Mio au plus. Les calques doivent avoir exactement la taille du fond, avec de la transparence (PNG ou WebP).",
     list,
-    el("div", { class: "drawing-row flex flex-wrap gap-2 items-center [:not(:where(.o089700))&_input[type=text]]:[flex:1_1_12rem] [:not(:where(.o089701))&_input[type=text]]:min-w-0 [:not(:where(.o089800))&_input[type=file]]:[flex:1_1_14rem] [:not(:where(.o089801))&_input[type=file]]:min-w-0 [&_input[type=file]]:text-[0.85rem]" }, nameInput, fileInput, send),
+    el("div", { class: "drawing-row flex flex-wrap gap-2 items-center [:not(:where(.o089700))&_input[type=text]]:[flex:1_1_12rem] [:not(:where(.o089701))&_input[type=text]]:min-w-0 [:not(:where(.o089800))&_input[type=file]]:[flex:1_1_14rem] [:not(:where(.o089801))&_input[type=file]]:min-w-0 [&_input[type=file]]:text-corps" }, nameInput, fileInput, send),
   );
 
   // Les demandes pour l'IA : choisir l'image à faire, copier la demande.
@@ -589,7 +589,7 @@ function renderDrawingEditor() {
     el("optgroup", { label: "Si l'IA se trompe" }, ...AI_CORRECTIONS.map(([key, label]) => el("option", { value: `correction:${key}`, text: label }))));
   aiChoice.value = drawingEdit.aiChoice ?? (draft.background ? "nuit" : "analyse");
   // Modifiable : on peut préciser où est le porche avant de copier.
-  const aiText = el("textarea", { class: "ai-prompt w-full min-h-[9rem] [resize:vertical] [:not(:where(.o105203))&]:[font-family:var(--font-mono)] [:not(:where(.o105204))&]:text-[0.78rem] [:not(:where(.o105205))&]:[line-height:1.45] [padding:0.6rem_0.7rem] [border-radius:12px] [border:1px_solid_var(--line)] bg-card-2 text-text", rows: "8", spellcheck: "false", "aria-label": "Demande à copier (modifiable)" });
+  const aiText = el("textarea", { class: "ai-prompt w-full min-h-[9rem] [resize:vertical] [:not(:where(.o105203))&]:[font-family:var(--font-mono)] [:not(:where(.o105204))&]:text-legende [:not(:where(.o105205))&]:[line-height:1.45] [padding:0.6rem_0.7rem] [border-radius:12px] [border:1px_solid_var(--line)] bg-card-2 text-text", rows: "8", spellcheck: "false", "aria-label": "Demande à copier (modifiable)" });
   const aiAttach = el("span");
   const aiSave = el("span");
   const aiCopy = el("button", { type: "button", class: "primary small", text: "Copier la demande" });
@@ -613,7 +613,7 @@ function renderDrawingEditor() {
     "Choisis l'image à faire, copie la demande et colle-la dans une IA qui retouche les photos (Gemini, ChatGPT…), avec l'image indiquée. Fais toujours les variantes à partir du fond de jour, jamais l'une de l'autre : le dessin ne bouge pas.",
     el("div", { class: "drawing-grid grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_220px),_1fr))] gap-[0.6rem] [:not(:where(.o090000))&_input]:w-full [:not(:where(.o090001))&_input]:min-w-0 [:not(:where(.o090000))&_select]:w-full [:not(:where(.o090001))&_select]:min-w-0" }, field("Style", aiStyle), field("Image à faire", aiChoice)),
     aiText,
-    el("dl", { class: "ai-steps grid [grid-template-columns:auto_1fr] [gap:0.25rem_0.8rem] m-0 text-[0.84rem] [:not(:where(.o105400))&_dt]:text-muted [:not(:where(.o105500))&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:[overflow-wrap:anywhere]" }, el("dt", { text: "Joindre" }), el("dd", {}, aiAttach), el("dt", { text: "Enregistrer sous" }), el("dd", {}, aiSave)),
+    el("dl", { class: "ai-steps grid [grid-template-columns:auto_1fr] [gap:0.25rem_0.8rem] m-0 text-petit [:not(:where(.o105400))&_dt]:text-muted [:not(:where(.o105500))&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:[overflow-wrap:anywhere]" }, el("dt", { text: "Joindre" }), el("dd", {}, aiAttach), el("dt", { text: "Enregistrer sous" }), el("dd", {}, aiSave)),
     aiCopy,
   );
 
@@ -644,7 +644,7 @@ function renderDrawingEditor() {
       });
       cells.push(field(weatherLabel, select));
     }
-    groups.push(el("div", { class: "drawing-ambiance-group grid gap-[0.4rem] [:not(:where(.o091300))&>b]:text-[0.85rem]" }, el("b", { text: momentLabel }), el("div", { class: "drawing-ambiances grid [grid-template-columns:repeat(auto-fill,_minmax(min(100%,_180px),_1fr))] gap-[0.6rem] [:not(:where(.o091100))&_select]:w-full [:not(:where(.o091101))&_select]:min-w-0" }, ...cells)));
+    groups.push(el("div", { class: "drawing-ambiance-group grid gap-[0.4rem] [:not(:where(.o091300))&>b]:text-corps" }, el("b", { text: momentLabel }), el("div", { class: "drawing-ambiances grid [grid-template-columns:repeat(auto-fill,_minmax(min(100%,_180px),_1fr))] gap-[0.6rem] [:not(:where(.o091100))&_select]:w-full [:not(:where(.o091101))&_select]:min-w-0" }, ...cells)));
   }
   const forced = el("select", { "aria-label": "Ambiance affichée" },
     el("option", { value: "", text: "Automatique (météo et soleil)" }),
@@ -665,7 +665,7 @@ function renderDrawingEditor() {
     "Comme sur les tableaux de domo-blog : un fond par ambiance, choisi d'après le soleil et la météo. Il en manque un ? Le plus proche s'affiche (orage → pluie → nuageux → soleil ; la nuit, puis le même temps de jour). Le crépuscule (soleil entre −6° et +6°) ne sert que si tu lui donnes au moins un fond. La pluie par 1 °C ou moins dehors compte comme de la neige.",
     ...groups,
     el("div", { class: "drawing-grid grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_220px),_1fr))] gap-[0.6rem] [:not(:where(.o090000))&_input]:w-full [:not(:where(.o090001))&_input]:min-w-0 [:not(:where(.o090000))&_select]:w-full [:not(:where(.o090001))&_select]:min-w-0" }, field("Ambiance affichée", forced)),
-    el("p", { class: "auto-meta text-muted text-[0.8rem] [&.run-loop]:text-alert [:not(:where(.o089100)).drawing-part>&]:m-0 [:not(:where(.o092300)).chart-card_&]:m-0", text: nowText }),
+    el("p", { class: "auto-meta text-muted text-petit [&.run-loop]:text-alert [:not(:where(.o089100)).drawing-part>&]:m-0 [:not(:where(.o092300)).chart-card_&]:m-0", text: nowText }),
   );
 
   // Les effets animés.
@@ -689,7 +689,7 @@ function renderDrawingEditor() {
     "Effets animés",
     "Sur le dessin, le temps qu'il fait : pluie, averses, orage, grêle, neige, brouillard, vent, et des étoiles par nuit claire. Ils suivent la météo comme les ambiances ; « Toujours » sert à essayer. Pas d'animation si l'appareil demande de réduire les mouvements.",
     el("div", { class: "drawing-grid grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_220px),_1fr))] gap-[0.6rem] [:not(:where(.o090000))&_input]:w-full [:not(:where(.o090001))&_input]:min-w-0 [:not(:where(.o090000))&_select]:w-full [:not(:where(.o090001))&_select]:min-w-0" }, field("Effets", effectMode), field("Intensité", effectLevel)),
-    el("p", { class: "auto-meta text-muted text-[0.8rem] [&.run-loop]:text-alert [:not(:where(.o089100)).drawing-part>&]:m-0 [:not(:where(.o092300)).chart-card_&]:m-0", text: `Maintenant : ${nowEffect ? (EFFECTS.find(([key]) => key === nowEffect)?.[1] ?? nowEffect).toLowerCase() : "aucun effet"}` }),
+    el("p", { class: "auto-meta text-muted text-petit [&.run-loop]:text-alert [:not(:where(.o089100)).drawing-part>&]:m-0 [:not(:where(.o092300)).chart-card_&]:m-0", text: `Maintenant : ${nowEffect ? (EFFECTS.find(([key]) => key === nowEffect)?.[1] ?? nowEffect).toLowerCase() : "aucun effet"}` }),
   );
 
   // Les calques.
@@ -751,8 +751,8 @@ function renderDrawingEditor() {
       el("div", { class: "drawing-grid grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_220px),_1fr))] gap-[0.6rem] [:not(:where(.o090000))&_input]:w-full [:not(:where(.o090001))&_input]:min-w-0 [:not(:where(.o090000))&_select]:w-full [:not(:where(.o090001))&_select]:min-w-0" },
         field("Image", image), field("Suit", kind), field("Appareil", entity),
         field("Quand son état est (séparés par des virgules)", states), field("Moment", when)),
-      el("label", { class: "check [.preset-form_&]:text-[0.9rem] [label&]:flex [label&]:items-center [label&]:gap-[0.45rem] [label&]:text-text" }, not, " Sauf ces états (visible pour tous les autres)"),
-      el("label", { class: "check [.preset-form_&]:text-[0.9rem] [label&]:flex [label&]:items-center [label&]:gap-[0.45rem] [label&]:text-text" }, position, " Suit la position du volet (l'image est le volet fermé ; à 25 %, il est dessiné aux trois quarts)"));
+      el("label", { class: "check [.preset-form_&]:text-corps [label&]:flex [label&]:items-center [label&]:gap-[0.45rem] [label&]:text-text" }, not, " Sauf ces états (visible pour tous les autres)"),
+      el("label", { class: "check [.preset-form_&]:text-corps [label&]:flex [label&]:items-center [label&]:gap-[0.45rem] [label&]:text-text" }, position, " Suit la position du volet (l'image est le volet fermé ; à 25 %, il est dessiné aux trois quarts)"));
   });
   const addLayer = el("button", { type: "button", class: "ghost small", text: "+ Ajouter un calque" });
   addLayer.disabled = house.images.length === 0;
@@ -816,7 +816,7 @@ function renderDrawingEditor() {
     entity.addEventListener("change", () => { draft.actions[index] = entity.value.trim(); });
     const remove = el("button", { type: "button", class: "ghost small danger", text: "Retirer" });
     remove.addEventListener("click", () => { draft.actions.splice(index, 1); refresh(); });
-    return el("li", { class: "drawing-row flex flex-wrap gap-2 items-center [:not(:where(.o089700))&_input[type=text]]:[flex:1_1_12rem] [:not(:where(.o089701))&_input[type=text]]:min-w-0 [:not(:where(.o089800))&_input[type=file]]:[flex:1_1_14rem] [:not(:where(.o089801))&_input[type=file]]:min-w-0 [&_input[type=file]]:text-[0.85rem]" }, entity, remove);
+    return el("li", { class: "drawing-row flex flex-wrap gap-2 items-center [:not(:where(.o089700))&_input[type=text]]:[flex:1_1_12rem] [:not(:where(.o089701))&_input[type=text]]:min-w-0 [:not(:where(.o089800))&_input[type=file]]:[flex:1_1_14rem] [:not(:where(.o089801))&_input[type=file]]:min-w-0 [&_input[type=file]]:text-corps" }, entity, remove);
   });
   const addAction = el("button", { type: "button", class: "ghost small", text: "+ Ajouter un bouton" });
   addAction.disabled = draft.actions.length >= 12;
@@ -994,15 +994,15 @@ function pagesPart() {
     box.addEventListener("change", () => {
       draft.areas = box.checked ? [...draft.areas, area.name] : draft.areas.filter((a) => a !== area.name);
     });
-    return el("label", { class: "check [.preset-form_&]:text-[0.9rem] [label&]:flex [label&]:items-center [label&]:gap-[0.45rem] [label&]:text-text" }, box, ` ${area.name}`);
+    return el("label", { class: "check [.preset-form_&]:text-corps [label&]:flex [label&]:items-center [label&]:gap-[0.45rem] [label&]:text-text" }, box, ` ${area.name}`);
   }));
   return drawingFieldset(
     "Onglets",
     "Chaque onglet a son dessin, ses boutons, et les pièces qu'il montre (aucune cochée : toute la maison). Le premier s'ouvre par défaut.",
-    el("div", { class: "drawing-row flex flex-wrap gap-2 items-center [:not(:where(.o089700))&_input[type=text]]:[flex:1_1_12rem] [:not(:where(.o089701))&_input[type=text]]:min-w-0 [:not(:where(.o089800))&_input[type=file]]:[flex:1_1_14rem] [:not(:where(.o089801))&_input[type=file]]:min-w-0 [&_input[type=file]]:text-[0.85rem]" }, choose, add),
+    el("div", { class: "drawing-row flex flex-wrap gap-2 items-center [:not(:where(.o089700))&_input[type=text]]:[flex:1_1_12rem] [:not(:where(.o089701))&_input[type=text]]:min-w-0 [:not(:where(.o089800))&_input[type=file]]:[flex:1_1_14rem] [:not(:where(.o089801))&_input[type=file]]:min-w-0 [&_input[type=file]]:text-corps" }, choose, add),
     el("div", { class: "drawing-grid grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_220px),_1fr))] gap-[0.6rem] [:not(:where(.o090000))&_input]:w-full [:not(:where(.o090001))&_input]:min-w-0 [:not(:where(.o090000))&_select]:w-full [:not(:where(.o090001))&_select]:min-w-0" }, field("Nom de l'onglet", name)),
     areas.length > 0 ? field("Pièces montrées", rooms) : "",
-    el("div", { class: "drawing-row flex flex-wrap gap-2 items-center [:not(:where(.o089700))&_input[type=text]]:[flex:1_1_12rem] [:not(:where(.o089701))&_input[type=text]]:min-w-0 [:not(:where(.o089800))&_input[type=file]]:[flex:1_1_14rem] [:not(:where(.o089801))&_input[type=file]]:min-w-0 [&_input[type=file]]:text-[0.85rem]" }, first, remove),
+    el("div", { class: "drawing-row flex flex-wrap gap-2 items-center [:not(:where(.o089700))&_input[type=text]]:[flex:1_1_12rem] [:not(:where(.o089701))&_input[type=text]]:min-w-0 [:not(:where(.o089800))&_input[type=file]]:[flex:1_1_14rem] [:not(:where(.o089801))&_input[type=file]]:min-w-0 [&_input[type=file]]:text-corps" }, first, remove),
   );
 }
 

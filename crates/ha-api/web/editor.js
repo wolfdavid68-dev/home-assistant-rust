@@ -137,15 +137,15 @@ function autoCard(entry) {
     "li",
     { class: "auto-card bg-card-2 [border-radius:18px] [padding:0.9rem_1rem] grid gap-[0.45rem]" },
     el("div", { class: "auto-card-head flex flex-wrap gap-2 items-center justify-between [:not(:where(.o034600))&_strong]:[overflow-wrap:anywhere]" }, el("strong", { text: entry.alias }), badges),
-    el("p", { class: "auto-summary m-0 text-text-2 text-[0.88rem] [overflow-wrap:anywhere]", text: entry.config ? describe(entry.config) : "" }),
+    el("p", { class: "auto-summary m-0 text-text-2 text-corps [overflow-wrap:anywhere]", text: entry.config ? describe(entry.config) : "" }),
   );
   if (entry.error) card.append(el("p", { class: "error", text: entry.error }));
   if (entry.updated_by && entry.updated_at) {
-    card.append(el("small", { class: "auto-meta text-muted text-[0.8rem] [&.run-loop]:text-alert [:not(:where(.o089100)).drawing-part>&]:m-0 [:not(:where(.o092300)).chart-card_&]:m-0", text: `Modifiée par ${entry.updated_by} le ${dateTime.format(new Date(entry.updated_at))}` }));
+    card.append(el("small", { class: "auto-meta text-muted text-petit [&.run-loop]:text-alert [:not(:where(.o089100)).drawing-part>&]:m-0 [:not(:where(.o092300)).chart-card_&]:m-0", text: `Modifiée par ${entry.updated_by} le ${dateTime.format(new Date(entry.updated_at))}` }));
   }
   if (entry.last_run) {
     card.append(el("small", {
-      class: `auto-meta text-muted text-[0.8rem] [&.run-loop]:text-alert [:not(:where(.o089100)).drawing-part>&]:m-0 [:not(:where(.o092300)).chart-card_&]:m-0 run-${entry.last_run.outcome}`,
+      class: `auto-meta text-muted text-petit [&.run-loop]:text-alert [:not(:where(.o089100)).drawing-part>&]:m-0 [:not(:where(.o092300)).chart-card_&]:m-0 run-${entry.last_run.outcome}`,
       text: `Dernière exécution il y a ${ago(entry.last_run.started)} · ${outcomeLabel(entry.last_run.outcome)}`,
     }));
   }
@@ -423,7 +423,7 @@ function setAutoStatus(text, kind = "", append = false, warnings = []) {
   const status = $("#auto-status");
   if (append && status.textContent) status.append(el("br"), text);
   else status.textContent = text;
-  status.className = `auto-status text-[0.9rem] [margin:0.8rem_0_0.3rem] [white-space:pre-wrap] [overflow-wrap:anywhere] [:not(:where(.o037900))&.ok]:text-ok [:not(:where(.o038000))&.error]:text-alert ${kind}`;
+  status.className = `auto-status text-corps [margin:0.8rem_0_0.3rem] [white-space:pre-wrap] [overflow-wrap:anywhere] [:not(:where(.o037900))&.ok]:text-ok [:not(:where(.o038000))&.error]:text-alert ${kind}`;
   $("#auto-warnings").replaceChildren(...(warnings ?? []).map((w) => el("li", { text: `⚠ ${w}` })));
 }
 
@@ -467,8 +467,8 @@ function metaFields(c, compact = false) {
     scheduleCheck();
   });
   const modeLabel = el("label", {}, el("span", { class: "label", text: compact ? "Si elle se redéclenche" : "Si elle se redéclenche pendant qu'elle tourne encore" }), mode);
-  if (compact) return [el("div", { class: "auto-row canvas-meta-row grid gap-[0.8rem] [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_190px),_1fr))] [align-items:end] [:not(:where(.o036600))&>label]:[grid-template-rows:1fr_auto]" }, alias, id, modeLabel, el("label", { class: "check [.preset-form_&]:text-[0.9rem] [label&]:flex [label&]:items-center [label&]:gap-[0.45rem] [label&]:text-text" }, enabled, "Activée"))];
-  return [el("div", { class: "auto-row grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_220px),_1fr))] gap-[0.8rem] [:not(:where(.o036600))&>label]:[grid-template-rows:1fr_auto]" }, alias, id), el("label", { class: "check [.preset-form_&]:text-[0.9rem] [label&]:flex [label&]:items-center [label&]:gap-[0.45rem] [label&]:text-text" }, enabled, "Activée"), modeLabel];
+  if (compact) return [el("div", { class: "auto-row canvas-meta-row grid gap-[0.8rem] [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_190px),_1fr))] [align-items:end] [:not(:where(.o036600))&>label]:[grid-template-rows:1fr_auto]" }, alias, id, modeLabel, el("label", { class: "check [.preset-form_&]:text-corps [label&]:flex [label&]:items-center [label&]:gap-[0.45rem] [label&]:text-text" }, enabled, "Activée"))];
+  return [el("div", { class: "auto-row grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_220px),_1fr))] gap-[0.8rem] [:not(:where(.o036600))&>label]:[grid-template-rows:1fr_auto]" }, alias, id), el("label", { class: "check [.preset-form_&]:text-corps [label&]:flex [label&]:items-center [label&]:gap-[0.45rem] [label&]:text-text" }, enabled, "Activée"), modeLabel];
 }
 
 function renderAutoForm() {
@@ -489,7 +489,7 @@ function renderAutoForm() {
 /** Un bloc « Quand / Si / Alors » : la liste, et un bouton pour ajouter. */
 function itemsBlock(title, hint, config, key, kinds, tag, fields) {
   const items = config[key] ?? [];
-  const block = el("fieldset", { class: "auto-block [border:1px_solid_var(--line)] [border-radius:18px] [padding:0.6rem_0.9rem_0.9rem] m-0 grid [grid-template-columns:minmax(0,_1fr)] gap-[0.6rem] min-w-0 [:not(:where(.o035800))&_legend]:font-semibold [:not(:where(.o035801))&_legend]:[padding:0_0.3rem] [&>select]:[justify-self:start] [:not(:where(.o036801))&>select]:max-w-[100%] [&.nested]:[grid-column:1_/_-1] [&.nested]:bg-card" }, el("legend", { text: title }), el("p", { class: "journal-hint text-muted text-[0.85rem] [margin:0_0_0.75rem] [:not(:where(.o035900)).auto-block_&]:m-0 [.auto-fields_&]:[grid-column:1_/_-1] [:not(:where(.o036501)).auto-fields_&]:m-0 [.auto-fields_&]:[overflow-wrap:anywhere]", text: hint }));
+  const block = el("fieldset", { class: "auto-block [border:1px_solid_var(--line)] [border-radius:18px] [padding:0.6rem_0.9rem_0.9rem] m-0 grid [grid-template-columns:minmax(0,_1fr)] gap-[0.6rem] min-w-0 [:not(:where(.o035800))&_legend]:font-semibold [:not(:where(.o035801))&_legend]:[padding:0_0.3rem] [&>select]:[justify-self:start] [:not(:where(.o036801))&>select]:max-w-[100%] [&.nested]:[grid-column:1_/_-1] [&.nested]:bg-card" }, el("legend", { text: title }), el("p", { class: "journal-hint text-muted text-corps [margin:0_0_0.75rem] [:not(:where(.o035900)).auto-block_&]:m-0 [.auto-fields_&]:[grid-column:1_/_-1] [:not(:where(.o036501)).auto-fields_&]:m-0 [.auto-fields_&]:[overflow-wrap:anywhere]", text: hint }));
   items.forEach((item, index) => {
     const kind = tag ? item[tag] : actionKind(item);
     const label = lookup(kinds, kind)?.[0] ?? kind;
@@ -501,7 +501,7 @@ function itemsBlock(title, hint, config, key, kinds, tag, fields) {
       renderAutoForm();
       scheduleCheck();
     });
-    const head = el("div", { class: "auto-item-head flex items-center gap-2 [&_strong]:mr-[auto] [:not(:where(.o036201))&_strong]:text-[0.9rem]" }, el("strong", { text: label }));
+    const head = el("div", { class: "auto-item-head flex items-center gap-2 [&_strong]:mr-[auto] [:not(:where(.o036201))&_strong]:text-corps" }, el("strong", { text: label }));
     if (["actions", "then", "else", "sequence"].includes(key) && index > 0) {
       const up = el("button", { type: "button", class: "ghost small", text: "↑", "aria-label": "Monter" });
       up.addEventListener("click", () => {
@@ -650,7 +650,7 @@ function actionFields(a, refresh) {
         nested(itemsBlock("Sinon… (facultatif)", "Si c'est faux.", a, "else", ACTION_KINDS, null, actionFields)),
       ];
     case "choose":
-      return [el("p", { class: "journal-hint text-muted text-[0.85rem] [margin:0_0_0.75rem] [:not(:where(.o035900)).auto-block_&]:m-0 [.auto-fields_&]:[grid-column:1_/_-1] [:not(:where(.o036501)).auto-fields_&]:m-0 [.auto-fields_&]:[overflow-wrap:anywhere]", text: `Bloc « selon le cas » (${(a.choose ?? []).length} option(s)) : il se modifie dans l'onglet YAML.` })];
+      return [el("p", { class: "journal-hint text-muted text-corps [margin:0_0_0.75rem] [:not(:where(.o035900)).auto-block_&]:m-0 [.auto-fields_&]:[grid-column:1_/_-1] [:not(:where(.o036501)).auto-fields_&]:m-0 [.auto-fields_&]:[overflow-wrap:anywhere]", text: `Bloc « selon le cas » (${(a.choose ?? []).length} option(s)) : il se modifie dans l'onglet YAML.` })];
     case "repeat": {
       a.repeat ??= { count: 3, sequence: [] };
       const r = a.repeat;
@@ -803,7 +803,7 @@ function actionFields(a, refresh) {
     delete extra.priority;
   }
   if (Object.keys(extra).length > 0) {
-    fields.push(el("p", { class: "journal-hint text-muted text-[0.85rem] [margin:0_0_0.75rem] [:not(:where(.o035900)).auto-block_&]:m-0 [.auto-fields_&]:[grid-column:1_/_-1] [:not(:where(.o036501)).auto-fields_&]:m-0 [.auto-fields_&]:[overflow-wrap:anywhere]", text: `Autres paramètres, conservés : ${JSON.stringify(extra)}` }));
+    fields.push(el("p", { class: "journal-hint text-muted text-corps [margin:0_0_0.75rem] [:not(:where(.o035900)).auto-block_&]:m-0 [.auto-fields_&]:[grid-column:1_/_-1] [:not(:where(.o036501)).auto-fields_&]:m-0 [.auto-fields_&]:[overflow-wrap:anywhere]", text: `Autres paramètres, conservés : ${JSON.stringify(extra)}` }));
   }
   return fields;
 }
@@ -976,9 +976,9 @@ function weekdayField(c) {
       else c.weekday = chosen;
       changed();
     });
-    box.append(el("label", { class: "check [.preset-form_&]:text-[0.9rem] [label&]:flex [label&]:items-center [label&]:gap-[0.45rem] [label&]:text-text" }, input, fr));
+    box.append(el("label", { class: "check [.preset-form_&]:text-corps [label&]:flex [label&]:items-center [label&]:gap-[0.45rem] [label&]:text-text" }, input, fr));
   }
-  return el("div", { class: "weekdays-field grid gap-[0.35rem] [grid-column:1_/_-1] text-[0.9rem] text-muted" }, el("span", { class: "label", text: "Jours (aucun = tous)" }), box);
+  return el("div", { class: "weekdays-field grid gap-[0.35rem] [grid-column:1_/_-1] text-corps text-muted" }, el("span", { class: "label", text: "Jours (aucun = tous)" }), box);
 }
 
 /** « Volets au coucher ! » → « volets_au_coucher » (identifiant valide). */
@@ -1136,7 +1136,7 @@ function renderTraces() {
     ...trace.runs.map((run, index) => {
       const button = el(
         "button",
-        { type: "button", class: `trace-run inline-flex items-center gap-[0.4rem] min-h-[36px] [padding:0.25rem_0.7rem] [border-radius:999px] [border:1px_solid_var(--line)] bg-card text-text [:not(:where(.o040409))&]:[font-family:var(--font-mono)] [:not(:where(.o040410))&]:text-[0.8rem] [&[aria-pressed=true]]:bg-text [&[aria-pressed=true]]:text-bg [&[aria-pressed=true]]:border-text run-${run.outcome}`, "aria-pressed": String(index === trace.selected) },
+        { type: "button", class: `trace-run inline-flex items-center gap-[0.4rem] min-h-[36px] [padding:0.25rem_0.7rem] [border-radius:999px] [border:1px_solid_var(--line)] bg-card text-text [:not(:where(.o040409))&]:[font-family:var(--font-mono)] [:not(:where(.o040410))&]:text-petit [&[aria-pressed=true]]:bg-text [&[aria-pressed=true]]:text-bg [&[aria-pressed=true]]:border-text run-${run.outcome}`, "aria-pressed": String(index === trace.selected) },
         el("span", { class: "trace-dot w-[8px] h-[8px] [border-radius:50%] bg-ok flex-none [:not(:where(.o040700)).run-running_&]:bg-accent [:not(:where(.o040800)).run-conditions\_failed_&]:bg-muted [:not(:where(.o040800)).run-already\_running_&]:bg-muted [:not(:where(.o040800)).run-too\_many_&]:bg-muted [:not(:where(.o040800)).run-aborted_&]:bg-muted [:not(:where(.o040900)).run-stopped_&]:[background:var(--glow-bar)] [:not(:where(.o041000)).run-loop_&]:bg-alert", "aria-hidden": "true" }),
         el("span", { text: timeOnly.format(new Date(run.started)) }),
       );
@@ -1172,7 +1172,7 @@ function traceDetail(run) {
   const step = (kind, title, detail, extra = "") =>
     el("li", { class: `trace-step grid [grid-template-columns:18px_minmax(0,_1fr)] gap-[0.7rem] relative pb-[0.8rem] [&::before]:[content:''] [&::before]:absolute [:not(:where(.o041702))&::before]:[left:8px] [:not(:where(.o041703))&::before]:[top:18px] [:not(:where(.o041704))&::before]:[bottom:0] [&::before]:w-[2px] [&::before]:bg-line [&:last-child::before]:hidden [:not(:where(.o042500))&_p]:m-0 [:not(:where(.o042501))&_p]:[overflow-wrap:anywhere] [&_small]:block [:not(:where(.o042601))&_small]:text-muted [:not(:where(.o042602))&_small]:[overflow-wrap:anywhere] [&.failed_small:first-of-type]:text-alert ${kind}` },
       el("span", { class: "trace-mark w-[18px] h-[18px] [border-radius:50%] [border:2px_solid_var(--ok)] bg-card mt-[2px] [:not(:where(.o042000)).trace-step.trigger_&]:border-accent [:not(:where(.o042001)).trace-step.trigger_&]:bg-accent [:not(:where(.o042100)).trace-step.done_&]:bg-ok [:not(:where(.o042200)).trace-step.stopped_&]:[border-color:var(--glow-bar)] [:not(:where(.o042201)).trace-step.stopped_&]:bg-glow-soft [:not(:where(.o042300)).trace-step.failed_&]:border-alert [:not(:where(.o042301)).trace-step.failed_&]:bg-alert [:not(:where(.o042400)).trace-step.running_&]:border-accent", "aria-hidden": "true" }),
-      el("div", {}, el("p", { text: title }), ...(detail ? [el("small", { text: detail })] : []), ...(extra ? [el("small", { class: "trace-path [:not(:where(.o042800))&]:[font-family:var(--font-mono)] [:not(:where(.o042801))&]:text-[0.75rem]", text: extra })] : [])),
+      el("div", {}, el("p", { text: title }), ...(detail ? [el("small", { text: detail })] : []), ...(extra ? [el("small", { class: "trace-path [:not(:where(.o042800))&]:[font-family:var(--font-mono)] [:not(:where(.o042801))&]:text-legende", text: extra })] : [])),
     );
   steps.append(step("trigger", "Déclenchée", run.trigger ?? "lancée à la main"));
   for (const check of run.conditions) {

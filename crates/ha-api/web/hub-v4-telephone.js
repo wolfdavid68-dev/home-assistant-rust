@@ -94,13 +94,13 @@ const HUB_V4_TEL_PANELS = ["lumieres", "volets", "chauffage"];
 
 /** Une carte de la grille : petit titre, valeur, ligne dessous. */
 function hubV4TelCard(icon, title, open) {
-  const value = el("b", { class: "max-w-full text-[20px] font-semibold leading-tight truncate" });
-  const sub = el("small", { class: `max-w-full text-[12px] ${HUB_V4_MUTE} truncate` });
+  const value = el("b", { class: "max-w-full text-grand font-semibold leading-tight truncate" });
+  const sub = el("small", { class: `max-w-full text-legende ${HUB_V4_MUTE} truncate` });
   const node = el("button", {
     type: "button",
     class: `flex flex-col items-start justify-between gap-1 min-h-20 min-w-0 p-3.5 rounded-[20px] border-0 text-left `
       + `text-inherit cursor-pointer ${HUB_V4_TEL_GLASS} ${HUB_V4_FOCUS}`,
-  }, el("span", { class: `flex items-center gap-1.5 text-[12px] font-medium ${HUB_V4_MUTE} [&_svg]:size-3.5` },
+  }, el("span", { class: `flex items-center gap-1.5 text-legende font-medium ${HUB_V4_MUTE} [&_svg]:size-3.5` },
     svgIcon(icon), title), value, sub);
   node.addEventListener("click", open);
   return { node, value, sub };
@@ -110,7 +110,7 @@ function hubV4TelCard(icon, title, open) {
 function hubV4TelTab(icon, label, run) {
   const node = el("button", {
     type: "button",
-    class: `flex flex-col items-center gap-1 min-w-0 pt-1.5 border-0 bg-transparent text-[11px] font-medium `
+    class: `flex flex-col items-center gap-1 min-w-0 pt-1.5 border-0 bg-transparent text-micro font-medium `
       + `${HUB_V4_MUTE} cursor-pointer aria-[current=page]:text-v-amber2 [&_svg]:size-6 ${HUB_V4_FOCUS}`,
   }, svgIcon(icon), el("span", { text: label }));
   node.addEventListener("click", run);
@@ -139,23 +139,23 @@ function hubV4TelBuild() {
       "aria-label": "Notifications",
     }, svgIcon(ICONS.bell)),
     badge: el("span", {
-      class: "absolute -top-1 -right-1 grid place-items-center min-w-5 h-5 px-1 rounded-full bg-[#ffbf5e] text-[11px] font-bold text-[#1a1530]",
+      class: "absolute -top-1 -right-1 grid place-items-center min-w-5 h-5 px-1 rounded-full bg-[#ffbf5e] text-micro font-bold text-[#1a1530]",
     }),
     avatar: button({
-      class: `grid place-items-center size-10 shrink-0 p-0 rounded-full border-0 bg-[#b9a3ff] text-[15px] font-bold `
+      class: `grid place-items-center size-10 shrink-0 p-0 rounded-full border-0 bg-[#b9a3ff] text-courant font-bold `
         + `text-[#1a1530] cursor-pointer ${HUB_V4_FOCUS}`,
       "aria-label": "Qui est là",
     }),
-    hello: el("h1", { class: "m-0 font-titre text-[32px] font-semibold leading-[1.08] tracking-[-0.03em]" }),
+    hello: el("h1", { class: "m-0 font-titre text-affiche font-semibold leading-[1.08] tracking-[-0.03em]" }),
     calm: el("em", { class: "block not-italic text-v-sky" }),
-    summary: el("p", { class: `m-0 mt-2 text-[14px] leading-snug ${HUB_V4_MUTE}` }),
+    summary: el("p", { class: `m-0 mt-2 text-corps leading-snug ${HUB_V4_MUTE}` }),
     approval: el("div", {
-      class: "flex items-center gap-3 mx-4 pl-4 pr-1.5 py-1.5 rounded-full bg-v-amber/14 text-v-amber2 text-[14px] font-medium",
+      class: "flex items-center gap-3 mx-4 pl-4 pr-1.5 py-1.5 rounded-full bg-v-amber/14 text-v-amber2 text-corps font-medium",
       role: "status",
     }),
     approvalText: el("span", { class: "flex-1 min-w-0 truncate" }),
     approvalGo: button({
-      class: `min-h-9 px-4 rounded-full border-0 bg-[#ffbf5e] text-[13px] font-semibold text-[#1a1530] cursor-pointer ${HUB_V4_FOCUS}`,
+      class: `min-h-9 px-4 rounded-full border-0 bg-[#ffbf5e] text-petit font-semibold text-[#1a1530] cursor-pointer ${HUB_V4_FOCUS}`,
     }, "Voir"),
     houseSlot: el("div", { class: "relative shrink-0" }),
     // Les onglets du dessin (vue de dehors, étages) et « Toute la maison ».
@@ -177,8 +177,8 @@ function hubV4TelBuild() {
     }),
     musicOpen: button({ class: `flex flex-1 items-center gap-3 min-w-0 p-0 border-0 bg-transparent text-left text-inherit cursor-pointer ${HUB_V4_FOCUS}` }),
     musicImg: el("img", { class: "absolute inset-0 size-full object-cover", alt: "", decoding: "async", draggable: "false" }),
-    musicTitle: el("b", { class: "text-[14px] font-semibold truncate" }),
-    musicSub: el("small", { class: `text-[12px] ${HUB_V4_MUTE} truncate` }),
+    musicTitle: el("b", { class: "text-corps font-semibold truncate" }),
+    musicSub: el("small", { class: `text-legende ${HUB_V4_MUTE} truncate` }),
     play: button({ class: `grid place-items-center size-11 shrink-0 p-0 rounded-full border-0 bg-voile/10 text-inherit cursor-pointer disabled:opacity-40 [&_svg]:size-5 ${HUB_V4_FOCUS}` }),
     next: button({ class: `grid place-items-center size-11 shrink-0 p-0 rounded-full border-0 bg-transparent text-inherit cursor-pointer disabled:opacity-40 [&_svg]:size-5 ${HUB_V4_FOCUS}`, "aria-label": "Morceau suivant" },
       svgIcon(ICONS.next)),
@@ -193,7 +193,7 @@ function hubV4TelBuild() {
   // Les lentilles : les mêmes que sur la tablette (hub-v3.js).
   ui.segs = HUB_V3_LENSES.map((lens) => {
     const seg = button({
-      class: `shrink-0 min-h-9 px-3.5 rounded-full border-0 bg-voile/8 text-[13px] font-medium text-inherit cursor-pointer `
+      class: `shrink-0 min-h-9 px-3.5 rounded-full border-0 bg-voile/8 text-petit font-medium text-inherit cursor-pointer `
         + `transition-colors aria-pressed:bg-[#ffbf5e] aria-pressed:text-[#1a1530] ${HUB_V4_FOCUS}`,
       "data-lens": lens.id,
       "aria-pressed": "false",
@@ -272,7 +272,7 @@ function hubV4TelBuild() {
       + "pt-[max(12px,env(safe-area-inset-top))] pb-[calc(152px+env(safe-area-inset-bottom))] "
       + "text-v-ink [font-variant-numeric:tabular-nums]",
   },
-  el("header", { class: "flex items-center gap-2.5 px-5 text-[13px] font-medium" }, ui.when, ui.live, ui.bell, ui.avatar),
+  el("header", { class: "flex items-center gap-2.5 px-5 text-petit font-medium" }, ui.when, ui.live, ui.bell, ui.avatar),
   el("div", { class: "px-5" }, ui.hello, ui.summary),
   ui.approval, ui.pages, ui.houseSlot, ui.lens, ui.panel, ui.cards, ui.music, ui.tabs);
 
@@ -301,7 +301,7 @@ function hubV4TelPanelBuild(ui) {
   ui.syncHeat = hubV4Keyed(ui.heatList, (id) => hubV4HeatTile(id, nameOf(entities.get(id))));
 
   const covers = hubV4Tile(ICONS.blinds, "sky", "Volets");
-  ui.coverAll = el("button", { type: "button", class: `${HUB_V4_BTN} min-h-9 px-3 text-[13px]` });
+  ui.coverAll = el("button", { type: "button", class: `${HUB_V4_BTN} min-h-9 px-3 text-petit` });
   ui.coverAll.addEventListener("click", () => {
     if (hubV3ActionRun("volets")) hubV3Wait(ui.coverAll);
   });
@@ -312,7 +312,7 @@ function hubV4TelPanelBuild(ui) {
   ui.syncCovers = hubV4Keyed(coverList, (id) => hubV4CoverRow(id, ""));
 
   const lights = hubV4Tile(ICONS.bulb, "amber", "Lumières");
-  ui.lightsOff = el("button", { type: "button", class: `${HUB_V4_BTN} min-h-9 px-3 text-[13px]`, text: "Tout éteindre" });
+  ui.lightsOff = el("button", { type: "button", class: `${HUB_V4_BTN} min-h-9 px-3 text-petit`, text: "Tout éteindre" });
   ui.lightsOff.addEventListener("click", () => {
     if (hubV3ActionRun("lumieres")) hubV3Wait(ui.lightsOff);
   });
@@ -321,11 +321,11 @@ function hubV4TelPanelBuild(ui) {
   lights.node.append(roomGrid);
   ui.lights = lights.node;
   ui.syncRooms = hubV4Keyed(roomGrid, (room) => {
-    const count = el("span", { class: `text-[13px] ${HUB_V4_MUTE} group-data-full:text-v-amber2` });
+    const count = el("span", { class: `text-petit ${HUB_V4_MUTE} group-data-full:text-v-amber2` });
     const node = el("button", {
       type: "button",
       class: "group flex items-center justify-between gap-2 min-h-12 px-3.5 rounded-[14px] border-0 bg-voile/6 text-left "
-        + "text-[14px] font-semibold text-inherit cursor-pointer transition-colors hover:bg-voile/10 "
+        + "text-corps font-semibold text-inherit cursor-pointer transition-colors hover:bg-voile/10 "
         + `data-full:bg-v-amber/16 ${HUB_V4_FOCUS}`,
     }, el("span", { class: "truncate", text: room }), count);
     node.addEventListener("click", () => hubV4Room(room));
@@ -433,7 +433,7 @@ function hubV4TelRenderPages() {
   const pill = (text, pressed, run) => {
     const node = el("button", {
       type: "button",
-      class: `shrink-0 min-h-9 px-3.5 rounded-full border-0 bg-voile/8 text-[13px] font-medium text-inherit cursor-pointer `
+      class: `shrink-0 min-h-9 px-3.5 rounded-full border-0 bg-voile/8 text-petit font-medium text-inherit cursor-pointer `
         + `transition-colors aria-pressed:bg-v-ink aria-pressed:text-v-inverse ${HUB_V4_FOCUS}`,
       "aria-pressed": String(pressed),
     }, text);

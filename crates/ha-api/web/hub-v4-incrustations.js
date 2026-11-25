@@ -15,9 +15,9 @@ const HUB_V4_ROW = "flex items-center gap-3 min-h-12 px-3 py-2 rounded-[16px] bg
 const HUB_V4_ICON_BTN = "grid place-items-center size-11 shrink-0 p-0 rounded-full border-0 bg-voile/8 text-inherit "
   + "cursor-pointer transition-colors hover:bg-voile/14 disabled:opacity-35 disabled:cursor-default [&_svg]:size-5 "
   + HUB_V4_FOCUS;
-const HUB_V4_INPUT = "w-full min-h-12 px-4 rounded-[16px] border-0 bg-voile/8 text-[15px] text-inherit "
+const HUB_V4_INPUT = "w-full min-h-12 px-4 rounded-[16px] border-0 bg-voile/8 text-courant text-inherit "
   + "placeholder:text-v-mute/80 [color-scheme:dark] " + HUB_V4_FOCUS;
-const HUB_V4_CHIP = "min-h-10 px-3 rounded-full border-0 bg-voile/8 text-[13px] text-inherit cursor-pointer "
+const HUB_V4_CHIP = "min-h-10 px-3 rounded-full border-0 bg-voile/8 text-petit text-inherit cursor-pointer "
   + "transition-colors hover:bg-voile/14 " + HUB_V4_FOCUS;
 // Un « + » et une coche, en traits (comme ICONS).
 const HUB_V4_MORE_ICONS = { plus: ["M12 5v14", "M5 12h14"] };
@@ -72,20 +72,20 @@ function hubV4Music() {
   if (!first) return false;
   let id = first.entity_id;
   const get = () => entities.get(id);
-  const sub = el("span", { class: `text-[13px] ${HUB_V4_MUTE} truncate` });
+  const sub = el("span", { class: `text-petit ${HUB_V4_MUTE} truncate` });
   const img = el("img", { alt: "", decoding: "async", draggable: "false", class: "absolute inset-0 size-full object-cover" });
   const art = el("div", {
     class: "relative grid place-items-center h-40 rounded-[20px] overflow-hidden "
       + "bg-[radial-gradient(circle_at_30%_20%,rgb(185_163_255/0.45),rgb(16_18_42/0.6))] text-v-violet [&>svg]:size-14 [&>svg]:opacity-60",
     "aria-hidden": "true",
   }, svgIcon(ICONS.music), img);
-  const title = el("b", { class: "text-[17px] font-semibold truncate" });
-  const artist = el("span", { class: `text-[13px] ${HUB_V4_MUTE} truncate` });
+  const title = el("b", { class: "text-moyen font-semibold truncate" });
+  const artist = el("span", { class: `text-petit ${HUB_V4_MUTE} truncate` });
   const progress = el("div", { class: "relative h-1.5 rounded-full bg-voile/10 overflow-hidden", role: "img" },
     el("span", { class: "absolute inset-y-0 left-0 w-(--p) rounded-full bg-v-violet" }));
   const at = el("span");
   const length = el("span");
-  const times = el("p", { class: `m-0 flex justify-between text-[12px] ${HUB_V4_MUTE}` }, at, length);
+  const times = el("p", { class: `m-0 flex justify-between text-legende ${HUB_V4_MUTE}` }, at, length);
   const command = (service, data) => {
     const now = get();
     if (!now || !hubV4Ready(now)) return;
@@ -103,7 +103,7 @@ function hubV4Music() {
   const controls = el("div", { class: "flex items-center justify-center gap-5" }, prev, play, next);
 
   let hold = 0;
-  const volumeValue = el("b", { class: "relative text-[14px] font-semibold" });
+  const volumeValue = el("b", { class: "relative text-corps font-semibold" });
   const range = el("input", { type: "range", min: "0", max: "100", step: "1", "aria-label": "Volume", class: HUB_V4_RANGE });
   const volume = el("label", {
     class: `relative flex items-center justify-between h-12 px-4 rounded-[16px] bg-voile/8 overflow-hidden ${HUB_V4_TRACK}`,
@@ -113,7 +113,7 @@ function hubV4Music() {
       + "transition-[width] motion-reduce:transition-none",
     "aria-hidden": "true",
   }),
-  el("span", { class: "relative flex items-center gap-2 text-[14px] font-medium [&_svg]:size-4" }, svgIcon(ICONS.speaker), "Volume"),
+  el("span", { class: "relative flex items-center gap-2 text-corps font-medium [&_svg]:size-4" }, svgIcon(ICONS.speaker), "Volume"),
   volumeValue, range);
   const showVolume = (percent) => {
     volume.style.setProperty("--v", `${percent}%`);
@@ -142,12 +142,12 @@ function hubV4Music() {
       const playing = player.state === "playing";
       const node = el("button", {
         type: "button", "aria-pressed": String(player.entity_id === id),
-        class: "flex items-center gap-2.5 min-h-11 px-3 rounded-[14px] border-0 bg-voile/6 text-left text-[14px] text-inherit "
+        class: "flex items-center gap-2.5 min-h-11 px-3 rounded-[14px] border-0 bg-voile/6 text-left text-corps text-inherit "
           + "cursor-pointer transition-colors hover:bg-voile/10 aria-pressed:bg-v-violet/20 " + HUB_V4_FOCUS,
       },
       el("span", { class: "size-2 shrink-0 rounded-full bg-voile/25 data-on:bg-v-violet", ...(playing ? { "data-on": "" } : {}) }),
       el("span", { class: "flex-1 truncate", text: nameOf(player) }),
-      el("span", { class: `text-[12px] ${HUB_V4_MUTE}`, text: playing ? "en cours" : player.state === "paused" ? "en pause" : "" }));
+      el("span", { class: `text-legende ${HUB_V4_MUTE}`, text: playing ? "en cours" : player.state === "paused" ? "en pause" : "" }));
       node.addEventListener("click", () => {
         id = player.entity_id;
         chooseMusicPlayer(id);
@@ -259,9 +259,9 @@ function hubV4Weather() {
   const get = () => [...entities.values()].find((s) => domainOf(s) === "weather");
   if (!get()) return false;
   const icon = el("span", { class: "text-v-sky [&_svg]:size-12", "aria-hidden": "true" });
-  const temp = el("b", { class: "font-titre text-[44px] font-light leading-none" });
-  const label = el("b", { class: "text-[15px] font-semibold" });
-  const feel = el("span", { class: `text-[13px] ${HUB_V4_MUTE}` });
+  const temp = el("b", { class: "font-titre text-affiche-l font-light leading-none" });
+  const label = el("b", { class: "text-courant font-semibold" });
+  const feel = el("span", { class: `text-petit ${HUB_V4_MUTE}` });
   const now = el("div", { class: "flex items-center gap-3 px-1" }, icon, temp, el("p", { class: "m-0 flex flex-col" }, label, feel));
   const daysTitle = el("b", { class: HUB_V4_LABEL, text: "4 jours" });
   const list = el("ul", { class: "m-0 p-0 list-none flex flex-col gap-1" });
@@ -292,21 +292,21 @@ function hubV4Weather() {
       });
       bar.style.setProperty("--from", `${Math.round(day.from * 100)}%`);
       bar.style.setProperty("--to", `${Math.round((1 - day.to) * 100)}%`);
-      const row = el("li", { class: "grid grid-cols-[40px_24px_32px_1fr_32px] items-center gap-2 min-h-10 px-2 text-[14px] [&_svg]:size-5" },
+      const row = el("li", { class: "grid grid-cols-[40px_24px_32px_1fr_32px] items-center gap-2 min-h-10 px-2 text-corps [&_svg]:size-5" },
         el("span", { class: "first-letter:uppercase", text: dayName.format(new Date(`${day.datetime.slice(0, 10)}T12:00`)) }),
         svgIcon(weatherIcon(day.condition)),
         el("span", { class: `text-right ${HUB_V4_MUTE}`, text: `${day.low}°` }),
         el("span", { class: "relative h-1.5 rounded-full bg-voile/10" }, bar),
         el("span", { class: "font-semibold", text: `${day.high}°` }));
       if (day.rain === null) return [row];
-      return [row, el("li", { class: "pl-[72px] -mt-1 text-[12px] text-v-sky", text: `Pluie possible · ${day.rain} %` })];
+      return [row, el("li", { class: "pl-[72px] -mt-1 text-legende text-v-sky", text: `Pluie possible · ${day.rain} %` })];
     }));
   };
   hubV4Overlay({
     icon: ICONS.partly,
     tone: "sky",
     title: "Météo",
-    sub: el("span", { class: `text-[13px] ${HUB_V4_MUTE}`, text: "Maintenant et 4 jours" }),
+    sub: el("span", { class: `text-petit ${HUB_V4_MUTE}`, text: "Maintenant et 4 jours" }),
     body: [now, daysTitle, list],
     spot: hubV4Rect(document.querySelector("#hub-weather")),
     refresh,
@@ -334,14 +334,14 @@ function hubV4Tempo() {
         + "data-[tone=blue]:border-0 data-[tone=blue]:bg-[#5b8cff] data-[tone=white]:border-0 data-[tone=white]:bg-white data-[tone=white]:ring-1 data-[tone=white]:ring-voile/30 "
         + "data-[tone=red]:border-0 data-[tone=red]:bg-[#ff6b6b]",
     });
-    const word = el("b", { class: "text-[20px] font-semibold" });
+    const word = el("b", { class: "text-grand font-semibold" });
     const node = el("div", { class: "flex flex-col gap-1 p-3 rounded-[18px] bg-voile/6" },
-      el("span", { class: `text-[13px] ${HUB_V4_MUTE}`, text: label }), el("span", { class: "flex items-center gap-2" }, dot, word));
+      el("span", { class: `text-petit ${HUB_V4_MUTE}`, text: label }), el("span", { class: "flex items-center gap-2" }, dot, word));
     return { node, dot, word };
   };
   const today = day("Aujourd'hui");
   const tomorrow = day("Demain");
-  const note = el("p", { class: `m-0 px-1 text-[13px] ${HUB_V4_MUTE}` });
+  const note = el("p", { class: `m-0 px-1 text-petit ${HUB_V4_MUTE}` });
   const paint = (part, state) => {
     const { tone, text } = hubV4TempoDay(state);
     part.dot.dataset.tone = tone;
@@ -350,7 +350,7 @@ function hubV4Tempo() {
   hubV4Overlay({
     icon: ICONS.bolt,
     title: "Tempo",
-    sub: el("span", { class: `text-[13px] ${HUB_V4_MUTE}`, text: "La couleur du jour EDF" }),
+    sub: el("span", { class: `text-petit ${HUB_V4_MUTE}`, text: "La couleur du jour EDF" }),
     body: [el("div", { class: "grid grid-cols-2 gap-2" }, today.node, tomorrow.node), note],
     spot: hubV4Rect(document.querySelector("#hub-v3-tempo")),
     refresh: () => {
@@ -407,7 +407,7 @@ function hubV4Agenda() {
     const days = hubV4AgendaDays(events, now);
     swap(list, ...days.map(({ date, events: dayEvents }) => {
       const rows = dayEvents.length === 0
-        ? [el("p", { class: `m-0 py-2 text-[14px] ${HUB_V4_MUTE}`, text: "Rien aujourd'hui" })]
+        ? [el("p", { class: `m-0 py-2 text-corps ${HUB_V4_MUTE}`, text: "Rien aujourd'hui" })]
         : dayEvents.map((e) => {
           const row = el("button", {
             type: "button",
@@ -416,9 +416,9 @@ function hubV4Agenda() {
           },
           el("span", { class: "w-1 self-stretch my-1.5 shrink-0 rounded-full bg-(--ev)" }),
           el("span", { class: "flex flex-col min-w-0" },
-            el("b", { class: "text-[14px] font-semibold truncate", text: String(e.summary ?? "") }),
+            el("b", { class: "text-corps font-semibold truncate", text: String(e.summary ?? "") }),
             el("span", {
-              class: `text-[12px] ${HUB_V4_MUTE} truncate`,
+              class: `text-legende ${HUB_V4_MUTE} truncate`,
               text: [e.allDay ? "toute la journée" : hubV4Clock(e.startDate), e.location || ""].filter(Boolean).join(" · "),
             })));
           row.style.setProperty("--ev", e.color);
@@ -429,8 +429,8 @@ function hubV4Agenda() {
           return row;
         });
       return el("li", { class: "grid grid-cols-[44px_1fr] gap-2 items-start p-1.5 rounded-[16px] bg-voile/6" },
-        el("span", { class: `flex flex-col items-center pt-1.5 text-[12px] ${HUB_V4_MUTE}` },
-          dateDay.format(date), el("b", { class: "text-[20px] font-semibold text-v-ink leading-tight", text: String(date.getDate()) })),
+        el("span", { class: `flex flex-col items-center pt-1.5 text-legende ${HUB_V4_MUTE}` },
+          dateDay.format(date), el("b", { class: "text-grand font-semibold text-v-ink leading-tight", text: String(date.getDate()) })),
         el("div", { class: "flex flex-col min-w-0" }, ...rows));
     }));
     add.hidden = !calendars.some((c) => c.id === "calendar.maison" && !c.readOnly && canControl(c.state));
@@ -439,7 +439,7 @@ function hubV4Agenda() {
     icon: ICONS.calendar,
     tone: "green",
     title: "Agenda",
-    sub: el("span", { class: `text-[13px] ${HUB_V4_MUTE}`, text: "Les jours qui viennent" }),
+    sub: el("span", { class: `text-petit ${HUB_V4_MUTE}`, text: "Les jours qui viennent" }),
     body: [list, add],
     more: { label: "Tout l'agenda", run: () => { leaveHub(); openAgenda(); } },
     refresh,
@@ -472,14 +472,14 @@ function hubV4EventData(title, day, time) {
 function hubV4NewEvent() {
   if (!hubV4Can()) return false;
   const field = (label, input) => el("label", { class: "flex flex-col gap-1" },
-    el("span", { class: `px-1 text-[12px] ${HUB_V4_MUTE}`, text: label }), input);
+    el("span", { class: `px-1 text-legende ${HUB_V4_MUTE}`, text: label }), input);
   const title = el("input", { type: "text", class: HUB_V4_INPUT, placeholder: "Dentiste, anniversaire…", maxlength: "120", required: "" });
   const day = el("input", { type: "date", class: HUB_V4_INPUT, required: "" });
   day.value = hubV4DayValue(new Date());
   const time = el("input", { type: "time", class: HUB_V4_INPUT });
   const cancel = el("button", { type: "button", class: `${HUB_V4_BTN} flex-1`, text: "Annuler" });
   const save = el("button", { type: "submit", class: `${HUB_V4_MAIN} flex-1`, text: "Ajouter" });
-  const note = el("p", { class: `m-0 px-1 text-[12px] ${HUB_V4_MUTE}`, text: "Sans heure, il prend toute la journée." });
+  const note = el("p", { class: `m-0 px-1 text-legende ${HUB_V4_MUTE}`, text: "Sans heure, il prend toute la journée." });
   const form = el("form", { class: "flex flex-col gap-2.5" },
     field("Titre", title), el("div", { class: "grid grid-cols-2 gap-2" }, field("Jour", day), field("Heure", time)), note,
     el("div", { class: "flex gap-2" }, cancel, save));
@@ -498,7 +498,7 @@ function hubV4NewEvent() {
     icon: ICONS.calendar,
     tone: "green",
     title: "Nouveau rendez-vous",
-    sub: el("span", { class: `text-[13px] ${HUB_V4_MUTE}`, text: "Dans l'agenda de la maison" }),
+    sub: el("span", { class: `text-petit ${HUB_V4_MUTE}`, text: "Dans l'agenda de la maison" }),
     body: [form],
     refresh: () => {},
   });
@@ -554,7 +554,7 @@ function hubV4Announce() {
     swap(whereBox, ...choices.map(([id, text]) => {
       const node = el("button", {
         type: "button", "aria-pressed": String(id === where),
-        class: "flex-1 min-h-10 px-3 rounded-[12px] border-0 bg-transparent text-[13px] font-medium text-inherit cursor-pointer "
+        class: "flex-1 min-h-10 px-3 rounded-[12px] border-0 bg-transparent text-petit font-medium text-inherit cursor-pointer "
           + `transition-colors hover:bg-voile/8 aria-pressed:bg-[#9ad8ff] aria-pressed:text-[#0b1a2b] ${HUB_V4_FOCUS}`,
         text,
       });
@@ -569,7 +569,7 @@ function hubV4Announce() {
     icon: ICONS.megaphone,
     tone: "sky",
     title: "Annonce",
-    sub: el("span", { class: `text-[13px] ${HUB_V4_MUTE}`, text: "La maison le dit à voix haute" }),
+    sub: el("span", { class: `text-petit ${HUB_V4_MUTE}`, text: "La maison le dit à voix haute" }),
     body: [form],
     refresh,
   });
@@ -594,13 +594,13 @@ function hubV4Notices(states) {
 /** La cloche : les avis actifs ; un ordre à valider s'ouvre dans sa propre fenêtre. */
 function hubV4Bell() {
   if (!hubV4Can() || typeof noticeStates !== "function") return false;
-  const sub = el("span", { class: `text-[13px] ${HUB_V4_MUTE}` });
+  const sub = el("span", { class: `text-petit ${HUB_V4_MUTE}` });
   const list = el("ul", { class: "m-0 p-0 list-none flex flex-col gap-1.5" });
   const refresh = () => {
     const active = hubV4Notices(noticeStates());
     setText(sub, active.length === 0 ? "Rien à signaler" : active.length === 1 ? "1 avis" : `${active.length} avis`);
     swap(list, ...(active.length === 0
-      ? [el("li", { class: `px-1 py-3 text-[14px] ${HUB_V4_MUTE}`, text: "Rien à signaler." })]
+      ? [el("li", { class: `px-1 py-3 text-corps ${HUB_V4_MUTE}`, text: "Rien à signaler." })]
       : active.map((state) => {
         const a = state.attributes;
         const approval = a.kind === "approval";
@@ -612,9 +612,9 @@ function hubV4Bell() {
           "aria-hidden": "true", ...(urgent ? { "data-urgent": "" } : {}),
         }, svgIcon(approval ? ICONS.shield : a.kind === "repair" ? ICONS.gauge : ICONS.bell));
         const text = el("p", { class: "m-0 flex flex-col flex-1 min-w-0" },
-          el("b", { class: "text-[14px] font-semibold truncate", text: String(a.title ?? "Notification") }),
-          el("span", { class: `text-[12px] ${HUB_V4_MUTE} line-clamp-2`, text: String(a.message ?? "") }));
-        const time = el("time", { class: `shrink-0 self-start pt-1 text-[12px] ${HUB_V4_MUTE}`, text: hubV4Clock(created) });
+          el("b", { class: "text-corps font-semibold truncate", text: String(a.title ?? "Notification") }),
+          el("span", { class: `text-legende ${HUB_V4_MUTE} line-clamp-2`, text: String(a.message ?? "") }));
+        const time = el("time", { class: `shrink-0 self-start pt-1 text-legende ${HUB_V4_MUTE}`, text: hubV4Clock(created) });
         if (approval) {
           const row = el("button", {
             type: "button", class: `${HUB_V4_ROW} w-full border-0 text-left text-inherit cursor-pointer hover:bg-voile/10 ${HUB_V4_FOCUS}`,
@@ -665,9 +665,9 @@ function hubV4Assist() {
   const paint = () => {
     const lines = hubV4AssistLines([...log.children]);
     swap(chat, ...(lines.length === 0
-      ? [el("p", { class: `m-0 py-2 text-[14px] ${HUB_V4_MUTE}`, text: "Demande en français : « éteins le salon », « quel temps demain ? »…" })]
+      ? [el("p", { class: `m-0 py-2 text-corps ${HUB_V4_MUTE}`, text: "Demande en français : « éteins le salon », « quel temps demain ? »…" })]
       : lines.map((line) => el("p", {
-        class: "m-0 max-w-[85%] px-3 py-2 rounded-[16px] text-[14px] leading-snug [overflow-wrap:anywhere] "
+        class: "m-0 max-w-[85%] px-3 py-2 rounded-[16px] text-corps leading-snug [overflow-wrap:anywhere] "
           + "data-[from=me]:self-end data-[from=me]:rounded-br-[4px] data-[from=me]:bg-[#9ad8ff] data-[from=me]:text-[#0b1a2b] "
           + "data-[from=home]:self-start data-[from=home]:rounded-bl-[4px] data-[from=home]:bg-voile/10 "
           + "data-error:shadow-[inset_3px_0_0_#ff6b6b]",
@@ -702,7 +702,7 @@ function hubV4Assist() {
     icon: ICONS.mic,
     tone: "sky",
     title: "Assist",
-    sub: el("span", { class: `text-[13px] ${HUB_V4_MUTE}`, text: "Demande à la maison" }),
+    sub: el("span", { class: `text-petit ${HUB_V4_MUTE}`, text: "Demande à la maison" }),
     body: [chat, ideas, form],
     refresh: paint,
     onClose: () => watch.disconnect(),
@@ -730,7 +730,7 @@ function hubV4People() {
   const persons = () => [...entities.values()].filter((s) => domainOf(s) === "person")
     .sort((a, b) => Number(b.state === "home") - Number(a.state === "home") || nameOf(a).localeCompare(nameOf(b), "fr"));
   if (!hubV4Can() || persons().length === 0) return false;
-  const sub = el("span", { class: `text-[13px] ${HUB_V4_MUTE}` });
+  const sub = el("span", { class: `text-petit ${HUB_V4_MUTE}` });
   const list = el("ul", { class: "m-0 p-0 list-none flex flex-col gap-1.5" });
   hubV4Overlay({
     icon: ICONS.person,
@@ -746,7 +746,7 @@ function hubV4People() {
       swap(list, ...people.map((state) => {
         const name = nameOf(state);
         const avatar = el("span", {
-          class: "relative grid place-items-center size-10 shrink-0 rounded-full bg-(--pc) text-[16px] font-semibold text-scrim "
+          class: "relative grid place-items-center size-10 shrink-0 rounded-full bg-(--pc) text-moyen font-semibold text-scrim "
             + "data-away:opacity-45",
           "aria-hidden": "true", ...(state.state === "home" ? {} : { "data-away": "" }),
         }, name.charAt(0).toUpperCase(), el("span", {
@@ -755,8 +755,8 @@ function hubV4People() {
         }));
         avatar.style.setProperty("--pc", personColor(name));
         return el("li", { class: HUB_V4_ROW }, avatar, el("p", { class: "m-0 flex flex-col min-w-0" },
-          el("b", { class: "text-[15px] font-semibold truncate", text: name }),
-          el("span", { class: `text-[13px] ${HUB_V4_MUTE}`, text: hubV4Presence(state) })));
+          el("b", { class: "text-courant font-semibold truncate", text: name }),
+          el("span", { class: `text-petit ${HUB_V4_MUTE}`, text: hubV4Presence(state) })));
       }));
     },
   });
@@ -795,9 +795,9 @@ function hubV4MachineView(state, now = Date.now(), shown = 3_600_000) {
 /** Une machine qui tourne : le programme, l'heure de fin, ce qui reste. */
 function hubV4Machine(entityId) {
   if (!hubV4Can() || !entities.get(entityId)) return false;
-  const sub = el("span", { class: `text-[13px] ${HUB_V4_MUTE} truncate` });
-  const end = el("b", { class: "font-titre text-[44px] font-light leading-none" });
-  const left = el("span", { class: `text-[13px] ${HUB_V4_MUTE}` });
+  const sub = el("span", { class: `text-petit ${HUB_V4_MUTE} truncate` });
+  const end = el("b", { class: "font-titre text-affiche-l font-light leading-none" });
+  const left = el("span", { class: `text-petit ${HUB_V4_MUTE}` });
   const bar = el("div", { class: "relative h-2 rounded-full bg-voile/10 overflow-hidden" },
     el("span", { class: "absolute inset-y-0 left-0 w-(--mp) rounded-full bg-v-sky transition-[width] motion-reduce:transition-none" }));
   hubV4Overlay({
@@ -851,12 +851,12 @@ function hubV4Water() {
     class: "relative w-16 h-28 shrink-0 rounded-[18px_18px_14px_14px] bg-voile/8 overflow-hidden shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--v3-voile)_12%,transparent)]",
     role: "img",
   }, fill);
-  const temp = el("b", { class: "font-titre text-[44px] font-light leading-none" });
-  const target = el("span", { class: `text-[13px] ${HUB_V4_MUTE}` });
-  const mode = el("span", { class: `text-[13px] ${HUB_V4_MUTE}` });
+  const temp = el("b", { class: "font-titre text-affiche-l font-light leading-none" });
+  const target = el("span", { class: `text-petit ${HUB_V4_MUTE}` });
+  const mode = el("span", { class: `text-petit ${HUB_V4_MUTE}` });
   const nudge = (direction) => {
     const node = el("button", {
-      type: "button", class: `${HUB_V4_ICON_BTN} text-[22px] font-light`,
+      type: "button", class: `${HUB_V4_ICON_BTN} text-titre font-light`,
       "aria-label": direction > 0 ? "Monter la consigne" : "Baisser la consigne", text: direction > 0 ? "+" : "−",
     });
     node.addEventListener("click", () => nudgeHeating(HUB_V3_WATER, direction));
@@ -869,10 +869,10 @@ function hubV4Water() {
   hubV4Overlay({
     icon: ICONS.flame,
     title: "Eau chaude",
-    sub: el("span", { class: `text-[13px] ${HUB_V4_MUTE}`, text: "Ballon thermodynamique" }),
+    sub: el("span", { class: `text-petit ${HUB_V4_MUTE}`, text: "Ballon thermodynamique" }),
     body: [
       el("div", { class: "flex items-center gap-4 px-1" }, tank,
-        el("div", { class: "flex flex-col gap-1 flex-1" }, temp, el("span", { class: `text-[13px] ${HUB_V4_MUTE}`, text: "dans le ballon" }), mode)),
+        el("div", { class: "flex flex-col gap-1 flex-1" }, temp, el("span", { class: `text-petit ${HUB_V4_MUTE}`, text: "dans le ballon" }), mode)),
       el("div", { class: "flex items-center justify-between gap-3 px-1" }, minus, target, plus),
       modeLabel, modes,
     ],
@@ -903,7 +903,7 @@ function hubV4Water() {
       swap(modes, ...presets.map((preset) => {
         const node = el("button", {
           type: "button", "aria-pressed": String(a.preset_mode === preset),
-          class: "min-h-10 px-2 rounded-[12px] border-0 bg-transparent text-[13px] font-medium text-inherit cursor-pointer "
+          class: "min-h-10 px-2 rounded-[12px] border-0 bg-transparent text-petit font-medium text-inherit cursor-pointer "
             + "transition-colors hover:bg-voile/8 aria-pressed:bg-[#ffbf5e] aria-pressed:text-[#1f1305] "
             + `disabled:opacity-40 disabled:cursor-default ${HUB_V4_FOCUS}`,
           text: lookup(PRESET_LABELS, preset) ?? `${preset.charAt(0).toUpperCase()}${preset.slice(1)}`,
@@ -937,10 +937,10 @@ function hubV4SecurityLog(entries, ids, keep = 4) {
 function hubV4Security() {
   const states = () => [...entities.values()].filter(hubV3IsSecurity).sort((a, b) => nameOf(a).localeCompare(nameOf(b), "fr"));
   if (!hubV4Can() || states().length === 0) return false;
-  const sub = el("span", { class: `text-[13px] ${HUB_V4_MUTE}` });
+  const sub = el("span", { class: `text-petit ${HUB_V4_MUTE}` });
   const list = el("ul", { class: "m-0 p-0 list-none flex flex-col gap-1.5" });
   const logLabel = el("b", { class: HUB_V4_LABEL, text: "Derniers passages" });
-  const log = el("ul", { class: "m-0 p-0 list-none flex flex-col gap-1 px-1 text-[13px]" });
+  const log = el("ul", { class: "m-0 p-0 list-none flex flex-col gap-1 px-1 text-petit" });
   logLabel.hidden = true;
   log.hidden = true;
   const allowed = account.permissions?.history !== false;
@@ -982,9 +982,9 @@ function hubV4Security() {
         const issue = hubV3SecurityIssue(state) !== null;
         return el("li", { class: HUB_V4_ROW },
           el("span", { class: `shrink-0 ${HUB_V4_MUTE} [&_svg]:size-5`, "aria-hidden": "true" }, svgIcon(iconOf(state))),
-          el("b", { class: "flex-1 min-w-0 text-[14px] font-medium truncate", text: nameOf(state) }),
+          el("b", { class: "flex-1 min-w-0 text-corps font-medium truncate", text: nameOf(state) }),
           el("span", {
-            class: "shrink-0 px-2.5 py-1 rounded-full text-[12px] font-semibold bg-v-ok/16 text-v-ok "
+            class: "shrink-0 px-2.5 py-1 rounded-full text-legende font-semibold bg-v-ok/16 text-v-ok "
               + "data-issue:bg-v-alert/18 data-issue:text-v-alert",
             ...(issue ? { "data-issue": "" } : {}),
             text: hubV3SecurityWord(state),
