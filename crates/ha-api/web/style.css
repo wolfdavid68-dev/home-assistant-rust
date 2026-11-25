@@ -7543,10 +7543,10 @@
   .\[\&\.is-on\]\:border-accent.is-on {
     border-color: var(--accent);
   }
-  .\[\&\.is-stale\]\:\[color\:color-mix\(in_srgb\,_var\(--tint-alertes\)_70\%\,_var\(--text\)\)\].is-stale {
+  .\[\&\.is-stale\]\:\[color\:color-mix\(in_srgb\,_var\(--tint-alertes\)_55\%\,_var\(--text\)\)\].is-stale {
     color: var(--tint-alertes);
     @supports (color: color-mix(in lab, red, red)) {
-      color: color-mix(in srgb, var(--tint-alertes) 70%, var(--text));
+      color: color-mix(in srgb, var(--tint-alertes) 55%, var(--text));
     }
   }
   .\[\&\.is-stale\:\:before\]\:mr-\[0\.35em\].is-stale::before {

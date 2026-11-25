@@ -113,7 +113,7 @@ function cardElement(card) {
   // L'âge de la donnée (étape 101) : « relevé à 08:15 », ou en ambre si elle est vieille.
   if (state && typeof freshness === "function") {
     const { text, stale } = freshness(state.last_updated ?? state.last_changed, staleAfter(state));
-    if (text) node.append(el("p", { class: `[margin:0.1rem_0_0] text-muted [:not(:where(.o111702))&]:text-legende [:not(:where(.o111703))&]:[font-variant-numeric:tabular-nums] [&.is-stale]:[color:color-mix(in_srgb,_var(--tint-alertes)_70%,_var(--text))] [&.is-stale::before]:[content:''] [&.is-stale::before]:inline-block [&.is-stale::before]:w-[0.45em] [&.is-stale::before]:h-[0.45em] [&.is-stale::before]:mr-[0.35em] [&.is-stale::before]:[border-radius:50%] [&.is-stale::before]:[background:var(--tint-alertes)] [&.is-stale::before]:[vertical-align:0.1em] glass-when${stale ? " is-stale" : ""}`, text }));
+    if (text) node.append(el("p", { class: `[margin:0.1rem_0_0] text-muted [:not(:where(.o111702))&]:text-legende [:not(:where(.o111703))&]:[font-variant-numeric:tabular-nums] [&.is-stale]:[color:color-mix(in_srgb,_var(--tint-alertes)_55%,_var(--text))] [&.is-stale::before]:[content:''] [&.is-stale::before]:inline-block [&.is-stale::before]:w-[0.45em] [&.is-stale::before]:h-[0.45em] [&.is-stale::before]:mr-[0.35em] [&.is-stale::before]:[border-radius:50%] [&.is-stale::before]:[background:var(--tint-alertes)] [&.is-stale::before]:[vertical-align:0.1em] glass-when${stale ? " is-stale" : ""}`, text }));
   }
   // Teinte par famille (étape 100) : l'appareil s'il est connu, sinon la phrase.
   const family = state ? familyOfState(state) : familyOf({ text: `${card.label} ${card.value}`, unit: card.unit ?? "" });

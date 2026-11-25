@@ -12,7 +12,7 @@ function tileHead(state, icon, subtitle, extra) {
     "div",
     { class: "tile-head flex items-center gap-3 pr-[1.9rem] min-w-0 [&>div]:min-w-0 [&>div]:flex-1 [:not(:where(.o010000)).tile-toggle_&]:pr-0 [:not(:where(.o010500)).has-knob_&]:pr-[1.9rem]" },
     el("span", { class: "icon" }, svgIcon(icon)),
-    el("div", {}, el("div", { class: "name", text: nameOf(state), title: state.entity_id }), el("div", { class: "sub text-petit text-muted [.tile.light.on_&]:[color:inherit] [.tile.light.on_&]:[opacity:0.85] [&.is-stale]:[color:color-mix(in_srgb,_var(--tint-alertes)_70%,_var(--text))] [&.is-stale::before]:[content:''] [&.is-stale::before]:inline-block [&.is-stale::before]:w-[0.45em] [&.is-stale::before]:h-[0.45em] [&.is-stale::before]:mr-[0.35em] [&.is-stale::before]:[border-radius:50%] [&.is-stale::before]:[background:var(--tint-alertes)] [&.is-stale::before]:[vertical-align:0.1em]", text: subtitle })),
+    el("div", {}, el("div", { class: "name", text: nameOf(state), title: state.entity_id }), el("div", { class: "sub text-petit text-muted [.tile.light.on_&]:[color:inherit] [.tile.light.on_&]:[opacity:0.85] [&.is-stale]:[color:color-mix(in_srgb,_var(--tint-alertes)_55%,_var(--text))] [&.is-stale::before]:[content:''] [&.is-stale::before]:inline-block [&.is-stale::before]:w-[0.45em] [&.is-stale::before]:h-[0.45em] [&.is-stale::before]:mr-[0.35em] [&.is-stale::before]:[border-radius:50%] [&.is-stale::before]:[background:var(--tint-alertes)] [&.is-stale::before]:[vertical-align:0.1em]", text: subtitle })),
   );
   if (extra) head.append(extra);
   return head;

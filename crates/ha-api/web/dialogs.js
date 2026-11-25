@@ -564,7 +564,7 @@ function renderEnergyNow() {
   const tempo = entities.get(TEMPO_TODAY);
   if (tempo && lookup(TEMPO_COLORS, tempo.state)) parts.push(tempoBadge(tempo.state));
   const tomorrow = entities.get(TEMPO_TOMORROW);
-  if (tempo && tomorrow) parts.push(el("span", { class: "sub text-petit text-muted [.tile.light.on_&]:[color:inherit] [.tile.light.on_&]:[opacity:0.85] [&.is-stale]:[color:color-mix(in_srgb,_var(--tint-alertes)_70%,_var(--text))] [&.is-stale::before]:[content:''] [&.is-stale::before]:inline-block [&.is-stale::before]:w-[0.45em] [&.is-stale::before]:h-[0.45em] [&.is-stale::before]:mr-[0.35em] [&.is-stale::before]:[border-radius:50%] [&.is-stale::before]:[background:var(--tint-alertes)] [&.is-stale::before]:[vertical-align:0.1em]", text: tempoTomorrowText(tomorrow) }));
+  if (tempo && tomorrow) parts.push(el("span", { class: "sub text-petit text-muted [.tile.light.on_&]:[color:inherit] [.tile.light.on_&]:[opacity:0.85] [&.is-stale]:[color:color-mix(in_srgb,_var(--tint-alertes)_55%,_var(--text))] [&.is-stale::before]:[content:''] [&.is-stale::before]:inline-block [&.is-stale::before]:w-[0.45em] [&.is-stale::before]:h-[0.45em] [&.is-stale::before]:mr-[0.35em] [&.is-stale::before]:[border-radius:50%] [&.is-stale::before]:[background:var(--tint-alertes)] [&.is-stale::before]:[vertical-align:0.1em]", text: tempoTomorrowText(tomorrow) }));
   box.hidden = parts.length === 0;
   box.replaceChildren(...parts);
 }
