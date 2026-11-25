@@ -791,7 +791,7 @@ function actionTile(state) {
   const subtitle = isScript
     ? running ? "En cours…" : "Prêt"
     : Number.isNaN(Date.parse(state.state)) ? "Jamais activée" : "";
-  const head = tileHead(state, isScript ? ICONS.play : ICONS.sparkle, subtitle);
+  const head = tileHead(state, hubSceneLook(state, 0).icon, subtitle);
   if (!isScript && subtitle === "") markAgo(head.querySelector(".sub"), state.state, "Activée il y a ");
   const button = el("button", { type: "button", class: "action-button [justify-self:start] min-h-[40px] [padding:0.45rem_1.1rem] [border-radius:999px] [border:0] bg-card-2 font-semibold [&:active]:[transform:scale(0.97)] [[data-theme|=plan]_&]:[border:1.25px_solid_var(--ink)] [[data-theme|=plan]_&]:[box-shadow:none] [[data-theme|=plan]_&]:[border-radius:var(--radius)]" });
   button.textContent = running ? "Arrêter" : isScript ? "Lancer" : "Activer";

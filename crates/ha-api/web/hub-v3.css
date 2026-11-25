@@ -731,6 +731,10 @@
 /* Une bascule active assombrit le dessin. */
 :root[data-hub-style="v3"] .hub #hub-house[data-lens]:not([data-lens="vivant"]) .house-base { filter: brightness(0.55) saturate(0.8); }
 :root[data-hub-style="v3"] .hub #hub-house[data-lens]:not([data-lens="vivant"]) .house-stage.default-drawing .house-base { filter: invert(1) hue-rotate(180deg) brightness(0.75); }
+/* En Clair, le dessin par défaut (traits bleus sur blanc) reste tel quel : inversé,
+   il deviendrait blanc sur le ciel clair et disparaîtrait. */
+:root[data-hub-style="v3"][data-theme="light"] .hub .house-stage.default-drawing .house-base { filter: none; mix-blend-mode: multiply; }
+:root[data-hub-style="v3"][data-theme="light"] .hub #hub-house[data-lens]:not([data-lens="vivant"]) .house-stage.default-drawing .house-base { filter: saturate(0.3) opacity(0.55); }
 
 /* Ce qui ne correspond pas à la bascule s'efface. */
 :root[data-hub-style="v3"] .hub #hub-house[data-lens="lumieres"] :is(.house-label, .house-zone):not([data-kind="lumieres"]),

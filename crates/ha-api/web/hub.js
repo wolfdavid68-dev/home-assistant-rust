@@ -30,7 +30,8 @@ const HUB_ICONS = {
   warn: ["M12 3l10 18H2z", "M12 10v4", "M12 17.5v.5"],
 };
 // Une couleur par personne, toujours la même pour un même nom.
-const HUB_PEOPLE_COLORS = ["#03a9f4", "#f06292", "#66bb6a", "#ffb74d", "#9575cd", "#4dd0e1"];
+// Assez foncées pour une initiale blanche lisible (contraste AA, 4,5:1 au moins).
+const HUB_PEOPLE_COLORS = ["#0277bd", "#c2185b", "#2e7d32", "#b45309", "#5e35b1", "#00838f"];
 
 function hubWanted() {
   try {
@@ -135,7 +136,7 @@ function renderHubPeople() {
     const name = nameOf(state);
     const home = state.state === "home";
     const avatar = el("span", {
-      class: home ? "hub-avatar w-[34px] h-[34px] [border-radius:50%] grid [place-items:center] [:not(:where(.o134005))&]:font-bold [:not(:where(.o134006))&]:text-corps [color:#fff] [background:var(--person)] [box-shadow:0_0_0_2px_var(--bg)] [&.away]:[opacity:0.35]" : "hub-avatar away w-[34px] h-[34px] [border-radius:50%] grid [place-items:center] [:not(:where(.o134005))&]:font-bold [:not(:where(.o134006))&]:text-corps [color:#fff] [background:var(--person)] [box-shadow:0_0_0_2px_var(--bg)] [&.away]:[opacity:0.35]",
+      class: home ? "hub-avatar w-[34px] h-[34px] [border-radius:50%] grid [place-items:center] [:not(:where(.o134005))&]:font-bold [:not(:where(.o134006))&]:text-corps [color:#fff] [background:var(--person)] [box-shadow:0_0_0_2px_var(--bg)] [&.away]:[background:transparent] [&.away]:[color:var(--muted)] [&.away]:[box-shadow:inset_0_0_0_1.5px_var(--muted)]" : "hub-avatar away w-[34px] h-[34px] [border-radius:50%] grid [place-items:center] [:not(:where(.o134005))&]:font-bold [:not(:where(.o134006))&]:text-corps [color:#fff] [background:var(--person)] [box-shadow:0_0_0_2px_var(--bg)] [&.away]:[background:transparent] [&.away]:[color:var(--muted)] [&.away]:[box-shadow:inset_0_0_0_1.5px_var(--muted)]",
       title: `${name} : ${home ? "à la maison" : "absent"}`,
       text: name.charAt(0).toUpperCase(),
     });
@@ -305,10 +306,10 @@ const HUB_SCENE_LOOKS = [
   [/nuit|coucher|dodo/i, "moon", "night"],
   [/pars|d[ée]part|absen|quitt|vacances/i, "door", "go"],
   [/cin[ée]|film|t[ée]l[ée]|\btv\b/i, "sofa", "cine"],
-  [/matin|r[ée]veil|lever/i, "illuminance", "morning"],
+  [/matin|r[ée]veil|lever|bonjour/i, "illuminance", "morning"],
   [/retour|arriv|rentr|bienvenue/i, "home", "home"],
   [/repas|d[îi]ner|d[ée]jeuner|cuisine/i, "pot", "morning"],
-  [/lecture|calme|d[ée]tente/i, "bulb", "cine"],
+  [/lecture|calme|d[ée]tente|soir/i, "bulb", "cine"],
 ];
 
 function hubSceneLook(state, index) {

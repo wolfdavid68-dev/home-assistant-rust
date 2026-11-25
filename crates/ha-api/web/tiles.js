@@ -254,7 +254,7 @@ function renderScenes() {
     const button = el(
       "button",
       { type: "button", id: `scene-${state.entity_id}`, class: running ? "scene on" : "scene", "aria-pressed": isScript ? String(running) : "false" },
-      svgIcon(isScript ? (running ? ICONS.stop : ICONS.play) : ICONS.sparkle),
+      svgIcon(isScript && running ? ICONS.stop : hubSceneLook(state, 0).icon),
       el("span", { text: nameOf(state) }),
     );
     button.addEventListener("click", () => {

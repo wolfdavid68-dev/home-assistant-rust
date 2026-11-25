@@ -7489,8 +7489,14 @@
   .\[\&_time\]\:min-w-\[7\.5rem\] time {
     min-width: 7.5rem;
   }
-  .\[\&\.away\]\:\[opacity\:0\.35\].away {
-    opacity: 0.35;
+  .\[\&\.away\]\:\[color\:var\(--muted\)\].away {
+    color: var(--muted);
+  }
+  .\[\&\.away\]\:\[box-shadow\:inset_0_0_0_1\.5px_var\(--muted\)\].away {
+    box-shadow: inset 0 0 0 1.5px var(--muted);
+  }
+  .\[\&\.away\]\:\[background\:transparent\].away {
+    background: transparent;
   }
   .\[\&\.below\.left\:\:after\]\:\[transform\:rotate\(-45deg\)\].below.left::after {
     transform: rotate(-45deg);
@@ -8780,6 +8786,9 @@
   }
   .tile.climate.stopped .dial .\[\.tile\.climate\.stopped_\.dial_\&\]\:\[stroke\:var\(--muted\)\] {
     stroke: var(--muted);
+  }
+  .tile.light.on .\[\.tile\.light\.on_\&\]\:bg-glow {
+    background-color: var(--glow);
   }
   .tile.light.on .\[\.tile\.light\.on_\&\]\:\[color\:inherit\] {
     color: inherit;
