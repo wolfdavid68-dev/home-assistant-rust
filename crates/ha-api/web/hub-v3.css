@@ -1026,6 +1026,57 @@
   mask-image: radial-gradient(farthest-side, #000 72%, transparent 100%);
 }
 
+/* Le ciel suit la météo, comme l'image de la maison (data-meteo, posé par
+   house.js) : éclaircies = astre voilé ; nuageux, vent, brouillard = ciel
+   gris, sans étoiles ; pluie, averses, orage, grêle = plus sombre ; neige =
+   pâle et froid. La pluie et la neige elles-mêmes tombent sur la maison
+   (effets du dessin). Les teintes de jour gardent l'ambre lisible (AA). */
+:root[data-hub-v4][data-meteo="eclaircies"] .hub .hub-center::before { opacity: 0.8; }
+:root[data-hub-v4]:is([data-meteo="nuageux"], [data-meteo="vent"], [data-meteo="brouillard"]) .hub .hub-center::before { opacity: 0.22; filter: blur(3px); }
+:root[data-hub-v4]:is([data-meteo="pluie"], [data-meteo="averses"], [data-meteo="orage"], [data-meteo="grele"], [data-meteo="neige"], [data-meteo="pluie-neige"]) .hub .hub-center::before { opacity: 0; }
+:root[data-hub-v4]:not([data-meteo="soleil"], [data-meteo="eclaircies"]) .hub::after { content: none; }
+
+/* La nuit couverte : des bancs de nuages sombres à la place des étoiles. */
+:root[data-hub-v4]:not([data-meteo="soleil"], [data-meteo="eclaircies"]) .hub::before {
+  background:
+    radial-gradient(ellipse 34% 9% at 64% 14%, var(--v4-cloud-bank), transparent 72%),
+    radial-gradient(ellipse 30% 8% at 30% 24%, var(--v4-cloud-bank), transparent 72%),
+    radial-gradient(ellipse 26% 7% at 84% 32%, var(--v4-cloud-bank), transparent 72%),
+    radial-gradient(120% 30% at 50% 104%, var(--v4-mist), transparent 70%);
+}
+:root[data-hub-v4] { --v4-cloud-bank: rgb(70 72 104 / 0.45); }
+:root[data-hub-v4][data-theme="light"] { --v4-cloud-bank: rgb(255 255 255 / 0.6); }
+
+:root[data-hub-v4]:is([data-meteo="nuageux"], [data-meteo="vent"]) {
+  --v3-sky-bg: linear-gradient(180deg, #14172b 0%, #1b1e35 40%, #252840 75%, #2c2e47 100%);
+}
+:root[data-hub-v4][data-meteo="brouillard"] {
+  --v4-mist: rgb(170 168 196 / 0.32);
+  --v3-sky-bg: linear-gradient(180deg, #1b1d30 0%, #24263b 45%, #303246 80%, #383a4e 100%);
+}
+:root[data-hub-v4]:is([data-meteo="pluie"], [data-meteo="averses"], [data-meteo="orage"], [data-meteo="grele"], [data-meteo="pluie-neige"]) {
+  --v4-cloud-bank: rgb(52 54 78 / 0.55);
+  --v3-sky-bg: linear-gradient(180deg, #0f111f 0%, #161929 40%, #1f2233 75%, #262838 100%);
+}
+:root[data-hub-v4][data-meteo="neige"] {
+  --v4-cloud-bank: rgb(120 132 170 / 0.32);
+  --v3-sky-bg: linear-gradient(180deg, #182036 0%, #212a43 45%, #2e3853 80%, #36405b 100%);
+}
+:root[data-hub-v4][data-theme="light"]:is([data-meteo="nuageux"], [data-meteo="vent"]) {
+  --v3-sky-bg: linear-gradient(180deg, #d3dae3 0%, #dde1e6 35%, #e7e6e4 70%, #ece6de 100%);
+}
+:root[data-hub-v4][data-theme="light"][data-meteo="brouillard"] {
+  --v4-mist: rgb(244 243 240 / 0.8);
+  --v3-sky-bg: linear-gradient(180deg, #dfe1e4 0%, #e6e7e8 45%, #ecebe9 80%, #efedea 100%);
+}
+:root[data-hub-v4][data-theme="light"]:is([data-meteo="pluie"], [data-meteo="averses"], [data-meteo="orage"], [data-meteo="grele"], [data-meteo="pluie-neige"]) {
+  --v4-cloud-bank: rgb(236 238 242 / 0.55);
+  --v3-sky-bg: linear-gradient(180deg, #d4dae1 0%, #d9dde2 35%, #e0e0e1 70%, #e4e0da 100%);
+}
+:root[data-hub-v4][data-theme="light"][data-meteo="neige"] {
+  --v3-sky-bg: linear-gradient(180deg, #e2e9f1 0%, #ebf0f5 40%, #f3f5f7 75%, #f6f4f0 100%);
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root[data-hub-v4] .hub::after { animation: none; }
 }

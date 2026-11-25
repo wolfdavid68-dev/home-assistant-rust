@@ -595,6 +595,9 @@ function updateHouse(view) {
   if (!view) return;
   const isNight = houseNight();
   view.stage.classList.toggle("is-night", isNight);
+  // Le temps qu'il fait, pour le ciel de l'accueil v4 (hub-v3.css) : il
+  // change avec l'image de la maison (soleil, nuages, pluie, neige…).
+  document.documentElement.dataset.meteo = weatherKind();
   if (view.ambiance) {
     const chosen = backgroundFor(view.config, ambianceOf(view.config));
     const url = chosen && chosen !== view.config.background ? houseUrl(chosen) : null;
