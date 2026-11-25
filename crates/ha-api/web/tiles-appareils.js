@@ -15,14 +15,14 @@ function lightTile(state) {
     type: "range", min: "1", max: "255", value: String(brightness),
     "aria-label": `Luminosité de ${nameOf(state)}`,
   });
-  fillSlider(slider);
+  tileSlider(slider);
   slider.addEventListener("change", () => {
     markPending(state.entity_id);
     callService("light", "turn_on", { entity_id: state.entity_id, brightness: Number(slider.value) });
   });
   const toggle = el(
     "button",
-    { class: "tile-toggle [:where(&)]:[all:unset] block cursor-pointer rounded-champ [&:focus-visible]:[outline:3px_solid_var(--accent)] [&:focus-visible]:[outline-offset:4px] [.tile.readonly_&]:[cursor:default]", type: "button", "aria-pressed": String(on) },
+    { class: "tile-toggle [:where(&)]:[all:unset] grid items-center min-h-11 -my-0.75 cursor-pointer rounded-champ [&:focus-visible]:[outline:3px_solid_var(--accent)] [&:focus-visible]:[outline-offset:4px] [.tile.readonly_&]:[cursor:default]", type: "button", "aria-pressed": String(on) },
     tileHead(state, ICONS.bulb, on ? agree(state, `Allumé · ${Math.round((brightness / 255) * 100)}\u202f%`) : statusText(state), knob()),
   );
   toggle.addEventListener("click", () => {
@@ -67,7 +67,7 @@ function coverTile(state) {
       type: "range", min: "0", max: "100", step: "5", value: String(Math.round(position)),
       "aria-label": `Position de ${nameOf(state)}`,
     });
-    fillSlider(slider);
+    tileSlider(slider);
     slider.addEventListener("change", () => command("set_cover_position", { position: Number(slider.value) }));
     children.push(slider);
   }
@@ -82,7 +82,7 @@ function switchTile(state, icon = ICONS.plug, labels = null) {
   // en contenir un autre.
   const toggle = el(
     "button",
-    { class: "tile-toggle [:where(&)]:[all:unset] block cursor-pointer rounded-champ [&:focus-visible]:[outline:3px_solid_var(--accent)] [&:focus-visible]:[outline-offset:4px] [.tile.readonly_&]:[cursor:default]", type: "button", "aria-pressed": String(on) },
+    { class: "tile-toggle [:where(&)]:[all:unset] grid items-center min-h-11 -my-0.75 cursor-pointer rounded-champ [&:focus-visible]:[outline:3px_solid_var(--accent)] [&:focus-visible]:[outline-offset:4px] [.tile.readonly_&]:[cursor:default]", type: "button", "aria-pressed": String(on) },
     tileHead(state, icon, text, knob()),
   );
   toggle.addEventListener("click", () => {
@@ -226,7 +226,7 @@ function mediaTile(state) {
     type: "range", min: "0", max: "100", value: String(volume),
     "aria-label": `Volume de ${nameOf(state)}`,
   });
-  fillSlider(slider);
+  tileSlider(slider);
   slider.addEventListener("change", () => {
     markPending(state.entity_id);
     callService("media_player", "volume_set", { entity_id: state.entity_id, volume_level: Number(slider.value) / 100 });
@@ -296,7 +296,7 @@ function announceTile(state) {
   const said = typeof a.dernier_message === "string" && !Number.isNaN(Date.parse(state.state));
   const last = said ? "" : hasVoice ? `Voix : ${voice}` : "Pas de voix installée : carillon seulement";
   const input = el("input", {
-    type: "text", maxlength: "500", autocomplete: "off", value: announceDraft.message,
+    type: "text", maxlength: "500", autocomplete: "off", enterkeyhint: "send", value: announceDraft.message,
     placeholder: hasVoice ? "Le repas est prêt" : "Installe Piper pour parler (docs/sonos.md)",
     "aria-label": "Message à annoncer",
   });
@@ -413,14 +413,14 @@ function fanTile(state) {
   const speed = finite(a.percentage) && on ? ` · ${Math.round(a.percentage)}\u202f%` : "";
   const toggle = el(
     "button",
-    { class: "tile-toggle [:where(&)]:[all:unset] block cursor-pointer rounded-champ [&:focus-visible]:[outline:3px_solid_var(--accent)] [&:focus-visible]:[outline-offset:4px] [.tile.readonly_&]:[cursor:default]", type: "button", "aria-pressed": String(on) },
+    { class: "tile-toggle [:where(&)]:[all:unset] grid items-center min-h-11 -my-0.75 cursor-pointer rounded-champ [&:focus-visible]:[outline:3px_solid_var(--accent)] [&:focus-visible]:[outline-offset:4px] [.tile.readonly_&]:[cursor:default]", type: "button", "aria-pressed": String(on) },
     tileHead(state, ICONS.fan, `${statusText(state)}${speed}`, knob()),
   );
   toggle.addEventListener("click", () => inputCommand(state, "toggle"));
   const children = [toggle];
   if (finite(a.percentage)) {
     const slider = el("input", { type: "range", min: "0", max: "100", step: "1", value: String(Math.round(a.percentage)), "aria-label": `Vitesse de ${nameOf(state)}` });
-    fillSlider(slider);
+    tileSlider(slider);
     slider.addEventListener("change", () => inputCommand(state, "set_percentage", { percentage: Number(slider.value) }));
     children.push(slider);
   }
@@ -503,7 +503,7 @@ function alarmPanelTile(state) {
  *  n'est effacé que si `onSubmit` ne renvoie pas false : un ordre qui n'est
  *  pas parti laisse le texte en place, pour réessayer. */
 function addForm(placeholder, label, onSubmit, extra = []) {
-  const input = el("input", { type: "text", maxlength: "200", placeholder, "aria-label": placeholder, required: "" });
+  const input = el("input", { type: "text", maxlength: "200", placeholder, "aria-label": placeholder, required: "", enterkeyhint: "done" });
   const form = el("form", { class: "add-form flex flex-wrap gap-2 items-center [:not(:where(.o017700))&_input[type=text]]:[flex:1_1_10rem] [:not(:where(.o017701))&_input[type=text]]:min-w-0" }, input, ...extra, el("button", { type: "submit", class: "action-button [justify-self:start] min-h-[40px] py-2 px-4 rounded-full [border:0] bg-card-2 font-semibold [&:active]:[transform:scale(0.97)]", text: label }));
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -695,7 +695,7 @@ function humidifierTile(state) {
   const measured = finite(a.current_humidity) ? `${number.format(a.current_humidity)}\u202f% mesurés` : "";
   const toggle = el(
     "button",
-    { class: "tile-toggle [:where(&)]:[all:unset] block cursor-pointer rounded-champ [&:focus-visible]:[outline:3px_solid_var(--accent)] [&:focus-visible]:[outline-offset:4px] [.tile.readonly_&]:[cursor:default]", type: "button", "aria-pressed": String(on) },
+    { class: "tile-toggle [:where(&)]:[all:unset] grid items-center min-h-11 -my-0.75 cursor-pointer rounded-champ [&:focus-visible]:[outline:3px_solid_var(--accent)] [&:focus-visible]:[outline-offset:4px] [.tile.readonly_&]:[cursor:default]", type: "button", "aria-pressed": String(on) },
     tileHead(state, ICONS.humidity, [statusText(state), measured].filter(Boolean).join(" · "), knob()),
   );
   toggle.addEventListener("click", () => {

@@ -33,6 +33,21 @@ function fillSlider(slider) {
   slider.addEventListener("input", update);
 }
 
+/** Le curseur d'une tuile : la barre reste de 28 px (18 px sur téléphone),
+ *  mais on le prend sur 44 px de haut, et son pouce est plus grand. Les
+ *  marges négatives gardent la tuile de la même hauteur. */
+const TILE_RANGE = "h-11 -my-2 bg-none bg-transparent"
+  + " [&::-webkit-slider-runnable-track]:h-7 [&::-webkit-slider-runnable-track]:rounded-champ [&::-webkit-slider-runnable-track]:[background:linear-gradient(90deg,var(--accent)_0_var(--fill,50%),var(--card-2)_var(--fill,50%)_100%)]"
+  + " [&::-moz-range-track]:h-7 [&::-moz-range-track]:rounded-champ [&::-moz-range-track]:[background:linear-gradient(90deg,var(--accent)_0_var(--fill,50%),var(--card-2)_var(--fill,50%)_100%)]"
+  + " [.tile.light.on_&::-webkit-slider-runnable-track]:[background:linear-gradient(90deg,var(--glow-bar)_0_var(--fill,50%),color-mix(in_srgb,var(--glow-line)_70%,var(--card))_var(--fill,50%)_100%)]"
+  + " [.tile.light.on_&::-moz-range-track]:[background:linear-gradient(90deg,var(--glow-bar)_0_var(--fill,50%),color-mix(in_srgb,var(--glow-line)_70%,var(--card))_var(--fill,50%)_100%)]"
+  + " [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-9 [&::-webkit-slider-thumb]:-mt-1 [&::-moz-range-thumb]:w-2 [&::-moz-range-thumb]:h-9"
+  + " focus-visible:outline-3 focus-visible:outline-accent focus-visible:outline-offset-1";
+function tileSlider(slider) {
+  slider.classList.add(...TILE_RANGE.split(" "));
+  fillSlider(slider);
+}
+
 function tileClass(state, kind) {
   const classes = ["tile", kind];
   if (state.state === "on" || (kind === "cover" && state.state === "open")) classes.push("on");

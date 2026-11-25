@@ -18,7 +18,7 @@ function inputBooleanTile(state) {
   const on = state.state === "on";
   const toggle = el(
     "button",
-    { class: "tile-toggle [:where(&)]:[all:unset] block cursor-pointer rounded-champ [&:focus-visible]:[outline:3px_solid_var(--accent)] [&:focus-visible]:[outline-offset:4px] [.tile.readonly_&]:[cursor:default]", type: "button", "aria-pressed": String(on) },
+    { class: "tile-toggle [:where(&)]:[all:unset] grid items-center min-h-11 -my-0.75 cursor-pointer rounded-champ [&:focus-visible]:[outline:3px_solid_var(--accent)] [&:focus-visible]:[outline-offset:4px] [.tile.readonly_&]:[cursor:default]", type: "button", "aria-pressed": String(on) },
     tileHead(state, ICONS.toggle, on ? "Activé" : state.state === "off" ? "Désactivé" : statusText(state), knob()),
   );
   toggle.addEventListener("click", () => inputCommand(state, "toggle"));
@@ -50,7 +50,7 @@ function inputNumberTile(state) {
       type: "range", min: String(min), max: String(max), step: String(step),
       value: String(Number.isFinite(value) ? value : min), "aria-label": `Valeur de ${nameOf(state)}`,
     });
-    fillSlider(slider);
+    tileSlider(slider);
     // Pendant le glissement, la valeur s'affiche ; elle est envoyée au lâcher.
     slider.addEventListener("input", () => {
       shown.firstChild.textContent = number.format(Number(slider.value));

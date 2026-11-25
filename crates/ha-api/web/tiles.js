@@ -206,13 +206,14 @@ function renderPlan() {
         "aria-label": [area.name, detail, temp ? `${temp.slice(0, -1)} degrés` : ""].filter(Boolean).join(", ") },
       el("span", { class: `grid place-items-center size-9 shrink-0 rounded-puce [&_svg]:size-[18px] ${iconTone}` }, svgIcon(roomIcon(area.name))),
       el("span", { class: "grid min-w-0 flex-1 gap-px leading-tight" },
-        el("span", { class: "font-semibold text-courant line-clamp-2 [overflow-wrap:anywhere]", text: area.name }),
+        el("span", { class: "font-semibold text-courant line-clamp-2 [overflow-wrap:anywhere]", text: area.name, title: area.name }),
         el("span", { class: `flex items-baseline gap-1.5 min-w-0 text-petit ${state ? "" : "text-muted"}` },
           temp ? el("b", { class: "shrink-0 font-semibold text-corps tabular-nums", text: temp }) : "",
           el("span", { class: "truncate opacity-90", text: detail || `${info.count} appareil${info.count > 1 ? "s" : ""}` }))),
     );
     // Mise en page « tableau » : la pièce s'ouvre en fenêtre, par-dessus la
     // maquette (house.js) ; sinon, seule, à la place des sections.
+    room.dataset.room = area.name;
     room.addEventListener("click", () => (isBoard() ? openRoom(area.name) : showRoom(area.name)));
     return room;
   });
@@ -242,6 +243,38 @@ function roomIcon(name) {
   return rules.find(([pattern]) => pattern.test(plain))?.[1] ?? ICONS.home;
 }
 
+// Les scènes qu'on vient de toucher : leur bouton reste « en cours » (il
+// pulse, bordure de l'accent) jusqu'à 5 s, même redessiné entre-temps.
+const scenesBusy = new Map();
+const SCENE_BUSY_MS = 5000;
+
+function sceneDone(entityId) {
+  clearTimeout(scenesBusy.get(entityId));
+  scenesBusy.delete(entityId);
+  const button = document.getElementById(`scene-${entityId}`);
+  button?.classList.remove("pending");
+  button?.removeAttribute("aria-busy");
+}
+
+/** Les appareils qu'une scène vise (attribut `targets`), s'ils sont connus. */
+function sceneTargets(state) {
+  const targets = state.attributes.targets;
+  return targets && typeof targets === "object" && !Array.isArray(targets) ? new Set(Object.keys(targets)) : null;
+}
+
+/** Sur téléphone, la ligne des scènes défile : un fondu sur le bord qui en
+ *  cache encore (droite, gauche ou les deux) le montre. */
+function scenesEdges(nav = $("#scenes")) {
+  const more = nav.scrollWidth - nav.clientWidth;
+  const left = nav.scrollLeft > 4;
+  const right = more - nav.scrollLeft > 4;
+  const edge = left && right ? "deux" : left ? "gauche" : right ? "droite" : "";
+  if (edge) nav.dataset.bord = edge;
+  else delete nav.dataset.bord;
+}
+$("#scenes").addEventListener("scroll", () => scenesEdges(), { passive: true });
+window.addEventListener("resize", () => scenesEdges());
+
 function renderScenes() {
   const list = [...entities.values()]
     .filter((s) => ["scene", "script"].includes(domainOf(s)) && canControl(s))
@@ -251,19 +284,34 @@ function renderScenes() {
   swap(nav, ...list.map((state) => {
     const isScript = domainOf(state) === "script";
     const running = isScript && state.state === "on";
+    const busy = scenesBusy.has(state.entity_id);
     const button = el(
       "button",
-      { type: "button", id: `scene-${state.entity_id}`, class: running ? "scene on" : "scene", "aria-pressed": isScript ? String(running) : "false" },
+      {
+        type: "button", id: `scene-${state.entity_id}`,
+        class: `scene${running ? " on" : ""}${busy ? " pending" : ""} aria-busy:border-accent aria-busy:bg-accent-soft focus-visible:outline-3 focus-visible:outline-accent focus-visible:outline-offset-2`,
+        // Un script en marche s'arrête d'un toucher : un bouton à bascule.
+        // Une scène se lance, sans état : un simple bouton.
+        ...(isScript && { "aria-pressed": String(running) }),
+        ...(busy && { "aria-busy": "true" }),
+      },
       svgIcon(isScript && running ? ICONS.stop : hubSceneLook(state, 0).icon),
       el("span", { text: nameOf(state) }),
     );
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
+      const id = state.entity_id;
+      clearTimeout(scenesBusy.get(id));
+      scenesBusy.set(id, setTimeout(() => sceneDone(id), SCENE_BUSY_MS));
       button.classList.add("pending");
-      setTimeout(() => button.classList.remove("pending"), 5000);
-      callService(domainOf(state), running ? "turn_off" : "turn_on", { entity_id: state.entity_id });
+      button.setAttribute("aria-busy", "true");
+      const outcome = running
+        ? await serviceStatus(domainOf(state), "turn_off", { entity_id: id })
+        : await runUndoable(nameOf(state), domainOf(state), "turn_on", { entity_id: id }, sceneTargets(state));
+      if (outcome === "refus") sceneDone(id);
     });
     return button;
   }));
+  scenesEdges(nav);
 }
 
 // L'heure, chaque minute (et la salutation avec). Les panneaux du tableau
