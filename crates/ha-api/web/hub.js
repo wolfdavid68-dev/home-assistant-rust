@@ -161,7 +161,7 @@ function renderHubAlert() {
   const waiting = noticeStates().filter((s) => s.state === "notifying" && s.attributes.kind === "approval").length;
   pill.hidden = found.length === 0 && waiting === 0;
   if (waiting > 0) {
-    const open = el("button", { type: "button", class: "hub-alert-action [border:0] [border-radius:999px] [padding:5px_14px] [background:rgb(255_255_255_/_0.16)] font-semibold cursor-pointer", text: "Voir" });
+    const open = el("button", { type: "button", class: "hub-alert-action [border:0] rounded-full [padding:5px_14px] [background:rgb(255_255_255_/_0.16)] font-semibold cursor-pointer", text: "Voir" });
     open.addEventListener("click", () => {
       if (typeof hubV4Approval === "function" && hubV4Approval()) return;
       $("#open-notices").click();
@@ -175,7 +175,7 @@ function renderHubAlert() {
   const parts = [svgIcon(HUB_ICONS.warn), el("b", { text: `${nameOf(state)} : ${text}` })];
   if (found.length > 1) parts.push(el("span", { text: ` et ${found.length - 1} de plus` }));
   if (domainOf(state) === "cover" && canControl(state)) {
-    const close = el("button", { type: "button", class: "hub-alert-action [border:0] [border-radius:999px] [padding:5px_14px] [background:rgb(255_255_255_/_0.16)] font-semibold cursor-pointer", text: "Fermer" });
+    const close = el("button", { type: "button", class: "hub-alert-action [border:0] rounded-full [padding:5px_14px] [background:rgb(255_255_255_/_0.16)] font-semibold cursor-pointer", text: "Fermer" });
     close.addEventListener("click", () => callService("cover", "close_cover", { entity_id: state.entity_id }));
     parts.push(close);
   }
@@ -247,7 +247,7 @@ function renderHubAgenda(now) {
     // Pas le nom de l'agenda : sa couleur, sur la barre, suffit.
     const sub = [later ? "demain" : "", e.location || ""].filter(Boolean).join(" · ");
     const row = el("button", { type: "button", class: e === next ? "hub-event next" : "hub-event" },
-      el("span", { class: "hub-event-bar w-[4px] [align-self:stretch] [border-radius:4px] [background:var(--ev)] flex-none" }),
+      el("span", { class: "hub-event-bar w-[4px] [align-self:stretch] rounded-trait [background:var(--ev)] flex-none" }),
       el("span", { class: "hub-event-time w-[44px] flex-none [:not(:where(.o137202))&]:[font-family:var(--font-mono,_monospace)] [:not(:where(.o137203))&]:text-corps text-muted", text: e.allDay ? "jour" : hourMinute.format(e.startDate) }),
       el("span", { class: "hub-event-text grid min-w-0 [:not(:where(.o137400))&_b]:font-semibold [:not(:where(.o137401))&_b]:overflow-hidden [:not(:where(.o137402))&_b]:text-ellipsis [:not(:where(.o137403))&_b]:whitespace-nowrap [:not(:where(.o137500))&_small]:text-muted [:not(:where(.o137501))&_small]:text-legende [:not(:where(.o137502))&_small]:overflow-hidden [:not(:where(.o137503))&_small]:text-ellipsis [:not(:where(.o137504))&_small]:whitespace-nowrap [:not(:where(.o137600))&_small:empty]:hidden [.hub-event:has(.hub-event-when)_&]:flex-1 [:not(:where(.o137800)).hub-event:has(.hub-event-when)_&_b]:[white-space:normal] [.hub-event:has(.hub-event-when)_&_b]:[display:-webkit-box] [.hub-event:has(.hub-event-when)_&_b]:[-webkit-box-orient:vertical] [.hub-event:has(.hub-event-when)_&_b]:[-webkit-line-clamp:2] [.hub-event:has(.hub-event-when)_&_b]:[line-clamp:2]" }, el("b", { text: e.summary }), el("small", { text: sub })),
       hubEventWhen(e, next, later, now));
@@ -388,7 +388,7 @@ function renderHubScenes() {
     const running = isScript && state.state === "on";
     const look = hubSceneLook(state, index);
     const suggest = index === suggested;
-    const button = el("button", { type: "button", class: `${suggest ? "hub-v4-suggest col-span-full " : ""}hub-scene [.hub-scenes.narrow_&]:min-h-[74px] [.hub-scenes.narrow_&]:p-[11px] [:not(:where(.o140300)).hub-scenes.narrow_&_b]:text-courant [:not(:where(.o140301)).hub-scenes.narrow_&_b]:[line-height:1.2] grid gap-[8px] justify-items-start min-h-[82px] p-[13px] [border:0] [border-radius:18px] bg-card text-left cursor-pointer [:not(:where(.o140500))&_b]:text-moyen [:not(:where(.o140501))&_b]:font-semibold [&.pending]:[opacity:0.6] [&.on]:[box-shadow:inset_0_0_0_2px_#03a9f4] t-${look.tone}${running ? " on" : ""}` },
+    const button = el("button", { type: "button", class: `${suggest ? "hub-v4-suggest col-span-full " : ""}hub-scene [.hub-scenes.narrow_&]:min-h-[74px] [.hub-scenes.narrow_&]:p-[11px] [:not(:where(.o140300)).hub-scenes.narrow_&_b]:text-courant [:not(:where(.o140301)).hub-scenes.narrow_&_b]:[line-height:1.2] grid gap-[8px] justify-items-start min-h-[82px] p-[13px] [border:0] rounded-panneau bg-card text-left cursor-pointer [:not(:where(.o140500))&_b]:text-moyen [:not(:where(.o140501))&_b]:font-semibold [&.pending]:[opacity:0.6] [&.on]:[box-shadow:inset_0_0_0_2px_#03a9f4] t-${look.tone}${running ? " on" : ""}` },
       el("span", { class: "hub-scene-icon w-[38px] h-[38px] [border-radius:12px] grid [place-items:center] [:not(:where(.o140700))&_svg]:w-[20px] [:not(:where(.o140701))&_svg]:h-[20px] [:not(:where(.o140800)).hub-scene.t-go_&]:[background:rgb(3_169_244_/_0.2)] [:not(:where(.o140801)).hub-scene.t-go_&]:[color:#03a9f4] [:not(:where(.o140900)).hub-scene.t-home_&]:[background:rgb(102_187_106_/_0.2)] [:not(:where(.o140901)).hub-scene.t-home_&]:[color:#66bb6a] [:not(:where(.o141000)).hub-scene.t-night_&]:[background:rgb(149_117_205_/_0.25)] [:not(:where(.o141001)).hub-scene.t-night_&]:[color:#b39ddb] [:not(:where(.o141100)).hub-scene.t-cine_&]:[background:rgb(255_183_77_/_0.2)] [:not(:where(.o141101)).hub-scene.t-cine_&]:[color:#ffb74d] [:not(:where(.o141200)).hub-scene.t-morning_&]:[background:rgb(255_213_79_/_0.2)] [:not(:where(.o141201)).hub-scene.t-morning_&]:[color:#f9a825]" }, svgIcon(running ? ICONS.stop : look.icon)),
       suggest ? el("span", { class: "grid min-w-0 gap-0.5" }, el("b", { text: nameOf(state) }),
         el("small", { class: "text-legende text-v-ink2", text: "Suggéré à cette heure" })) : el("b", { text: nameOf(state) }));

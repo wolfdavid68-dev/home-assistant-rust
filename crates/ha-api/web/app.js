@@ -468,10 +468,10 @@ function looseStates(states = [...entities.values()]) {
 const view = { room: null };
 
 // Les tuiles d'une section, en grille.
-const TILE_GRID = "tile-grid grid [grid-template-columns:repeat(auto-fill,_minmax(min(100%,_200px),_1fr))] [align-items:start] gap-[12px] [@media(min-width:1000px)]:[:not(:where(.o079300))[data-layout=board]_&]:[grid-template-columns:repeat(auto-fill,_minmax(260px,_1fr))] [:not(:where(.o102200)).room-body_&]:[grid-template-columns:1fr] [.room-body_&>*]:[grid-column:1_/_-1] [@media(min-width:1000px)]:[.room-view_.room-body_&>*]:[break-inside:avoid]";
+const TILE_GRID = "tile-grid grid [grid-template-columns:repeat(auto-fill,_minmax(min(100%,_200px),_1fr))] [align-items:start] gap-3 [:not(:where(.o102200)).room-body_&]:[grid-template-columns:1fr] [.room-body_&>*]:[grid-column:1_/_-1] [@media(min-width:1000px)]:[.room-view_.room-body_&>*]:[break-inside:avoid]";
 // Sur téléphone, les tuiles d'une section forment une seule carte : une
 // ligne par appareil, séparées d'un filet (au lieu d'une carte chacune).
-const PHONE_LIST = "phone-list max-sm:gap-0 max-sm:bg-card max-sm:rounded-carte max-sm:shadow-carte max-sm:overflow-hidden max-sm:[&>.tile]:rounded-none max-sm:[&>.tile]:shadow-none max-sm:[&>.tile]:bg-transparent max-sm:[&>.tile]:px-[14px] max-sm:[&>.tile]:py-[11px] max-sm:[&>.tile]:gap-[8px] max-sm:[&>.tile+.tile]:border-t max-sm:[&>.tile+.tile]:border-line max-sm:[&>.tile.light.on]:text-text max-sm:[&>.tile>input[type=range]]:h-[18px] max-sm:[&>.tile>input[type=range]]:ml-[50px] max-sm:[&>.tile>input[type=range]]:w-[calc(100%-50px)] max-sm:[&>.tile.sensor]:grid-cols-[minmax(0,1fr)_auto] max-sm:[&>.tile.sensor]:items-center max-sm:[&>.tile.sensor>.tile-head]:pr-0 max-sm:[&>.tile.sensor>.value]:text-titre max-sm:[&>.tile.sensor>.value]:mr-[2rem] max-sm:[&>.tile.sensor>:not(.tile-head,.value,.history-button)]:col-span-full max-sm:[&_.history-button]:top-[7px] max-sm:[&_.history-button]:right-[6px] max-sm:[&_.history-button]:opacity-70";
+const PHONE_LIST = "phone-list max-sm:gap-0 max-sm:bg-card max-sm:rounded-carte max-sm:shadow-carte max-sm:overflow-hidden max-sm:[&>.tile]:rounded-none max-sm:[&>.tile]:shadow-none max-sm:[&>.tile]:bg-transparent max-sm:[&>.tile]:px-3.5 max-sm:[&>.tile]:py-3 max-sm:[&>.tile]:gap-2 max-sm:[&>.tile+.tile]:border-t max-sm:[&>.tile+.tile]:border-line max-sm:[&>.tile.light.on]:text-text max-sm:[&>.tile>input[type=range]]:h-[18px] max-sm:[&>.tile>input[type=range]]:ml-12 max-sm:[&>.tile>input[type=range]]:w-[calc(100%-50px)] max-sm:[&>.tile.sensor]:grid-cols-[minmax(0,1fr)_auto] max-sm:[&>.tile.sensor]:items-center max-sm:[&>.tile.sensor>.tile-head]:pr-0 max-sm:[&>.tile.sensor>.value]:text-titre max-sm:[&>.tile.sensor>.value]:mr-8 max-sm:[&>.tile.sensor>:not(.tile-head,.value,.history-button)]:col-span-full max-sm:[&_.history-button]:top-[7px] max-sm:[&_.history-button]:right-[6px] max-sm:[&_.history-button]:opacity-70";
 
 /** Dans la section d'une pièce, « Salon lampe 1 » devient « Lampe 1 » et
  *  « Température Salon », « Température » : le titre dit déjà la pièce. */
@@ -539,7 +539,7 @@ function sectionHead(title, grid, room) {
   chevron.setAttribute("class", `size-4 shrink-0 transition-transform ${folded ? "-rotate-90" : ""}`);
   const button = el("button", {
     type: "button", "aria-expanded": String(!folded),
-    class: "section-toggle [:where(&)]:[all:unset] flex w-full min-h-6 max-sm:min-h-10 items-center gap-2 cursor-pointer rounded-md hover:text-text focus-visible:outline-3 focus-visible:outline-accent focus-visible:outline-offset-2",
+    class: "section-toggle [:where(&)]:[all:unset] flex w-full min-h-6 max-sm:min-h-10 items-center gap-2 cursor-pointer rounded-trait hover:text-text focus-visible:outline-3 focus-visible:outline-accent focus-visible:outline-offset-2",
   }, el("span", { class: "min-w-0 truncate", text: title }), summary, chevron);
   button.addEventListener("click", () => {
     const fold = !grid.hidden;

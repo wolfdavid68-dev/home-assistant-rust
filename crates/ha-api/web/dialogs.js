@@ -25,7 +25,7 @@ const ACTIVE_STATES = new Set(["on", "home", "open", "above_horizon", "playing",
 function historyButton(state) {
   const button = el(
     "button",
-    { class: "history-button [:where(&)]:[all:unset] absolute [:not(:where(.o019102))&]:[top:10px] [:not(:where(.o019103))&]:[right:10px] w-[32px] h-[32px] grid [place-items:center] [border-radius:10px] text-muted cursor-pointer [:not(:where(.o019200))&_svg]:w-[17px] [:not(:where(.o019201))&_svg]:h-[17px] [&:hover]:bg-card-2 [&:hover]:text-text [&:focus-visible]:[outline:3px_solid_var(--accent)] [&:focus-visible]:[outline-offset:1px] [.tile.light.on_&]:text-glow-ink", type: "button", title: "Historique", "aria-label": `Historique de ${nameOf(state)}` },
+    { class: "history-button [:where(&)]:[all:unset] absolute [:not(:where(.o019102))&]:[top:10px] [:not(:where(.o019103))&]:[right:10px] w-[32px] h-[32px] grid [place-items:center] rounded-puce text-muted cursor-pointer [:not(:where(.o019200))&_svg]:w-[17px] [:not(:where(.o019201))&_svg]:h-[17px] [&:hover]:bg-card-2 [&:hover]:text-text [&:focus-visible]:[outline:3px_solid_var(--accent)] [&:focus-visible]:[outline-offset:1px] [.tile.light.on_&]:text-glow-ink", type: "button", title: "Historique", "aria-label": `Historique de ${nameOf(state)}` },
     svgIcon(ICONS.chart),
   );
   button.addEventListener("click", (event) => {
@@ -354,7 +354,7 @@ async function loadLogbook() {
   }
   const entries = Array.isArray(data.entries) ? data.entries : [];
   if (entries.length === 0) {
-    list.replaceChildren(el("p", { class: "journal-hint text-muted text-corps [margin:0_0_0.75rem] [:not(:where(.o035900)).auto-block_&]:m-0 [.auto-fields_&]:[grid-column:1_/_-1] [:not(:where(.o036501)).auto-fields_&]:m-0 [.auto-fields_&]:[overflow-wrap:anywhere]", text: "Rien de noté sur cette période." }));
+    list.replaceChildren(el("p", { class: "journal-hint text-muted text-corps mt-0 mx-0 mb-3 [:not(:where(.o035900)).auto-block_&]:m-0 [.auto-fields_&]:[grid-column:1_/_-1] [:not(:where(.o036501)).auto-fields_&]:m-0 [.auto-fields_&]:[overflow-wrap:anywhere]", text: "Rien de noté sur cette période." }));
     return;
   }
   const groups = [];
@@ -374,7 +374,7 @@ async function loadLogbook() {
     groups.at(-1).items.push(item);
   }
   list.replaceChildren(
-    ...groups.map(({ day, items }) => el("section", {}, el("h3", { text: day }), el("ol", { class: "journal-list list-none m-0 p-0 bg-card [border-radius:18px] [box-shadow:var(--shadow)] overflow-hidden [:not(:where(.o029500))&_li]:flex [:not(:where(.o029501))&_li]:flex-wrap [:not(:where(.o029502))&_li]:[gap:0.25rem_0.75rem] [:not(:where(.o029503))&_li]:items-baseline [:not(:where(.o029504))&_li]:[padding:0.7rem_1rem] [:not(:where(.o029505))&_li]:[border-top:1px_solid_var(--line)] [:not(:where(.o029506))&_li]:text-corps [&_li:first-child]:[border-top:0] [:not(:where(.o029700))&_time]:text-muted [:not(:where(.o029701))&_time]:[font-family:var(--font-mono)] [:not(:where(.o029702))&_time]:text-petit [:not(:where(.o029900))&_small]:text-muted [&_small]:ml-[auto] [:not(:where(.o030000))&_li.failed_strong]:text-alert [:not(:where(.o030000))&_li.failed_span]:text-alert" }, ...items))),
+    ...groups.map(({ day, items }) => el("section", {}, el("h3", { text: day }), el("ol", { class: "journal-list list-none m-0 p-0 bg-card rounded-panneau [box-shadow:var(--shadow)] overflow-hidden [:not(:where(.o029500))&_li]:flex [:not(:where(.o029501))&_li]:flex-wrap [:not(:where(.o029502))&_li]:gap-y-1 [:not(:where(.o029502))&_li]:gap-x-3 [:not(:where(.o029503))&_li]:items-baseline [:not(:where(.o029504))&_li]:py-3 [:not(:where(.o029504))&_li]:px-4 [:not(:where(.o029505))&_li]:[border-top:1px_solid_var(--line)] [:not(:where(.o029506))&_li]:text-corps [&_li:first-child]:[border-top:0] [:not(:where(.o029700))&_time]:text-muted [:not(:where(.o029701))&_time]:[font-family:var(--font-mono)] [:not(:where(.o029702))&_time]:text-petit [:not(:where(.o029900))&_small]:text-muted [&_small]:ml-auto [:not(:where(.o030000))&_li.failed_strong]:text-alert [:not(:where(.o030000))&_li.failed_span]:text-alert" }, ...items))),
   );
 }
 
@@ -384,7 +384,7 @@ async function loadLogbook() {
 function whyParts(id) {
   const answer = logbookView.answers.get(id);
   if (answer !== undefined) {
-    return [el("p", { class: "logbook-why [.journal-list_&]:[flex-basis:100%] [.journal-list_&]:[margin:0.2rem_0_0] [.journal-list_&]:[padding:0.5rem_0.75rem] [.journal-list_&]:[border-radius:10px] [.journal-list_&]:bg-line [.journal-list_&]:[text-wrap:pretty]", role: "status", text: answer ?? "Claude réfléchit…" })];
+    return [el("p", { class: "logbook-why [.journal-list_&]:[flex-basis:100%] [.journal-list_&]:mt-1 [.journal-list_&]:mx-0 [.journal-list_&]:mb-0 [.journal-list_&]:py-2 [.journal-list_&]:px-3 [.journal-list_&]:rounded-puce [.journal-list_&]:bg-line [.journal-list_&]:[text-wrap:pretty]", role: "status", text: answer ?? "Claude réfléchit…" })];
   }
   const button = el("button", { class: "ghost small logbook-why-ask", type: "button", text: "Pourquoi ?" });
   button.addEventListener("click", () => askWhy(id));
@@ -455,7 +455,7 @@ function renderNotices() {
   if (!$("#notices").open) return;
   const list = $("#notice-list");
   list.replaceChildren(...active.map(noticeItem));
-  if (active.length === 0) list.replaceChildren(el("li", { class: "auto-empty text-muted [padding:1rem_0]", text: "Rien à signaler." }));
+  if (active.length === 0) list.replaceChildren(el("li", { class: "auto-empty text-muted py-4 px-0", text: "Rien à signaler." }));
   const ignored = all.filter((state) => state.state === "ignored").length;
   $("#notice-ignored").hidden = ignored === 0;
   $("#notice-ignored").textContent = ignored === 1
@@ -469,8 +469,8 @@ function noticeItem(state) {
   const severity = repair ? String(state.attributes.severity ?? "warning") : approval ? "approval" : "info";
   const head = el("div", { class: "notice-head flex flex-wrap gap-2 items-center justify-between [:not(:where(.o039900))&_strong]:[overflow-wrap:anywhere]" }, el("strong", { text: String(state.attributes.title ?? "Notification") }));
   if (repair) head.append(el("span", { class: `badge ${severity === "error" ? "bad" : ""}`, text: "à réparer" }));
-  const item = el("li", { class: `notice-item bg-card-2 [border-radius:16px] [padding:0.8rem_1rem] grid gap-[0.35rem] [border-left:4px_solid_var(--accent)] [:not(:where(.o039300))&.sev-warning]:[border-left-color:var(--glow-bar)] [:not(:where(.o039400))&.sev-error]:[border-left-color:var(--alert)] [:not(:where(.o039500))&.sev-approval]:[border-left-color:var(--alert)] sev-${severity}` }, head, el("p", { class: "notice-message m-0 [white-space:pre-line] [overflow-wrap:anywhere] text-text-2", text: String(state.attributes.message ?? "") }));
-  const meta = el("div", { class: "notice-meta flex gap-[0.6rem] items-center justify-between text-muted" });
+  const item = el("li", { class: `notice-item bg-card-2 rounded-panneau py-3 px-4 grid gap-1.5 [border-left:4px_solid_var(--accent)] [:not(:where(.o039300))&.sev-warning]:[border-left-color:var(--glow-bar)] [:not(:where(.o039400))&.sev-error]:[border-left-color:var(--alert)] [:not(:where(.o039500))&.sev-approval]:[border-left-color:var(--alert)] sev-${severity}` }, head, el("p", { class: "notice-message m-0 [white-space:pre-line] [overflow-wrap:anywhere] text-text-2", text: String(state.attributes.message ?? "") }));
+  const meta = el("div", { class: "notice-meta flex gap-2.5 items-center justify-between text-muted" });
   if (typeof state.attributes.created_at === "string") {
     meta.append(el("small", { text: `il y a ${ago(state.attributes.created_at)}` }));
   }
@@ -535,7 +535,7 @@ async function loadEnergy() {
   const days = energyView.range === "year" ? 1 : Number(energyView.range);
   const { status, data } = await api("GET", `/api/energy?days=${days}`);
   if (status !== 200) {
-    $("#energy-chart").replaceChildren(el("p", { class: "auto-empty text-muted [padding:1rem_0]", text: "Bilan indisponible." }));
+    $("#energy-chart").replaceChildren(el("p", { class: "auto-empty text-muted py-4 px-0", text: "Bilan indisponible." }));
     return;
   }
   energyView.report = data;
@@ -564,7 +564,7 @@ function renderEnergyNow() {
   const tempo = entities.get(TEMPO_TODAY);
   if (tempo && lookup(TEMPO_COLORS, tempo.state)) parts.push(tempoBadge(tempo.state));
   const tomorrow = entities.get(TEMPO_TOMORROW);
-  if (tempo && tomorrow) parts.push(el("span", { class: "sub text-petit text-muted [.tile.light.on_&]:[color:inherit] [.tile.light.on_&]:[opacity:0.85] [&.is-stale]:[color:color-mix(in_srgb,_var(--tint-alertes)_55%,_var(--text))] [&.is-stale::before]:[content:''] [&.is-stale::before]:inline-block [&.is-stale::before]:w-[0.45em] [&.is-stale::before]:h-[0.45em] [&.is-stale::before]:mr-[0.35em] [&.is-stale::before]:[border-radius:50%] [&.is-stale::before]:[background:var(--tint-alertes)] [&.is-stale::before]:[vertical-align:0.1em]", text: tempoTomorrowText(tomorrow) }));
+  if (tempo && tomorrow) parts.push(el("span", { class: "sub text-petit text-muted [.tile.light.on_&]:[color:inherit] [.tile.light.on_&]:[opacity:0.85] [&.is-stale]:[color:color-mix(in_srgb,_var(--tint-alertes)_55%,_var(--text))] [&.is-stale::before]:[content:''] [&.is-stale::before]:inline-block [&.is-stale::before]:w-[0.45em] [&.is-stale::before]:h-[0.45em] [&.is-stale::before]:mr-[0.35em] [&.is-stale::before]:rounded-full [&.is-stale::before]:[background:var(--tint-alertes)] [&.is-stale::before]:[vertical-align:0.1em]", text: tempoTomorrowText(tomorrow) }));
   box.hidden = parts.length === 0;
   box.replaceChildren(...parts);
 }
@@ -593,7 +593,7 @@ function energyPeriods(report) {
 const known = (value) => value !== null && value !== undefined;
 
 function totalTile(title, total) {
-  const tile = el("div", { class: "energy-total bg-card-2 [border-radius:16px] [padding:0.7rem_0.85rem] grid gap-[0.15rem] min-w-0 [:not(:where(.o043700))&_strong]:[font-family:var(--font-display)] [:not(:where(.o043701))&_strong]:text-grand [:not(:where(.o043702))&_strong]:[font-variant-numeric:tabular-nums] [:not(:where(.o043703))&_strong]:[overflow-wrap:anywhere] [:not(:where(.o043800))&_small]:text-text-2 [:not(:where(.o043801))&_small]:text-legende" }, el("span", { class: "label", text: title }),
+  const tile = el("div", { class: "energy-total bg-card-2 rounded-panneau py-3 px-3.5 grid gap-0.5 min-w-0 [:not(:where(.o043700))&_strong]:[font-family:var(--font-display)] [:not(:where(.o043701))&_strong]:text-grand [:not(:where(.o043702))&_strong]:[font-variant-numeric:tabular-nums] [:not(:where(.o043703))&_strong]:[overflow-wrap:anywhere] [:not(:where(.o043800))&_small]:text-text-2 [:not(:where(.o043801))&_small]:text-legende" }, el("span", { class: "label", text: title }),
     el("strong", { text: `${kwhFormat.format(total.consumed_kwh)} kWh` }));
   if (known(total.cost)) tile.append(el("small", { text: `≈ ${euros.format(total.cost)}` }));
   if (total.produced_kwh > 0) {
@@ -611,7 +611,7 @@ function renderEnergy() {
   for (const id of ["#energy-totals", "#energy-legend", "#energy-details"]) $(id).hidden = empty;
   if (empty) {
     $("#energy-chart").replaceChildren(
-      el("p", { class: "auto-empty text-muted [padding:1rem_0]", text: "Aucun compteur d'énergie pour l'instant. Branche le Linky (HA_TELEINFO), ou indique tes compteurs et leurs prix dans energy.yaml." }),
+      el("p", { class: "auto-empty text-muted py-4 px-0", text: "Aucun compteur d'énergie pour l'instant. Branche le Linky (HA_TELEINFO), ou indique tes compteurs et leurs prix dans energy.yaml." }),
     );
     $("#energy-note").textContent = "";
     return;
@@ -697,7 +697,7 @@ function renderEnergy() {
       const total = periods.reduce((t, p) => t + value(p, i), 0);
       const cost = known(source.price) ? ` · ${euros.format(total * source.price)}` : "";
       return el("li", {},
-        el("span", { class: `swatch [:not(:where(.o044300))&.series-1]:[fill:var(--series-1)] [:not(:where(.o044301))&.series-1]:[background:var(--series-1)] [:not(:where(.o044400))&.series-2]:[fill:var(--series-2)] [:not(:where(.o044401))&.series-2]:[background:var(--series-2)] [:not(:where(.o044500))&.series-3]:[fill:var(--series-3)] [:not(:where(.o044501))&.series-3]:[background:var(--series-3)] [:not(:where(.o044600))&.series-4]:[fill:var(--series-4)] [:not(:where(.o044601))&.series-4]:[background:var(--series-4)] [:not(:where(.o044700))&.series-5]:[fill:var(--series-5)] [:not(:where(.o044701))&.series-5]:[background:var(--series-5)] [:not(:where(.o044800))&.series-6]:[fill:var(--series-6)] [:not(:where(.o044801))&.series-6]:[background:var(--series-6)] w-[12px] h-[12px] [border-radius:4px] series-${(i % SERIES) + 1}`, "aria-hidden": "true" }),
+        el("span", { class: `swatch [:not(:where(.o044300))&.series-1]:[fill:var(--series-1)] [:not(:where(.o044301))&.series-1]:[background:var(--series-1)] [:not(:where(.o044400))&.series-2]:[fill:var(--series-2)] [:not(:where(.o044401))&.series-2]:[background:var(--series-2)] [:not(:where(.o044500))&.series-3]:[fill:var(--series-3)] [:not(:where(.o044501))&.series-3]:[background:var(--series-3)] [:not(:where(.o044600))&.series-4]:[fill:var(--series-4)] [:not(:where(.o044601))&.series-4]:[background:var(--series-4)] [:not(:where(.o044700))&.series-5]:[fill:var(--series-5)] [:not(:where(.o044701))&.series-5]:[background:var(--series-5)] [:not(:where(.o044800))&.series-6]:[fill:var(--series-6)] [:not(:where(.o044801))&.series-6]:[background:var(--series-6)] w-[12px] h-[12px] rounded-trait series-${(i % SERIES) + 1}`, "aria-hidden": "true" }),
         el("span", { text: source.name }),
         el("small", { text: `${kwhFormat.format(total)} kWh${source.kind === "production" ? " produits" : ""}${cost}` }),
       );

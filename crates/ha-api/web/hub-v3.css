@@ -144,7 +144,7 @@
   min-height: 44px;
   padding: 0 12px;
   border: 0;
-  border-radius: 14px;
+  border-radius: var(--radius-champ);
   background: color-mix(in srgb, var(--v3-voile) 7%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v3-voile) 6%, transparent);
   color: var(--v3-ink);
@@ -180,7 +180,7 @@
   width: 100%;
   padding: 0;
   border: 0;
-  border-radius: 14px;
+  border-radius: var(--radius-champ);
   background: none;
   color: var(--v3-ink);
   font: inherit;
@@ -195,7 +195,7 @@
   width: 48px;
   height: 48px;
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: var(--radius-puce);
   color: #21133f;
   background: linear-gradient(140deg, #6d4fb0, #b9a3ff 58%, #ff9bd2);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v3-voile) 12%, transparent);
@@ -214,7 +214,7 @@
   height: 44px;
   padding: 0;
   border: 0;
-  border-radius: 14px;
+  border-radius: var(--radius-champ);
   background: transparent;
   color: var(--v3-ink);
   cursor: pointer;
@@ -299,7 +299,7 @@
   margin-top: 8px;
   padding: 8px 12px;
   border: 0;
-  border-radius: 14px;
+  border-radius: var(--radius-champ);
   background: color-mix(in srgb, var(--v3-voile) 5%, transparent);
   color: var(--v3-ink);
   font: inherit;
@@ -350,7 +350,7 @@
   height: 44px;
   padding: 0;
   border: 0;
-  border-radius: 14px;
+  border-radius: var(--radius-champ);
   color: var(--v3-ink);
   background: var(--v3-glass);
   -webkit-backdrop-filter: blur(20px) saturate(150%);
@@ -415,7 +415,7 @@
   padding: 4px;
   overflow-x: auto;
   scrollbar-width: none;
-  border-radius: 18px;
+  border-radius: var(--radius-panneau);
   background: var(--v3-glass);
   -webkit-backdrop-filter: blur(20px) saturate(150%);
   backdrop-filter: blur(20px) saturate(150%);
@@ -435,7 +435,7 @@
   height: 36px;
   padding: 0 4px;
   border: 0;
-  border-radius: 14px;
+  border-radius: var(--radius-champ);
   background: transparent;
   color: var(--v3-ink2);
   font-size: var(--text-corps);
@@ -458,7 +458,7 @@
   top: 4px;
   width: var(--v3-seg);
   height: 36px;
-  border-radius: 14px;
+  border-radius: var(--radius-champ);
   pointer-events: none;
   background: color-mix(in srgb, var(--v3-voile) 13%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v3-voile) 10%, transparent);
@@ -630,7 +630,7 @@
   height: auto;
   min-height: 28px;
   padding-block: 4px;
-  border-radius: 14px;
+  border-radius: var(--radius-champ);
   line-height: 1.2;
 }
 :root[data-hub-style="v3"] .hub .hub-v3-pin:disabled { cursor: default; opacity: 0.6; }
@@ -651,7 +651,7 @@
   padding: 4px;
   overflow-x: auto;
   scrollbar-width: none;
-  border-radius: 18px;
+  border-radius: var(--radius-panneau);
   background: var(--v3-glass);
   -webkit-backdrop-filter: blur(20px) saturate(150%);
   backdrop-filter: blur(20px) saturate(150%);
@@ -675,7 +675,7 @@
   height: 36px;
   padding: 0 12px 0 10px;
   border: 0;
-  border-radius: 14px;
+  border-radius: var(--radius-champ);
   background: transparent;
   color: var(--v3-ink2);
   font-size: var(--text-petit);
@@ -731,7 +731,7 @@
 :root[data-hub-style="v3"] .hub .house-tag {
   padding: 5px 9px 6px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-puce);
   color: var(--v3-ink);
   background: color-mix(in srgb, var(--v3-scrim) 66%, transparent);
   -webkit-backdrop-filter: blur(12px);
@@ -800,7 +800,7 @@
   min-height: 0;
   padding: 0 10px;
   border: 0;
-  border-radius: 18px;
+  border-radius: var(--radius-panneau);
   background: transparent;
   box-shadow: none;
   color: var(--v3-ink2);
@@ -1226,7 +1226,7 @@
 
 /* Le dock : des icônes seules (le nom reste pour le lecteur d'écran), l'accueil surligné. */
 :root[data-hub-v4] .hub .hub-dock { gap: 4px; padding: 6px 8px; }
-:root[data-hub-v4] .hub .hub-dock button { position: relative; gap: 0; min-width: 0; width: 52px; height: 44px; padding: 0; border-radius: 14px; }
+:root[data-hub-v4] .hub .hub-dock button { position: relative; gap: 0; min-width: 0; width: 52px; height: 44px; padding: 0; border-radius: var(--radius-champ); }
 :root[data-hub-v4] .hub .hub-dock button > span {
   position: absolute;
   width: 1px;

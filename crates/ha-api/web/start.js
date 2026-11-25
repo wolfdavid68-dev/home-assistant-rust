@@ -110,7 +110,7 @@ function wakeWave(event, stage) {
   screen.style.setProperty("--wake-end", `${reach}px`);
   screen.classList.add(calm ? "waking-calm" : "waking");
   if (!calm) {
-    saverWake.ring = el("span", { class: "wake-ring fixed [:not(:where(.o027301))&]:[left:var(--wake-x,_50%)] [:not(:where(.o027302))&]:[top:var(--wake-y,_50%)] [z-index:51] [width:calc(var(--wake-end,_150vmax)_*_2)] [height:calc(var(--wake-end,_150vmax)_*_2)] [border-radius:50%] [background:radial-gradient(closest-side,_transparent_86%,_rgb(170_205_255_/_0.18)_93%,_rgb(220_236_255_/_0.6)_97%,_transparent_100%)] [transform:translate(-50%,_-50%)_scale(0)] pointer-events-none [animation:wake-ring_0.7s_cubic-bezier(0.55,_0,_0.25,_1)_forwards] [@media(prefers-reduced-motion:reduce)]:hidden", "aria-hidden": "true" });
+    saverWake.ring = el("span", { class: "wake-ring fixed [:not(:where(.o027301))&]:[left:var(--wake-x,_50%)] [:not(:where(.o027302))&]:[top:var(--wake-y,_50%)] [z-index:51] [width:calc(var(--wake-end,_150vmax)_*_2)] [height:calc(var(--wake-end,_150vmax)_*_2)] rounded-full [background:radial-gradient(closest-side,_transparent_86%,_rgb(170_205_255_/_0.18)_93%,_rgb(220_236_255_/_0.6)_97%,_transparent_100%)] [transform:translate(-50%,_-50%)_scale(0)] pointer-events-none [animation:wake-ring_0.7s_cubic-bezier(0.55,_0,_0.25,_1)_forwards] [@media(prefers-reduced-motion:reduce)]:hidden", "aria-hidden": "true" });
     saverWake.ring.style.setProperty("--wake-x", `${x}px`);
     saverWake.ring.style.setProperty("--wake-y", `${y}px`);
     saverWake.ring.style.setProperty("--wake-end", `${reach}px`);

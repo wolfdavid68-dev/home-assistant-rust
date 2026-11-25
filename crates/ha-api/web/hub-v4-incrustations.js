@@ -149,7 +149,7 @@ function hubV4Music() {
       const playing = player.state === "playing";
       const node = el("button", {
         type: "button", "aria-pressed": String(player.entity_id === id),
-        class: "flex items-center gap-2.5 min-h-11 px-3 rounded-[14px] border-0 bg-voile/6 text-left text-corps text-inherit "
+        class: "flex items-center gap-2.5 min-h-11 px-3 rounded-champ border-0 bg-voile/6 text-left text-corps text-inherit "
           + "cursor-pointer transition-colors hover:bg-voile/10 aria-pressed:bg-v-violet/20 " + HUB_V4_FOCUS,
       },
       el("span", {
@@ -358,7 +358,7 @@ function hubV4Tempo() {
         + "data-[tone=red]:border-0 data-[tone=red]:bg-[#ff6b6b]",
     });
     const word = el("b", { class: "text-moyen font-semibold" });
-    const node = el("div", { class: "flex flex-col gap-1.5 p-3 rounded-[18px] bg-voile/6" },
+    const node = el("div", { class: "flex flex-col gap-1.5 p-3 rounded-panneau bg-voile/6" },
       el("span", { class: `text-petit ${HUB_V4_MUTE}`, text: label }), el("span", { class: "flex items-center gap-2" }, dot, word));
     return { node, dot, word };
   };
@@ -477,7 +477,7 @@ function hubV4AgendaPart() {
   const days = hubV4AgendaList();
   const head = el("button", {
     type: "button",
-    class: "flex items-center gap-3 w-full min-h-12 mt-1.5 p-0 rounded-[14px] border-0 bg-transparent text-left text-inherit "
+    class: "flex items-center gap-3 w-full min-h-12 mt-1.5 p-0 rounded-champ border-0 bg-transparent text-left text-inherit "
       + `cursor-pointer ${HUB_V4_FOCUS}`,
     "aria-label": "Ouvrir l'agenda",
   },
@@ -780,8 +780,8 @@ function hubV4Assist() {
       ? [el("p", { class: `m-0 py-2 text-corps ${HUB_V4_MUTE}`, text: "Demande en français : « éteins le salon », « quel temps demain ? »…" })]
       : lines.map((line) => el("p", {
         class: "m-0 max-w-[85%] px-3 py-2 rounded-[16px] text-corps leading-snug [overflow-wrap:anywhere] "
-          + "data-[from=me]:self-end data-[from=me]:rounded-br-[4px] data-[from=me]:bg-[#9ad8ff] data-[from=me]:text-[#0b1a2b] "
-          + "data-[from=home]:self-start data-[from=home]:rounded-bl-[4px] data-[from=home]:bg-voile/10 "
+          + "data-[from=me]:self-end data-[from=me]:rounded-br-trait data-[from=me]:bg-[#9ad8ff] data-[from=me]:text-[#0b1a2b] "
+          + "data-[from=home]:self-start data-[from=home]:rounded-bl-trait data-[from=home]:bg-voile/10 "
           + "data-error:shadow-[inset_3px_0_0_#ff6b6b]",
         "data-from": line.from, ...(line.error ? { "data-error": "" } : {}), text: line.text,
       }))));

@@ -60,7 +60,7 @@ function presetSummary(preset) {
 }
 
 function presetCard(preset) {
-  const card = el("li", { class: `bg-card-2 [border-radius:18px] [padding:0.8rem_0.9rem] grid gap-[0.45rem] [align-content:start] [border:1px_solid_transparent] [&.is-on]:border-accent [&.is-unavailable]:[opacity:0.6] preset-card${preset.enabled ? " is-on" : ""}${preset.unavailable ? " is-unavailable" : ""}` });
+  const card = el("li", { class: `bg-card-2 rounded-panneau py-3 px-3.5 grid gap-2 [align-content:start] [border:1px_solid_transparent] [&.is-on]:border-accent [&.is-unavailable]:[opacity:0.6] preset-card${preset.enabled ? " is-on" : ""}${preset.unavailable ? " is-unavailable" : ""}` });
   const toggle = el("input", { type: "checkbox", "aria-label": `${preset.title} : active` });
   toggle.checked = preset.enabled;
   toggle.disabled = !presets.editable || Boolean(preset.unavailable);
@@ -68,10 +68,10 @@ function presetCard(preset) {
   card.append(
     el(
       "div",
-      { class: "preset-head grid [grid-template-columns:auto_minmax(0,_1fr)_auto] gap-[0.6rem] items-center" },
-      el("span", { class: "preset-icon grid [place-items:center] w-[36px] h-[36px] [border-radius:12px] bg-card text-accent [:not(:where(.o032000))&_svg]:w-[20px] [:not(:where(.o032001))&_svg]:h-[20px]" }, svgIcon(PRESET_ICONS[preset.name] ?? ICONS.sparkle)),
+      { class: "preset-head grid [grid-template-columns:auto_minmax(0,_1fr)_auto] gap-2.5 items-center" },
+      el("span", { class: "preset-icon grid [place-items:center] w-[36px] h-[36px] rounded-champ bg-card text-accent [:not(:where(.o032000))&_svg]:w-[20px] [:not(:where(.o032001))&_svg]:h-[20px]" }, svgIcon(PRESET_ICONS[preset.name] ?? ICONS.sparkle)),
       el("div", { class: "preset-title grid [:not(:where(.o032200))&_small]:text-muted [:not(:where(.o032201))&_small]:text-petit" }, el("strong", { text: preset.title }), el("small", { text: preset.when })),
-      el("label", { class: "preset-switch relative inline-block w-[44px] h-[26px] cursor-pointer [:not(:where(.o032500))&_input]:absolute [:not(:where(.o032501))&_input]:[inset:0] [&_input]:[opacity:0] [&_input]:m-0 [&_input]:[cursor:inherit] [:not(:where(.o032600))&_span]:absolute [:not(:where(.o032601))&_span]:[inset:0] [:not(:where(.o032602))&_span]:[border-radius:999px] [:not(:where(.o032603))&_span]:bg-line [:not(:where(.o032604))&_span]:[transition:background_0.2s] [&_span]:pointer-events-none [&_span::after]:[content:''] [&_span::after]:absolute [:not(:where(.o032702))&_span::after]:[top:3px] [:not(:where(.o032703))&_span::after]:[left:3px] [&_span::after]:w-[20px] [&_span::after]:h-[20px] [&_span::after]:[border-radius:50%] [:not(:where(.o032707))&_span::after]:[background:#fff] [&_span::after]:[box-shadow:0_1px_3px_rgb(0_0_0_/_0.25)] [:not(:where(.o032709))&_span::after]:[transition:transform_0.2s] [:not(:where(.o032800))&_input:checked+span]:bg-accent [&_input:checked+span::after]:[transform:translateX(18px)] [&_input:focus-visible+span]:[outline:2px_solid_var(--accent)] [&_input:focus-visible+span]:[outline-offset:2px] [&_input:disabled+span]:[opacity:0.5] [@media(prefers-reduced-motion:reduce)]:[:not(:where(.o034000))&_span]:[transition:none] [@media(prefers-reduced-motion:reduce)]:[:not(:where(.o034000))&_span::after]:[transition:none]" }, toggle, el("span", { "aria-hidden": "true" })),
+      el("label", { class: "preset-switch relative inline-block w-[44px] h-[26px] cursor-pointer [:not(:where(.o032500))&_input]:absolute [:not(:where(.o032501))&_input]:[inset:0] [&_input]:[opacity:0] [&_input]:m-0 [&_input]:[cursor:inherit] [:not(:where(.o032600))&_span]:absolute [:not(:where(.o032601))&_span]:[inset:0] [:not(:where(.o032602))&_span]:rounded-full [:not(:where(.o032603))&_span]:bg-line [:not(:where(.o032604))&_span]:[transition:background_0.2s] [&_span]:pointer-events-none [&_span::after]:[content:''] [&_span::after]:absolute [:not(:where(.o032702))&_span::after]:[top:3px] [:not(:where(.o032703))&_span::after]:[left:3px] [&_span::after]:w-[20px] [&_span::after]:h-[20px] [&_span::after]:rounded-full [:not(:where(.o032707))&_span::after]:[background:#fff] [&_span::after]:[box-shadow:0_1px_3px_rgb(0_0_0_/_0.25)] [:not(:where(.o032709))&_span::after]:[transition:transform_0.2s] [:not(:where(.o032800))&_input:checked+span]:bg-accent [&_input:checked+span::after]:[transform:translateX(18px)] [&_input:focus-visible+span]:[outline:2px_solid_var(--accent)] [&_input:focus-visible+span]:[outline-offset:2px] [&_input:disabled+span]:[opacity:0.5] [@media(prefers-reduced-motion:reduce)]:[:not(:where(.o034000))&_span]:[transition:none] [@media(prefers-reduced-motion:reduce)]:[:not(:where(.o034000))&_span::after]:[transition:none]" }, toggle, el("span", { "aria-hidden": "true" })),
     ),
   );
   if (preset.unavailable) {
@@ -84,10 +84,10 @@ function presetCard(preset) {
   details.open = presets.open.has(preset.name);
   details.addEventListener("toggle", () => (details.open ? presets.open.add(preset.name) : presets.open.delete(preset.name)));
   const draft = structuredClone(preset.options);
-  const form = el("div", { class: "preset-form grid gap-2 mt-[0.6rem]" }, ...presetFields(preset.name, draft));
+  const form = el("div", { class: "preset-form grid gap-2 mt-2.5" }, ...presetFields(preset.name, draft));
   const save = el("button", { type: "button", class: "primary small", text: preset.enabled ? "Enregistrer" : "Enregistrer et activer" });
   save.addEventListener("click", () => savePreset(preset, true, draft));
-  details.append(form, el("div", { class: "preset-buttons flex justify-end mt-[0.6rem]" }, save));
+  details.append(form, el("div", { class: "preset-buttons flex justify-end mt-2.5" }, save));
   card.append(details);
   return card;
 }
@@ -97,7 +97,7 @@ function presetCheck(draft, key, text) {
   const input = el("input", { type: "checkbox" });
   input.checked = draft[key] === true;
   input.addEventListener("change", () => (draft[key] = input.checked));
-  return el("label", { class: "check [.preset-form_&]:text-corps [label&]:flex [label&]:items-center [label&]:gap-[0.45rem] [label&]:text-text" }, input, ` ${text}`);
+  return el("label", { class: "check [.preset-form_&]:text-corps [label&]:flex [label&]:items-center [label&]:gap-2 [label&]:text-text" }, input, ` ${text}`);
 }
 
 function presetNumber(draft, key, text, { min, max, step = 1, unit }) {
@@ -107,7 +107,7 @@ function presetNumber(draft, key, text, { min, max, step = 1, unit }) {
     const value = Number(input.value);
     if (input.value !== "" && Number.isFinite(value)) draft[key] = value;
   });
-  return el("label", { class: "preset-field flex flex-wrap items-center justify-between gap-2 text-corps [:not(:where(.o033600))&_select]:max-w-[60%]" }, el("span", { text }), el("span", { class: "preset-input inline-flex items-center gap-[0.35rem] [:not(:where(.o033800))&_input]:w-22" }, input, el("span", { text: unit })));
+  return el("label", { class: "preset-field flex flex-wrap items-center justify-between gap-2 text-corps [:not(:where(.o033600))&_select]:max-w-[60%]" }, el("span", { text }), el("span", { class: "preset-input inline-flex items-center gap-1.5 [:not(:where(.o033800))&_input]:w-22" }, input, el("span", { text: unit })));
 }
 
 function presetTime(draft, key, text) {

@@ -161,7 +161,7 @@ function hubV4PacTile() {
       const tip = el("span", {
         role: "tooltip",
         class: `pointer-events-none absolute bottom-[calc(100%+10px)] ${side} z-10 whitespace-nowrap `
-          + "px-3 py-1.5 rounded-[10px] bg-v-ink text-v-inverse text-legende font-medium shadow-lg "
+          + "px-3 py-1.5 rounded-puce bg-v-ink text-v-inverse text-legende font-medium shadow-lg "
           + "invisible opacity-0 translate-y-1 transition-all duration-150 group-hover:visible group-hover:opacity-100 group-hover:translate-y-0 "
           + "group-focus-visible:visible group-focus-visible:opacity-100 group-focus-visible:translate-y-0 motion-reduce:transition-none",
       }, el("b", { text: part.name }), ` · ${hubV4KwhText(part.kwh)} kWh · ${part.pct} %`);

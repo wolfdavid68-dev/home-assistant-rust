@@ -121,7 +121,7 @@ function hubV4TelCard(icon, tone, title, open) {
   const body = el("span", { class: "flex flex-col items-start gap-1 min-w-0 max-w-full" });
   const node = el("button", {
     type: "button",
-    class: "flex flex-col items-stretch justify-between gap-2.5 min-h-24 min-w-0 p-3.5 rounded-[18px] border-0 text-left "
+    class: "flex flex-col items-stretch justify-between gap-2.5 min-h-24 min-w-0 p-3.5 rounded-panneau border-0 text-left "
       + `text-v-ink cursor-pointer ${HUB_V4_TEL_GLASS} ${HUB_V4_FOCUS}`,
   }, el("span", { class: `flex items-center gap-1.5 text-legende font-medium ${HUB_V4_MUTE}` },
     el("span", { class: `grid shrink-0 ${tone} [&_svg]:size-3.5` }, svgIcon(icon)), title), body);
@@ -198,7 +198,7 @@ function hubV4TelBuild() {
     approval: el("div", { class: "flex px-5", role: "status" }),
     approvalText: el("span", { class: "min-w-0 text-legende font-medium text-v-ink2 truncate" }),
     approvalGo: button({
-      class: "flex items-center gap-2.5 max-w-full min-h-11 pl-3.5 pr-4 rounded-[14px] border-0 bg-v-amber/12 "
+      class: "flex items-center gap-2.5 max-w-full min-h-11 pl-3.5 pr-4 rounded-champ border-0 bg-v-amber/12 "
         + "ring-1 ring-inset ring-v-amber/25 backdrop-blur-[12px] text-left text-v-ink cursor-pointer "
         + `[&_svg]:size-4 ${HUB_V4_FOCUS}`,
     }),
@@ -229,10 +229,10 @@ function hubV4TelBuild() {
     // La musique, dans le flux sous les cartes (comme la maquette) : rien
     // n'est caché sous elle.
     music: el("section", {
-      class: `flex items-center gap-1 mx-4 p-2 pr-1 rounded-[18px] text-v-ink ${HUB_V4_TEL_GLASS}`,
+      class: `flex items-center gap-1 mx-4 p-2 pr-1 rounded-panneau text-v-ink ${HUB_V4_TEL_GLASS}`,
       "aria-label": "Musique",
     }),
-    musicOpen: button({ class: `flex flex-1 items-center gap-3 min-w-0 min-h-12 p-0 border-0 bg-transparent text-left text-inherit cursor-pointer rounded-[14px] ${HUB_V4_FOCUS}` }),
+    musicOpen: button({ class: `flex flex-1 items-center gap-3 min-w-0 min-h-12 p-0 border-0 bg-transparent text-left text-inherit cursor-pointer rounded-champ ${HUB_V4_FOCUS}` }),
     musicImg: el("img", { class: "absolute inset-0 size-full object-cover", alt: "", decoding: "async", draggable: "false" }),
     musicTitle: el("b", { class: "text-corps font-semibold leading-snug truncate" }),
     musicSub: el("small", { class: `text-legende leading-snug ${HUB_V4_MUTE} truncate` }),
@@ -405,7 +405,7 @@ function hubV4TelPanelBuild(ui) {
     const count = el("span", { class: `text-petit ${HUB_V4_MUTE} group-data-full:text-v-amber2` });
     const node = el("button", {
       type: "button",
-      class: "group flex items-center justify-between gap-2 min-h-12 px-3.5 rounded-[14px] border-0 bg-voile/6 text-left "
+      class: "group flex items-center justify-between gap-2 min-h-12 px-3.5 rounded-champ border-0 bg-voile/6 text-left "
         + "text-corps font-semibold text-inherit cursor-pointer transition-colors hover:bg-voile/10 "
         + `data-full:bg-v-amber/16 ${HUB_V4_FOCUS}`,
     }, el("span", { class: "truncate", text: room }), count);

@@ -110,7 +110,7 @@ function hubV4Doorbell(state, at = doorbellRang(state)) {
     svgIcon(HUB_V4_BELL_ICONS.camera), el("span"));
   const wait = el("span", { class: `absolute left-2.5 top-2.5 ${HUB_V4_TAG}`, text: "La nouvelle photo arrive…" });
   const stamp = el("span", { class: `absolute left-2.5 bottom-2.5 ${HUB_V4_TAG} [font-variant-numeric:tabular-nums]` });
-  const photo = el("div", { class: `relative grid place-items-center h-[189px] overflow-hidden rounded-[14px] ${HUB_V4_PHOTO_BG}` },
+  const photo = el("div", { class: `relative grid place-items-center h-[189px] overflow-hidden rounded-champ ${HUB_V4_PHOTO_BG}` },
     empty, img, wait, stamp);
   const ignore = el("button", { type: "button", class: `${HUB_V4_BTN} flex-1`, text: "Ignorer" });
   ignore.addEventListener("click", () => hubV4Close());

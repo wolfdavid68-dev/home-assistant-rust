@@ -132,7 +132,7 @@ function tint(node, color, alpha = 24) {
 }
 
 function colorDot(color, cls = "") {
-  const dot = el("span", { class: `agenda-dot w-[9px] h-[9px] [border-radius:50%] [background:var(--ev)] flex-none inline-block [.agenda-strip-dots_&]:w-[5px] [.agenda-strip-dots_&]:h-[5px] ${cls}`.trim(), "aria-hidden": "true" });
+  const dot = el("span", { class: `agenda-dot w-[9px] h-[9px] rounded-full [background:var(--ev)] flex-none inline-block [.agenda-strip-dots_&]:w-[5px] [.agenda-strip-dots_&]:h-[5px] ${cls}`.trim(), "aria-hidden": "true" });
   dot.style.setProperty("--ev", color);
   return dot;
 }
@@ -279,7 +279,7 @@ function weekView(calendars, days) {
 
   // Les journées entières, en bandeaux, sur une ou plusieurs lignes.
   const lanes = [];
-  const bandBox = el("div", { class: "agenda-bands grid [:not(:where(.o122501))&]:[grid-template-columns:52px_repeat(var(--days),_minmax(0,_1fr))] [:not(:where(.o122900))&]:[grid-template-rows:repeat(var(--lanes),_22px)] gap-y-[3px] pb-[6px] [border-bottom:1px_solid_var(--line)]" }, el("span", { class: "agenda-bands-label [:not(:where(.o123000))&]:[grid-column:1] [:not(:where(.o123001))&]:[grid-row:1] text-micro text-muted text-right [padding:4px_6px_0_0]", text: "journée" }));
+  const bandBox = el("div", { class: "agenda-bands grid [:not(:where(.o122501))&]:[grid-template-columns:52px_repeat(var(--days),_minmax(0,_1fr))] [:not(:where(.o122900))&]:[grid-template-rows:repeat(var(--lanes),_22px)] gap-y-1 pb-1.5 [border-bottom:1px_solid_var(--line)]" }, el("span", { class: "agenda-bands-label [:not(:where(.o123000))&]:[grid-column:1] [:not(:where(.o123001))&]:[grid-row:1] text-micro text-muted text-right pt-1 pr-1.5 pb-0 pl-0", text: "journée" }));
   for (const e of bands) {
     const start = Math.max(0, Math.round((dayStart(e.startDate) - from) / DAY_MS));
     const end = Math.min(days.length - 1, Math.round((dayStart(new Date(e.endDate.getTime() - 1)) - from) / DAY_MS));
@@ -335,7 +335,7 @@ function weekView(calendars, days) {
       column.append(block);
     }
     if (sameDay(day, now) && hoursOf(now) >= first && hoursOf(now) <= last) {
-      const line = el("span", { class: "agenda-now absolute [:not(:where(.o124401))&]:[left:0] [:not(:where(.o124402))&]:[right:0] [border-top:2px_solid_var(--alert)] [z-index:2] pointer-events-none [&::before]:[content:''] [&::before]:absolute [:not(:where(.o124502))&::before]:[left:-5px] [:not(:where(.o124503))&::before]:[top:-5px] [&::before]:w-[8px] [&::before]:h-[8px] [&::before]:[border-radius:50%] [&::before]:bg-alert" });
+      const line = el("span", { class: "agenda-now absolute [:not(:where(.o124401))&]:[left:0] [:not(:where(.o124402))&]:[right:0] [border-top:2px_solid_var(--alert)] [z-index:2] pointer-events-none [&::before]:[content:''] [&::before]:absolute [:not(:where(.o124502))&::before]:[left:-5px] [:not(:where(.o124503))&::before]:[top:-5px] [&::before]:w-[8px] [&::before]:h-[8px] [&::before]:rounded-full [&::before]:bg-alert" });
       line.style.setProperty("top", at(hoursOf(now)));
       column.append(line);
     }
@@ -391,7 +391,7 @@ function monthView(calendars) {
   const now = new Date();
   const box = el("div", { class: "agenda-month flex-1 grid [grid-template-rows:auto_repeat(var(--weeks),_minmax(96px,_1fr))]" });
   box.style.setProperty("--weeks", String(weeks));
-  box.append(el("div", { class: "agenda-month-head grid [grid-template-columns:repeat(7,_minmax(0,_1fr))] [border-bottom:1px_solid_var(--line)] [&_span]:text-center [:not(:where(.o124801))&_span]:text-micro [:not(:where(.o124802))&_span]:text-muted [&_span]:uppercase [&_span]:[padding:4px_0_6px]" },
+  box.append(el("div", { class: "agenda-month-head grid [grid-template-columns:repeat(7,_minmax(0,_1fr))] [border-bottom:1px_solid_var(--line)] [&_span]:text-center [:not(:where(.o124801))&_span]:text-micro [:not(:where(.o124802))&_span]:text-muted [&_span]:uppercase [&_span]:pt-1 [&_span]:px-0 [&_span]:pb-1.5" },
     ...["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."].map((d) => el("span", { text: d }))));
   for (let w = 0; w < weeks; w++) {
     const monday = addDays(start, w * 7);
@@ -420,20 +420,20 @@ function monthView(calendars) {
     for (let d = 0; d < 7; d++) {
       const day = addDays(monday, d);
       const out = day.getMonth() !== first.getMonth();
-      const cell = el("div", { class: `[border-left:1px_solid_var(--line)] [padding:4px_5px] min-w-0 flex flex-col gap-[1px] overflow-hidden [&:first-of-type]:[border-left:0] [&.out]:[opacity:0.45] agenda-month-cell${out ? " out" : ""}${sameDay(day, now) ? " is-today" : ""}` });
-      const number = el("button", { type: "button", class: "agenda-month-number [:where(&)]:[all:unset] cursor-pointer [:not(:where(.o125402))&]:text-petit [:not(:where(.o125403))&]:font-semibold w-[24px] h-[24px] [:not(:where(.o125406))&]:[line-height:24px] text-center [border-radius:50%] [.agenda-month-cell.is-today_&]:bg-accent [.agenda-month-cell.is-today_&]:text-accent-ink", text: String(day.getDate()), "aria-label": agendaLongDay.format(day) });
+      const cell = el("div", { class: `[border-left:1px_solid_var(--line)] py-1 px-1.5 min-w-0 flex flex-col gap-px overflow-hidden [&:first-of-type]:[border-left:0] [&.out]:[opacity:0.45] agenda-month-cell${out ? " out" : ""}${sameDay(day, now) ? " is-today" : ""}` });
+      const number = el("button", { type: "button", class: "agenda-month-number [:where(&)]:[all:unset] cursor-pointer [:not(:where(.o125402))&]:text-petit [:not(:where(.o125403))&]:font-semibold w-[24px] h-[24px] [:not(:where(.o125406))&]:[line-height:24px] text-center rounded-full [.agenda-month-cell.is-today_&]:bg-accent [.agenda-month-cell.is-today_&]:text-accent-ink", text: String(day.getDate()), "aria-label": agendaLongDay.format(day) });
       number.addEventListener("click", () => openAgenda(day, "day"));
       cell.append(number, el("span", { class: "agenda-month-gap [height:calc(var(--lanes,_0)_*_20px)] flex-none" }));
       const short = events.filter((e) => !long.includes(e) && e.startDate < addDays(day, 1) && e.endDate > day);
       for (const e of short.slice(0, 3)) {
-        const line = el("button", { type: "button", class: "agenda-month-event [:where(&)]:[all:unset] cursor-pointer flex items-center gap-[5px] text-legende whitespace-nowrap overflow-hidden min-w-0 [border-radius:5px] [padding:1px_2px] [&:hover]:bg-card-2 [:not(:where(.o126200))&_small]:[font:0.66rem_var(--font-mono)] [:not(:where(.o126201))&_small]:text-muted [:not(:where(.o126300))&_span]:overflow-hidden [:not(:where(.o126301))&_span]:text-ellipsis" }, colorDot(e.color));
+        const line = el("button", { type: "button", class: "agenda-month-event [:where(&)]:[all:unset] cursor-pointer flex items-center gap-1.5 text-legende whitespace-nowrap overflow-hidden min-w-0 rounded-trait py-px px-0.5 [&:hover]:bg-card-2 [:not(:where(.o126200))&_small]:[font:0.66rem_var(--font-mono)] [:not(:where(.o126201))&_small]:text-muted [:not(:where(.o126300))&_span]:overflow-hidden [:not(:where(.o126301))&_span]:text-ellipsis" }, colorDot(e.color));
         if (!e.allDay) line.append(el("small", { text: hourMinute.format(e.startDate) }));
         line.append(el("span", { text: e.summary }));
         line.addEventListener("click", () => openEventDetails(e));
         cell.append(line);
       }
       if (short.length > 3) {
-        const more = el("button", { type: "button", class: "agenda-month-more [:where(&)]:[all:unset] cursor-pointer text-micro text-muted pl-[2px]", text: `+ ${short.length - 3} autres` });
+        const more = el("button", { type: "button", class: "agenda-month-more [:where(&)]:[all:unset] cursor-pointer text-micro text-muted pl-0.5", text: `+ ${short.length - 3} autres` });
         more.addEventListener("click", () => openAgenda(day, "day"));
         cell.append(more);
       }
@@ -450,12 +450,12 @@ function listView(calendars) {
   const now = new Date();
   const from = agenda.anchor;
   const monday = weekStart(from);
-  const strip = el("div", { class: "agenda-strip grid [grid-template-columns:repeat(7,_minmax(0,_1fr))] [padding:4px_0_8px]" });
+  const strip = el("div", { class: "agenda-strip grid [grid-template-columns:repeat(7,_minmax(0,_1fr))] pt-1 px-0 pb-2" });
   for (let i = 0; i < 7; i++) {
     const day = addDays(monday, i);
-    const dots = el("span", { class: "agenda-strip-dots flex justify-center gap-[3px] h-[6px] mt-[4px]" },
+    const dots = el("span", { class: "agenda-strip-dots flex justify-center gap-1 h-[6px] mt-1" },
       ...eventsOfDay(day, calendars).slice(0, 3).map((e) => colorDot(e.color)));
-    const button = el("button", { type: "button", class: `[:where(&)]:[all:unset] cursor-pointer text-center text-micro text-muted [:not(:where(.o126800))&_b]:block [&_b]:[margin:2px_auto_0] [:not(:where(.o126802))&_b]:w-[32px] [:not(:where(.o126803))&_b]:h-[32px] [:not(:where(.o126805))&_b]:[border-radius:50%] [:not(:where(.o126806))&_b]:[font:600_1rem_var(--font-display)] [:not(:where(.o126807))&_b]:text-text [&.chosen_b]:[box-shadow:inset_0_0_0_2px_var(--accent)] [:not(:where(.o127000))&.is-today_b]:bg-accent [:not(:where(.o127001))&.is-today_b]:text-accent-ink agenda-strip-day${sameDay(day, now) ? " is-today" : ""}${sameDay(day, from) ? " chosen" : ""}` },
+    const button = el("button", { type: "button", class: `[:where(&)]:[all:unset] cursor-pointer text-center text-micro text-muted [:not(:where(.o126800))&_b]:block [&_b]:mt-0.5 [&_b]:mx-auto [&_b]:mb-0 [:not(:where(.o126802))&_b]:w-[32px] [:not(:where(.o126803))&_b]:h-[32px] [:not(:where(.o126805))&_b]:rounded-full [:not(:where(.o126806))&_b]:[font:600_1rem_var(--font-display)] [:not(:where(.o126807))&_b]:text-text [&.chosen_b]:[box-shadow:inset_0_0_0_2px_var(--accent)] [:not(:where(.o127000))&.is-today_b]:bg-accent [:not(:where(.o127001))&.is-today_b]:text-accent-ink agenda-strip-day${sameDay(day, now) ? " is-today" : ""}${sameDay(day, from) ? " chosen" : ""}` },
       el("span", { text: agendaWeekday.format(day) }), el("b", { text: String(day.getDate()) }), dots);
     button.addEventListener("click", () => {
       agenda.anchor = day;
@@ -463,7 +463,7 @@ function listView(calendars) {
     });
     strip.append(button);
   }
-  const list = el("div", { class: "agenda-list-days grid gap-[7px]" });
+  const list = el("div", { class: "agenda-list-days grid gap-2" });
   const seen = new Set();
   let shown = 0;
   for (let i = 0; i < 21 && shown < 60; i++) {
@@ -482,7 +482,7 @@ function listView(calendars) {
     let lineDrawn = !sameDay(day, now);
     for (const e of events) {
       if (!lineDrawn && !e.allDay && e.startDate > now) {
-        list.append(el("div", { class: "agenda-list-now flex items-center gap-[6px] text-alert [font:600_0.7rem_var(--font-mono)] [&::after]:[content:''] [&::after]:flex-1 [&::after]:[border-top:2px_solid_var(--alert)]", text: hourMinute.format(now) }));
+        list.append(el("div", { class: "agenda-list-now flex items-center gap-1.5 text-alert [font:600_0.7rem_var(--font-mono)] [&::after]:[content:''] [&::after]:flex-1 [&::after]:[border-top:2px_solid_var(--alert)]", text: hourMinute.format(now) }));
         lineDrawn = true;
       }
       list.append(listEvent(e, now));
@@ -490,7 +490,7 @@ function listView(calendars) {
     }
   }
   if (shown === 0) list.append(el("p", { class: "muted", text: "Rien de prévu dans les trois semaines qui viennent." }));
-  return el("div", { class: "agenda-list list-none m-0 grid gap-[2px] [padding:0_12px_12px] [overflow-y:auto]" }, strip, list);
+  return el("div", { class: "agenda-list list-none m-0 grid gap-0.5 pt-0 px-3 pb-3 [overflow-y:auto]" }, strip, list);
 }
 
 function listEvent(e, now) {
@@ -500,7 +500,7 @@ function listEvent(e, now) {
     if (!sameDay(e.startDate, last)) pill.append(el("small", { text: ` · jusqu'au ${shortDate.format(last)}` }));
     return pill;
   }
-  const row = el("button", { type: "button", class: `[:where(&)]:[all:unset] cursor-pointer [box-sizing:border-box] flex items-center gap-[12px] [padding:9px_12px] [border-radius:12px] bg-card-2 [box-shadow:inset_3px_0_0_var(--ev)] [&.past]:[opacity:0.45] agenda-list-event${e.endDate < now ? " past" : ""}` },
+  const row = el("button", { type: "button", class: `[:where(&)]:[all:unset] cursor-pointer [box-sizing:border-box] flex items-center gap-3 py-2.5 px-3 rounded-champ bg-card-2 [box-shadow:inset_3px_0_0_var(--ev)] [&.past]:[opacity:0.45] agenda-list-event${e.endDate < now ? " past" : ""}` },
     colorDot(e.color, "agenda-list-icon"),
     el("span", { class: "agenda-list-text grid flex-1 min-w-0 [:not(:where(.o128200))&_b]:font-semibold [:not(:where(.o128201))&_b]:text-courant [:not(:where(.o128202))&_b]:overflow-hidden [:not(:where(.o128203))&_b]:text-ellipsis [:not(:where(.o128204))&_b]:whitespace-nowrap [:not(:where(.o128300))&_small]:text-legende [:not(:where(.o128301))&_small]:text-muted [:not(:where(.o128302))&_small]:overflow-hidden [:not(:where(.o128303))&_small]:text-ellipsis [:not(:where(.o128304))&_small]:whitespace-nowrap" }, el("b", { text: e.summary }),
       el("small", { text: [e.label, e.location].filter(Boolean).join(" · ") })),
@@ -522,7 +522,7 @@ function todayCard(calendars, home) {
     .filter((e) => e.startDate >= addDays(today, 1))
     .slice(0, home ? 2 : 1);
   const next = events.find((e) => !e.allDay && e.startDate > now);
-  const head = el("div", { class: "agenda-card-head flex items-center justify-between gap-[8px] mb-[6px] [:not(:where(.o117500))&_h3]:m-0 [:not(:where(.o117501))&_h3]:text-moyen [:not(:where(.o117502))&_h3]:font-semibold [:not(:where(.o117600))&_h3::first-letter]:uppercase" }, el("h3", { text: home ? "Agenda · aujourd'hui" : "Aujourd'hui" }));
+  const head = el("div", { class: "agenda-card-head flex items-center justify-between gap-2 mb-1.5 [:not(:where(.o117500))&_h3]:m-0 [:not(:where(.o117501))&_h3]:text-moyen [:not(:where(.o117502))&_h3]:font-semibold [:not(:where(.o117600))&_h3::first-letter]:uppercase" }, el("h3", { text: home ? "Agenda · aujourd'hui" : "Aujourd'hui" }));
   if (home) {
     const all = el("button", { type: "button", class: "agenda-link [:where(&)]:[all:unset] cursor-pointer text-accent [:not(:where(.o117703))&]:text-petit [:not(:where(.o117704))&]:font-medium", text: "Tout l'agenda ›" });
     all.addEventListener("click", () => openAgenda(today));
@@ -537,7 +537,7 @@ function todayCard(calendars, home) {
     const past = !isTomorrow && e.endDate < now && !e.allDay;
     const when = isTomorrow ? "demain" : e.allDay ? "journée" : hourMinute.format(e.startDate);
     const note = e === next ? inMinutes(e.startDate) : past ? "fait" : e.label || e.location || "";
-    const row = el("button", { type: "button", class: `[:where(&)]:[all:unset] cursor-pointer [box-sizing:border-box] w-full flex items-center gap-[10px] [padding:6px_6px] [border-radius:12px] [:not(:where(.o118000))&:hover]:bg-card-2 [:not(:where(.o118100))&.next]:bg-accent-soft [&.past]:[opacity:0.5] [&:focus-visible]:[outline:3px_solid_var(--accent)] [&:focus-visible]:[outline-offset:-3px] agenda-today-line${e === next ? " next" : ""}${past ? " past" : ""}` },
+    const row = el("button", { type: "button", class: `[:where(&)]:[all:unset] cursor-pointer [box-sizing:border-box] w-full flex items-center gap-2.5 p-1.5 rounded-champ [:not(:where(.o118000))&:hover]:bg-card-2 [:not(:where(.o118100))&.next]:bg-accent-soft [&.past]:[opacity:0.5] [&:focus-visible]:[outline:3px_solid_var(--accent)] [&:focus-visible]:[outline-offset:-3px] agenda-today-line${e === next ? " next" : ""}${past ? " past" : ""}` },
       el("span", { class: "agenda-today-time [font:0.82rem_var(--font-mono)] text-muted w-[3.6rem] flex-none", text: when }), colorDot(e.color, "agenda-today-icon"),
       el("span", { class: "agenda-today-text grid min-w-0 flex-1 [:not(:where(.o118600))&_b]:font-semibold [:not(:where(.o118601))&_b]:text-corps [:not(:where(.o118602))&_b]:whitespace-nowrap [:not(:where(.o118603))&_b]:overflow-hidden [:not(:where(.o118604))&_b]:text-ellipsis [:not(:where(.o118700))&_small]:text-muted [:not(:where(.o118701))&_small]:text-legende [:not(:where(.o118702))&_small]:whitespace-nowrap [:not(:where(.o118703))&_small]:overflow-hidden [:not(:where(.o118704))&_small]:text-ellipsis [&_small.error]:[color:var(--alert-ink,_var(--alert))]" }, el("b", { text: e.summary }), el("small", { text: isTomorrow && !e.allDay ? hourMinute.format(e.startDate) : e.location || "" })),
       el("span", { class: "agenda-today-note text-legende text-muted text-right flex-none max-w-[40%] [.agenda-today-line.next_&]:text-accent [.agenda-today-line.next_&]:font-semibold", text: note }));
@@ -559,11 +559,11 @@ function miniMonth() {
     for (let d = dayStart(e.startDate); d < e.endDate && days.length < 42; d = addDays(d, 1)) days.push(d.getTime());
     return days;
   }));
-  const prev = el("button", { type: "button", class: "agenda-mini-arrow [:where(&)]:[all:unset] cursor-pointer [padding:0_6px] text-muted text-moyen", "aria-label": "Mois précédent", text: "‹" });
-  const next = el("button", { type: "button", class: "agenda-mini-arrow [:where(&)]:[all:unset] cursor-pointer [padding:0_6px] text-muted text-moyen", "aria-label": "Mois suivant", text: "›" });
+  const prev = el("button", { type: "button", class: "agenda-mini-arrow [:where(&)]:[all:unset] cursor-pointer py-0 px-1.5 text-muted text-moyen", "aria-label": "Mois précédent", text: "‹" });
+  const next = el("button", { type: "button", class: "agenda-mini-arrow [:where(&)]:[all:unset] cursor-pointer py-0 px-1.5 text-muted text-moyen", "aria-label": "Mois suivant", text: "›" });
   prev.addEventListener("click", () => { agenda.anchor = new Date(a.getFullYear(), a.getMonth() - 1, 1); renderAgendaView(); });
   next.addEventListener("click", () => { agenda.anchor = new Date(a.getFullYear(), a.getMonth() + 1, 1); renderAgendaView(); });
-  const grid = el("div", { class: "agenda-mini-grid grid [grid-template-columns:repeat(7,_minmax(0,_1fr))] text-center gap-y-[2px] [isolation:isolate]" }, ...["L", "M", "M", "J", "V", "S", "D"].map((d) => el("span", { class: "agenda-mini-name text-legende text-muted pb-[2px]", text: d })));
+  const grid = el("div", { class: "agenda-mini-grid grid [grid-template-columns:repeat(7,_minmax(0,_1fr))] text-center gap-y-0.5 [isolation:isolate]" }, ...["L", "M", "M", "J", "V", "S", "D"].map((d) => el("span", { class: "agenda-mini-name text-legende text-muted pb-0.5", text: d })));
   const chosenWeek = weekStart(a).getTime();
   for (let i = 0; i < 42; i++) {
     const day = addDays(start, i);
@@ -582,7 +582,7 @@ function miniMonth() {
     });
     grid.append(button);
   }
-  return [el("div", { class: "agenda-card-head flex items-center justify-between gap-[8px] mb-[6px] [:not(:where(.o117500))&_h3]:m-0 [:not(:where(.o117501))&_h3]:text-moyen [:not(:where(.o117502))&_h3]:font-semibold [:not(:where(.o117600))&_h3::first-letter]:uppercase" }, el("h3", { text: agendaMonthTitle.format(first) }), el("span", {}, prev, next)), grid];
+  return [el("div", { class: "agenda-card-head flex items-center justify-between gap-2 mb-1.5 [:not(:where(.o117500))&_h3]:m-0 [:not(:where(.o117501))&_h3]:text-moyen [:not(:where(.o117502))&_h3]:font-semibold [:not(:where(.o117600))&_h3::first-letter]:uppercase" }, el("h3", { text: agendaMonthTitle.format(first) }), el("span", {}, prev, next)), grid];
 }
 
 function calendarToggles(calendars) {
@@ -591,10 +591,10 @@ function calendarToggles(calendars) {
     const failure = typeof calendar.state.attributes.erreur === "string" ? calendar.state.attributes.erreur : "";
     const where = calendar.state.state === "unavailable" ? (failure || "pas encore chargé")
       : calendar.source === "TimeTree" ? "TimeTree" : calendar.readOnly ? `en ligne (${calendar.source})` : "sur le serveur";
-    const toggle = el("button", { type: "button", class: "agenda-calendar [:where(&)]:[all:unset] cursor-pointer [box-sizing:border-box] w-full flex items-center gap-[10px] [padding:5px_2px] [&[aria-checked=false]_.agenda-calendar-icon]:[background:transparent] [&[aria-checked=false]_.agenda-calendar-icon]:[box-shadow:inset_0_0_0_2px_var(--ev)] [&:focus-visible]:[outline:3px_solid_var(--accent)] [&:focus-visible]:[outline-offset:-3px]", role: "switch", "aria-checked": String(shown) },
+    const toggle = el("button", { type: "button", class: "agenda-calendar [:where(&)]:[all:unset] cursor-pointer [box-sizing:border-box] w-full flex items-center gap-2.5 py-1.5 px-0.5 [&[aria-checked=false]_.agenda-calendar-icon]:[background:transparent] [&[aria-checked=false]_.agenda-calendar-icon]:[box-shadow:inset_0_0_0_2px_var(--ev)] [&:focus-visible]:[outline:3px_solid_var(--accent)] [&:focus-visible]:[outline-offset:-3px]", role: "switch", "aria-checked": String(shown) },
       colorDot(calendar.color, "agenda-calendar-icon"),
       el("span", { class: "agenda-today-text grid min-w-0 flex-1 [:not(:where(.o118600))&_b]:font-semibold [:not(:where(.o118601))&_b]:text-corps [:not(:where(.o118602))&_b]:whitespace-nowrap [:not(:where(.o118603))&_b]:overflow-hidden [:not(:where(.o118604))&_b]:text-ellipsis [:not(:where(.o118700))&_small]:text-muted [:not(:where(.o118701))&_small]:text-legende [:not(:where(.o118702))&_small]:whitespace-nowrap [:not(:where(.o118703))&_small]:overflow-hidden [:not(:where(.o118704))&_small]:text-ellipsis [&_small.error]:[color:var(--alert-ink,_var(--alert))]" }, el("b", { text: calendar.name }), el("small", { class: calendar.state.state === "unavailable" ? "error" : "", text: where })),
-      el("span", { class: "agenda-switch w-[30px] h-[18px] [border-radius:9px] bg-card-2 [box-shadow:inset_0_0_0_1px_var(--line)] relative flex-none [&::after]:[content:''] [&::after]:absolute [:not(:where(.o120602))&::after]:[left:2px] [:not(:where(.o120603))&::after]:[top:2px] [&::after]:w-[14px] [&::after]:h-[14px] [&::after]:[border-radius:50%] [&::after]:bg-muted [&::after]:[transition:transform_0.15s] [.agenda-calendar[aria-checked=true]_&]:[background:color-mix(in_srgb,_var(--ev)_70%,_transparent)] [.agenda-calendar[aria-checked=true]_&]:[box-shadow:none] [.agenda-calendar[aria-checked=true]_&::after]:[transform:translateX(12px)] [.agenda-calendar[aria-checked=true]_&::after]:[background:#fff]", "aria-hidden": "true" }));
+      el("span", { class: "agenda-switch w-[30px] h-[18px] rounded-puce bg-card-2 [box-shadow:inset_0_0_0_1px_var(--line)] relative flex-none [&::after]:[content:''] [&::after]:absolute [:not(:where(.o120602))&::after]:[left:2px] [:not(:where(.o120603))&::after]:[top:2px] [&::after]:w-[14px] [&::after]:h-[14px] [&::after]:rounded-full [&::after]:bg-muted [&::after]:[transition:transform_0.15s] [.agenda-calendar[aria-checked=true]_&]:[background:color-mix(in_srgb,_var(--ev)_70%,_transparent)] [.agenda-calendar[aria-checked=true]_&]:[box-shadow:none] [.agenda-calendar[aria-checked=true]_&::after]:[transform:translateX(12px)] [.agenda-calendar[aria-checked=true]_&::after]:[background:#fff]", "aria-hidden": "true" }));
     toggle.style.setProperty("--ev", calendar.color);
     toggle.addEventListener("click", () => {
       if (shown) agenda.hidden.add(calendar.id);
@@ -605,11 +605,11 @@ function calendarToggles(calendars) {
     return toggle;
   });
   const timetree = calendars.filter((c) => c.source === "TimeTree");
-  const out = [el("div", { class: "agenda-card-head flex items-center justify-between gap-[8px] mb-[6px] [:not(:where(.o117500))&_h3]:m-0 [:not(:where(.o117501))&_h3]:text-moyen [:not(:where(.o117502))&_h3]:font-semibold [:not(:where(.o117600))&_h3::first-letter]:uppercase" }, el("h3", { text: "Agendas" })), ...rows];
+  const out = [el("div", { class: "agenda-card-head flex items-center justify-between gap-2 mb-1.5 [:not(:where(.o117500))&_h3]:m-0 [:not(:where(.o117501))&_h3]:text-moyen [:not(:where(.o117502))&_h3]:font-semibold [:not(:where(.o117600))&_h3::first-letter]:uppercase" }, el("h3", { text: "Agendas" })), ...rows];
   if (timetree.length > 0) {
     const ok = timetree.every((c) => c.state.state !== "unavailable");
     const changed = Math.max(...timetree.map((c) => Date.parse(c.state.last_updated) || 0));
-    out.push(el("p", { class: `[margin:6px_0_0] text-legende text-muted [&::before]:[content:'●_'] [&::before]:text-ok [&.error::before]:text-alert agenda-sync${ok ? "" : " error"}`, text: ok ? `TimeTree relu ${changed ? `à ${hourMinute.format(new Date(changed))}` : ""}, toutes les 15 min` : "TimeTree injoignable" }));
+    out.push(el("p", { class: `mt-1.5 mx-0 mb-0 text-legende text-muted [&::before]:[content:'●_'] [&::before]:text-ok [&.error::before]:text-alert agenda-sync${ok ? "" : " error"}`, text: ok ? `TimeTree relu ${changed ? `à ${hourMinute.format(new Date(changed))}` : ""}, toutes les 15 min` : "TimeTree injoignable" }));
   }
   if (calendars.length === 0) out.push(el("p", { class: "muted", text: "Aucun agenda : voir docs/agenda.md et docs/timetree.md." }));
   return out;
@@ -626,12 +626,12 @@ function openEventDetails(e) {
   const when = e.allDay
     ? (sameDay(e.startDate, lastDay) ? agendaLongDay.format(e.startDate) : `du ${agendaLongDay.format(e.startDate)} au ${agendaLongDay.format(lastDay)}`)
     : `${agendaLongDay.format(e.startDate)} · ${eventSpan(e)}`;
-  const rows = [el("p", { class: "agenda-event-when [margin:2px_0_10px_22px] text-text-2", text: when })];
-  const line = (icon, ...content) => el("div", { class: "agenda-event-row flex gap-[10px] [padding:5px_0] items-start text-text-2" }, el("span", { class: "agenda-event-key [:not(:where(.o129200))&_svg]:w-[16px] [:not(:where(.o129201))&_svg]:h-[16px] [:not(:where(.o129202))&_svg]:text-muted [&_svg]:mt-[2px]", "aria-hidden": "true" }, svgIcon(icon)), el("div", {}, ...content));
+  const rows = [el("p", { class: "agenda-event-when mt-0.5 mr-0 mb-2.5 ml-6 text-text-2", text: when })];
+  const line = (icon, ...content) => el("div", { class: "agenda-event-row flex gap-2.5 py-1.5 px-0 items-start text-text-2" }, el("span", { class: "agenda-event-key [:not(:where(.o129200))&_svg]:w-[16px] [:not(:where(.o129201))&_svg]:h-[16px] [:not(:where(.o129202))&_svg]:text-muted [&_svg]:mt-0.5", "aria-hidden": "true" }, svgIcon(icon)), el("div", {}, ...content));
   if (e.location) rows.push(line(ICONS.globe, e.location));
   const where = [];
   if (e.label) {
-    const chip = el("span", { class: "agenda-label inline-block [border-radius:6px] [padding:1px_8px] [:not(:where(.o129403))&]:text-legende [:not(:where(.o129404))&]:font-semibold [background:color-mix(in_srgb,_var(--ev)_var(--ev-alpha,_30%),_transparent)] [color:color-mix(in_srgb,_var(--ev)_45%,_var(--text))]", text: e.label });
+    const chip = el("span", { class: "agenda-label inline-block rounded-trait py-px px-2 [:not(:where(.o129403))&]:text-legende [:not(:where(.o129404))&]:font-semibold [background:color-mix(in_srgb,_var(--ev)_var(--ev-alpha,_30%),_transparent)] [color:color-mix(in_srgb,_var(--ev)_45%,_var(--text))]", text: e.label });
     tint(chip, e.color, 30);
     where.push(chip, " ");
   }
@@ -639,12 +639,12 @@ function openEventDetails(e) {
   rows.push(line(ICONS.calendar, ...where));
   if (Array.isArray(e.attendees) && e.attendees.length > 0) {
     rows.push(line(ICONS.person, ...e.attendees.filter((n) => typeof n === "string").map((name) =>
-      el("span", { class: "agenda-person inline-flex items-center gap-[6px] [padding:2px_9px_2px_3px] [margin:0_4px_4px_0] [border-radius:999px] bg-card-2 text-petit" }, el("span", { class: "agenda-person-initial w-[20px] h-[20px] [border-radius:50%] bg-accent text-accent-ink grid [place-items:center] [:not(:where(.o129607))&]:text-micro [:not(:where(.o129608))&]:font-bold", text: name.charAt(0).toUpperCase(), "aria-hidden": "true" }), name))));
+      el("span", { class: "agenda-person inline-flex items-center gap-1.5 pt-0.5 pr-2.5 pb-0.5 pl-1 mt-0 mr-1 mb-1 ml-0 rounded-full bg-card-2 text-petit" }, el("span", { class: "agenda-person-initial w-[20px] h-[20px] rounded-full bg-accent text-accent-ink grid [place-items:center] [:not(:where(.o129607))&]:text-micro [:not(:where(.o129608))&]:font-bold", text: name.charAt(0).toUpperCase(), "aria-hidden": "true" }), name))));
   }
   if (typeof e.description === "string" && e.description.trim() !== "") rows.push(line(ICONS.list, el("span", { class: "agenda-event-note [white-space:pre-line]", text: e.description })));
-  const buttons = el("div", { class: "agenda-event-buttons flex gap-[8px] mt-[12px] [:not(:where(.o129800))&_a]:[text-decoration:none]" });
+  const buttons = el("div", { class: "agenda-event-buttons flex gap-2 mt-3 [:not(:where(.o129800))&_a]:[text-decoration:none]" });
   if (e.calendar.source === "TimeTree") {
-    buttons.append(el("a", { class: "action-button [justify-self:start] min-h-[40px] [padding:0.45rem_1.1rem] [border-radius:999px] [border:0] bg-card-2 font-semibold [&:active]:[transform:scale(0.97)] [[data-theme|=plan]_&]:[border:1.25px_solid_var(--ink)] [[data-theme|=plan]_&]:[box-shadow:none] [[data-theme|=plan]_&]:[border-radius:var(--radius)]", href: "https://timetreeapp.com/", target: "_blank", rel: "noopener noreferrer", text: "Ouvrir TimeTree" }));
+    buttons.append(el("a", { class: "action-button [justify-self:start] min-h-[40px] py-2 px-4 rounded-full [border:0] bg-card-2 font-semibold [&:active]:[transform:scale(0.97)]", href: "https://timetreeapp.com/", target: "_blank", rel: "noopener noreferrer", text: "Ouvrir TimeTree" }));
   }
   if (!e.calendar.readOnly && (typeof canControl !== "function" || canControl(e.calendar.state)) && typeof e.uid === "string") {
     const remove = el("button", { type: "button", class: "ghost danger", text: "Supprimer" });
@@ -701,24 +701,24 @@ function renderBoardAgenda() {
     return;
   }
   box.hidden = false;
-  const today = el("div", { class: "agenda-card agenda-home-today bg-card [border-radius:var(--radius)] [box-shadow:var(--shadow)] [padding:12px_14px] min-w-0 [[data-theme=maquette]_&]:bg-card [:not(:where(.o132101))[data-theme=maquette]_&]:[box-shadow:none] [:not(:where(.o132700))[data-theme|=plan]_&]:[box-shadow:0_0_0_1.25px_var(--ink)] [[data-theme|=plan]_&]:[border-radius:6px] [@media(min-width:1000px)]:[[data-layout=board]_&]:min-h-0 [@media(min-width:1000px)]:[[data-layout=board]_&]:[overflow:hidden_auto] [@media(min-width:1000px)]:[[data-layout=board]_&]:[overscroll-behavior:contain] [@media(min-width:1000px)]:[[data-layout=board]_&]:[scrollbar-width:none] [@media(min-width:1000px)]:[[data-layout=board]_&::-webkit-scrollbar]:hidden [@media(min-width:1000px)]:[:not(:where(.o081900))[data-layout=board]_&.fade-start]:[mask-image:linear-gradient(to_bottom,_transparent,_#000_var(--fade-start,_0px),_#000_calc(100%_-_var(--fade-end,_0px)),_transparent)] [@media(min-width:1000px)]:[:not(:where(.o081900))[data-layout=board]_&.fade-end]:[mask-image:linear-gradient(to_bottom,_transparent,_#000_var(--fade-start,_0px),_#000_calc(100%_-_var(--fade-end,_0px)),_transparent)]" }, ...todayCard(calendars, true));
+  const today = el("div", { class: "agenda-card agenda-home-today bg-card rounded-carte [box-shadow:var(--shadow)] py-3 px-3.5 min-w-0" }, ...todayCard(calendars, true));
   const monday = weekStart(new Date());
   const now = new Date();
-  const week = el("div", { class: "agenda-home-week grid [grid-template-columns:repeat(7,_minmax(0,_1fr))] gap-[4px]" });
+  const week = el("div", { class: "agenda-home-week grid [grid-template-columns:repeat(7,_minmax(0,_1fr))] gap-1" });
   for (let i = 0; i < 7; i++) {
     const day = addDays(monday, i);
     const bars = eventsOfDay(day, calendars).slice(0, 4).map((e) => {
-      const bar = el("span", { class: "agenda-home-bar [width:calc(100%_-_10px)] h-[5px] [border-radius:3px] [background:var(--ev)]", title: `${eventTime(e)} ${e.summary}` });
+      const bar = el("span", { class: "agenda-home-bar [width:calc(100%_-_10px)] h-[5px] rounded-trait [background:var(--ev)]", title: `${eventTime(e)} ${e.summary}` });
       bar.style.setProperty("--ev", e.color);
       return bar;
     });
-    const cell = el("button", { type: "button", class: `[:where(&)]:[all:unset] cursor-pointer grid [justify-items:center] [align-content:start] gap-[3px] text-micro text-muted pb-[2px] [border-radius:10px] [&:hover]:bg-card-2 [:not(:where(.o130600))&_b]:[font:600_0.95rem_var(--font-display)] [:not(:where(.o130601))&_b]:text-text [:not(:where(.o130602))&_b]:w-[26px] [:not(:where(.o130603))&_b]:h-[26px] [:not(:where(.o130604))&_b]:[line-height:26px] [&_b]:text-center [:not(:where(.o130606))&_b]:[border-radius:50%] [:not(:where(.o130700))&.is-today_b]:bg-accent [:not(:where(.o130701))&.is-today_b]:text-accent-ink agenda-home-day${sameDay(day, now) ? " is-today" : ""}`, "aria-label": `${agendaLongDay.format(day)} : ${bars.length} rendez-vous` },
+    const cell = el("button", { type: "button", class: `[:where(&)]:[all:unset] cursor-pointer grid [justify-items:center] [align-content:start] gap-1 text-micro text-muted pb-0.5 rounded-puce [&:hover]:bg-card-2 [:not(:where(.o130600))&_b]:[font:600_0.95rem_var(--font-display)] [:not(:where(.o130601))&_b]:text-text [:not(:where(.o130602))&_b]:w-[26px] [:not(:where(.o130603))&_b]:h-[26px] [:not(:where(.o130604))&_b]:[line-height:26px] [&_b]:text-center [:not(:where(.o130606))&_b]:rounded-full [:not(:where(.o130700))&.is-today_b]:bg-accent [:not(:where(.o130701))&.is-today_b]:text-accent-ink agenda-home-day${sameDay(day, now) ? " is-today" : ""}`, "aria-label": `${agendaLongDay.format(day)} : ${bars.length} rendez-vous` },
       el("span", { text: agendaWeekday.format(day) }), el("b", { text: String(day.getDate()) }), ...bars);
     cell.addEventListener("click", () => openAgenda(day, "day"));
     week.append(cell);
   }
-  const weekCard = el("div", { class: "agenda-card agenda-home-weekcard bg-card [border-radius:var(--radius)] [box-shadow:var(--shadow)] [padding:12px_14px] min-w-0 [[data-theme=maquette]_&]:bg-card [:not(:where(.o132101))[data-theme=maquette]_&]:[box-shadow:none] [:not(:where(.o132700))[data-theme|=plan]_&]:[box-shadow:0_0_0_1.25px_var(--ink)] [[data-theme|=plan]_&]:[border-radius:6px]" },
-    el("div", { class: "agenda-card-head flex items-center justify-between gap-[8px] mb-[6px] [:not(:where(.o117500))&_h3]:m-0 [:not(:where(.o117501))&_h3]:text-moyen [:not(:where(.o117502))&_h3]:font-semibold [:not(:where(.o117600))&_h3::first-letter]:uppercase" }, el("h3", { text: "Cette semaine" })), week);
+  const weekCard = el("div", { class: "agenda-card agenda-home-weekcard bg-card rounded-carte [box-shadow:var(--shadow)] py-3 px-3.5 min-w-0" },
+    el("div", { class: "agenda-card-head flex items-center justify-between gap-2 mb-1.5 [:not(:where(.o117500))&_h3]:m-0 [:not(:where(.o117501))&_h3]:text-moyen [:not(:where(.o117502))&_h3]:font-semibold [:not(:where(.o117600))&_h3::first-letter]:uppercase" }, el("h3", { text: "Cette semaine" })), week);
   const scrolled = box.querySelector(".agenda-home-today")?.scrollTop ?? 0;
   box.replaceChildren(today, weekCard);
   // Moins haute que ses rendez-vous (une tablette, avec le lecteur de musique

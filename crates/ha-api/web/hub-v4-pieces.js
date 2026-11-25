@@ -437,7 +437,7 @@ function hubV4LampButton(entityId, room) {
   const word = el("span", { class: `text-legende ${HUB_V4_MUTE} group-aria-pressed:text-v-amber2` });
   const node = el("button", {
     type: "button", "aria-pressed": "false",
-    class: "group flex items-center gap-2.5 min-h-14 px-2.5 rounded-[14px] border-0 bg-voile/6 text-left text-inherit "
+    class: "group flex items-center gap-2.5 min-h-14 px-2.5 rounded-champ border-0 bg-voile/6 text-left text-inherit "
       + "cursor-pointer transition-colors hover:bg-voile/10 aria-pressed:bg-v-amber/14 "
       + "aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-v-amber/35 "
       + `disabled:opacity-40 disabled:cursor-default [&.pending]:opacity-60 ${HUB_V4_FOCUS}`,
@@ -507,7 +507,7 @@ function hubV4CoverRow(entityId, room) {
   // Seul dans la pièce, le volet a son état dans l'en-tête de la carte : la ligne du nom s'efface.
   const node = el("div", { class: "flex flex-col gap-2" },
     el("div", { class: "flex items-baseline gap-2 group-data-single/covers:hidden" }, name, word),
-    el("div", { class: "flex gap-1 p-1 rounded-[14px] bg-voile/6", role: "group" }, ...buttons));
+    el("div", { class: "flex gap-1 p-1 rounded-champ bg-voile/6", role: "group" }, ...buttons));
   const refresh = () => {
     const state = entities.get(entityId);
     if (!state) return;
@@ -576,7 +576,7 @@ function hubV4PageNav(name) {
     // Le focus d'ouverture va au retour (sinon à la barre qui défile, sur un téléphone).
     // Sur un écran étroit, il reste collé à gauche quand la barre défile.
     type: "button", autofocus: "",
-    class: `${HUB_V4_PILL} ${HUB_V4_BAR} rounded-[14px] min-h-10 pl-2.5 pr-3.5 text-v-ink shrink-0 max-lg:sticky max-lg:left-0 max-lg:z-10 max-lg:bg-scrim lg:justify-self-start`,
+    class: `${HUB_V4_PILL} ${HUB_V4_BAR} rounded-champ min-h-10 pl-2.5 pr-3.5 text-v-ink shrink-0 max-lg:sticky max-lg:left-0 max-lg:z-10 max-lg:bg-scrim lg:justify-self-start`,
   }, el("span", { class: "rotate-180 [&_svg]:size-3.5", "aria-hidden": "true" }, svgIcon(HUB_V4_ICONS.go)), "Maison");
   back.addEventListener("click", () => hubV4PageClose());
   const pill = (text, current, run, arrow = false) => {
@@ -672,7 +672,7 @@ function hubV4PageStage(name) {
     : page.zones.filter((z) => z.area === name).sort((a, b) => b.w * b.h - a.w * a.h)[0];
   if (zone) {
     ring = el("div", {
-      class: "absolute left-(--rl) top-(--rt) w-(--rw) h-(--rh) rounded-[14px] border-2 border-v-amber/80 "
+      class: "absolute left-(--rl) top-(--rt) w-(--rw) h-(--rh) rounded-champ border-2 border-v-amber/80 "
         + "shadow-[0_0_36px_color-mix(in_srgb,var(--v3-amber)_45%,transparent),inset_0_0_26px_color-mix(in_srgb,var(--v3-amber)_20%,transparent)] animate-v4-breathe motion-reduce:animate-none",
     });
     ring.hidden = true;
@@ -815,7 +815,7 @@ function hubV4RoomBody(name) {
     if (typeof account !== "undefined" && account.permissions?.history) {
       see = el("button", {
         type: "button",
-        class: "self-end min-h-9 -my-1 px-2 rounded-[10px] border-0 bg-transparent text-petit font-semibold text-v-amber "
+        class: "self-end min-h-9 -my-1 px-2 rounded-puce border-0 bg-transparent text-petit font-semibold text-v-amber "
           + `cursor-pointer hover:underline ${HUB_V4_FOCUS}`,
       });
       see.addEventListener("click", () => openLogbook(id));
@@ -870,7 +870,7 @@ function hubV4RoomBody(name) {
 }
 
 /** Une ligne d'une carte de « Toute la maison » : icône, nom (et sous-ligne), valeur à droite. */
-const HUB_V4_ALL_ROW = "flex items-center gap-3 min-h-11 px-3 py-1.5 rounded-[14px] bg-voile/6 text-left text-inherit "
+const HUB_V4_ALL_ROW = "flex items-center gap-3 min-h-11 px-3 py-1.5 rounded-champ bg-voile/6 text-left text-inherit "
   + `[&>svg]:size-[18px] [&>svg]:shrink-0 [&>svg]:text-v-mute`;
 // La valeur d'une ligne : verte si tout va bien, rouge si ça cloche (classes en entier pour Tailwind).
 // En Clair, le vert v-ok seul est juste sous AA (4,46:1) sur le ciel crème : un peu d'encre en plus.
@@ -930,7 +930,7 @@ function hubV4PlugButton(entityId) {
   const word = el("span", { class: `text-legende ${HUB_V4_MUTE} group-aria-pressed:text-v-amber2` });
   const node = el("button", {
     type: "button", "aria-pressed": "false",
-    class: "group flex items-center gap-2 min-h-14 px-2 rounded-[14px] border-0 bg-voile/6 text-left text-inherit "
+    class: "group flex items-center gap-2 min-h-14 px-2 rounded-champ border-0 bg-voile/6 text-left text-inherit "
       + "cursor-pointer transition-colors hover:bg-voile/10 aria-pressed:bg-v-amber/14 "
       + "aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-v-amber/35 "
       + `disabled:opacity-40 disabled:cursor-default [&.pending]:opacity-60 ${HUB_V4_FOCUS}`,
@@ -1247,8 +1247,8 @@ function hubV4HouseBody() {
   for (const node of volumes) setAttr(node, "aria-pressed", String(Number(node.dataset.level) === hubV4ChimeVolume));
   const voice = el("p", { class: `m-0 px-1 text-legende ${HUB_V4_MUTE} truncate` });
   sayTile.node.append(
-    el("div", { class: "flex gap-1 p-1 rounded-[14px] bg-voile/6", role: "group", "aria-label": "Annoncer" }, everywhere, chime),
-    el("div", { class: "flex gap-1 p-1 rounded-[14px] bg-voile/6", role: "group", "aria-label": "Volume du carillon" }, ...volumes),
+    el("div", { class: "flex gap-1 p-1 rounded-champ bg-voile/6", role: "group", "aria-label": "Annoncer" }, everywhere, chime),
+    el("div", { class: "flex gap-1 p-1 rounded-champ bg-voile/6", role: "group", "aria-label": "Volume du carillon" }, ...volumes),
     voice);
   fourth.push(sayTile.node);
   paints.push(() => {

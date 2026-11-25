@@ -30,7 +30,7 @@ if (typeof MutationObserver === "function") new MutationObserver(() => {
 
 // Les classes communes. Les couleurs sont celles de l'accueil v3 (hub-v3.css).
 const HUB_V4_FOCUS = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v-amber";
-const HUB_V4_BTN = "flex items-center justify-center gap-1.5 min-h-11 px-4 rounded-[14px] border-0 "
+const HUB_V4_BTN = "flex items-center justify-center gap-1.5 min-h-11 px-4 rounded-champ border-0 "
   + "bg-voile/8 text-corps font-medium text-inherit cursor-pointer transition-colors "
   + "hover:bg-voile/14 disabled:opacity-40 disabled:cursor-default [&.pending]:opacity-60 [&_svg]:size-4 "
   + HUB_V4_FOCUS;
@@ -146,10 +146,10 @@ function hubV4Overlay({ icon, tone = "amber", title, sub, body, more, spot, refr
     veil.dataset.spot = "";
     // Le reste s'efface autour de la pièce (une ombre immense), qui respire en ambre.
     const halo = el("div", {
-      class: "pointer-events-none absolute left-(--sx) top-(--sy) w-(--sw) h-(--sh) rounded-[18px] "
+      class: "pointer-events-none absolute left-(--sx) top-(--sy) w-(--sw) h-(--sh) rounded-panneau "
         + "shadow-[0_0_0_200vmax_var(--v4-shade)] animate-v4-fade motion-reduce:animate-none",
     }, el("div", {
-      class: "absolute -inset-1 rounded-[22px] border-2 border-v-amber "
+      class: "absolute -inset-1 rounded-carte border-2 border-v-amber "
         + "shadow-[0_0_28px_color-mix(in_srgb,var(--v3-amber)_55%,transparent),inset_0_0_22px_color-mix(in_srgb,var(--v3-amber)_25%,transparent)] "
         + "animate-v4-breathe motion-reduce:animate-none",
     }));
@@ -160,7 +160,7 @@ function hubV4Overlay({ icon, tone = "amber", title, sub, body, more, spot, refr
     parts.push(halo);
   }
   const close = el("button", {
-    type: "button", class: `grid place-items-center size-11 shrink-0 p-0 rounded-[14px] border-0 bg-voile/8 text-inherit `
+    type: "button", class: `grid place-items-center size-11 shrink-0 p-0 rounded-champ border-0 bg-voile/8 text-inherit `
       + `cursor-pointer transition-colors hover:bg-voile/14 [&_svg]:size-5 ${HUB_V4_FOCUS}`,
     "aria-label": "Fermer",
   }, svgIcon(HUB_V4_ICONS.close));
@@ -355,7 +355,7 @@ function hubV4Room(name) {
     const tgSub = el("span", { class: `text-petit ${HUB_V4_MUTE}` });
     const toggle = el("button", {
       type: "button", role: "switch", "aria-label": `Lumières : ${name}`,
-      class: "group flex items-center gap-3 w-full min-h-14 px-3 rounded-[18px] border-0 bg-v-amber/10 "
+      class: "group flex items-center gap-3 w-full min-h-14 px-3 rounded-panneau border-0 bg-v-amber/10 "
         + "text-left text-inherit cursor-pointer disabled:opacity-40 disabled:cursor-default [&.pending]:opacity-60 "
         + HUB_V4_FOCUS,
     },
@@ -379,7 +379,7 @@ function hubV4Room(name) {
     const makeLamp = (state) => {
       const node = el("button", {
         type: "button",
-        class: "flex flex-col items-center justify-center gap-1 min-w-0 min-h-14 px-0.5 py-1.5 rounded-[14px] border-0 "
+        class: "flex flex-col items-center justify-center gap-1 min-w-0 min-h-14 px-0.5 py-1.5 rounded-champ border-0 "
           + `bg-voile/6 text-legende ${HUB_V4_MUTE} cursor-pointer transition-colors `
           + "aria-pressed:bg-v-amber/14 aria-pressed:text-v-amber2 "
           + "disabled:opacity-40 disabled:cursor-default [&.pending]:opacity-60 [&_svg]:size-[18px] " + HUB_V4_FOCUS,
@@ -434,7 +434,7 @@ function hubV4Room(name) {
     const word = el("span", {});
     const head = el("button", {
       type: "button",
-      class: "flex items-baseline justify-between gap-2 w-full px-1 pt-1 rounded-[10px] border-0 bg-transparent "
+      class: "flex items-baseline justify-between gap-2 w-full px-1 pt-1 rounded-puce border-0 bg-transparent "
         + `text-left text-petit ${HUB_V4_MUTE} cursor-pointer disabled:cursor-default enabled:hover:bg-voile/6 `
         + HUB_V4_FOCUS,
     }, label, word);
@@ -505,7 +505,7 @@ function hubV4Room(name) {
 // ------------------------------------------------- Les morceaux communs
 
 // Le bouton principal d'une incrustation (Éteindre, Lancer, Valider).
-const HUB_V4_MAIN = "flex items-center justify-center gap-1.5 min-h-12 px-4 rounded-[14px] border-0 "
+const HUB_V4_MAIN = "flex items-center justify-center gap-1.5 min-h-12 px-4 rounded-champ border-0 "
   + "bg-[#ffbf5e] text-courant font-semibold text-[#1f1305] cursor-pointer transition-colors "
   + "hover:bg-[#ffcb7d] disabled:opacity-40 disabled:cursor-default [&.pending]:opacity-60 [&_svg]:size-4 "
   + HUB_V4_FOCUS;
@@ -532,7 +532,7 @@ const HUB_V4_MORE_LINES = {
 function hubV4Note(icon, text = "") {
   const words = el("span", { class: "min-w-0", text });
   const node = el("p", {
-    class: `m-0 flex items-center gap-2.5 min-h-10 px-3 py-2 rounded-[14px] bg-voile/6 text-legende ${HUB_V4_MUTE} `
+    class: `m-0 flex items-center gap-2.5 min-h-10 px-3 py-2 rounded-champ bg-voile/6 text-legende ${HUB_V4_MUTE} `
       + "[&>svg]:size-4 [&>svg]:shrink-0",
   }, svgIcon(icon), words);
   return { node, words };
@@ -647,7 +647,7 @@ function hubV4Lamp(entityId, spot = null) {
     const value = el("b", { class: "relative text-courant font-semibold" });
     const range = el("input", { type: "range", min: "1", max: "100", step: "1", "aria-label": "Intensité", class: HUB_V4_RANGE });
     const bar = el("label", {
-      class: `relative flex items-center justify-between h-14 px-4 text-v-ink rounded-[18px] bg-voile/8 overflow-hidden ${HUB_V4_TRACK}`,
+      class: `relative flex items-center justify-between h-14 px-4 text-v-ink rounded-panneau bg-voile/8 overflow-hidden ${HUB_V4_TRACK}`,
     },
     el("span", {
       class: "absolute inset-y-0 left-0 w-(--v) bg-linear-to-r from-v-amber/20 to-v-amber/45 "
@@ -816,7 +816,7 @@ function hubV4Cover(entityId, spot = null) {
   const small = el("span", { class: "text-legende text-v-ink2" });
   // La fenêtre : le dehors (teinté par le thème, nuit ou jour), les lames du volet par-dessus.
   const pane = el("div", {
-    class: "relative w-[118px] h-[168px] shrink-0 rounded-[14px] overflow-hidden ring-4 ring-inset ring-voile/10 "
+    class: "relative w-[118px] h-[168px] shrink-0 rounded-champ overflow-hidden ring-4 ring-inset ring-voile/10 "
       + "bg-linear-to-b from-v-violet/30 via-v-violet/20 to-v-pink/25",
     "aria-hidden": "true",
   },
@@ -1040,7 +1040,7 @@ function hubV4Moment(state) {
     sub: el("span", { class: `text-petit ${HUB_V4_MUTE}`, text: "Ce qui va se passer" }),
     body: [
       list,
-      el("div", { class: "flex items-center gap-3 p-3 rounded-[18px] bg-v-violet/12" },
+      el("div", { class: "flex items-center gap-3 p-3 rounded-panneau bg-v-violet/12" },
         hubV4Ring(),
         el("div", { class: "flex flex-col" }, count,
           el("span", { class: `text-petit ${HUB_V4_MUTE}`, text: "Touche Annuler pour arrêter." }))),
@@ -1141,7 +1141,7 @@ function hubV4Approval() {
     title: "Ordre à valider",
     sub,
     body: [
-      el("div", { class: "flex flex-col gap-2 p-3.5 rounded-[18px] bg-voile/6" },
+      el("div", { class: "flex flex-col gap-2 p-3.5 rounded-panneau bg-voile/6" },
         el("span", { class: `flex items-center gap-2 text-petit ${HUB_V4_MUTE}` },
           el("span", { class: "text-v-sky [&_svg]:size-4", "aria-hidden": "true" }, svgIcon(ICONS.mic)), who),
         order, reason),
@@ -1234,7 +1234,7 @@ function hubV4CoursesRow() {
   const left = todoItems(state).filter((item) => item.status !== "completed").length;
   const row = el("button", {
     type: "button",
-    class: "flex items-center gap-2.5 w-full min-h-10 mt-1.5 px-3 rounded-[14px] border-0 bg-voile/6 text-left cursor-pointer "
+    class: "flex items-center gap-2.5 w-full min-h-10 mt-1.5 px-3 rounded-champ border-0 bg-voile/6 text-left cursor-pointer "
       + "hover:bg-voile/10 [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-v-mute " + HUB_V4_FOCUS,
     "aria-label": left > 0 ? `Courses et tâches : ${left} à faire` : "Courses et tâches : rien à faire",
   }, svgIcon(HUB_V4_HOME_ICONS.cart),
