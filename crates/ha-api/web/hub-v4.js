@@ -22,6 +22,12 @@ const HUB_V4_GAP = 16;
 const HUB_V4_MARGIN = 8;
 const hubV4 = { dialog: null, refresh: null };
 
+// En v4, la maison suit le thème (houseNight) : quand le thème change
+// (choix dans Apparence, ou le système qui passe en sombre), elle se redessine.
+if (typeof MutationObserver === "function") new MutationObserver(() => {
+  if (typeof house !== "undefined" && house.view && typeof updateHouse === "function") updateHouse(house.view);
+}).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-hub-v4"] });
+
 // Les classes communes. Les couleurs sont celles de l'accueil v3 (hub-v3.css).
 const HUB_V4_FOCUS = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v-sky";
 const HUB_V4_BTN = "flex items-center justify-center gap-1.5 min-h-11 px-4 rounded-[14px] border-0 "

@@ -195,8 +195,12 @@ function houseUrl(name) {
 
 // ---------------------------------------------------------------- Le dessin
 
-/** Fait-il nuit ? (Le soleil, s'il est connu ; sinon, jamais.) */
+/** Fait-il nuit ? (Le soleil, s'il est connu ; sinon, jamais.) En v4, le
+ *  ciel de l'accueil suit le thème (Clair = jour, Sombre = nuit) : la maison
+ *  aussi, pour que son image, ses fenêtres allumées et ses étoiles aillent
+ *  avec le ciel. */
 function houseNight() {
+  if (typeof hubV4On === "function" && hubV4On()) return document.documentElement.dataset.theme === "dark";
   return entities.get("sun.sun")?.state === "below_horizon";
 }
 
@@ -237,7 +241,9 @@ const momentOf = (ambiance) => ambiance.split("-")[0];
 /** L'ambiance du moment (« nuit-pluie »…), ou celle imposée par le réglage. */
 function ambianceOf(page) {
   if (page.forced) return page.forced;
-  const moment = hasDusk(page) && houseDusk() ? "crepuscule" : houseNight() ? "nuit" : "jour";
+  // En v4, pas de crépuscule : l'image suit le ciel du thème (voir houseNight).
+  const v4 = typeof hubV4On === "function" && hubV4On();
+  const moment = !v4 && hasDusk(page) && houseDusk() ? "crepuscule" : houseNight() ? "nuit" : "jour";
   const weather = weatherKind();
   return weather === "soleil" ? moment : `${moment}-${weather}`;
 }
@@ -403,7 +409,7 @@ function labelValue(state) {
  * calques, les valeurs. Renvoie de quoi les mettre à jour.
  */
 function drawHouse(stage, config, { interactive }) {
-  const base = el("img", { class: "house-base [:not(:where(.o066500))[data-theme=plan-nuit]_.house-stage.default-drawing_&]:[filter:invert(1)_hue-rotate(180deg)_brightness(1.15)] [:not(:where(.o066501))[data-theme=plan-nuit]_.house-stage.default-drawing_&]:[mix-blend-mode:screen] [:not(:where(.o066500))[data-theme=maquette]_.house-stage.default-drawing_&]:[filter:invert(1)_hue-rotate(180deg)_brightness(1.15)] [:not(:where(.o066501))[data-theme=maquette]_.house-stage.default-drawing_&]:[mix-blend-mode:screen]", alt: "La maison", draggable: "false" });
+  const base = el("img", { class: "house-base [transition:opacity_0.6s_ease] [&.under-ambiance]:opacity-0 [:not(:where(.o066500))[data-theme=plan-nuit]_.house-stage.default-drawing_&]:[filter:invert(1)_hue-rotate(180deg)_brightness(1.15)] [:not(:where(.o066501))[data-theme=plan-nuit]_.house-stage.default-drawing_&]:[mix-blend-mode:screen] [:not(:where(.o066500))[data-theme=maquette]_.house-stage.default-drawing_&]:[filter:invert(1)_hue-rotate(180deg)_brightness(1.15)] [:not(:where(.o066501))[data-theme=maquette]_.house-stage.default-drawing_&]:[mix-blend-mode:screen]", alt: "La maison", draggable: "false" });
   const custom = config.background ? houseUrl(config.background) : null;
   base.src = custom ?? HOUSE_DEFAULT;
   stage.classList.toggle("default-drawing", custom === null);
@@ -455,7 +461,7 @@ function drawHouse(stage, config, { interactive }) {
     return { label, name, value, node };
   });
   stage.replaceChildren(...parts);
-  const view = { stage, config, ambiance, layers, fx, zones, labels };
+  const view = { stage, config, base, ambiance, layers, fx, zones, labels };
   // La taille du dessin n'est connue qu'une fois l'image chargée : ses
   // proportions servent à le faire tenir dans la hauteur de l'écran.
   stage.classList.remove("cutout");
@@ -594,6 +600,12 @@ function updateHouse(view) {
     const url = chosen && chosen !== view.config.background ? houseUrl(chosen) : null;
     if (url && view.ambiance.getAttribute("src") !== url) view.ambiance.src = url;
     view.ambiance.classList.toggle("off", url === null);
+    // Le fond s'efface sous l'ambiance, une fois celle-ci chargée : en Sombre,
+    // les images de la maison se fondent dans le ciel (mode « éclaircir »),
+    // et une image de nuit posée sur celle de jour n'en garderait presque rien.
+    const ready = url !== null && view.ambiance.complete && view.ambiance.naturalWidth > 0;
+    if (url !== null && !ready) view.ambiance.addEventListener("load", () => updateHouse(view), { once: true });
+    view.base?.classList.toggle("under-ambiance", ready);
   }
   for (const { layer, img } of view.layers) {
     const shown = layerShown(layer, isNight);
