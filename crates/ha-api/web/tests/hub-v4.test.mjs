@@ -22,6 +22,9 @@ const hubV4CoverLabel = run("hubV4CoverLabel");
 const hubV4MomentRows = run("hubV4MomentRows");
 const hubV4Expiry = run("hubV4Expiry");
 const hubV4AskedBy = run("hubV4AskedBy");
+const hubV4Suggested = run("hubV4Suggested");
+const hubV4TempoText = run("hubV4TempoText");
+const hubV4CoursesText = run("hubV4CoursesText");
 
 const cover = (state, attributes = {}) => ({ entity_id: "cover.salon", state, attributes });
 
@@ -210,5 +213,35 @@ describe("hubV4Expiry et hubV4AskedBy", () => {
     assert.equal(hubV4AskedBy("à la voix (Alexa)", at), "Demandé à la voix (Alexa) · 21:42");
     assert.equal(hubV4AskedBy("", at), "Demandé à 21:42");
     assert.equal(hubV4AskedBy("", "n'importe quoi"), "Demandé");
+  });
+});
+
+describe("hubV4Suggested : la scène de l'heure (Moments)", () => {
+  const names = ["Bonjour", "Bonne nuit", "Cinéma", "Je pars", "Je rentre", "Soirée"];
+  test("le matin, le midi, le soir, la nuit", () => {
+    assert.equal(hubV4Suggested(names, 7), 0);
+    assert.equal(hubV4Suggested(names, 13), 3);
+    assert.equal(hubV4Suggested(names, 18), 4);
+    assert.equal(hubV4Suggested(names, 22), 1);
+    assert.equal(hubV4Suggested(names, 2), 1);
+  });
+  test("rien qui corresponde : pas de suggestion", () => {
+    assert.equal(hubV4Suggested(["Cinéma", "Lecture"], 7), -1);
+    assert.equal(hubV4Suggested([], 22), -1);
+  });
+});
+
+describe("hubV4TempoText et hubV4CoursesText", () => {
+  test("la couleur du jour, puis le jour", () => {
+    assert.equal(hubV4TempoText("Bleu", "aujourd'hui"), "Bleu aujourd'hui");
+    assert.equal(hubV4TempoText("Rouge", "demain"), "Rouge demain");
+  });
+  test("pas encore annoncé, ou un état inconnu", () => {
+    assert.equal(hubV4TempoText("unknown", "demain"), "Demain : pas encore annoncé");
+    assert.equal(hubV4TempoText("unavailable", "aujourd'hui"), "Aujourd'hui : indisponible");
+  });
+  test("la liste des courses : vide ou le nombre", () => {
+    assert.equal(hubV4CoursesText(0), "vides");
+    assert.equal(hubV4CoursesText(3), "3");
   });
 });

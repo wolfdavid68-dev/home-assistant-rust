@@ -851,6 +851,185 @@
   :root[data-hub-style="v3"] .hub :is(.hub-scene, .hub-v3-music-open, .hub-v3-play, .hub-v3-next, .hub-v3-ib, .hub-v3-seg, .hub-v3-zone, .hub-v3-alloff, .hub-v3-room-chip, .hub-dock button, .hub-views button):active:not(:disabled) { transform: none; }
 }
 
+/* ================================================================ v4 : l'ambiance
+   La v4 (<html data-hub-v4>) reprend tout ce qui précède et change l'ambiance :
+   ciel de nuit indigo → prune avec lune et étoiles (Sombre), ciel de jour
+   bleu pâle → pêche avec soleil et nuages (Clair), récit en serif, chiffres
+   fins, accent ambre, verre teinté, maison plus grande. La v3 ne change pas. */
+
+/* Geist est variable (100 à 900), mais sa @font-face de base (css/legacy.css)
+   s'arrête à 400-600 : un poids 200 y tombe sur 400. Ce second nom vise le
+   même fichier (un seul téléchargement) avec toute la plage, pour la v4
+   seulement. */
+@font-face {
+  font-family: "Geist v4";
+  src: url("/fonts/geist.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root[data-hub-v4] {
+  --v4-star: 255 248 232;
+  --v4-moon: radial-gradient(circle at 36% 34%, #fffdf0 0%, #f6efcf 48%, #e6dbb2 100%);
+  --v4-moon-halo: 0 0 18px 4px rgb(255 242 205 / 0.30), 0 0 70px 26px rgb(255 232 190 / 0.10);
+  --v4-mist: rgb(150 112 190 / 0.16);
+  --v3-sky-bg:
+    radial-gradient(90% 38% at 50% 100%, rgb(122 78 140 / 0.30), transparent 72%),
+    linear-gradient(180deg, #090c1f 0%, #0c1030 22%, #0f1436 40%, #181a40 54%, #221d49 66%, #30254f 78%, #3e2c55 90%, #4a3159 100%);
+}
+:root[data-hub-v4][data-theme="light"] {
+  --v4-sun: radial-gradient(circle at 40% 38%, #fffbea 0%, #ffe8a8 52%, #ffd27a 100%);
+  --v4-sun-halo: 0 0 26px 8px rgb(255 214 130 / 0.50), 0 0 120px 48px rgb(255 222 160 / 0.32);
+  --v4-cloud: rgb(255 255 255 / 0.78);
+  --v4-mist: rgb(255 236 214 / 0.55);
+  --v3-sky-bg:
+    radial-gradient(70% 40% at 72% 6%, rgb(255 236 196 / 0.55), transparent 70%),
+    linear-gradient(180deg, #cddff1 0%, #dbe6f2 24%, #e9ecf0 44%, #f5e9de 66%, #f8e4d2 84%, #f5e8d8 100%);
+}
+
+/* Accent ambre (le bleu ciel garde son sens : volets, Tempo bleu). */
+:root[data-hub-v4] .hub {
+  --accent: var(--v3-amber);
+  --accent-soft: color-mix(in srgb, var(--v3-amber) 16%, transparent);
+  /* Verre teinté indigo, bordure d'un pixel très légère, ombre douce. */
+  --v3-glass: rgb(28 27 74 / 0.58);
+  --v3-glass-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06), inset 0 0 0 1px rgb(255 255 255 / 0.07), 0 1px 1px rgb(4 4 20 / 0.25), 0 22px 44px -22px rgb(4 4 20 / 0.75);
+  font-family: "Geist v4", var(--font);
+}
+:root[data-hub-v4][data-theme="light"] .hub {
+  --v3-glass: rgb(255 253 249 / 0.76);
+  --v3-glass-shadow: inset 0 1px 0 rgb(255 255 255 / 0.7), inset 0 0 0 1px rgb(60 48 30 / 0.07), 0 1px 2px rgb(90 70 40 / 0.06), 0 16px 36px -18px rgb(90 70 40 / 0.24);
+}
+:root[data-hub-v4] .hub :focus-visible { outline-color: var(--v3-amber); }
+
+/* Le ciel : étoiles et brume derrière tout (la .hub fixe forme un contexte d'empilement). */
+:root[data-hub-v4] .hub::before,
+:root[data-hub-v4] .hub::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+:root[data-hub-v4] .hub::before {
+  background:
+    radial-gradient(circle at 33.1% 10.4%, rgb(var(--v4-star) / 0.38) 0 0.6px, transparent 1.5px),
+    radial-gradient(circle at 53.4% 22.5%, rgb(var(--v4-star) / 0.6) 0 0.6px, transparent 1.5px),
+    radial-gradient(circle at 22.6% 6.8%, rgb(var(--v4-star) / 0.38) 0 1px, transparent 1.9px),
+    radial-gradient(circle at 10.7% 30.8%, rgb(var(--v4-star) / 0.41) 0 1.1px, transparent 2px),
+    radial-gradient(circle at 23.4% 37.1%, rgb(var(--v4-star) / 0.5) 0 0.6px, transparent 1.5px),
+    radial-gradient(circle at 44.1% 31.7%, rgb(var(--v4-star) / 0.5) 0 0.6px, transparent 1.5px),
+    radial-gradient(circle at 61.6% 9.5%, rgb(var(--v4-star) / 0.4) 0 1px, transparent 1.9px),
+    radial-gradient(circle at 31.6% 47.7%, rgb(var(--v4-star) / 0.35) 0 0.7px, transparent 1.6px),
+    radial-gradient(circle at 56.8% 14.5%, rgb(var(--v4-star) / 0.55) 0 0.6px, transparent 1.5px),
+    radial-gradient(circle at 8% 5.3%, rgb(var(--v4-star) / 0.5) 0 0.7px, transparent 1.6px),
+    radial-gradient(circle at 66.5% 25.5%, rgb(var(--v4-star) / 0.5) 0 1px, transparent 1.9px),
+    radial-gradient(circle at 45.5% 18.8%, rgb(var(--v4-star) / 0.6) 0 0.7px, transparent 1.6px),
+    radial-gradient(circle at 81.4% 34.2%, rgb(var(--v4-star) / 0.45) 0 0.8px, transparent 1.7px),
+    radial-gradient(circle at 35% 25.1%, rgb(var(--v4-star) / 0.7) 0 1.1px, transparent 2px),
+    radial-gradient(circle at 93.3% 4.4%, rgb(var(--v4-star) / 0.42) 0 0.8px, transparent 1.7px),
+    radial-gradient(circle at 48.9% 4.2%, rgb(var(--v4-star) / 0.6) 0 0.6px, transparent 1.5px),
+    radial-gradient(circle at 72.4% 15.1%, rgb(var(--v4-star) / 0.45) 0 0.8px, transparent 1.7px),
+    radial-gradient(circle at 88.6% 18.8%, rgb(var(--v4-star) / 0.38) 0 1px, transparent 1.9px),
+    radial-gradient(circle at 15% 17.1%, rgb(var(--v4-star) / 0.38) 0 0.6px, transparent 1.5px),
+    radial-gradient(circle at 69.3% 38.2%, rgb(var(--v4-star) / 0.4) 0 1px, transparent 1.9px),
+    radial-gradient(circle at 39% 39.4%, rgb(var(--v4-star) / 0.55) 0 0.6px, transparent 1.5px),
+    radial-gradient(circle at 78.1% 6.2%, rgb(var(--v4-star) / 0.5) 0 1px, transparent 1.9px),
+    /* Brume basse. */
+    radial-gradient(120% 30% at 50% 104%, var(--v4-mist), transparent 70%);
+}
+/* Quelques étoiles plus vives qui scintillent très lentement. */
+:root[data-hub-v4] .hub::after {
+  background:
+    radial-gradient(circle at 75.8% 7.6%, rgb(var(--v4-star) / 0.8) 0 0.9px, transparent 1.9px),
+    radial-gradient(circle at 90% 26.3%, rgb(var(--v4-star) / 0.7) 0 0.7px, transparent 1.6px),
+    radial-gradient(circle at 54.7% 36%, rgb(var(--v4-star) / 0.75) 0 0.8px, transparent 1.7px),
+    radial-gradient(circle at 28.7% 19.9%, rgb(var(--v4-star) / 0.75) 0 0.8px, transparent 1.7px),
+    radial-gradient(circle at 40.5% 9.9%, rgb(var(--v4-star) / 0.7) 0 0.7px, transparent 1.6px),
+    radial-gradient(circle at 19.5% 12.1%, rgb(var(--v4-star) / 0.8) 0 1px, transparent 1.9px),
+    radial-gradient(circle at 63.5% 31.6%, rgb(var(--v4-star) / 0.65) 0 0.6px, transparent 1.5px),
+    radial-gradient(circle at 85.6% 42.9%, rgb(var(--v4-star) / 0.6) 0 1px, transparent 1.9px);
+  animation: hub-v4-twinkle 7s ease-in-out infinite alternate;
+}
+@keyframes hub-v4-twinkle {
+  from { opacity: 0.35; }
+  to { opacity: 1; }
+}
+/* Le jour : pas d'étoiles ; deux nuages légers et une brume chaude. */
+:root[data-hub-v4][data-theme="light"] .hub::before {
+  background:
+    radial-gradient(ellipse 130px 26px at 61% 15%, var(--v4-cloud), transparent 72%),
+    radial-gradient(ellipse 80px 22px at 56.5% 13%, var(--v4-cloud), transparent 72%),
+    radial-gradient(ellipse 150px 24px at 37% 30%, rgb(255 255 255 / 0.5), transparent 72%),
+    radial-gradient(ellipse 70px 20px at 40.5% 28.5%, rgb(255 255 255 / 0.55), transparent 72%),
+    radial-gradient(120% 30% at 50% 104%, var(--v4-mist), transparent 70%);
+}
+:root[data-hub-v4][data-theme="light"] .hub::after { content: none; }
+
+/* La lune (le soleil le jour), en haut à droite de la zone de la maison. */
+:root[data-hub-v4] .hub .hub-center::before {
+  content: "";
+  position: absolute;
+  top: 104px;
+  right: 6%;
+  z-index: -1;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--v4-moon);
+  box-shadow: var(--v4-moon-halo);
+  pointer-events: none;
+}
+:root[data-hub-v4][data-theme="light"] .hub .hub-center::before {
+  width: 46px;
+  height: 46px;
+  background: var(--v4-sun);
+  box-shadow: var(--v4-sun-halo);
+}
+
+/* Récit en serif : « Bonsoir. » droite, « Tout est calme. » en italique ambre. */
+:root[data-hub-v4] .hub .hub-v3-hello {
+  font-family: "Instrument Serif", Georgia, "Times New Roman", serif;
+  font-size: clamp(34px, 3.7vw, 48px);
+  font-weight: 400;
+  line-height: 1.04;
+  letter-spacing: -0.012em;
+}
+:root[data-hub-v4] .hub .hub-v3-hello em { font-style: italic; color: var(--v3-amber); }
+/* Le même récit sur l'écran téléphone (hub-v4-telephone.js). */
+:root[data-hub-v4] .hub .hub-v4-tel h1:has(> em) {
+  font-family: "Instrument Serif", Georgia, "Times New Roman", serif;
+  font-weight: 400;
+  letter-spacing: -0.012em;
+}
+:root[data-hub-v4] .hub .hub-v4-tel h1 > em { font-style: italic; color: var(--v3-amber); }
+
+/* Chiffres fins : l'heure et la température. */
+:root[data-hub-v4] .hub .hub-clock {
+  font-family: "Geist v4", var(--font);
+  font-weight: 200;
+  letter-spacing: -0.035em;
+}
+:root[data-hub-v4] .hub .hub-weather-now strong { font-family: "Geist v4", var(--font); font-weight: 200; }
+
+/* La maison : plus grande, centrée. Une image 3D détourée (.cutout) se pose
+   telle quelle sur le ciel ; sinon (fond non uni), ses bords se fondent
+   doucement dans le ciel au lieu de l'ovale net du thème sombre. */
+@media (min-width: 1100px) {
+  :root[data-hub-v4] .hub { grid-template-columns: minmax(250px, 22%) minmax(0, 1fr) minmax(270px, 24%); }
+}
+:root[data-hub-v4] .hub .hub-house { inset: 50px -2% 0; }
+:root[data-hub-v4] .hub .hub-house #house-stage { width: min(100cqw, calc(100cqh * var(--ratio, 1.35))); }
+:root[data-hub-v4] .hub .hub-house #house-stage:not(.cutout) {
+  -webkit-mask-image: radial-gradient(farthest-side, #000 72%, transparent 100%);
+  mask-image: radial-gradient(farthest-side, #000 72%, transparent 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-hub-v4] .hub::after { animation: none; }
+}
+
 /* ---------------------------------------------------------------- Hors v3 : le réglage du style */
 .hub-style-pick { display: grid; gap: .3rem; }
 .hub-style-pick select { width: 100%; }
@@ -858,3 +1037,144 @@
 .hub-v3-pins { display: none; }
 
 :root[data-hub-style="v3"][data-theme="light"] .hub { color-scheme: light; }
+
+/* ===== v4 accueil : composants ===== */
+/* Ce que la v4 change aux blocs repris de la v3 (le reste est en classes Tailwind
+   dans hub-v3.js, hub-v4.js et hub.js). La v3 n'est pas touchée : tout est sous
+   :root[data-hub-v4]. */
+
+/* Les pièces sur la maison (Vivant) : une pastille sombre « • Salon », le point
+   ambre si une lumière y est allumée. Toucher ouvre la pièce. */
+:root[data-hub-v4] .hub #hub-house[data-lens="vivant"] .hub-v3-pins { display: block; }
+/* Sur le téléphone (hub-v4-telephone.js), la maison est petite : pas de pastilles sur Vivant, comme la maquette. */
+:root[data-hub-v4][data-hub-tel] #hub-house[data-lens="vivant"] .hub-v3-pins { display: none; }
+:root[data-hub-v4] .hub .hub-v3-pin.hub-v4-room-pin {
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px 0 9px;
+  background: color-mix(in srgb, var(--v3-scrim) 80%, transparent);
+  color: var(--v3-ink);
+  font-size: var(--text-legende);
+  font-weight: 500;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v3-voile) 12%, transparent), 0 6px 16px -8px rgb(0 0 0 / 0.7);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+@media (hover: hover) {
+  :root[data-hub-v4] .hub .hub-v3-pins .hub-v3-pin.hub-v4-room-pin:hover { background-color: color-mix(in srgb, var(--v3-scrim) 94%, transparent); }
+}
+
+/* Les onglets du dessin (Devant / Jardin) au milieu, sous la maison, avec le bouton des réglages. */
+:root[data-hub-v4] .hub .hub-views { left: 50%; transform: translateX(-50%); }
+:root[data-hub-v4] .hub .hub-views .hub-v4-tune { display: grid; place-items: center; width: 40px; margin-left: 4px; padding: 0; color: var(--v3-ink2); }
+:root[data-hub-v4] .hub .hub-views .hub-v4-tune svg { width: 18px; height: 18px; }
+
+/* Moments : la scène de l'heure, en tête et sur toute la largeur. */
+:root[data-hub-v4] .hub .hub-scenes .hub-scene { min-height: 40px; }
+:root[data-hub-v4] .hub .hub-scenes .hub-scene.hub-v4-suggest:not(.on) {
+  min-height: 48px;
+  background: color-mix(in srgb, var(--v3-amber) 13%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v3-amber) 30%, transparent);
+}
+:root[data-hub-v4] .hub .hub-scene.hub-v4-suggest .hub-scene-icon { color: var(--v3-amber); }
+@media (hover: hover) {
+  :root[data-hub-v4] .hub .hub-scene.hub-v4-suggest:not(.on):hover { background-color: color-mix(in srgb, var(--v3-amber) 20%, transparent); }
+}
+
+/* Les colonnes, un peu plus serrées que la v3 : tout tient à 1280 × 670 comme la maquette. */
+:root[data-hub-v4] .hub .hub-left { gap: 10px; }
+:root[data-hub-v4] .hub .hub-right { gap: 10px; }
+/* Si la colonne manque de hauteur, les moments défilent : la musique reste entière en bas. */
+:root[data-hub-v4] .hub .hub-left > .hub-scenes { flex: 0 1 auto; min-height: 52px; overflow-y: auto; scrollbar-width: none; }
+:root[data-hub-v4] .hub .hub-left > .hub-scenes::-webkit-scrollbar { display: none; }
+:root[data-hub-v4] .hub .hub-left > .hub-scenes.hub-v4-more {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
+}
+:root[data-hub-v4] .hub .hub-left > :not(.hub-scenes) { flex-shrink: 0; }
+
+/* Musique : précédent, lecture, suivant, puis le volume. */
+:root[data-hub-v4] .hub .hub-v3-music { padding: 12px 12px 8px; }
+:root[data-hub-v4] .hub .hub-v3-art { width: 44px; height: 44px; }
+:root[data-hub-v4] .hub .hub-v3-music-ctl { gap: 2px; margin-top: 6px; }
+:root[data-hub-v4] .hub .hub-v3-music-ctl :is(.hub-v3-play, .hub-v3-next) { width: 40px; height: 40px; border-radius: 12px; }
+:root[data-hub-v4] .hub .hub-v3-music-ctl svg { width: 18px; height: 18px; }
+:root[data-hub-v4] .hub .hub-v4-volume { height: 40px; background: none; box-shadow: none; }
+:root[data-hub-v4] .hub .hub-v4-volume::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--v3-ink) var(--fill, 0%), color-mix(in srgb, var(--v3-voile) 20%, transparent) var(--fill, 0%));
+}
+:root[data-hub-v4] .hub .hub-v4-volume::-moz-range-track { height: 4px; border-radius: 999px; background: color-mix(in srgb, var(--v3-voile) 20%, transparent); }
+:root[data-hub-v4] .hub .hub-v4-volume::-moz-range-progress { height: 4px; border-radius: 999px; background: var(--v3-ink); }
+:root[data-hub-v4] .hub .hub-v4-volume::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--v3-ink);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.4);
+}
+:root[data-hub-v4] .hub .hub-v4-volume::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: var(--v3-ink); }
+
+/* Chauffage : la consigne dans une pastille, un chevron ; l'eau chaude sur une ligne. */
+:root[data-hub-v4] .hub .hub-v3-zone.hub-v4-zone { gap: 10px; min-height: 44px; margin-top: 6px; padding: 4px 8px 4px 12px; }
+:root[data-hub-v4] .hub .hub-v4-zone .hub-v3-zone-text { flex: 1; }
+:root[data-hub-v4] .hub .hub-v4-zone .hub-v3-zone-target {
+  display: inline-grid;
+  place-items: center;
+  min-width: 48px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: var(--text-corps);
+  font-weight: 600;
+  background: color-mix(in srgb, var(--v3-voile) 6%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v3-voile) 18%, transparent);
+}
+/* La couleur du chauffage, foncée vers l'encre : lisible (AA) sur la pastille, de jour comme de nuit. */
+:root[data-hub-v4] .hub .hub-v4-zone.heating .hub-v3-zone-target,
+:root[data-hub-v4] .hub .hub-v3-heat-chip.running {
+  color: color-mix(in srgb, var(--v3-heat) 72%, var(--v3-ink));
+  background: color-mix(in srgb, var(--v3-heat) 12%, transparent);
+}
+:root[data-hub-v4] .hub .hub-v4-zone.heating .hub-v3-zone-target { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v3-heat) 45%, transparent); }
+:root[data-hub-v4] .hub .hub-v4-chevron { display: grid; flex: none; margin-left: -4px; color: var(--v3-mute); }
+:root[data-hub-v4] .hub .hub-v4-chevron svg { width: 16px; height: 16px; }
+:root[data-hub-v4] .hub .hub-v3-zone.hub-v4-zone.water { min-height: 36px; margin-top: 4px; background: none; }
+:root[data-hub-v4] .hub .hub-v4-zone.water .hub-v3-zone-text { display: flex; align-items: baseline; gap: 6px; }
+:root[data-hub-v4] .hub .hub-v3-zone.hub-v4-zone.water .hub-v3-zone-target {
+  min-width: 0;
+  height: auto;
+  padding: 0 4px;
+  background: none;
+  box-shadow: none;
+  font-size: var(--text-courant);
+  color: var(--v3-ink);
+}
+
+/* Le dock : des icônes seules (le nom reste pour le lecteur d'écran), l'accueil surligné. */
+:root[data-hub-v4] .hub .hub-dock { gap: 4px; padding: 6px 8px; }
+:root[data-hub-v4] .hub .hub-dock button { position: relative; gap: 0; min-width: 0; width: 52px; height: 44px; padding: 0; border-radius: 14px; }
+:root[data-hub-v4] .hub .hub-dock button > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+:root[data-hub-v4] .hub .hub-dock .hub-talk-button::before { display: none; }
+:root[data-hub-v4] .hub .hub-dock #hub-v4-home[aria-current="page"] {
+  color: var(--v3-amber);
+  background: color-mix(in srgb, var(--v3-voile) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v3-voile) 10%, transparent);
+}
+
+/* L'agenda et le chauffage, un peu moins rembourrés. */
+:root[data-hub-v4] .hub :is(.hub-agenda, .hub-v3-heating) { padding: 12px; }
+/* Tempo : un petit titre et les pastilles, serrés. */
+:root[data-hub-v4] .hub .hub-v3-tempo { row-gap: 4px; column-gap: 6px; }

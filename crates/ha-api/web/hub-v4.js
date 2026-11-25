@@ -1089,3 +1089,95 @@ function hubV4Approval() {
 document.querySelector?.("#hub-style")?.addEventListener("change", () => {
   if (!hubV4On()) hubV4Shut();
 });
+
+// ---------------------------------------------------------------- L'accueil v4 : ses composants
+// Ce que la v4 change sur l'accueil (hub-v3.js et hub.js les appellent quand
+// hubV4On()) : la scène suggérée, Tempo en pastilles, la ligne des courses.
+// La v3 garde son rendu. Le style propre aux blocs repris de la v3 est à la
+// fin de hub-v3.css (« v4 accueil : composants »).
+
+const HUB_V4_HOME_ICONS = {
+  eye: ["M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z", "M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"],
+  cart: ["M3 4h2l2.4 11h10.2L20 8H6.2", "M9 20h.01", "M17 20h.01"],
+  plus: ["M12 5v14", "M5 12h14"],
+};
+// La scène suggérée selon l'heure : [de, à (heures, 24 + n pour la nuit), nom].
+const HUB_V4_SUGGEST = [
+  [5, 11, /matin|r[ée]veil|lever|bonjour/i],
+  [11, 17, /pars|d[ée]part|absen|quitt/i],
+  [17, 21, /retour|arriv|rentr|bienvenue|soir|repas|d[îi]ner/i],
+  [21, 29, /nuit|coucher|dodo/i],
+];
+// Le point de couleur d'une pastille Tempo (classes écrites en entier pour Tailwind).
+const HUB_V4_TEMPO_DOTS = { Bleu: "bg-v-sky", Blanc: "bg-v-ink", Rouge: "bg-v-alert" };
+
+/** L'index de la scène à mettre en avant à cette heure, ou -1. */
+function hubV4Suggested(names, hour) {
+  const h = hour < 5 ? hour + 24 : hour;
+  const slot = HUB_V4_SUGGEST.find(([from, to]) => h >= from && h < to);
+  return slot ? names.findIndex((name) => slot[2].test(String(name))) : -1;
+}
+
+/** Ce que dit une pastille Tempo : « Bleu aujourd'hui », « Demain : pas annoncé ». */
+function hubV4TempoText(color, when) {
+  if (lookup(HUB_V4_TEMPO_DOTS, color)) return `${color} ${when}`;
+  const day = when.charAt(0).toUpperCase() + when.slice(1);
+  if (color === "unavailable") return `${day} : indisponible`;
+  return color === "unknown" || color === "" || color == null ? `${day} : pas encore annoncé` : `${day} : ${color}`;
+}
+
+/** Ce qui reste sur la liste des courses : « vides » ou le nombre. */
+function hubV4CoursesText(left) {
+  return left > 0 ? String(left) : "vides";
+}
+
+/** Une pastille Tempo : un point de la couleur du jour, puis le texte. */
+function hubV4TempoPill(state, when) {
+  const color = state ? state.state : "unknown";
+  const dot = lookup(HUB_V4_TEMPO_DOTS, color) ?? "bg-v-mute";
+  return el("span", { class: "inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-voile/8 text-legende font-medium text-v-ink2" },
+    el("span", { class: `size-1.5 shrink-0 rounded-full ${dot}`, "aria-hidden": "true" }),
+    hubV4TempoText(color, when));
+}
+
+/** La ligne « Courses et tâches » au bas de l'agenda, ou null sans liste. */
+function hubV4CoursesRow() {
+  const state = entities.get(HUB_LIST);
+  if (!state) return null;
+  const left = todoItems(state).filter((item) => item.status !== "completed").length;
+  const row = el("button", {
+    type: "button",
+    class: "flex items-center gap-2.5 w-full min-h-10 mt-1.5 px-3 rounded-[14px] border-0 bg-voile/6 text-left cursor-pointer "
+      + "hover:bg-voile/10 [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-v-mute " + HUB_V4_FOCUS,
+    "aria-label": left > 0 ? `Courses et tâches : ${left} à faire` : "Courses et tâches : rien à faire",
+  }, svgIcon(HUB_V4_HOME_ICONS.cart),
+  el("span", { class: "flex-1 min-w-0 text-petit font-medium text-v-ink2 truncate", text: "Courses et tâches" }),
+  el("span", { class: `text-petit ${HUB_V4_MUTE}`, text: hubV4CoursesText(left) }));
+  row.addEventListener("click", () => $("#hub-courses").click());
+  return row;
+}
+
+/** L'en-tête v4 de l'agenda : icône, titre, quand, et « + » pour ajouter. */
+function hubV4AgendaHead() {
+  const parts = [svgIcon(ICONS.calendar), el("h2", { class: "m-0! flex-1 min-w-0 justify-start! gap-2 whitespace-nowrap", text: "Agenda" },
+    el("small", { class: "min-w-0 truncate", text: new Date().getHours() >= 18 ? "ce soir et demain" : "aujourd'hui et demain" }))];
+  if (typeof hubV4NewEvent === "function" && entities.get("calendar.maison") && canControl(entities.get("calendar.maison"))) {
+    const add = el("button", {
+      type: "button",
+      class: "grid place-items-center size-8 shrink-0 p-0 rounded-full border-0 bg-transparent text-v-ink cursor-pointer "
+        + "hover:bg-voile/10 [&>svg]:size-[18px] " + HUB_V4_FOCUS,
+      "aria-label": "Ajouter un rendez-vous",
+      title: "Ajouter un rendez-vous",
+    }, svgIcon(HUB_V4_HOME_ICONS.plus));
+    add.addEventListener("click", () => hubV4NewEvent());
+    parts.push(add);
+  }
+  return el("div", { class: "hub-v4-agenda-head flex items-center gap-2 mx-1 -mt-1 mb-0.5 [&>svg]:size-[18px] [&>svg]:shrink-0 [&>svg]:text-v-ink2" }, ...parts);
+}
+
+/** Ouvrir une pièce depuis l'accueil v4 : sa page, sinon sa fenêtre, sinon la pièce. */
+function hubV4OpenRoom(name) {
+  if (typeof hubV4Page === "function" && hubV4Page(name)) return;
+  if (hubV4Room(name)) return;
+  openRoom(name);
+}

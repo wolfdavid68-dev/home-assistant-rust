@@ -44,6 +44,8 @@ const HUB_V3_PIN_LENSES = {
   musique: { icon: "music", pins: "Musique par pièce", rooms: "Musique des pièces hors du dessin" },
   securite: { icon: "shield", pins: "Sécurité par pièce", rooms: "Sécurité des pièces hors du dessin" },
 };
+// Vivant, en v4 : une pastille par pièce dessinée, qui l'ouvre.
+const HUB_V3_HOME_PINS = { pins: "Pièces de la maison", rooms: "" };
 // L'icône devant la phrase de chaque lentille.
 const HUB_V3_READ_ICONS = { lumieres: "bulb", volets: "blinds", chauffage: "flame", musique: "music", securite: "shield" };
 const hubV3 = { placed: false, lens: "vivant", ui: null, pins: new Map(), chips: new Map(), pinLens: "" };
@@ -220,6 +222,8 @@ function hubV3Build() {
     musicImg,
     musicTitle: el("b", { class: "hub-v3-music-title" }),
     musicSub: el("small", { class: "hub-v3-music-sub" }),
+    // En v4 : morceau précédent et volume (cachés en v3).
+    prev: button({ class: "hub-v3-next hub-v4-prev", "aria-label": "Morceau précédent" }, svgIcon(ICONS.previous)),
     play: button({ class: "hub-v3-play" }),
     next: button({ class: "hub-v3-next", "aria-label": "Morceau suivant" }, svgIcon(ICONS.next)),
     tempo: el("div", { id: "hub-v3-tempo", class: "hub-v3-tempo" }),
@@ -239,7 +243,17 @@ function hubV3Build() {
     rooms: el("div", { id: "hub-v3-lit-rooms", class: "hub-v3-lit-rooms", role: "group",
       "aria-label": "Lumières des pièces hors du dessin" }),
     musicBtn: button({ id: "hub-v3-music-btn" }, svgIcon(ICONS.music), el("span", { text: "Musique" })),
+    // La v4 seulement : le titre « Moments », l'invite au-dessus de la maison, l'accueil dans le dock.
+    moments: el("p", { class: "hub-v4-moments m-0 -mb-1.5 text-legende font-medium text-v-mute", text: "Moments" }),
+    invite: el("p", { class: "hub-v4-invite absolute top-[62px] left-1/2 z-[3] -translate-x-1/2 m-0 flex items-center gap-2 "
+      + "max-w-[calc(100%-24px)] text-petit text-v-ink2 whitespace-nowrap [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-v-mute" }),
+    home: button({ id: "hub-v4-home", "aria-label": "Accueil", title: "Accueil", "aria-current": "page" },
+      svgIcon(ICONS.home), el("span", { text: "Accueil" })),
   };
+  ui.volume = el("input", { type: "range", min: "0", max: "100", step: "1", value: "0", "aria-label": "Volume",
+    class: "hub-v4-volume flex-1 min-w-0 m-0 cursor-pointer appearance-none disabled:opacity-40 disabled:cursor-default" });
+  ui.volumeValue = el("span", { class: "w-[3.4em] shrink-0 text-right text-petit text-v-ink2" });
+  ui.volumeBox = el("span", { class: "hub-v4-volume-box flex flex-1 min-w-0 items-center gap-2 pl-1" }, ui.volume, ui.volumeValue);
   ui.music.hidden = true;
   ui.tempo.hidden = true;
   ui.heating.hidden = true;
@@ -250,12 +264,13 @@ function hubV3Build() {
   ui.rooms.hidden = true;
   ui.musicBtn.hidden = true;
   ui.badge.hidden = true;
+  for (const node of [ui.prev, ui.volumeBox, ui.moments, ui.invite, ui.home]) node.hidden = true;
 
   ui.musicOpen.append(
     el("span", { class: "hub-v3-art" }, svgIcon(ICONS.music), musicImg),
     el("span", { class: "hub-v3-music-text" }, ui.musicTitle, ui.musicSub),
   );
-  ui.music.append(ui.musicOpen, el("div", { class: "hub-v3-music-ctl" }, ui.play, ui.next));
+  ui.music.append(ui.musicOpen, el("div", { class: "hub-v3-music-ctl" }, ui.prev, ui.play, ui.next, ui.volumeBox));
   ui.bell.append(ui.badge);
   ui.actions.append(ui.bell, ui.assist, ui.account);
 
@@ -285,6 +300,27 @@ function hubV3Build() {
   };
   ui.play.addEventListener("click", act((state) => musicCommand(state,
     state.state === "playing" ? "media_pause" : "media_play")));
+  ui.prev.addEventListener("click", act((state) => musicCommand(state, "media_previous_track")));
+  fillSlider(ui.volume);
+  ui.volume.addEventListener("input", () => setText(ui.volumeValue, `${ui.volume.value} %`));
+  ui.volume.addEventListener("change", act((state) => musicCommand(state, "volume_set",
+    { volume_level: Number(ui.volume.value) / 100 })));
+  // L'invite de la v4 : « Toute la maison › » ouvre la page de la maison (hub-v4-pieces.js).
+  // La couleur et la graisse sur le texte : le bouton hérite de celles de la phrase (.hub button).
+  const all = button({ class: "inline-flex items-center gap-0.5 h-8 px-1 -my-1 rounded-lg border-0 bg-transparent cursor-pointer "
+    + "hover:underline [&>svg]:size-3.5 [&>svg]:text-v-amber focus-visible:outline-2 focus-visible:outline-v-sky" },
+  el("span", { class: "font-semibold text-v-amber", text: "Toute la maison" }), svgIcon(HUB_V4_ICONS.go));
+  all.addEventListener("click", () => {
+    if (typeof hubV4Page === "function" && hubV4Page(HUB_V4_ALL)) return;
+    leaveHub();
+  });
+  ui.invite.append(svgIcon(HUB_V4_HOME_ICONS.eye),
+    el("span", { text: "Touche une pièce pour l'ouvrir" }), el("span", { class: "text-v-mute", "aria-hidden": "true", text: "·" }), all);
+  // L'accueil du dock (v4) : revient à la vue Vivant.
+  ui.home.addEventListener("click", () => {
+    hubV3.lens = "vivant";
+    hubV3RenderLens();
+  });
   ui.next.addEventListener("click", act((state) => musicCommand(state, "media_next_track")));
   // Les boutons de l'en-tête restent les vrais : ceux-ci les déclenchent.
   ui.bell.addEventListener("click", () => $("#open-notices")?.click());
@@ -303,12 +339,14 @@ function hubV3Build() {
 function hubV3Place() {
   const ui = hubV3Build();
   const root = $("#hub");
-  root.querySelector(".hub-left").append(root.querySelector(".hub-time"), ui.hello, ui.summary, $("#hub-scenes"), ui.music);
+  root.querySelector(".hub-left").append(root.querySelector(".hub-time"), ui.hello, ui.summary, ui.moments, $("#hub-scenes"),
+    ui.music);
   root.querySelector(".hub-right").append($("#hub-weather"), ui.tempo, $("#hub-agenda"), ui.heating, $("#hub-rooms"));
   root.querySelector(".hub-top").append(ui.actions);
   root.querySelector(".hub-center").prepend(ui.lens, ui.read);
-  root.querySelector(".hub-center").append(ui.rooms);
+  root.querySelector(".hub-center").append(ui.rooms, ui.invite);
   $("#hub-open-agenda").after(ui.musicBtn);
+  root.querySelector(".hub-dock").prepend(ui.home);
   hubV3.placed = true;
 }
 
@@ -319,7 +357,7 @@ function hubV3Restore() {
   root.querySelector(".hub-left").append(root.querySelector(".hub-time"), $("#hub-weather"), $("#hub-agenda"));
   root.querySelector(".hub-right").append($("#hub-scenes"), $("#hub-rooms"));
   const added = [ui.hello, ui.summary, ui.music, ui.tempo, ui.heating, ui.actions, ui.lens, ui.read, ui.rooms, ui.pins,
-    ui.musicBtn];
+    ui.musicBtn, ui.moments, ui.invite, ui.home];
   for (const node of added) node.remove();
   const box = $("#hub-house");
   if (box) delete box.dataset.lens;
@@ -341,6 +379,7 @@ function renderHubV3() {
   hubV3RenderTempo();
   hubV3RenderHeating();
   hubV3RenderLens();
+  hubV3RenderV4();
   // Les écrans de la v4 (hub-v4.js) suivent l'état de la maison.
   if (typeof renderHubV4 === "function") renderHubV4();
 }
@@ -443,6 +482,19 @@ function hubV3RenderMusic() {
   setAttr(ui.play, "aria-label", playing ? "Mettre en pause" : "Lancer la lecture");
   ui.play.disabled = !allowed;
   ui.next.disabled = !allowed || !active;
+  // En v4 : le morceau précédent et le volume, comme la maquette.
+  const v4 = hubV4On();
+  ui.prev.hidden = !v4;
+  ui.volumeBox.hidden = !v4;
+  if (!v4) return;
+  ui.prev.disabled = !allowed || !active;
+  const volume = finite(a.volume_level) ? Math.round(a.volume_level * 100) : 0;
+  ui.volume.disabled = !allowed;
+  if (document.activeElement !== ui.volume) {
+    ui.volume.value = String(volume);
+    ui.volume.dispatchEvent(new Event("input"));
+  }
+  setAttr(ui.volume, "aria-valuetext", `${volume} %`);
 }
 
 /** Le tempo du jour (et du lendemain), si le Linky le donne. */
@@ -451,6 +503,13 @@ function hubV3RenderTempo() {
   const today = entities.get(TEMPO_TODAY);
   ui.tempo.hidden = !today;
   if (!today) return;
+  // En v4 : « Tempo », puis une pastille par jour (hub-v4.js).
+  if (hubV4On()) {
+    const tomorrow = entities.get(TEMPO_TOMORROW);
+    swap(ui.tempo, el("span", { class: "text-legende text-v-mute", text: "Tempo" }),
+      hubV4TempoPill(today, "aujourd'hui"), ...(tomorrow ? [hubV4TempoPill(tomorrow, "demain")] : []));
+    return;
+  }
   const parts = [el("span", { class: "hub-v3-tempo-label", text: "Tempo" }), tempoBadge(today.state)];
   const tomorrow = entities.get(TEMPO_TOMORROW);
   if (tomorrow) parts.push(el("span", { class: "hub-v3-tempo-next", text: tempoTomorrowText(tomorrow) }));
@@ -472,6 +531,10 @@ function hubV3RenderHeating() {
     else chip.push(el("span", { class: "hub-v3-heat-chip", text: `PAC · ${pump.state}` }));
   }
   const head = el("div", { class: "hub-v3-heat-head" }, svgIcon(ICONS.flame), el("h3", { text: "Chauffage" }), ...chip);
+  if (hubV4On()) {
+    swap(ui.heating, head, ...states.map(hubV3HeatRowV4));
+    return;
+  }
   const rows = states.map((state) => {
     const area = areas.find((a) => a.entities.some((e) => e.entity_id === state.entity_id));
     const current = state.attributes.current_temperature;
@@ -489,6 +552,70 @@ function hubV3RenderHeating() {
     return row;
   });
   swap(ui.heating, head, ...rows);
+}
+
+/** Une rangée du chauffage en v4 : nom, « il fait 21,2° · Confort », la consigne
+ *  dans une pastille et un chevron ; l'eau chaude sur une ligne. */
+function hubV3HeatRowV4(state) {
+  const area = areas.find((a) => a.entities.some((e) => e.entity_id === state.entity_id));
+  const current = state.attributes.current_temperature;
+  const mode = heatMode(state);
+  const target = state.state !== "off" && state.state !== "unavailable" ? heatTarget(state) : null;
+  const water = state.entity_id === HUB_V3_WATER;
+  const heating = state.attributes.hvac_action === "heating";
+  const classes = ["hub-v3-zone", "hub-v4-zone"];
+  if (water) classes.push("water");
+  if (heating) classes.push("heating");
+  const value = target !== null ? `${number.format(target)}°` : "";
+  const text = water
+    ? el("span", { class: "hub-v3-zone-text" }, el("b", { text: nameOf(state) }), el("small", { text: `· ${mode}` }))
+    : el("span", { class: "hub-v3-zone-text" }, el("b", { text: nameOf(state) }),
+      el("small", { text: finite(current) ? `il fait ${number.format(current)}° · ${mode}` : mode }));
+  const children = [text];
+  if (value) children.push(el("span", { class: "hub-v3-zone-target", text: value }));
+  // L'eau chaude s'ouvre en détail (hub-v4-incrustations.js) ; une zone rangée dans une pièce
+  // ouvre la pièce, les autres la page de toute la maison (son chauffage par zone).
+  if (water) return el("button", { type: "button", class: classes.join(" "), title: "Eau chaude en détail" }, ...children);
+  const whole = typeof hubV4Page === "function";
+  if (!area && !whole) return el("div", { class: classes.join(" ") }, ...children);
+  children.push(el("span", { class: "hub-v4-chevron", "aria-hidden": "true" }, svgIcon(HUB_V4_ICONS.go)));
+  const row = el("button", { type: "button", class: classes.join(" "),
+    title: area ? `Ouvrir ${area.name}` : "Le chauffage de toute la maison" }, ...children);
+  row.addEventListener("click", () => {
+    if (area) hubV4OpenRoom(area.name);
+    else hubV4Page(HUB_V4_ALL);
+  });
+  return row;
+}
+
+/** Ce que la v4 ajoute à l'accueil : « Moments », l'invite sur la maison, le dock en icônes. */
+function hubV3RenderV4() {
+  const ui = hubV3.ui;
+  const v4 = hubV4On();
+  const scenes = $("#hub-scenes");
+  ui.moments.hidden = !v4 || scenes.hidden;
+  // Des moments cachés faute de place (ils défilent) : le bas s'estompe, pour le dire.
+  scenes.classList.toggle("hub-v4-more", v4 && !scenes.hidden && scenes.scrollHeight > scenes.clientHeight + 1);
+  ui.home.hidden = !v4;
+  const zones = (house.view?.zones ?? []).some(({ zone }) => zone.area);
+  ui.invite.hidden = !v4 || hubV3.lens !== "vivant" || !zones;
+  // Le dock n'a plus que des icônes : leur nom en bulle (title) ; le lecteur d'écran lit le texte caché.
+  for (const node of document.querySelectorAll("#hub .hub-dock > button")) {
+    if (node === ui.home) continue;
+    if (!v4) {
+      if (node.dataset.v4Title !== undefined) {
+        node.removeAttribute("title");
+        delete node.dataset.v4Title;
+      }
+      continue;
+    }
+    const text = node.textContent.trim();
+    // Le bouton Énergie montre la puissance (« 1,8 kW ») : son nom le dit aussi.
+    const label = node.id === "hub-energy" && text !== "Énergie" ? `Énergie : ${text}` : text;
+    if (label === "") continue;
+    setAttr(node, "title", label);
+    node.dataset.v4Title = "";
+  }
 }
 
 /** Le texte sous la barre de lentilles : ce que montre la lentille choisie. */
@@ -617,6 +744,15 @@ function hubV3ToggleRoom(name) {
 
 /** Un bouton de pièce : l'icône de la lentille, le nom (dans la rangée) et ce qu'elle montre. */
 function hubV3RoomButton(name, cls, withName, lens) {
+  // En v4, sur Vivant : une pastille sombre « • Salon », le point ambre si une lumière est allumée.
+  if (lens === "vivant") {
+    const node = el("button", { type: "button", class: `${cls} hub-v4-room-pin` },
+      el("span", { class: "size-1.5 shrink-0 rounded-full bg-v-mute [.lit>&]:bg-v-amber "
+        + "[.lit>&]:shadow-[0_0_6px_var(--v3-amber)]", "aria-hidden": "true" }),
+      el("span", { text: name }));
+    node.addEventListener("click", () => hubV3Tap(lens, name));
+    return { node, count: null, sub: null };
+  }
   const count = el("span", { class: "hub-v3-pin-n" });
   const parts = [svgIcon(ICONS[HUB_V3_PIN_LENSES[lens].icon])];
   if (withName) parts.push(el("span", { class: "hub-v3-chip-name", text: name }));
@@ -762,6 +898,12 @@ function hubV3Look(lens, name, members) {
 
 /** Met à jour un bouton de pièce d'après la lentille. Lumières garde son propre rendu. */
 function hubV3Paint(lens, item, name, members) {
+  if (lens === "vivant") {
+    const lit = members.filter((s) => s.state === "on").length;
+    item.node.classList.toggle("lit", lit > 0);
+    setAttr(item.node, "aria-label", `${hubV3PinLabel(name, lit, members.length, false)} Toucher pour ouvrir la pièce.`);
+    return;
+  }
   if (lens === "lumieres") {
     hubV3PaintRoom(item, name, members);
     return;
@@ -799,6 +941,11 @@ function hubV3MoveCovers(covers) {
 /** Toucher une pastille. Vrai si une commande est partie (la pastille attend la réponse).
  *  Chauffage et Sécurité ouvrent la pièce : jamais de déverrouillage d'un seul geste. */
 function hubV3Tap(lens, name) {
+  // En v4, sur Vivant : la page de la pièce (hub-v4.js).
+  if (lens === "vivant") {
+    if (typeof hubV4OpenRoom === "function") hubV4OpenRoom(name);
+    return false;
+  }
   // En v4, une pièce touchée s'ouvre en incrustation (hub-v4.js).
   if (lens === "lumieres" && typeof hubV4Room === "function" && hubV4Room(name)) return false;
   if (lens === "lumieres") return hubV3ToggleRoom(name);
@@ -917,15 +1064,18 @@ function hubV3RenderPins() {
   const ui = hubV3.ui;
   if (!ui || !hubV3.placed) return;
   const lens = hubV3.lens;
+  // En v4, Vivant pose aussi une pastille par pièce : son nom, pour l'ouvrir.
+  const home = lens === "vivant" && typeof hubV4On === "function" && hubV4On();
+  const key = home ? "vivant-v4" : lens;
   // Nouvelle lentille : des pastilles neuves, qui entrent l'une après l'autre.
-  if (hubV3.pinLens !== lens) {
+  if (hubV3.pinLens !== key) {
     for (const map of [hubV3.pins, hubV3.chips]) {
       for (const item of map.values()) item.node.remove();
       map.clear();
     }
-    hubV3.pinLens = lens;
+    hubV3.pinLens = key;
   }
-  const config = lookup(HUB_V3_PIN_LENSES, lens);
+  const config = home ? HUB_V3_HOME_PINS : lookup(HUB_V3_PIN_LENSES, lens);
   if (!config) {
     ui.rooms.hidden = true;
     return;
@@ -946,8 +1096,8 @@ function hubV3RenderPins() {
   for (const [name, zone] of largest) {
     const area = areas.find((a) => a.name === name);
     if (!area) continue;
-    const members = hubV3Members(lens, area);
-    if (members.length > 0) onDrawing.push({ name, members, at: hubV3ZoneCenter(zone) });
+    const members = home ? hubV3RoomLights(area) : hubV3Members(lens, area);
+    if (members.length > 0 || home) onDrawing.push({ name, members, at: hubV3ZoneCenter(zone) });
   }
   // De haut en bas puis de gauche à droite : l'ordre d'entrée et de lecture.
   onDrawing.sort((a, b) => a.at.y - b.at.y || a.at.x - b.at.x);
@@ -963,7 +1113,8 @@ function hubV3RenderPins() {
   // Les pièces qu'aucun onglet ne dessine : une rangée en bas.
   const drawn = new Set((house.pages ?? []).flatMap((page) => page.zones.map((zone) => zone.area)));
   for (const name of largest.keys()) drawn.add(name);
-  const offDrawing = shownAreas()
+  // Sur Vivant (v4), les autres pièces sont dans « Toute la maison » : pas de rangée.
+  const offDrawing = home ? [] : shownAreas()
     .filter((area) => !drawn.has(area.name))
     .map((area) => ({ name: area.name, members: hubV3Members(lens, area) }))
     .filter((w) => w.members.length > 0);

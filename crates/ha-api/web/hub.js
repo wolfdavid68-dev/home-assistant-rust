@@ -255,9 +255,14 @@ function renderHubAgenda(now) {
     row.addEventListener("click", () => openEventDetails(e));
     return row;
   });
+  const empty = [el("p", { class: "hub-empty m-[4px] text-muted text-corps", text: "Rien de prévu d'ici demain soir." })];
+  // En v4 (hub-v4.js) : une icône et « + » dans l'en-tête, les courses en bas.
+  const v4 = typeof hubV4On === "function" && hubV4On();
+  const courses = v4 ? hubV4CoursesRow() : null;
   swap(card,
-    el("h2", {}, "Agenda", el("small", { text: "aujourd'hui et demain" })),
-    ...(rows.length > 0 ? rows : [el("p", { class: "hub-empty m-[4px] text-muted text-corps", text: "Rien de prévu d'ici demain soir." })]),
+    v4 ? hubV4AgendaHead() : el("h2", {}, "Agenda", el("small", { text: "aujourd'hui et demain" })),
+    ...(rows.length > 0 ? rows : empty),
+    ...(courses ? [courses] : []),
   );
 }
 
@@ -288,6 +293,8 @@ function hubMergeSame(events) {
 function renderHubViews() {
   const box = $("#hub-views");
   box.hidden = house.pages.length < 2;
+  // En v4 : le bouton des réglages du dessin à côté des onglets, pour qui peut le modifier.
+  const tune = typeof hubV4On === "function" && hubV4On() && house.editable ? [hubViewsTune()] : [];
   swap(box, ...house.pages.map((page) => {
     const current = page.id === house.config?.id;
     const button = el("button", { type: "button", class: current ? "on" : "", "aria-pressed": String(current), text: page.name });
@@ -295,12 +302,27 @@ function renderHubViews() {
       if (page.id !== house.config?.id) selectPage(page.id);
     });
     return button;
-  }));
+  }), ...tune);
+}
+
+/** Le bouton « Réglages du dessin » (v4). Neuf à chaque rendu, comme les onglets :
+ *  swap() le compare à l'ancien et garde l'ancien s'il est pareil. */
+function hubViewsTune() {
+  const button = el("button", { type: "button", class: "hub-v4-tune", "aria-label": "Réglages du dessin de la maison",
+    title: "Réglages du dessin" }, svgIcon(ICONS.sliders));
+  button.addEventListener("click", () => {
+    $("#open-account").click();
+    // Les réglages s'ouvrent sur la rubrique en cours : on passe au dessin une fois ouverts.
+    setTimeout(() => $('.set-link[data-pane="dessin"]')?.click(), 0);
+  });
+  return button;
 }
 
 const HUB_SCENE_TONES = ["go", "home", "night", "cine"];
 const HUB_SCENES_KEY = "ha-hub-scenes";
 const HUB_SCENES_MAX = 6;
+// En v4, sans choix fait dans Mon compte : la scène suggérée et quatre autres.
+const HUB_V4_MOMENTS = 5;
 // L'icône et la couleur d'une scène, devinées d'après son nom.
 const HUB_SCENE_LOOKS = [
   [/nuit|coucher|dodo/i, "moon", "night"],
@@ -350,17 +372,26 @@ function renderHubScenes() {
   const list = hubScenes();
   const box = $("#hub-scenes");
   box.hidden = list.length === 0;
+  // En v4 (hub-v4.js) : la scène de l'heure en tête, sur toute la largeur, puis deux colonnes.
+  const v4 = typeof hubV4On === "function" && hubV4On();
+  const suggested = v4 ? hubV4Suggested(list.map(nameOf), new Date().getHours()) : -1;
+  let order = list.map((state, index) => ({ state, index }));
+  if (suggested > 0) order.unshift(...order.splice(suggested, 1));
+  // Le choix par défaut (rien de coché dans Mon compte) : cinq moments en v4, comme la maquette.
+  if (v4 && hubChosenScenes() === null) order = order.slice(0, HUB_V4_MOMENTS);
   // Pas de case vide : 3 colonnes pour 3, 5 ou 6 scènes, 2 pour 2 ou 4.
-  const columns = list.length === 1 ? 1 : list.length % 3 === 0 || list.length === 5 ? 3 : 2;
+  const columns = order.length === 1 ? 1 : v4 ? 2 : list.length % 3 === 0 || list.length === 5 ? 3 : 2;
   box.style.setProperty("--cols", String(columns));
   box.classList.toggle("narrow", columns === 3);
-  swap(box, ...list.map((state, index) => {
+  swap(box, ...order.map(({ state, index }) => {
     const isScript = domainOf(state) === "script";
     const running = isScript && state.state === "on";
     const look = hubSceneLook(state, index);
-    const button = el("button", { type: "button", class: `hub-scene [.hub-scenes.narrow_&]:min-h-[74px] [.hub-scenes.narrow_&]:p-[11px] [:not(:where(.o140300)).hub-scenes.narrow_&_b]:text-courant [:not(:where(.o140301)).hub-scenes.narrow_&_b]:[line-height:1.2] grid gap-[8px] justify-items-start min-h-[82px] p-[13px] [border:0] [border-radius:18px] bg-card text-left cursor-pointer [:not(:where(.o140500))&_b]:text-moyen [:not(:where(.o140501))&_b]:font-semibold [&.pending]:[opacity:0.6] [&.on]:[box-shadow:inset_0_0_0_2px_#03a9f4] t-${look.tone}${running ? " on" : ""}` },
+    const suggest = index === suggested;
+    const button = el("button", { type: "button", class: `${suggest ? "hub-v4-suggest col-span-full " : ""}hub-scene [.hub-scenes.narrow_&]:min-h-[74px] [.hub-scenes.narrow_&]:p-[11px] [:not(:where(.o140300)).hub-scenes.narrow_&_b]:text-courant [:not(:where(.o140301)).hub-scenes.narrow_&_b]:[line-height:1.2] grid gap-[8px] justify-items-start min-h-[82px] p-[13px] [border:0] [border-radius:18px] bg-card text-left cursor-pointer [:not(:where(.o140500))&_b]:text-moyen [:not(:where(.o140501))&_b]:font-semibold [&.pending]:[opacity:0.6] [&.on]:[box-shadow:inset_0_0_0_2px_#03a9f4] t-${look.tone}${running ? " on" : ""}` },
       el("span", { class: "hub-scene-icon w-[38px] h-[38px] [border-radius:12px] grid [place-items:center] [:not(:where(.o140700))&_svg]:w-[20px] [:not(:where(.o140701))&_svg]:h-[20px] [:not(:where(.o140800)).hub-scene.t-go_&]:[background:rgb(3_169_244_/_0.2)] [:not(:where(.o140801)).hub-scene.t-go_&]:[color:#03a9f4] [:not(:where(.o140900)).hub-scene.t-home_&]:[background:rgb(102_187_106_/_0.2)] [:not(:where(.o140901)).hub-scene.t-home_&]:[color:#66bb6a] [:not(:where(.o141000)).hub-scene.t-night_&]:[background:rgb(149_117_205_/_0.25)] [:not(:where(.o141001)).hub-scene.t-night_&]:[color:#b39ddb] [:not(:where(.o141100)).hub-scene.t-cine_&]:[background:rgb(255_183_77_/_0.2)] [:not(:where(.o141101)).hub-scene.t-cine_&]:[color:#ffb74d] [:not(:where(.o141200)).hub-scene.t-morning_&]:[background:rgb(255_213_79_/_0.2)] [:not(:where(.o141201)).hub-scene.t-morning_&]:[color:#f9a825]" }, svgIcon(running ? ICONS.stop : look.icon)),
-      el("b", { text: nameOf(state) }));
+      suggest ? el("span", { class: "grid min-w-0 gap-0.5" }, el("b", { text: nameOf(state) }),
+        el("small", { class: "text-legende text-v-mute", text: "Suggéré à cette heure" })) : el("b", { text: nameOf(state) }));
     button.addEventListener("click", () => {
       if (!running && typeof hubV4Moment === "function" && hubV4Moment(state)) return;
       button.classList.add("pending");
