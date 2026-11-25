@@ -54,3 +54,36 @@ test("index.html : les en-têtes et les pieds reprennent les classes de fenetres
     assert.ok(!source.includes("window.confirm("), name);
   }
 });
+
+test("formulaires : l'heure proposée est le prochain quart d'heure, la fin une heure après", () => {
+  const prochain = run("formProchainQuart");
+  const plus = run("formHeurePlus");
+  const minutes = run("formMinutes");
+  const at = (h, m) => new Date(2026, 10, 25, h, m);
+  assert.equal(prochain(at(14, 7)), "14:15");
+  assert.equal(prochain(at(14, 0)), "14:15");
+  assert.equal(prochain(at(14, 15)), "14:30");
+  assert.equal(prochain(at(9, 59)), "10:00");
+  assert.equal(prochain(at(23, 50)), "23:45");
+  assert.equal(plus("14:15", 60), "15:15");
+  assert.equal(plus("23:30", 60), "23:59");
+  assert.equal(plus("08:00", -30), "07:30");
+  assert.equal(minutes("10:30") - minutes("09:45"), 45);
+});
+
+test("rien de perdu par erreur : les fenêtres de saisie demandent avant de fermer", () => {
+  const web = join(dirname(fileURLToPath(import.meta.url)), "..");
+  const source = (name) => readFileSync(join(web, name), "utf8");
+  // Chaque éditeur garde sa fenêtre, et ses boutons Fermer passent par fenetreFermer.
+  for (const [name, id] of [["agenda.js", "agenda-new"], ["editor.js", "automations"], ["house-reglage.js", "drawing"], ["account.js", "account-dialog"]]) {
+    assert.match(source(name), new RegExp(`fenetreGarde\\(\\$\\("#${id}"\\)`), name);
+    assert.match(source(name), new RegExp(`fenetreFermer\\(\\$\\("#${id}"\\)\\)`), name);
+  }
+  // Le formulaire du rendez-vous : nos erreurs sous les champs, pas de message flash global.
+  const agenda = source("agenda.js");
+  const nouveau = agenda.slice(agenda.indexOf("agendaNewSetup"), agenda.indexOf("// ---------------------------------------------------------------- Page Maison"));
+  assert.ok(nouveau.includes("champErreur("));
+  assert.ok(nouveau.includes("boutonEnCours("));
+  assert.ok(!nouveau.includes("flash("));
+  assert.ok(!nouveau.includes("callService("));
+});

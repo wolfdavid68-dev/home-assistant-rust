@@ -490,7 +490,7 @@ function renderCanvas() {
       }
       // « + » au bout d'une sortie libre : ajouter un bloc relié, comme n8n.
       if (!canvas.readOnly && !wireFrom(node.key, port)) {
-        const add = el("button", { type: "button", class: "port-add absolute [left:calc(100%_+_22px)] [transform:translateY(-50%)] w-[28px] h-[28px] p-0 [border:1.5px_dashed_color-mix(in_srgb,_var(--muted)_80%,_transparent)] rounded-full bg-card text-muted [font:700_1rem/1_var(--font)] cursor-pointer [:not(:where(.o054012))&]:[transition:background_0.15s_ease,_color_0.15s_ease,_border-color_0.15s_ease,_transform_0.15s_ease] [&::before]:[content:''] [&::before]:absolute [:not(:where(.o054102))&::before]:[right:calc(100%_+_1px)] [:not(:where(.o054103))&::before]:[top:50%] [&::before]:w-[15px] [&::before]:[border-top:2px_dashed_color-mix(in_srgb,_var(--muted)_60%,_transparent)] [:not(:where(.o054200))&:hover]:[border-style:solid] [:not(:where(.o054201))&:hover]:border-accent [:not(:where(.o054202))&:hover]:bg-accent [:not(:where(.o054203))&:hover]:text-accent-ink [:not(:where(.o054204))&:hover]:[transform:translateY(-50%)_scale(1.08)] [:not(:where(.o054200))&:focus-visible]:[border-style:solid] [:not(:where(.o054201))&:focus-visible]:border-accent [:not(:where(.o054202))&:focus-visible]:bg-accent [:not(:where(.o054203))&:focus-visible]:text-accent-ink [:not(:where(.o054204))&:focus-visible]:[transform:translateY(-50%)_scale(1.08)] [@media(prefers-reduced-motion:reduce)]:[:not(:where(.o059400))&]:[transition:none]", "data-add": node.key, "data-port": port, "aria-label": `Ajouter un bloc après « ${kind} »${text ? ` (${text})` : ""}`, text: "+" });
+        const add = el("button", { type: "button", class: "port-add absolute after:absolute after:content-[''] after:rounded-full after:[inset:calc(14px_-_22px_/_var(--canvas-scale,_1))] [left:calc(100%_+_22px)] [transform:translateY(-50%)] w-[28px] h-[28px] p-0 [border:1.5px_dashed_color-mix(in_srgb,_var(--muted)_80%,_transparent)] rounded-full bg-card text-muted [font:700_1rem/1_var(--font)] cursor-pointer [:not(:where(.o054012))&]:[transition:background_0.15s_ease,_color_0.15s_ease,_border-color_0.15s_ease,_transform_0.15s_ease] [&::before]:[content:''] [&::before]:absolute [:not(:where(.o054102))&::before]:[right:calc(100%_+_1px)] [:not(:where(.o054103))&::before]:[top:50%] [&::before]:w-[15px] [&::before]:[border-top:2px_dashed_color-mix(in_srgb,_var(--muted)_60%,_transparent)] [:not(:where(.o054200))&:hover]:[border-style:solid] [:not(:where(.o054201))&:hover]:border-accent [:not(:where(.o054202))&:hover]:bg-accent [:not(:where(.o054203))&:hover]:text-accent-ink [:not(:where(.o054204))&:hover]:[transform:translateY(-50%)_scale(1.08)] [:not(:where(.o054200))&:focus-visible]:[border-style:solid] [:not(:where(.o054201))&:focus-visible]:border-accent [:not(:where(.o054202))&:focus-visible]:bg-accent [:not(:where(.o054203))&:focus-visible]:text-accent-ink [:not(:where(.o054204))&:focus-visible]:[transform:translateY(-50%)_scale(1.08)] [@media(prefers-reduced-motion:reduce)]:[:not(:where(.o059400))&]:[transition:none]", "data-add": node.key, "data-port": port, "aria-label": `Ajouter un bloc après « ${kind} »${text ? ` (${text})` : ""}`, text: "+" });
         add.style.top = `${top}px`;
         box.append(add);
       }
@@ -524,9 +524,9 @@ function openPanel(key) {
   const refresh = () => openPanel(key);
   const fields = panelFields(node, refresh);
   const box = el("div", { class: "auto-fields grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_170px),_1fr))] gap-2.5 [&_input:not([type=checkbox])]:bg-card [&_input:not([type=checkbox])]:min-w-0 [&_input:not([type=checkbox])]:w-full [&_select]:bg-card [:not(:where(.o036401))&_select]:min-w-0 [:not(:where(.o036402))&_select]:w-full [:not(:where(.o036600))&>label]:[grid-template-rows:1fr_auto] [.canvas-panel>&]:[grid-template-columns:minmax(0,_1fr)] [.canvas-panel>&]:[align-content:start] [.canvas-panel>&]:p-3.5" }, ...fields);
-  const remove = el("button", { type: "button", class: "ghost danger small", text: "Supprimer le bloc" });
+  const remove = el("button", { type: "button", class: "ghost danger small min-h-11", text: "Supprimer le bloc" });
   remove.addEventListener("click", () => removeNode(key));
-  const close = el("button", { type: "button", class: "canvas-panel-close flex-none w-[34px] h-[34px] [border:1px_solid_var(--line)] rounded-full bg-card text-text [font:400_1.3rem/1_var(--font)] cursor-pointer [&:hover]:bg-card-2", "aria-label": "Fermer les réglages du bloc", text: "×" });
+  const close = el("button", { type: "button", class: "canvas-panel-close flex-none w-11 h-11 [border:1px_solid_var(--line)] rounded-full bg-card text-text [font:400_1.3rem/1_var(--font)] cursor-pointer [&:hover]:bg-card-2", "aria-label": "Fermer les réglages du bloc", text: "×" });
   close.addEventListener("click", () => openPanel(null));
   panel.className = `canvas-panel absolute [z-index:3] [:not(:where(.o057202))&]:[top:12px] [:not(:where(.o057203))&]:[right:12px] [:not(:where(.o057204))&]:[bottom:12px] [:not(:where(.o057205))&]:[width:min(400px,_calc(100%_-_24px))] overflow-auto grid [grid-template-rows:auto_1fr_auto] [border:1px_solid_var(--line)] rounded-panneau bg-card [box-shadow:var(--shadow-float)] [user-select:text] [-webkit-user-select:text] [touch-action:auto] [:not(:where(.o057216))&]:[animation:panel-in_0.24s_cubic-bezier(0.2,_0.8,_0.2,_1)] [@media(prefers-reduced-motion:reduce)]:[:not(:where(.o059200))&]:[animation:none] [@media(max-width:700px)]:[:not(:where(.o059700))&]:[top:auto] [@media(max-width:700px)]:[:not(:where(.o059701))&]:[left:8px] [@media(max-width:700px)]:[:not(:where(.o059702))&]:[right:8px] [@media(max-width:700px)]:[:not(:where(.o059703))&]:[bottom:8px] [@media(max-width:700px)]:[:not(:where(.o059704))&]:w-[auto] [@media(max-width:700px)]:max-h-[56%] [@media(max-width:700px)]:[:not(:where(.o059706))&]:[animation-name:sheet-in] cat-${nodeCategory(node)}`;
   panel.replaceChildren(
@@ -601,7 +601,7 @@ function panelFields(node, refresh) {
       const blocks = a.choose.map((option, i) => {
         option.conditions ??= [];
         const block = nested(itemsBlock(`Option ${i + 1}`, "Toutes doivent être vraies.", option, "conditions", CONDITION_KINDS, "condition", conditionFields));
-        const remove = el("button", { type: "button", class: "ghost small", text: `Retirer l'option ${i + 1}` });
+        const remove = el("button", { type: "button", class: "ghost small min-h-11", text: `Retirer l'option ${i + 1}` });
         remove.addEventListener("click", () => {
           // Les fils des options suivantes remontent d'un cran.
           a.choose.splice(i, 1);
@@ -618,7 +618,7 @@ function panelFields(node, refresh) {
         block.append(remove);
         return block;
       });
-      const add = el("button", { type: "button", class: "ghost small", text: "+ Ajouter une option" });
+      const add = el("button", { type: "button", class: "ghost small min-h-11", text: "+ Ajouter une option" });
       add.addEventListener("click", () => {
         a.choose.push({ conditions: [] });
         canvas.structureChanged = true;
@@ -691,7 +691,10 @@ function openAddMenu(screenX, screenY, at, from = null) {
       [...list.querySelectorAll(".canvas-menu-item")].find((item) => !item.hidden)?.click();
       event.preventDefault();
     } else if (event.key === "Escape") {
+      // Échap ferme le menu seulement, pas la fenêtre.
+      event.preventDefault();
       menu.hidden = true;
+      $("#canvas-add").focus({ preventScroll: true });
     }
   });
   for (const [title, kind, kinds] of groups) {
@@ -730,7 +733,7 @@ function openAddMenu(screenX, screenY, at, from = null) {
       list.append(item);
     }
   }
-  const close = el("button", { type: "button", class: "ghost small", text: "Annuler" });
+  const close = el("button", { type: "button", class: "ghost small min-h-11", text: "Annuler" });
   close.addEventListener("click", () => {
     menu.hidden = true;
   });
@@ -798,6 +801,8 @@ function applyView() {
   area.style.backgroundPosition = `${x}px ${y}px`;
   area.style.backgroundSize = `${20 * scale}px ${20 * scale}px`;
   $("#canvas-zoom-level").textContent = `${Math.round(scale * 100)} %`;
+  // Le « + » des blocs garde une zone de toucher de 44 px à l'écran, à tout zoom.
+  $("#canvas-stage").style.setProperty("--canvas-scale", String(scale));
   renderMinimap();
 }
 

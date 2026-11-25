@@ -71,7 +71,7 @@ function presetCard(preset) {
       { class: "preset-head grid [grid-template-columns:auto_minmax(0,_1fr)_auto] gap-2.5 items-center" },
       el("span", { class: "preset-icon grid [place-items:center] w-[36px] h-[36px] rounded-champ bg-card text-accent [:not(:where(.o032000))&_svg]:w-[20px] [:not(:where(.o032001))&_svg]:h-[20px]" }, svgIcon(PRESET_ICONS[preset.name] ?? ICONS.sparkle)),
       el("div", { class: "preset-title grid [:not(:where(.o032200))&_small]:text-muted [:not(:where(.o032201))&_small]:text-petit" }, el("strong", { text: preset.title }), el("small", { text: preset.when })),
-      el("label", { class: "preset-switch relative inline-block w-[44px] h-[26px] cursor-pointer [:not(:where(.o032500))&_input]:absolute [:not(:where(.o032501))&_input]:[inset:0] [&_input]:[opacity:0] [&_input]:m-0 [&_input]:[cursor:inherit] [:not(:where(.o032600))&_span]:absolute [:not(:where(.o032601))&_span]:[inset:0] [:not(:where(.o032602))&_span]:rounded-full [:not(:where(.o032603))&_span]:bg-line [:not(:where(.o032604))&_span]:[transition:background_0.2s] [&_span]:pointer-events-none [&_span::after]:[content:''] [&_span::after]:absolute [:not(:where(.o032702))&_span::after]:[top:3px] [:not(:where(.o032703))&_span::after]:[left:3px] [&_span::after]:w-[20px] [&_span::after]:h-[20px] [&_span::after]:rounded-full [:not(:where(.o032707))&_span::after]:[background:#fff] [&_span::after]:[box-shadow:0_1px_3px_rgb(0_0_0_/_0.25)] [:not(:where(.o032709))&_span::after]:[transition:transform_0.2s] [:not(:where(.o032800))&_input:checked+span]:bg-accent [&_input:checked+span::after]:[transform:translateX(18px)] [&_input:focus-visible+span]:[outline:2px_solid_var(--accent)] [&_input:focus-visible+span]:[outline-offset:2px] [&_input:disabled+span]:[opacity:0.5] [@media(prefers-reduced-motion:reduce)]:[:not(:where(.o034000))&_span]:[transition:none] [@media(prefers-reduced-motion:reduce)]:[:not(:where(.o034000))&_span::after]:[transition:none]" }, toggle, el("span", { "aria-hidden": "true" })),
+      el("label", { class: "preset-switch relative inline-block w-[44px] h-[26px] cursor-pointer [&_input[type=checkbox]]:-inset-y-2.5 [:not(:where(.o032500))&_input]:absolute [:not(:where(.o032501))&_input]:[inset:0] [&_input]:[opacity:0] [&_input]:m-0 [&_input]:[cursor:inherit] [:not(:where(.o032600))&_span]:absolute [:not(:where(.o032601))&_span]:[inset:0] [:not(:where(.o032602))&_span]:rounded-full [:not(:where(.o032603))&_span]:bg-line [:not(:where(.o032604))&_span]:[transition:background_0.2s] [&_span]:pointer-events-none [&_span::after]:[content:''] [&_span::after]:absolute [:not(:where(.o032702))&_span::after]:[top:3px] [:not(:where(.o032703))&_span::after]:[left:3px] [&_span::after]:w-[20px] [&_span::after]:h-[20px] [&_span::after]:rounded-full [:not(:where(.o032707))&_span::after]:[background:#fff] [&_span::after]:[box-shadow:0_1px_3px_rgb(0_0_0_/_0.25)] [:not(:where(.o032709))&_span::after]:[transition:transform_0.2s] [:not(:where(.o032800))&_input:checked+span]:bg-accent [&_input:checked+span::after]:[transform:translateX(18px)] [&_input:focus-visible+span]:[outline:2px_solid_var(--accent)] [&_input:focus-visible+span]:[outline-offset:2px] [&_input:disabled+span]:[opacity:0.5] [@media(prefers-reduced-motion:reduce)]:[:not(:where(.o034000))&_span]:[transition:none] [@media(prefers-reduced-motion:reduce)]:[:not(:where(.o034000))&_span::after]:[transition:none]" }, toggle, el("span", { "aria-hidden": "true" })),
     ),
   );
   if (preset.unavailable) {
@@ -85,9 +85,9 @@ function presetCard(preset) {
   details.addEventListener("toggle", () => (details.open ? presets.open.add(preset.name) : presets.open.delete(preset.name)));
   const draft = structuredClone(preset.options);
   const form = el("div", { class: "preset-form grid gap-2 mt-2.5" }, ...presetFields(preset.name, draft));
-  const save = el("button", { type: "button", class: "primary small", text: preset.enabled ? "Enregistrer" : "Enregistrer et activer" });
-  save.addEventListener("click", () => savePreset(preset, true, draft));
-  details.append(form, el("div", { class: "preset-buttons flex justify-end mt-2.5" }, save));
+  const save = el("button", { type: "button", class: "primary small min-h-11", text: preset.enabled ? "Enregistrer" : "Enregistrer et activer" });
+  save.addEventListener("click", () => savePreset(preset, true, draft, save));
+  details.append(form, el("div", { class: "preset-buttons flex flex-wrap items-center justify-end gap-2 mt-2.5" }, save));
   card.append(details);
   return card;
 }
@@ -97,11 +97,11 @@ function presetCheck(draft, key, text) {
   const input = el("input", { type: "checkbox" });
   input.checked = draft[key] === true;
   input.addEventListener("change", () => (draft[key] = input.checked));
-  return el("label", { class: "check [.preset-form_&]:text-corps [label&]:flex [label&]:items-center [label&]:gap-2 [label&]:text-text" }, input, ` ${text}`);
+  return el("label", { class: "check min-h-11 [.preset-form_&]:text-corps [label&]:flex [label&]:items-center [label&]:gap-2 [label&]:text-text" }, input, ` ${text}`);
 }
 
 function presetNumber(draft, key, text, { min, max, step = 1, unit }) {
-  const input = el("input", { type: "number", min: String(min), max: String(max), step: String(step), inputmode: "decimal" });
+  const input = el("input", { type: "number", min: String(min), max: String(max), step: String(step), inputmode: "decimal", enterkeyhint: "done" });
   input.value = draft[key] ?? "";
   input.addEventListener("input", () => {
     const value = Number(input.value);
@@ -166,16 +166,35 @@ function presetFields(name, draft) {
   return fields;
 }
 
-async function savePreset(preset, enabled, options) {
-  const { status, data } = await api("PUT", `/api/automations/presets/${encodeURIComponent(preset.name)}`, { enabled, options });
+/** `button` : « Enregistrer » du formulaire de réglage. Pendant l'envoi, il
+ *  dit « Enregistrement… » ; en cas d'erreur, le réglage reste tel qu'écrit
+ *  et l'erreur s'affiche juste à côté du bouton. */
+async function savePreset(preset, enabled, options, button = null) {
+  if (button?.disabled) return;
+  const restore = button ? boutonEnCours(button, "Enregistrement…") : null;
+  button?.parentElement.querySelector(".preset-erreur")?.remove();
+  let status = 0;
+  let data = {};
+  try {
+    ({ status, data } = await api("PUT", `/api/automations/presets/${encodeURIComponent(preset.name)}`, { enabled, options }));
+  } catch {
+    status = 0;
+  } finally {
+    restore?.();
+  }
   if (status === 403 && data.confirm) {
-    // Annulé : la case reprend sa place.
-    renderPresets();
-    return askConfirmation(() => savePreset(preset, enabled, options));
+    // Annulé : la case reprend sa place (le formulaire, lui, reste tel quel).
+    if (!button) renderPresets();
+    return askConfirmation(() => savePreset(preset, enabled, options, button));
   }
   if (status !== 200) {
+    const message = data.error ?? (status === 0 ? "Le serveur ne répond pas : réessaie." : "Enregistrement impossible.");
+    if (button) {
+      button.before(el("p", { class: "preset-erreur m-0 mr-auto self-center text-petit font-semibold text-alert-ink", role: "alert", text: message }));
+      return;
+    }
     await renderPresets();
-    return showPresetNotice(data.error ?? "Enregistrement impossible.", true);
+    return showPresetNotice(message, true);
   }
   presets.open.delete(preset.name);
   await showAutoList(enabled ? `« ${preset.title} » est prête, et active.` : `« ${preset.title} » est désactivée (gardée).`);

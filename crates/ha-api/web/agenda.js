@@ -215,7 +215,7 @@ function renderAgendaView() {
   const calendars = agendaCalendars();
 
   $("#agenda-views").replaceChildren(...AGENDA_VIEWS.map(([id, label]) => {
-    const button = el("button", { type: "button", "aria-pressed": String(agenda.view === id), text: label });
+    const button = el("button", { type: "button", class: "min-h-11", "aria-pressed": String(agenda.view === id), text: label });
     button.addEventListener("click", () => setAgendaView(id));
     return button;
   }));
@@ -562,8 +562,8 @@ function miniMonth() {
     for (let d = dayStart(e.startDate); d < e.endDate && days.length < 42; d = addDays(d, 1)) days.push(d.getTime());
     return days;
   }));
-  const prev = el("button", { type: "button", class: "agenda-mini-arrow [:where(&)]:[all:unset] cursor-pointer py-0 px-1.5 text-muted text-moyen", "aria-label": "Mois précédent", text: "‹" });
-  const next = el("button", { type: "button", class: "agenda-mini-arrow [:where(&)]:[all:unset] cursor-pointer py-0 px-1.5 text-muted text-moyen", "aria-label": "Mois suivant", text: "›" });
+  const prev = el("button", { type: "button", class: "agenda-mini-arrow [:where(&)]:[all:unset] cursor-pointer inline-grid place-items-center min-w-11 min-h-11 rounded-puce text-muted text-moyen hover:bg-card-2", "aria-label": "Mois précédent", text: "‹" });
+  const next = el("button", { type: "button", class: "agenda-mini-arrow [:where(&)]:[all:unset] cursor-pointer inline-grid place-items-center min-w-11 min-h-11 rounded-puce text-muted text-moyen hover:bg-card-2", "aria-label": "Mois suivant", text: "›" });
   prev.addEventListener("click", () => { agenda.anchor = new Date(a.getFullYear(), a.getMonth() - 1, 1); renderAgendaView(); });
   next.addEventListener("click", () => { agenda.anchor = new Date(a.getFullYear(), a.getMonth() + 1, 1); renderAgendaView(); });
   const grid = el("div", { class: "agenda-mini-grid grid [grid-template-columns:repeat(7,_minmax(0,_1fr))] text-center gap-y-0.5 [isolation:isolate]" }, ...["L", "M", "M", "J", "V", "S", "D"].map((d) => el("span", { class: "agenda-mini-name text-legende text-muted pb-0.5", text: d })));
@@ -571,7 +571,8 @@ function miniMonth() {
   for (let i = 0; i < 42; i++) {
     const day = addDays(start, i);
     if (i >= 35 && day.getMonth() !== first.getMonth()) break;
-    const cls = ["agenda-mini-day"];
+    // 44 px de haut au doigt ; le rond d'aujourd'hui reste un rond de 24 px.
+    const cls = ["agenda-mini-day", "h-11", "leading-11", "before:[inset:calc(50%_-_12px)]"];
     if (day.getMonth() !== first.getMonth()) cls.push("out");
     if (sameDay(day, now)) cls.push("is-today");
     if (agenda.view === "week" && weekStart(day).getTime() === chosenWeek) cls.push("week");
@@ -664,31 +665,132 @@ function openEventDetails(e) {
 
 // ----- Nouveau rendez-vous (agenda de la maison)
 
+// Le formulaire est dans index.html ; ici, ce qui le rend commode : les
+// heures proposées (le prochain quart d'heure, une heure de durée), la case
+// « Toute la journée », les erreurs sous le champ concerné, le bouton qui
+// dit « Ajout… » pendant l'envoi, et rien de perdu en fermant par erreur.
+const agendaNew = { initial: "" };
+const agendaNewFields = () => ["#agenda-new-summary", "#agenda-new-day", "#agenda-new-start", "#agenda-new-end", "#agenda-new-allday"].map((id) => $(id));
+const agendaNewSnapshot = () => agendaNewFields().map((input) => (input.type === "checkbox" ? String(input.checked) : input.value)).join("|");
+
+(function agendaNewSetup() {
+  const form = $("#agenda-new-form");
+  // Nos messages sous les champs, à la place des bulles du navigateur.
+  form.noValidate = true;
+  const summary = $("#agenda-new-summary");
+  summary.setAttribute("enterkeyhint", "done");
+  summary.setAttribute("autocapitalize", "sentences");
+  for (const id of ["#agenda-new-day", "#agenda-new-start", "#agenda-new-end"]) $(id).setAttribute("enterkeyhint", "done");
+  // Toute la journée : une case, plutôt que deux heures à vider.
+  const times = form.querySelector(".agenda-new-times");
+  // Une erreur sous « Fin » n'étire pas le champ « Début ».
+  times.classList.add("items-start");
+  const allDay = el("input", { id: "agenda-new-allday", type: "checkbox", class: "relative order-2 ml-auto shrink-0 w-[2.6rem] h-6 m-0 rounded-full bg-line appearance-none cursor-pointer transition-colors checked:bg-ok after:absolute after:top-[3px] after:left-[3px] after:size-[18px] after:rounded-full after:bg-white after:shadow after:transition-transform checked:after:translate-x-[1.1rem] motion-reduce:transition-none motion-reduce:after:transition-none" });
+  // (Le formulaire met ses libellés en grille : la case passe à droite par les colonnes.)
+  times.before(el("label", { class: "check grid grid-flow-col items-center justify-between gap-3 min-h-11" }, allDay, el("span", { class: "text-courant text-text", text: "Toute la journée" })));
+  allDay.addEventListener("change", () => {
+    times.hidden = allDay.checked;
+    if (!allDay.checked && !$("#agenda-new-start").value) agendaNewTimes();
+  });
+  const hint = form.querySelector(".auto-meta");
+  if (hint) hint.textContent = "Ajouté dans l'agenda de la maison.";
+  // Le début bouge : la fin garde la même durée.
+  const start = $("#agenda-new-start");
+  let before = "";
+  start.addEventListener("focus", () => { before = start.value; });
+  start.addEventListener("change", () => {
+    const end = $("#agenda-new-end");
+    if (!start.value) return;
+    const duration = before && end.value ? formMinutes(end.value) - formMinutes(before) : 60;
+    end.value = formHeurePlus(start.value, duration > 0 ? duration : 60);
+    before = start.value;
+    champErreur(end);
+  });
+  // L'erreur venue du serveur : au-dessus des boutons.
+  form.querySelector(".fenetre-pied").before(el("p", { id: "agenda-new-error", class: "m-0 text-petit font-semibold text-alert-ink", role: "alert", hidden: "" }));
+  fenetreGarde($("#agenda-new"), () => agendaNewSnapshot() !== agendaNew.initial);
+})();
+
+/** Les heures proposées : le prochain quart d'heure, pour une heure. */
+function agendaNewTimes() {
+  const start = formProchainQuart(new Date());
+  $("#agenda-new-start").value = start;
+  $("#agenda-new-end").value = formHeurePlus(start, 60);
+}
+
 $("#agenda-add").addEventListener("click", () => {
   const day = agenda.anchor;
   $("#agenda-new-day").value = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
   $("#agenda-new-summary").value = "";
-  $("#agenda-new-start").value = "";
-  $("#agenda-new-end").value = "";
+  $("#agenda-new-allday").checked = false;
+  $("#agenda-new-form .agenda-new-times").hidden = false;
+  agendaNewTimes();
+  for (const input of agendaNewFields()) champErreur(input);
+  $("#agenda-new-error").hidden = true;
+  agendaNew.initial = agendaNewSnapshot();
   ouvrirFenetre($("#agenda-new"), $("#agenda-new-summary"));
 });
-for (const id of ["#agenda-new-close", "#agenda-new-cancel"]) $(id).addEventListener("click", () => $("#agenda-new").close());
+for (const id of ["#agenda-new-close", "#agenda-new-cancel"]) $(id).addEventListener("click", () => fenetreFermer($("#agenda-new")));
+
+/** Les erreurs du formulaire, sous leurs champs ; `true` s'il n'y en a pas. */
+function agendaNewCheck() {
+  const [summary, day, start, end, allDay] = agendaNewFields();
+  const errors = [];
+  if (!summary.value.trim()) errors.push([summary, "Donne un titre au rendez-vous."]);
+  if (!day.value) errors.push([day, "Choisis le jour."]);
+  if (!allDay.checked) {
+    if (!start.value) errors.push([start, "Choisis l'heure de début, ou coche « Toute la journée »."]);
+    else if (end.value && end.value <= start.value) errors.push([end, `La fin doit venir après le début (${start.value}).`]);
+  }
+  for (const input of [summary, day, start, end]) champErreur(input);
+  for (const [input, message] of errors) champErreur(input, message);
+  errors[0]?.[0].focus();
+  return errors.length === 0;
+}
+
 $("#agenda-new-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const summary = $("#agenda-new-summary").value.trim();
-  const day = $("#agenda-new-day").value;
-  const start = $("#agenda-new-start").value;
-  const end = $("#agenda-new-end").value;
-  if (!summary || !day) return;
-  const data = { entity_id: "calendar.maison", summary };
-  if (start) {
+  const form = event.currentTarget;
+  const submit = form.querySelector("button[type=submit]");
+  if (submit.disabled || !agendaNewCheck()) return;
+  const [summaryInput, dayInput, startInput, endInput, allDay] = agendaNewFields();
+  const day = dayInput.value;
+  const start = startInput.value;
+  const end = endInput.value;
+  const data = { entity_id: "calendar.maison", summary: summaryInput.value.trim() };
+  if (!allDay.checked) {
     data.start_date_time = `${day} ${start}`;
     if (end && end > start) data.end_date_time = `${day} ${end}`;
   } else {
     data.start_date = day;
   }
-  // Le rendez-vous n'est pas parti : la fenêtre reste ouverte, pour réessayer.
-  if (await callService("calendar", "create_event", data)) $("#agenda-new").close();
+  const error = $("#agenda-new-error");
+  error.hidden = true;
+  const restore = boutonEnCours(submit, "Ajout…");
+  // Le rendez-vous n'est pas parti : la fenêtre reste ouverte, remplie, pour réessayer.
+  let problem = "";
+  try {
+    const response = await authFetch("/api/services/calendar/create_event", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (!response) problem = "Serveur injoignable : le rendez-vous n'est pas parti. Réessaie.";
+    else if (response.status === 401) problem = "Session expirée : reconnecte-toi, puis réessaie.";
+    else if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      problem = typeof body.error === "string" ? `${body.error}.` : "Rendez-vous refusé par le serveur.";
+    }
+  } finally {
+    restore();
+  }
+  if (problem) {
+    error.textContent = problem;
+    error.hidden = false;
+    return;
+  }
+  agendaNew.initial = agendaNewSnapshot();
+  $("#agenda-new").close();
 });
 
 // ---------------------------------------------------------------- Page Maison

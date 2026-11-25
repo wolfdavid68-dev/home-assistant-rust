@@ -74,6 +74,8 @@ function fenetrePremierChamp(dialog) {
 }
 
 const fenetreOuvreurs = new WeakMap();
+// Fenêtre → fonction « des changements ne sont pas enregistrés ? ».
+const fenetreGardes = new WeakMap();
 const fenetresPretes = new WeakSet();
 
 /** Une fois par fenêtre : le focus rendu à l'ouvreur, et le toucher sur le
@@ -92,8 +94,14 @@ function fenetrePrete(dialog) {
   // Le geste commence et finit sur le fond : un glissé depuis un champ ne ferme pas.
   dialog.addEventListener("pointerdown", (event) => { depuisLeFond = surLeFond(event); });
   dialog.addEventListener("click", (event) => {
-    if (depuisLeFond && surLeFond(event)) dialog.close();
+    if (depuisLeFond && surLeFond(event)) fenetreFermer(dialog);
     depuisLeFond = false;
+  });
+  // Échap : avec des changements non enregistrés (`fenetreGarde`), on demande d'abord.
+  dialog.addEventListener("cancel", (event) => {
+    if (!fenetreGardes.get(dialog)?.()) return;
+    event.preventDefault();
+    fenetreFermer(dialog);
   });
 }
 
@@ -157,3 +165,95 @@ function etatVide(icone, texte, action = null, tag = "div") {
   if (action) box.append(fenetreBouton(action.texte, "secondaire", action.onClick));
   return box;
 }
+
+// ---------------------------------------------------------------- Changements non enregistrés
+
+/** Rien de perdu par erreur : `modifie()` dit si la fenêtre a des
+ *  changements non enregistrés ; Échap, le fond ou `fenetreFermer` demandent
+ *  alors « Abandonner les changements ? » avant de fermer. */
+function fenetreGarde(dialog, modifie) {
+  fenetreGardes.set(dialog, modifie);
+  fenetrePrete(dialog);
+}
+
+/** « Abandonner les changements ? » : `true` si on abandonne. Le focus va
+ *  sur « Continuer » : Entrée ne perd rien. */
+function abandonnerChangements(message = "Ce qui n'est pas enregistré sera perdu.") {
+  return confirmer(message, { titre: "Abandonner les changements ?", ok: "Abandonner", annuler: "Continuer", danger: true });
+}
+
+/** Ferme la fenêtre (bouton Fermer, Annuler) ; avec des changements non
+ *  enregistrés, après confirmation. Renvoie `true` si elle est fermée. */
+async function fenetreFermer(dialog) {
+  if (fenetreGardes.get(dialog)?.() && !await abandonnerChangements()) return false;
+  dialog.close();
+  return true;
+}
+
+// ---------------------------------------------------------------- Formulaires
+
+let champNumero = 0;
+
+/** L'erreur d'un champ, écrite juste sous lui : le texte, `aria-invalid` et
+ *  `aria-describedby`. Un message vide l'efface ; taper dans le champ aussi.
+ *  Dans un `<label>`, le texte y est ajouté en dernier, caché aux lecteurs
+ *  d'écran (sinon il s'ajouterait au nom du champ) : ils le lisent par
+ *  `aria-describedby`. Renvoie le champ. */
+function champErreur(champ, message = "") {
+  if (!champ.id) champ.id = `champ-${++champNumero}`;
+  const id = `${champ.id}-erreur`;
+  const decrit = (champ.getAttribute("aria-describedby") ?? "").split(" ").filter((x) => x && x !== id);
+  document.getElementById(id)?.remove();
+  if (!message) {
+    champ.removeAttribute("aria-invalid");
+    if (decrit.length) champ.setAttribute("aria-describedby", decrit.join(" "));
+    else champ.removeAttribute("aria-describedby");
+    return champ;
+  }
+  const texte = el("p", { id, class: "champ-erreur m-0 text-petit font-semibold text-alert-ink [overflow-wrap:anywhere]", text: message });
+  const label = champ.closest("label");
+  if (label) {
+    texte.setAttribute("aria-hidden", "true");
+    label.append(texte);
+  } else {
+    champ.after(texte);
+  }
+  champ.setAttribute("aria-invalid", "true");
+  champ.setAttribute("aria-describedby", [...decrit, id].join(" "));
+  champ.addEventListener("input", () => champErreur(champ), { once: true });
+  return champ;
+}
+
+/** Le bouton principal pendant un envoi : désactivé, `aria-busy`, son texte
+ *  remplacé par `texte` (« Ajout… »). Renvoie la fonction qui le rétablit. */
+function boutonEnCours(bouton, texte = "Envoi…") {
+  const avant = bouton.textContent;
+  const seulTexte = bouton.childElementCount === 0;
+  bouton.disabled = true;
+  bouton.setAttribute("aria-busy", "true");
+  if (seulTexte) bouton.textContent = texte;
+  return () => {
+    bouton.disabled = false;
+    bouton.removeAttribute("aria-busy");
+    if (seulTexte) bouton.textContent = avant;
+  };
+}
+
+/** « 14:07 » → « 14:15 » : le prochain quart d'heure (au plus 23:45). */
+function formProchainQuart(date) {
+  const minutes = Math.min(Math.ceil((date.getHours() * 60 + date.getMinutes() + 1) / 15) * 15, 23 * 60 + 45);
+  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+}
+
+/** « 14:15 » + 60 → « 15:15 », sans passer minuit (au plus 23:59). */
+function formHeurePlus(heure, plus) {
+  const [h, m] = heure.split(":").map(Number);
+  const minutes = Math.max(0, Math.min(h * 60 + m + plus, 23 * 60 + 59));
+  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+}
+
+/** Minutes de « 14:15 » (pour comparer et garder une durée). */
+const formMinutes = (heure) => {
+  const [h, m] = heure.split(":").map(Number);
+  return h * 60 + m;
+};

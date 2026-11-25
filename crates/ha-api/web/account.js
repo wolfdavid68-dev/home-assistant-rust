@@ -51,32 +51,59 @@ async function loadCerveau() {
   const prefs = await api("GET", "/api/cerveau/preferences");
   if (prefs.status !== 200) return;
   const box = $("#cerveau-prefs-text");
-  // Un texte en cours d'écriture n'est pas écrasé.
-  if (document.activeElement !== box) box.value = typeof prefs.data.texte === "string" ? prefs.data.texte : "";
+  // Un texte en cours d'écriture (ou modifié, pas encore enregistré) n'est pas écrasé.
+  const saved = typeof prefs.data.texte === "string" ? prefs.data.texte : "";
+  if (document.activeElement !== box && !cerveauModifie()) box.value = saved;
+  account.cerveauTexte = saved;
   const by = typeof prefs.data.modifie_par === "string" && typeof prefs.data.modifie_le === "string"
     ? `Modifiées par ${prefs.data.modifie_par} le ${new Date(prefs.data.modifie_le).toLocaleString("fr", { dateStyle: "short", timeStyle: "short" })}. `
     : "";
   $("#cerveau-prefs-status").textContent = by + used;
 }
 
+/** Le texte des préférences a-t-il changé depuis qu'il a été lu ou enregistré ? */
+function cerveauModifie() {
+  return !$("#cerveau-prefs").hidden && typeof account.cerveauTexte === "string"
+    && $("#cerveau-prefs-text").value !== account.cerveauTexte;
+}
+
+// Enregistrer : « Enregistrement… » pendant l'envoi, « Enregistré » à côté du
+// bouton, et une erreur sous le texte, qui reste tel qu'écrit.
 $("#cerveau-prefs-save").addEventListener("click", async (event) => {
   const button = event.currentTarget;
-  button.disabled = true;
+  const box = $("#cerveau-prefs-text");
+  if (button.disabled) return;
+  champErreur(box);
+  const restore = boutonEnCours(button, "Enregistrement…");
+  let problem = "";
   try {
-    const { status, data } = await api("PUT", "/api/cerveau/preferences", { texte: $("#cerveau-prefs-text").value });
+    const { status, data } = await api("PUT", "/api/cerveau/preferences", { texte: box.value });
     if (status === 200) {
-      $("#cerveau-prefs-text").value = data.texte;
-      flash("Préférences enregistrées.");
+      box.value = typeof data.texte === "string" ? data.texte : box.value;
+      account.cerveauTexte = box.value;
       loadCerveau().catch(() => {});
     } else {
-      flash(typeof data?.error === "string" ? data.error : "Préférences refusées.");
+      problem = typeof data?.error === "string" ? data.error : "Préférences refusées.";
     }
   } catch {
-    flash("Préférences non enregistrées : le serveur ne répond pas.");
+    problem = "Préférences non enregistrées : le serveur ne répond pas. Le texte est gardé, réessaie.";
   } finally {
-    button.disabled = false;
+    restore();
   }
+  if (problem) champErreur(box, problem);
+  else accountSaved(button);
 });
+$("#cerveau-prefs-text").setAttribute("enterkeyhint", "enter");
+
+/** « Enregistré », quelques secondes, à côté du bouton qui vient de servir. */
+function accountSaved(anchor, text = "Enregistré", error = false) {
+  anchor.parentElement.querySelector(".compte-enregistre")?.remove();
+  const pill = error
+    ? el("span", { class: "compte-enregistre inline-flex items-center self-center py-0.5 px-2 rounded-full bg-alert-soft text-alert-ink text-legende font-semibold", role: "alert", text })
+    : el("span", { class: "compte-enregistre inline-flex items-center gap-1 self-center py-0.5 px-2 rounded-full bg-ok-soft text-text text-legende font-semibold [&_svg]:w-3.5 [&_svg]:h-3.5", role: "status" }, svgIcon(["M5 12l5 5L20 7"]), text);
+  anchor.after(pill);
+  setTimeout(() => pill.remove(), 3000);
+}
 
 /** Un message bref en bas de l'écran (une commande refusée…). */
 function flash(text) {
@@ -104,7 +131,9 @@ for (const opener of ["#dock-account", "#open-account"]) {
     loadCerveau().catch(() => {});
   });
 }
-$("#account-close").addEventListener("click", () => $("#account-dialog").close());
+$("#account-close").addEventListener("click", () => fenetreFermer($("#account-dialog")));
+// Fermer par erreur (Échap, la croix) avec des préférences non enregistrées : on demande.
+fenetreGarde($("#account-dialog"), cerveauModifie);
 
 // ---------------------------------------------------------------- Assist
 // « Ferme le volet de la chambre » : la phrase est comprise sur le serveur
@@ -315,7 +344,7 @@ function renderPush(blocker) {
   for (const button of document.querySelectorAll("#push button")) button.disabled = pushView.busy;
   const others = info.devices.filter((d) => d !== mine);
   $("#push-devices").replaceChildren(...others.map((device) => {
-    const remove = el("button", { type: "button", class: "ghost small", text: "Retirer" });
+    const remove = el("button", { type: "button", class: "ghost small min-h-11", text: "Retirer", "aria-label": `Retirer ${device.name}` });
     remove.addEventListener("click", () => pushAction(async () => {
       await api("DELETE", `/api/push/subscriptions/${device.id}`);
     }));
@@ -326,6 +355,21 @@ function renderPush(blocker) {
   }));
 }
 
+/** Le résultat d'une action, dans la section (pas en bas de l'écran). */
+function pushNote(text, error = false) {
+  let note = $("#push-note");
+  if (!note) {
+    note = el("p", { id: "push-note", class: "m-0 text-petit", role: "status" });
+    $("#push-categories").before(note);
+  }
+  note.textContent = text;
+  note.classList.toggle("text-alert-ink", error);
+  note.classList.toggle("font-semibold", error);
+  note.classList.toggle("text-muted", !error);
+  clearTimeout(pushNote.timer);
+  pushNote.timer = setTimeout(() => { note.textContent = ""; }, 6000);
+}
+
 /** Une action à la fois ; la section est relue après. */
 async function pushAction(action) {
   if (pushView.busy) return;
@@ -334,7 +378,7 @@ async function pushAction(action) {
   try {
     await action();
   } catch (error) {
-    flash(error instanceof Error && error.message ? error.message : "Action impossible.");
+    pushNote(error instanceof Error && error.message ? error.message : "Action impossible.", true);
   } finally {
     pushView.busy = false;
     await loadPush().catch(() => {});
@@ -359,20 +403,20 @@ $("#push-enable").addEventListener("click", () => pushAction(async () => {
     await subscription.unsubscribe().catch(() => {});
     throw new Error(typeof data.error === "string" ? `${data.error}.` : "Abonnement refusé par le serveur.");
   }
-  flash("Notifications activées sur cet appareil.");
+  pushNote("Notifications activées sur cet appareil.");
 }));
 
 $("#push-disable").addEventListener("click", () => pushAction(async () => {
   const mine = pushView.info.devices.find((d) => d.endpoint === pushView.subscription?.endpoint);
   if (mine) await api("DELETE", `/api/push/subscriptions/${mine.id}`);
   await pushView.subscription?.unsubscribe();
-  flash("Notifications désactivées sur cet appareil.");
+  pushNote("Notifications désactivées sur cet appareil.");
 }));
 
 $("#push-test").addEventListener("click", () => pushAction(async () => {
   const { status } = await api("POST", "/api/push/test");
   if (status !== 202) throw new Error("Essai impossible.");
-  flash("Essai envoyé : la notification arrive dans quelques secondes.");
+  pushNote("Essai envoyé : la notification arrive dans quelques secondes.");
 }));
 
 for (const box of document.querySelectorAll("#push-categories input")) {
@@ -383,7 +427,10 @@ for (const box of document.querySelectorAll("#push-categories input")) {
     }
     pushAction(async () => {
       const mine = pushView.info.devices.find((d) => d.endpoint === pushView.subscription?.endpoint);
-      if (mine) await api("PATCH", `/api/push/subscriptions/${mine.id}`, { categories });
+      if (!mine) return;
+      const { status } = await api("PATCH", `/api/push/subscriptions/${mine.id}`, { categories });
+      if (status >= 300) throw new Error("Choix non enregistré : réessaie.");
+      pushNote("Enregistré.");
     });
   });
 }
@@ -509,12 +556,15 @@ async function loadTablets() {
   box.hidden = status !== 200;
   if (status !== 200 || !Array.isArray(data)) return;
   $("#tablet-list").replaceChildren(...data.map((tablet) => {
-    const forget = el("button", { type: "button", class: "ghost small", text: "Déconnecter" });
+    const forget = el("button", { type: "button", class: "ghost small min-h-11", text: "Déconnecter", "aria-label": `Déconnecter ${tablet.label}` });
     forget.addEventListener("click", async () => {
       if (!await confirmer(`Déconnecter « ${tablet.label} » ? Il faudra la reconnecter avec le mot de passe de son compte.`, { titre: "Déconnecter la tablette ?", ok: "Déconnecter", danger: true })) return;
       forget.disabled = true;
       const { status: done } = await api("DELETE", `/api/auth/tablets/${tablet.id}`).catch(() => ({ status: 0 }));
-      if (done !== 204 && done !== 404) flash("Déconnexion impossible.");
+      if (done !== 204 && done !== 404) {
+        forget.disabled = false;
+        return accountSaved(forget, "Déconnexion impossible", true);
+      }
       loadTablets();
     });
     return el("li", { class: "push-device flex items-center justify-between gap-3 py-2 px-3 rounded-champ bg-card-2 [:not(:where(.o114700))&_span]:grid [&_span]:min-w-0 [:not(:where(.o114800))&_strong]:[overflow-wrap:anywhere] [:not(:where(.o114900))&_small]:text-muted" },

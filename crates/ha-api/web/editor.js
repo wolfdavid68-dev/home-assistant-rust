@@ -23,6 +23,10 @@ const auto = {
   mode: "form",
   checkTimer: null,
   checkSeq: 0,
+  // Ce qui était enregistré à l'ouverture, pour savoir s'il y a des changements.
+  baseline: null,
+  yamlBase: "",
+  yamlCarry: false,
 };
 
 const TRIGGER_KINDS = {
@@ -99,7 +103,52 @@ $("#open-automations").addEventListener("click", () => {
   ouvrirFenetre($("#automations"));
   showAutoList();
 });
-$("#automations-close").addEventListener("click", () => $("#automations").close());
+$("#automations-close").addEventListener("click", () => fenetreFermer($("#automations")));
+
+// ----- Rien de perdu par erreur
+
+/** Une configuration comparable : clés triées, listes vides et valeurs
+ *  absentes retirées (le schéma et le formulaire ne les écrivent pas pareil). */
+function autoStable(value) {
+  if (Array.isArray(value)) return value.map(autoStable);
+  if (value === null || typeof value !== "object") return value;
+  const out = {};
+  for (const key of Object.keys(value).sort()) {
+    const item = value[key];
+    if (item === undefined || (Array.isArray(item) && item.length === 0)) continue;
+    out[key] = autoStable(item);
+  }
+  return out;
+}
+
+/** La configuration telle qu'elle est dessinée ou remplie, en texte. */
+function autoFingerprint() {
+  const config = auto.mode === "canvas" ? graphToConfig(auto.config ?? {}).config : auto.config;
+  return JSON.stringify(autoStable(config ?? {}));
+}
+
+/** Des changements non enregistrés dans l'éditeur ? */
+function autoDirty() {
+  if ($("#auto-edit-view").hidden || readOnly() || auto.baseline === null) return false;
+  if (auto.mode === "yaml") return auto.yamlCarry || $("#auto-yaml").value !== auto.yamlBase;
+  return autoFingerprint() !== auto.baseline;
+}
+// Échap ferme d'abord ce qui est ouvert dans le schéma (le menu d'ajout, le
+// panneau d'un bloc), puis seulement la fenêtre, après « Abandonner les
+// changements ? » s'il y en a (fenetres.js).
+$("#automations").addEventListener("cancel", (event) => {
+  if (!$("#canvas-menu").hidden) {
+    $("#canvas-menu").hidden = true;
+  } else if (auto.mode === "canvas" && !$("#canvas-panel").hidden && !$("#auto-edit-view").hidden) {
+    openPanel(null);
+  } else {
+    return;
+  }
+  event.preventDefault();
+  event.stopImmediatePropagation();
+});
+// Après l'écouteur ci-dessus : il passe avant celui de fenetres.js.
+fenetreGarde($("#automations"), autoDirty);
 
 // ----- Liste
 
@@ -150,16 +199,16 @@ function autoCard(entry) {
     }));
   }
   const buttons = el("div", { class: "auto-card-buttons flex flex-wrap gap-2" });
-  const open = el("button", { type: "button", class: "action-button [justify-self:start] min-h-[40px] py-2 px-4 rounded-full [border:0] bg-card-2 font-semibold [&:active]:[transform:scale(0.97)]", text: entry.source === "editor" && auto.editable ? "Modifier" : "Voir" });
+  const open = el("button", { type: "button", class: "action-button [justify-self:start] min-h-11 py-2 px-4 rounded-full [border:0] bg-card-2 font-semibold [&:active]:[transform:scale(0.97)]", text: entry.source === "editor" && auto.editable ? "Modifier" : "Voir" });
   open.addEventListener("click", () => openAutoEditor(entry));
   buttons.append(open);
   if (!entry.error) {
-    const history = el("button", { type: "button", class: "action-button [justify-self:start] min-h-[40px] py-2 px-4 rounded-full [border:0] bg-card-2 font-semibold [&:active]:[transform:scale(0.97)]", text: "Historique" });
+    const history = el("button", { type: "button", class: "action-button [justify-self:start] min-h-11 py-2 px-4 rounded-full [border:0] bg-card-2 font-semibold [&:active]:[transform:scale(0.97)]", text: "Historique" });
     history.addEventListener("click", () => openTraces(entry));
     buttons.append(history);
   }
   if (entry.source === "editor" && auto.editable && entry.config) {
-    const toggle = el("button", { type: "button", class: "action-button [justify-self:start] min-h-[40px] py-2 px-4 rounded-full [border:0] bg-card-2 font-semibold [&:active]:[transform:scale(0.97)]", text: entry.enabled ? "Désactiver" : "Activer" });
+    const toggle = el("button", { type: "button", class: "action-button [justify-self:start] min-h-11 py-2 px-4 rounded-full [border:0] bg-card-2 font-semibold [&:active]:[transform:scale(0.97)]", text: entry.enabled ? "Désactiver" : "Activer" });
     toggle.addEventListener("click", () => {
       const config = structuredClone(entry.config);
       if (entry.enabled) config.enabled = false;
@@ -297,6 +346,9 @@ function openAutoEditor(entry) {
   $("#auto-yaml").value = entry.yaml ?? "";
   setAutoStatus("");
   renderAutoEditor();
+  auto.baseline = autoFingerprint();
+  auto.yamlBase = $("#auto-yaml").value;
+  auto.yamlCarry = false;
   if (entry.id === null) $("#auto-canvas-meta input")?.focus();
 }
 
@@ -324,7 +376,7 @@ function renderAutoEditor() {
     // Nom, identifiant, mode : repliés, sauf pour une nouvelle automatisation
     // (il faut lui donner un nom). Le schéma garde ainsi toute la place.
     const meta = $("#auto-canvas-meta");
-    const details = el("details", { class: "canvas-meta [:not(:where(.o048900))&_summary]:cursor-pointer [:not(:where(.o048901))&_summary]:font-semibold [:not(:where(.o048902))&_summary]:py-1 [:not(:where(.o048902))&_summary]:px-0 [&[open]_summary]:mb-2" }, el("summary", { text: `${auto.config.alias || auto.config.id || "Nouvelle automatisation"} · nom et réglages` }), ...metaFields(auto.config, true));
+    const details = el("details", { class: "canvas-meta [:not(:where(.o048900))&_summary]:cursor-pointer [:not(:where(.o048901))&_summary]:font-semibold [:not(:where(.o048902))&_summary]:py-3 [:not(:where(.o048902))&_summary]:px-0 [&[open]_summary]:mb-2" }, el("summary", { text: `${auto.config.alias || auto.config.id || "Nouvelle automatisation"} · nom et réglages` }), ...metaFields(auto.config, true));
     details.open = auto.existingId === null;
     meta.replaceChildren(details);
     if (ro) for (const control of meta.querySelectorAll("input, select")) control.disabled = true;
@@ -382,6 +434,9 @@ $("#auto-tab-yaml").addEventListener("click", async () => {
   const result = await checkAutomation({ config: auto.config });
   if (!result) return setAutoStatus("Corrige d'abord l'erreur ci-dessus pour passer en YAML.", "error", true);
   $("#auto-yaml").value = result.yaml;
+  // Le YAML est refait par le serveur : on retient s'il y avait déjà des changements.
+  auto.yamlCarry = JSON.stringify(autoStable(auto.config ?? {})) !== auto.baseline;
+  auto.yamlBase = result.yaml;
   auto.mode = "yaml";
   renderAutoEditor();
 });
@@ -467,8 +522,8 @@ function metaFields(c, compact = false) {
     scheduleCheck();
   });
   const modeLabel = el("label", {}, el("span", { class: "label", text: compact ? "Si elle se redéclenche" : "Si elle se redéclenche pendant qu'elle tourne encore" }), mode);
-  if (compact) return [el("div", { class: "auto-row canvas-meta-row grid gap-3 [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_190px),_1fr))] [align-items:end] [:not(:where(.o036600))&>label]:[grid-template-rows:1fr_auto]" }, alias, id, modeLabel, el("label", { class: "check [.preset-form_&]:text-corps [label&]:flex [label&]:items-center [label&]:gap-2 [label&]:text-text" }, enabled, "Activée"))];
-  return [el("div", { class: "auto-row grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_220px),_1fr))] gap-3 [:not(:where(.o036600))&>label]:[grid-template-rows:1fr_auto]" }, alias, id), el("label", { class: "check [.preset-form_&]:text-corps [label&]:flex [label&]:items-center [label&]:gap-2 [label&]:text-text" }, enabled, "Activée"), modeLabel];
+  if (compact) return [el("div", { class: "auto-row canvas-meta-row grid gap-3 [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_190px),_1fr))] [align-items:end] [:not(:where(.o036600))&>label]:[grid-template-rows:1fr_auto]" }, alias, id, modeLabel, el("label", { class: "check min-h-11 [.preset-form_&]:text-corps [label&]:flex [label&]:items-center [label&]:gap-2 [label&]:text-text" }, enabled, "Activée"))];
+  return [el("div", { class: "auto-row grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_220px),_1fr))] gap-3 [:not(:where(.o036600))&>label]:[grid-template-rows:1fr_auto]" }, alias, id), el("label", { class: "check min-h-11 [.preset-form_&]:text-corps [label&]:flex [label&]:items-center [label&]:gap-2 [label&]:text-text" }, enabled, "Activée"), modeLabel];
 }
 
 function renderAutoForm() {
@@ -493,7 +548,7 @@ function itemsBlock(title, hint, config, key, kinds, tag, fields) {
   items.forEach((item, index) => {
     const kind = tag ? item[tag] : actionKind(item);
     const label = lookup(kinds, kind)?.[0] ?? kind;
-    const remove = el("button", { type: "button", class: "ghost small", text: "Retirer", "aria-label": `Retirer : ${label}` });
+    const remove = el("button", { type: "button", class: "ghost small min-h-11", text: "Retirer", "aria-label": `Retirer : ${label}` });
     remove.addEventListener("click", () => {
       items.splice(index, 1);
       // Liste facultative vidée : on retire la clé (comme dans le YAML).
@@ -503,7 +558,7 @@ function itemsBlock(title, hint, config, key, kinds, tag, fields) {
     });
     const head = el("div", { class: "auto-item-head flex items-center gap-2 [&_strong]:mr-auto [:not(:where(.o036201))&_strong]:text-corps" }, el("strong", { text: label }));
     if (["actions", "then", "else", "sequence"].includes(key) && index > 0) {
-      const up = el("button", { type: "button", class: "ghost small", text: "↑", "aria-label": "Monter" });
+      const up = el("button", { type: "button", class: "ghost small min-h-11 min-w-11", text: "↑", "aria-label": "Monter" });
       up.addEventListener("click", () => {
         [items[index - 1], items[index]] = [items[index], items[index - 1]];
         renderAutoForm();
@@ -965,7 +1020,7 @@ function offsetField(object, key) {
 
 function weekdayField(c) {
   const days = new Set(asList(c.weekday));
-  const box = el("div", { class: "weekdays flex flex-wrap gap-y-1 gap-x-3", role: "group", "aria-label": "Jours" });
+  const box = el("div", { class: "weekdays flex flex-wrap gap-y-2 gap-x-3", role: "group", "aria-label": "Jours" });
   for (const [en, fr] of WEEKDAYS) {
     const input = el("input", { type: "checkbox" });
     input.checked = days.has(en) || days.has(fr);
@@ -976,7 +1031,7 @@ function weekdayField(c) {
       else c.weekday = chosen;
       changed();
     });
-    box.append(el("label", { class: "check [.preset-form_&]:text-corps [label&]:flex [label&]:items-center [label&]:gap-2 [label&]:text-text" }, input, fr));
+    box.append(el("label", { class: "check min-h-11 [.preset-form_&]:text-corps [label&]:flex [label&]:items-center [label&]:gap-2 [label&]:text-text" }, input, fr));
   }
   return el("div", { class: "weekdays-field grid gap-1.5 [grid-column:1_/_-1] text-corps text-muted" }, el("span", { class: "label", text: "Jours (aucun = tous)" }), box);
 }
@@ -994,12 +1049,33 @@ function slug(text) {
 
 // ----- Enregistrer, supprimer, versions
 
-$("#auto-save").addEventListener("click", () => {
+$("#auto-save").addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  if (button.disabled) return;
   const request = currentRequest();
   if (request.invalid) return setAutoStatus(request.invalid.join(" "), "error");
   const id = auto.mode === "yaml" ? auto.existingId ?? yamlId($("#auto-yaml").value) : auto.config.id;
-  if (!id) return setAutoStatus("Donne un nom (ou un identifiant) à l'automatisation.", "error");
-  saveAutomation(id, request, auto.existingId === null ? "Automatisation créée." : "Automatisation enregistrée.");
+  if (!id) {
+    setAutoStatus("Donne un nom (ou un identifiant) à l'automatisation.", "error");
+    // Le nom est sous « nom et réglages » : on l'ouvre et on y va.
+    const meta = $("#auto-canvas-meta details");
+    if (meta && auto.mode === "canvas") meta.open = true;
+    const name = (auto.mode === "canvas" ? $("#auto-canvas-meta") : $("#auto-form")).querySelector("input");
+    if (name) {
+      champErreur(name, "Donne un nom à l'automatisation.");
+      name.focus();
+    }
+    return;
+  }
+  // Pendant l'envoi : « Enregistrement… », un seul envoi ; en cas d'erreur, rien n'est perdu.
+  const restore = boutonEnCours(button, "Enregistrement…");
+  try {
+    await saveAutomation(id, request, auto.existingId === null ? "Automatisation créée." : "Automatisation enregistrée.");
+  } catch {
+    setAutoStatus("Le serveur ne répond pas : rien n'est perdu, réessaie.", "error");
+  } finally {
+    restore();
+  }
 });
 
 /** L'identifiant écrit dans un YAML (`id: …`), pour l'adresse de la requête. */
@@ -1068,7 +1144,7 @@ $("#auto-versions").addEventListener("click", async () => {
         el("span", { text: `${version.changed_by}${version.deleted ? " · supprimée" : ""}` }),
       );
       if (version.config && !readOnly()) {
-        const load = el("button", { type: "button", class: "ghost small", text: "Charger" });
+        const load = el("button", { type: "button", class: "ghost small min-h-11", text: "Charger" });
         load.addEventListener("click", () => {
           auto.config = version.config;
           $("#auto-yaml").value = version.yaml ?? "";
@@ -1083,7 +1159,11 @@ $("#auto-versions").addEventListener("click", async () => {
   if (data.versions.length === 0) list.replaceChildren(etatVide(ICONS.archive, "Aucune version enregistrée.", null, "li"));
 });
 
-$("#auto-cancel").addEventListener("click", () => showAutoList());
+$("#auto-cancel").addEventListener("click", async () => {
+  if (autoDirty() && !await abandonnerChangements("Les changements de cette automatisation ne sont pas enregistrés.")) return;
+  auto.baseline = null;
+  showAutoList();
+});
 
 // ----- Historique des exécutions
 
@@ -1136,7 +1216,7 @@ function renderTraces() {
     ...trace.runs.map((run, index) => {
       const button = el(
         "button",
-        { type: "button", class: `trace-run inline-flex items-center gap-1.5 min-h-[36px] py-1 px-3 rounded-full [border:1px_solid_var(--line)] bg-card text-text [:not(:where(.o040409))&]:[font-family:var(--font-mono)] [:not(:where(.o040410))&]:text-petit [&[aria-pressed=true]]:bg-text [&[aria-pressed=true]]:text-bg [&[aria-pressed=true]]:border-text run-${run.outcome}`, "aria-pressed": String(index === trace.selected) },
+        { type: "button", class: `trace-run inline-flex items-center gap-1.5 min-h-11 py-1 px-3 rounded-full [border:1px_solid_var(--line)] bg-card text-text [:not(:where(.o040409))&]:[font-family:var(--font-mono)] [:not(:where(.o040410))&]:text-petit [&[aria-pressed=true]]:bg-text [&[aria-pressed=true]]:text-bg [&[aria-pressed=true]]:border-text run-${run.outcome}`, "aria-pressed": String(index === trace.selected) },
         el("span", { class: "trace-dot w-[8px] h-[8px] rounded-full bg-ok flex-none [:not(:where(.o040700)).run-running_&]:bg-accent [:not(:where(.o040800)).run-conditions\_failed_&]:bg-muted [:not(:where(.o040800)).run-already\_running_&]:bg-muted [:not(:where(.o040800)).run-too\_many_&]:bg-muted [:not(:where(.o040800)).run-aborted_&]:bg-muted [:not(:where(.o040900)).run-stopped_&]:[background:var(--glow-bar)] [:not(:where(.o041000)).run-loop_&]:bg-alert", "aria-hidden": "true" }),
         el("span", { text: timeOnly.format(new Date(run.started)) }),
       );
@@ -1203,8 +1283,12 @@ function askConfirmation(then) {
   const form = $("#confirm-form");
   form.reset();
   $("#confirm-error").hidden = true;
+  champErreur(form.password);
   ouvrirFenetre($("#confirm"), form.password);
 }
+// Entrée valide (le clavier du téléphone le dit) ; nos erreurs sous le champ.
+$("#confirm-form").noValidate = true;
+for (const name of ["password", "code"]) $("#confirm-form")[name].setAttribute("enterkeyhint", "go");
 
 $("#confirm-cancel").addEventListener("click", () => {
   afterConfirmation = null;
@@ -1215,28 +1299,38 @@ $("#confirm-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
   const button = form.querySelector("button[type=submit]");
-  button.disabled = true;
+  if (button.disabled) return;
+  if (!form.password.value) {
+    champErreur(form.password, "Écris ton mot de passe.");
+    return form.password.focus();
+  }
+  const restore = boutonEnCours(button, "Vérification…");
+  let status = 0;
   try {
     const code = form.code.value.trim();
-    const { status } = await api("POST", "/api/auth/confirm", {
+    ({ status } = await api("POST", "/api/auth/confirm", {
       password: form.password.value,
       ...(code && { code }),
-    });
-    form.password.value = "";
-    form.code.value = "";
-    if (status !== 200) {
-      const error = $("#confirm-error");
-      error.textContent = status === 429 ? "Trop de tentatives. Réessaie dans 15 minutes." : "Mot de passe ou code incorrect.";
-      error.hidden = false;
-      return;
-    }
-    $("#confirm").close();
-    const then = afterConfirmation;
-    afterConfirmation = null;
-    then?.();
+    }));
+  } catch {
+    status = 0;
   } finally {
-    button.disabled = false;
+    restore();
   }
+  if (status !== 200) {
+    // L'erreur sous le mot de passe ; le mot de passe est effacé (pas le code), à retaper.
+    if (status !== 0) form.password.value = "";
+    champErreur(form.password, status === 429 ? "Trop de tentatives. Réessaie dans 15 minutes."
+      : status === 0 ? "Le serveur ne répond pas : réessaie." : "Mot de passe ou code incorrect.");
+    form.password.focus();
+    return;
+  }
+  form.password.value = "";
+  form.code.value = "";
+  $("#confirm").close();
+  const then = afterConfirmation;
+  afterConfirmation = null;
+  then?.();
 });
 
 /** Suggestions d'appareils pour les champs « Appareil(s) ». */

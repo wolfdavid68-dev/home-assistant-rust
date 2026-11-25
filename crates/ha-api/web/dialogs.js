@@ -25,7 +25,7 @@ const ACTIVE_STATES = new Set(["on", "home", "open", "above_horizon", "playing",
 function historyButton(state) {
   const button = el(
     "button",
-    { class: "history-button [:where(&)]:[all:unset] absolute [:not(:where(.o019102))&]:[top:10px] [:not(:where(.o019103))&]:[right:10px] w-[32px] h-[32px] grid [place-items:center] rounded-puce text-muted cursor-pointer [:not(:where(.o019200))&_svg]:w-[17px] [:not(:where(.o019201))&_svg]:h-[17px] [&:hover]:bg-card-2 [&:hover]:text-text [&:focus-visible]:[outline:3px_solid_var(--accent)] [&:focus-visible]:[outline-offset:1px] [.tile.light.on_&]:text-glow-ink", type: "button", title: "Historique", "aria-label": `Historique de ${nameOf(state)}` },
+    { class: "history-button [:where(&)]:[all:unset] absolute top-1 right-1 size-11 grid [place-items:center] rounded-puce text-muted cursor-pointer [:not(:where(.o019200))&_svg]:w-[17px] [:not(:where(.o019201))&_svg]:h-[17px] [&:hover]:bg-card-2 [&:hover]:text-text [&:focus-visible]:[outline:3px_solid_var(--accent)] [&:focus-visible]:[outline-offset:1px] [.tile.light.on_&]:text-glow-ink", type: "button", title: "Historique", "aria-label": `Historique de ${nameOf(state)}` },
     svgIcon(ICONS.chart),
   );
   button.addEventListener("click", (event) => {
@@ -386,7 +386,7 @@ function whyParts(id) {
   if (answer !== undefined) {
     return [el("p", { class: "logbook-why [.journal-list_&]:[flex-basis:100%] [.journal-list_&]:mt-1 [.journal-list_&]:mx-0 [.journal-list_&]:mb-0 [.journal-list_&]:py-2 [.journal-list_&]:px-3 [.journal-list_&]:rounded-puce [.journal-list_&]:bg-line [.journal-list_&]:[text-wrap:pretty]", role: "status", text: answer ?? "Claude réfléchit…" })];
   }
-  const button = el("button", { class: "ghost small logbook-why-ask", type: "button", text: "Pourquoi ?" });
+  const button = el("button", { class: "ghost small logbook-why-ask min-h-11", type: "button", text: "Pourquoi ?" });
   button.addEventListener("click", () => askWhy(id));
   return [button];
 }
@@ -477,7 +477,7 @@ function noticeItem(state) {
   if (approval && Number.isSafeInteger(state.attributes.approval_id)) {
     meta.append(approvalButtons(state.attributes.approval_id));
   } else if (canControl(state)) {
-    const dismiss = el("button", { type: "button", class: "ghost small", text: repair ? "Ignorer" : "Retirer" });
+    const dismiss = el("button", { type: "button", class: "ghost small min-h-11", text: repair ? "Ignorer" : "Retirer" });
     dismiss.addEventListener("click", () => {
       dismiss.disabled = true;
       callService("persistent_notification", "dismiss", { entity_id: state.entity_id });
@@ -490,8 +490,8 @@ function noticeItem(state) {
 
 /** « Valider » / « Refuser » un ordre retenu par la garde. */
 function approvalButtons(id) {
-  const approve = el("button", { type: "button", class: "primary small", text: "Valider" });
-  const deny = el("button", { type: "button", class: "ghost small", text: "Refuser" });
+  const approve = el("button", { type: "button", class: "primary small min-h-11", text: "Valider" });
+  const deny = el("button", { type: "button", class: "ghost small min-h-11", text: "Refuser" });
   const answer = async (yes) => {
     approve.disabled = true;
     deny.disabled = true;
