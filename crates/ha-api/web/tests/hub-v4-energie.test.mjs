@@ -84,3 +84,15 @@ describe("hubV4EnergyLead", () => {
     assert.equal(hubV4EnergyLead(0, 0), "Aucun compteur d'énergie pour l'instant.");
   });
 });
+
+describe("hubV4EnergyTempo", () => {
+  const hubV4EnergyTempo = run("hubV4EnergyTempo");
+  test("bleu, blanc, rouge, ou pas encore annoncé", () => {
+    assert.deepEqual(plain(hubV4EnergyTempo({ state: "Bleu" })), { tone: "blue", text: "Bleu" });
+    assert.deepEqual(plain(hubV4EnergyTempo({ state: "Blanc" })), { tone: "white", text: "Blanc" });
+    assert.deepEqual(plain(hubV4EnergyTempo({ state: "Rouge" })), { tone: "red", text: "Rouge" });
+    assert.deepEqual(plain(hubV4EnergyTempo({ state: "unknown" })), { tone: "unknown", text: "À venir" });
+    assert.deepEqual(plain(hubV4EnergyTempo({ state: "unavailable" })), { tone: "unknown", text: "Indisponible" });
+    assert.deepEqual(plain(hubV4EnergyTempo(undefined)), { tone: "unknown", text: "—" });
+  });
+});

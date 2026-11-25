@@ -16,6 +16,9 @@ const hubV4Wind = run("hubV4Wind");
 const hubV4WeatherDays = run("hubV4WeatherDays");
 const hubV4TempoDay = run("hubV4TempoDay");
 const hubV4AgendaDays = run("hubV4AgendaDays");
+const hubV4Holiday = run("hubV4Holiday");
+const hubV4WeatherSub = run("hubV4WeatherSub");
+const hubV4SayData = run("hubV4SayData");
 const hubV4EventData = run("hubV4EventData");
 const hubV4Notices = run("hubV4Notices");
 const hubV4Presence = run("hubV4Presence");
@@ -110,6 +113,13 @@ describe("hubV4TempoDay", () => {
 describe("hubV4AgendaDays", () => {
   const now = new Date(2026, 10, 5, 9, 0);
   const at = (d, h, m = 0) => new Date(2026, 10, d, h, m);
+  test("un jour férié fait apparaître son jour", () => {
+    const days = hubV4AgendaDays([], now, 7, [{ date: new Date(2026, 10, 11), name: "Armistice" }]);
+    assert.deepEqual(plain(days.map((d) => [d.date.getDate(), d.holidays])), [[5, []], [11, ["Armistice"]]]);
+  });
+  test("un jour férié hors de la fenêtre : rien", () => {
+    assert.equal(hubV4AgendaDays([], now, 3, [{ date: new Date(2026, 10, 11), name: "Armistice" }]).length, 1);
+  });
   test("aujourd'hui est toujours là, les jours vides non", () => {
     const events = [{ summary: "Dentiste", startDate: at(7, 14), endDate: at(7, 15), allDay: false }];
     const days = hubV4AgendaDays(events, now);
@@ -223,5 +233,43 @@ describe("hubV4SecurityLog", () => {
     const log = hubV4SecurityLog(entries, ["binary_sensor.porte_entree"]);
     assert.deepEqual(log.map((e) => e.message), ["fermée", "ouverte"]);
     assert.deepEqual(plain(hubV4SecurityLog(undefined, [])), []);
+  });
+});
+
+describe("hubV4Holiday", () => {
+  test("la date du capteur et son nom", () => {
+    const day = hubV4Holiday({ state: "2026-11-11", attributes: { nom: "Armistice" } });
+    assert.equal(day.name, "Armistice");
+    assert.equal(day.date.getTime(), new Date(2026, 10, 11).getTime());
+  });
+  test("sans nom, ou sans date", () => {
+    assert.equal(hubV4Holiday({ state: "2026-12-25", attributes: {} }).name, "Jour férié");
+    assert.equal(hubV4Holiday({ state: "unknown", attributes: {} }), null);
+    assert.equal(hubV4Holiday(undefined), null);
+  });
+});
+
+describe("hubV4WeatherSub", () => {
+  test("le soir, puis le jour", () => {
+    assert.equal(hubV4WeatherSub(21), "Ce soir et les jours qui viennent");
+    assert.equal(hubV4WeatherSub(2), "Ce soir et les jours qui viennent");
+    assert.equal(hubV4WeatherSub(9), "Aujourd'hui et les jours qui viennent");
+  });
+});
+
+describe("hubV4SayData", () => {
+  const announcer = { tts: { entity_id: "tts.sonos" }, speakers: ["media_player.salon", "media_player.cuisine"] };
+  test("partout : le message, les enceintes, le volume", () => {
+    assert.deepEqual(plain(hubV4SayData(announcer, "all", "  À table !  ", 50)), {
+      entity_id: "tts.sonos", media_player_entity_id: ["media_player.salon", "media_player.cuisine"], volume: 50, message: "À table !",
+    });
+  });
+  test("le carillon seul n'a pas besoin de message", () => {
+    assert.deepEqual(plain(hubV4SayData(announcer, "chime", "ignoré", 30)), {
+      entity_id: "tts.sonos", media_player_entity_id: ["media_player.salon", "media_player.cuisine"], volume: 30,
+    });
+  });
+  test("partout sans message : rien", () => {
+    assert.equal(hubV4SayData(announcer, "all", "   ", 70), null);
   });
 });

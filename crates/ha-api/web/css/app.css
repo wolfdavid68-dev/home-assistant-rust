@@ -10,7 +10,7 @@
  * ses règles de legacy.css, jusqu'à le vider.
  *
  * Pas de « preflight » : legacy.css a sa propre remise à zéro. Les couleurs
- * viennent des variables des thèmes (clair, sombre, plan, maquette) : une
+ * viennent des variables des thèmes (clair, sombre) : une
  * classe `bg-card` suit donc le thème sans variante `dark:`. */
 @layer theme, legacy, utilities;
 @import "tailwindcss/theme.css" layer(theme);
@@ -21,8 +21,7 @@
 @source "../*.js";
 
 /* Les thèmes choisis dans les Réglages (attribut data-theme de <html>). */
-@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, [data-theme="maquette"], [data-theme="maquette"] *));
-@custom-variant plan (&:where([data-theme|="plan"], [data-theme|="plan"] *));
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 @theme inline {
   --color-bg: var(--bg);
@@ -71,9 +70,51 @@
   --font-sans: var(--font);
   --font-titre: var(--font-display);
   --font-code: var(--font-mono);
+  /* Le récit de l'accueil v4 (titres, « Tout est calme. ») : Instrument Serif, OFL. */
+  --font-recit: "Instrument Serif", Georgia, "Times New Roman", serif;
+  /* Les grands chiffres fins de la v4 (heure, degrés) : la Geist variable, graisse libre. */
+  --font-chiffres: "Geist v4", var(--font);
+  /* rounded-carte : les cartes (22 px, --radius de legacy.css) ; voir l'échelle plus bas. */
   --radius-carte: var(--radius);
   --shadow-carte: var(--shadow);
   --shadow-flottant: var(--shadow-float);
+}
+
+/* L'échelle du texte : les seules tailles de l'interface (pas de text-[…]).
+   Sans hauteur de ligne propre : elle reste celle du parent, comme avant. */
+@theme {
+  --text-*: initial;
+  --text-micro: 0.6875rem;   /* 11 px : étiquettes minuscules (jours, unités) */
+  --text-legende: 0.75rem;   /* 12 px : légendes, « il y a… » */
+  --text-petit: 0.8125rem;   /* 13 px : texte secondaire des tuiles */
+  --text-corps: 0.875rem;    /* 14 px : texte des fenêtres */
+  --text-courant: 0.9375rem; /* 15 px : noms, boutons */
+  --text-moyen: 1.0625rem;   /* 17 px : titres de carte */
+  --text-grand: 1.25rem;     /* 20 px */
+  --text-titre: 1.375rem;    /* 22 px : titres de fenêtre */
+  --text-titre-l: 1.75rem;   /* 28 px */
+  --text-affiche: 2.125rem;  /* 34 px : grands chiffres */
+  --text-affiche-l: 2.75rem; /* 44 px */
+  --text-geant: 3.25rem;     /* 52 px : l'heure, la température du jour */
+}
+
+/* L'échelle des rayons : les seuls arrondis de l'interface (pas de rounded-[…] ni de
+   [border-radius:…]). Une marche par rôle ; un champ et le bouton à côté ont le même.
+   rounded-trait  4 px  barres, jauges, pastilles minuscules, étiquettes d'agenda
+   rounded-puce  10 px  puces, petites icônes carrées, petits boutons, aperçus
+   rounded-champ 14 px  champs, boutons, lignes de liste, tuiles de pièce (= legacy.css)
+   rounded-panneau 18 px  panneaux internes, blocs d'éditeur, menus flottants
+   rounded-carte 22 px  cartes (= var(--radius))
+   rounded-fenetre 26 px  dialogues, fenêtres, carte de connexion
+   rounded-full : ronds et pilules (ex-50 % et 999px) ; rounded-none.
+   Valeurs regroupées à ±2 px (script agents/design/scripts/premium/rayons.py). L'accueil
+   v3/v4 (hub-v3.css, hub-v*.js) garde ses rayons de maquette : jeton seulement à valeur égale. */
+@theme {
+  --radius-trait: 0.25rem;
+  --radius-puce: 0.625rem;
+  --radius-champ: 0.875rem;
+  --radius-panneau: 1.125rem;
+  --radius-fenetre: 1.625rem;
 }
 
 /* L'accueil v4 (hub-v4.js) : les incrustations entrent, la pièce choisie respire,

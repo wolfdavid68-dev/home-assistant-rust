@@ -55,10 +55,10 @@ function weatherTile(state) {
     { id: tileId(state.entity_id), class: `${tileClass(state, "weather")} wide` },
     tileHead(state, weatherIcon(state.state), `${label}${feels}`),
     value,
-    el("div", { class: "sub text-[0.82rem] text-muted [.tile.light.on_&]:[color:inherit] [.tile.light.on_&]:[opacity:0.85] [&.is-stale]:[color:color-mix(in_srgb,_var(--tint-alertes)_70%,_var(--text))] [&.is-stale::before]:[content:''] [&.is-stale::before]:inline-block [&.is-stale::before]:w-[0.45em] [&.is-stale::before]:h-[0.45em] [&.is-stale::before]:mr-[0.35em] [&.is-stale::before]:[border-radius:50%] [&.is-stale::before]:[background:var(--tint-alertes)] [&.is-stale::before]:[vertical-align:0.1em]", text: details }),
-    el("ol", { class: "forecast list-none m-0 [padding:0.7rem_0_0] [border-top:1px_solid_var(--line)] grid [grid-template-columns:repeat(5,_minmax(0,_1fr))] gap-1 text-center text-[0.85rem] [:not(:where(.o019900))&_li]:grid [:not(:where(.o019901))&_li]:[justify-items:center] [:not(:where(.o019902))&_li]:gap-[0.15rem] [:not(:where(.o020000))&_svg]:w-[22px] [:not(:where(.o020001))&_svg]:h-[22px] [:not(:where(.o020002))&_svg]:text-muted", "aria-label": "Prévisions" }, ...days),
+    el("div", { class: "sub text-petit text-muted [.tile.light.on_&]:[color:inherit] [.tile.light.on_&]:[opacity:0.85] [&.is-stale]:[color:color-mix(in_srgb,_var(--tint-alertes)_55%,_var(--text))] [&.is-stale::before]:[content:''] [&.is-stale::before]:inline-block [&.is-stale::before]:w-[0.45em] [&.is-stale::before]:h-[0.45em] [&.is-stale::before]:mr-[0.35em] [&.is-stale::before]:rounded-full [&.is-stale::before]:[background:var(--tint-alertes)] [&.is-stale::before]:[vertical-align:0.1em]", text: details }),
+    el("ol", { class: "forecast list-none m-0 pt-3 px-0 pb-0 [border-top:1px_solid_var(--line)] grid [grid-template-columns:repeat(5,_minmax(0,_1fr))] gap-1 text-center text-corps [:not(:where(.o019900))&_li]:grid [:not(:where(.o019901))&_li]:[justify-items:center] [:not(:where(.o019902))&_li]:gap-0.5 [:not(:where(.o020000))&_svg]:w-[22px] [:not(:where(.o020001))&_svg]:h-[22px] [:not(:where(.o020002))&_svg]:text-muted", "aria-label": "Prévisions" }, ...days),
     // Licence CC BY 4.0 d'Open-Meteo : la source doit être citée.
-    el("small", { class: "attribution text-muted text-[0.7rem]", text: typeof a.attribution === "string" ? a.attribution : "" }),
+    el("small", { class: "attribution text-muted text-micro", text: typeof a.attribution === "string" ? a.attribution : "" }),
   );
 }
 
@@ -73,7 +73,7 @@ const vigilanceRank = (level) => ["Vert", "Jaune", "Orange", "Rouge"].indexOf(le
 function vigilanceBadge(level) {
   const [color, adjective] = lookup(VIGILANCE_LEVELS, level) ?? ["unknown", ""];
   // La couleur ne suffit pas : le niveau est toujours écrit.
-  return el("span", { class: `vigilance-badge inline-block [padding:0.2rem_0.7rem] [border-radius:999px] [:not(:where(.o046403))&]:text-[0.95rem] [:not(:where(.o046404))&]:font-semibold [color:var(--vig-ink)] bg-card-2 [:not(:where(.o046500))&.level-green]:[background:var(--vig-green)] [:not(:where(.o046600))&.level-yellow]:[background:var(--vig-yellow)] [:not(:where(.o046700))&.level-orange]:[background:var(--vig-orange)] [:not(:where(.o046800))&.level-red]:[background:var(--vig-red)] [&.level-red]:[color:var(--vig-red-ink)] [.weather-pill_&]:text-[0.78rem] [.weather-pill_&]:[padding:0.1rem_0.55rem] level-${color}`, text: `Vigilance ${adjective}` });
+  return el("span", { class: `vigilance-badge inline-block py-1 px-3 rounded-full [:not(:where(.o046403))&]:text-courant [:not(:where(.o046404))&]:font-semibold [color:var(--vig-ink)] bg-card-2 [:not(:where(.o046500))&.level-green]:[background:var(--vig-green)] [:not(:where(.o046600))&.level-yellow]:[background:var(--vig-yellow)] [:not(:where(.o046700))&.level-orange]:[background:var(--vig-orange)] [:not(:where(.o046800))&.level-red]:[background:var(--vig-red)] [&.level-red]:[color:var(--vig-red-ink)] [.weather-pill_&]:text-legende [.weather-pill_&]:py-0.5 [.weather-pill_&]:px-2 level-${color}`, text: `Vigilance ${adjective}` });
 }
 
 function vigilancePhenomena(state) {
@@ -142,10 +142,10 @@ function vigilanceTile(state) {
     tileHead(state, ICONS.shield, department),
     el("div", { class: "value small-value" }, known ? vigilanceBadge(state.state) : statusText(state)),
   ];
-  if (known && items.length === 0) parts.push(el("p", { class: "sub text-[0.82rem] text-muted [.tile.light.on_&]:[color:inherit] [.tile.light.on_&]:[opacity:0.85] [&.is-stale]:[color:color-mix(in_srgb,_var(--tint-alertes)_70%,_var(--text))] [&.is-stale::before]:[content:''] [&.is-stale::before]:inline-block [&.is-stale::before]:w-[0.45em] [&.is-stale::before]:h-[0.45em] [&.is-stale::before]:mr-[0.35em] [&.is-stale::before]:[border-radius:50%] [&.is-stale::before]:[background:var(--tint-alertes)] [&.is-stale::before]:[vertical-align:0.1em]", text: "Aucun phénomène dangereux prévu aujourd'hui." }));
-  if (items.length > 0) parts.push(el("ul", { class: "vigilance-list list-none [margin:0.6rem_0_0] p-0 grid gap-[0.35rem] [:not(:where(.o047400))&_li]:pl-[0.9rem] [&_li]:relative [:not(:where(.o047402))&_li]:text-text-2 [&_li::before]:[content:''] [&_li::before]:absolute [:not(:where(.o047502))&_li::before]:[left:0] [:not(:where(.o047503))&_li::before]:[top:0.45em] [&_li::before]:w-2 [&_li::before]:h-2 [&_li::before]:[border-radius:50%] [&_li::before]:bg-muted [:not(:where(.o047600))&_li.level-yellow::before]:[background:var(--vig-yellow)] [&_li.level-yellow::before]:[outline:1px_solid_color-mix(in_srgb,_var(--vig-ink)_25%,_transparent)] [:not(:where(.o047700))&_li.level-orange::before]:[background:var(--vig-orange)] [:not(:where(.o047800))&_li.level-red::before]:[background:var(--vig-red)]", "aria-label": "Aujourd'hui" }, ...items));
+  if (known && items.length === 0) parts.push(el("p", { class: "sub text-petit text-muted [.tile.light.on_&]:[color:inherit] [.tile.light.on_&]:[opacity:0.85] [&.is-stale]:[color:color-mix(in_srgb,_var(--tint-alertes)_55%,_var(--text))] [&.is-stale::before]:[content:''] [&.is-stale::before]:inline-block [&.is-stale::before]:w-[0.45em] [&.is-stale::before]:h-[0.45em] [&.is-stale::before]:mr-[0.35em] [&.is-stale::before]:rounded-full [&.is-stale::before]:[background:var(--tint-alertes)] [&.is-stale::before]:[vertical-align:0.1em]", text: "Aucun phénomène dangereux prévu aujourd'hui." }));
+  if (items.length > 0) parts.push(el("ul", { class: "vigilance-list list-none mt-2.5 mx-0 mb-0 p-0 grid gap-1.5 [:not(:where(.o047400))&_li]:pl-3.5 [&_li]:relative [:not(:where(.o047402))&_li]:text-text-2 [&_li::before]:[content:''] [&_li::before]:absolute [:not(:where(.o047502))&_li::before]:[left:0] [:not(:where(.o047503))&_li::before]:[top:0.45em] [&_li::before]:w-2 [&_li::before]:h-2 [&_li::before]:rounded-full [&_li::before]:bg-muted [:not(:where(.o047600))&_li.level-yellow::before]:[background:var(--vig-yellow)] [&_li.level-yellow::before]:[outline:1px_solid_color-mix(in_srgb,_var(--vig-ink)_25%,_transparent)] [:not(:where(.o047700))&_li.level-orange::before]:[background:var(--vig-orange)] [:not(:where(.o047800))&_li.level-red::before]:[background:var(--vig-red)]", "aria-label": "Aujourd'hui" }, ...items));
   if (known && typeof a.niveau_actuel === "string" && a.niveau_actuel !== state.state) {
-    parts.push(el("p", { class: "sub text-[0.82rem] text-muted [.tile.light.on_&]:[color:inherit] [.tile.light.on_&]:[opacity:0.85] [&.is-stale]:[color:color-mix(in_srgb,_var(--tint-alertes)_70%,_var(--text))] [&.is-stale::before]:[content:''] [&.is-stale::before]:inline-block [&.is-stale::before]:w-[0.45em] [&.is-stale::before]:h-[0.45em] [&.is-stale::before]:mr-[0.35em] [&.is-stale::before]:[border-radius:50%] [&.is-stale::before]:[background:var(--tint-alertes)] [&.is-stale::before]:[vertical-align:0.1em]", text: `En ce moment : ${lookup(VIGILANCE_LEVELS, a.niveau_actuel)?.[1] ?? a.niveau_actuel}` }));
+    parts.push(el("p", { class: "sub text-petit text-muted [.tile.light.on_&]:[color:inherit] [.tile.light.on_&]:[opacity:0.85] [&.is-stale]:[color:color-mix(in_srgb,_var(--tint-alertes)_55%,_var(--text))] [&.is-stale::before]:[content:''] [&.is-stale::before]:inline-block [&.is-stale::before]:w-[0.45em] [&.is-stale::before]:h-[0.45em] [&.is-stale::before]:mr-[0.35em] [&.is-stale::before]:rounded-full [&.is-stale::before]:[background:var(--tint-alertes)] [&.is-stale::before]:[vertical-align:0.1em]", text: `En ce moment : ${lookup(VIGILANCE_LEVELS, a.niveau_actuel)?.[1] ?? a.niveau_actuel}` }));
   }
   const tomorrow = entities.get(VIGILANCE_TOMORROW);
   if (tomorrow && known) {
@@ -156,9 +156,9 @@ function vigilanceTile(state) {
     } else {
       text = "Demain : publiée vers 6 h";
     }
-    parts.push(el("p", { class: "vigilance-tomorrow [margin:0.6rem_0_0] pt-2 [border-top:1px_solid_var(--line)] text-text-2", text }));
+    parts.push(el("p", { class: "vigilance-tomorrow mt-2.5 mx-0 mb-0 pt-2 [border-top:1px_solid_var(--line)] text-text-2", text }));
   }
-  parts.push(el("small", { class: "attribution text-muted text-[0.7rem]", text: typeof a.attribution === "string" ? a.attribution : "" }));
+  parts.push(el("small", { class: "attribution text-muted text-micro", text: typeof a.attribution === "string" ? a.attribution : "" }));
   const level = known ? lookup(VIGILANCE_LEVELS, state.state)[0] : "unknown";
   return el("div", { id: tileId(state.entity_id), class: `${tileClass(state, "vigilance")} wide level-${level}` }, ...parts);
 }
@@ -172,7 +172,7 @@ const TEMPO_COLORS = { Bleu: ["blue", "bleu"], Blanc: ["white", "blanc"], Rouge:
 function tempoBadge(color) {
   const [css, adjective] = lookup(TEMPO_COLORS, color) ?? ["unknown", ""];
   // Comme pour la vigilance, la couleur est toujours écrite.
-  return el("span", { class: `tempo-badge inline-block [padding:0.2rem_0.7rem] [border-radius:999px] [:not(:where(.o047903))&]:text-[0.95rem] [:not(:where(.o047904))&]:font-semibold [color:var(--vig-ink)] bg-card-2 [:not(:where(.o048000))&.tempo-blue]:[background:var(--tempo-blue)] [:not(:where(.o048001))&.tempo-blue]:[color:var(--tempo-blue-ink)] [:not(:where(.o048100))&.tempo-white]:[background:var(--tempo-white)] [:not(:where(.o048101))&.tempo-white]:[color:var(--vig-ink)] [&.tempo-white]:[box-shadow:inset_0_0_0_1px_color-mix(in_srgb,_var(--vig-ink)_30%,_transparent)] [:not(:where(.o048200))&.tempo-red]:[background:var(--vig-red)] [:not(:where(.o048201))&.tempo-red]:[color:var(--vig-red-ink)] [:not(:where(.o048300)).energy-now_&]:text-[0.78rem] [:not(:where(.o048301)).energy-now_&]:[padding:0.1rem_0.55rem] [:not(:where(.o048300)).vigilance-tomorrow_&]:text-[0.78rem] [:not(:where(.o048301)).vigilance-tomorrow_&]:[padding:0.1rem_0.55rem] tempo-${css}`, text: `Jour ${adjective}` });
+  return el("span", { class: `tempo-badge inline-block py-1 px-3 rounded-full [:not(:where(.o047903))&]:text-courant [:not(:where(.o047904))&]:font-semibold [color:var(--vig-ink)] bg-card-2 [:not(:where(.o048000))&.tempo-blue]:[background:var(--tempo-blue)] [:not(:where(.o048001))&.tempo-blue]:[color:var(--tempo-blue-ink)] [:not(:where(.o048100))&.tempo-white]:[background:var(--tempo-white)] [:not(:where(.o048101))&.tempo-white]:[color:var(--vig-ink)] [&.tempo-white]:[box-shadow:inset_0_0_0_1px_color-mix(in_srgb,_var(--vig-ink)_30%,_transparent)] [:not(:where(.o048200))&.tempo-red]:[background:var(--vig-red)] [:not(:where(.o048201))&.tempo-red]:[color:var(--vig-red-ink)] [:not(:where(.o048300)).energy-now_&]:text-legende [:not(:where(.o048301)).energy-now_&]:py-0.5 [:not(:where(.o048301)).energy-now_&]:px-2 [:not(:where(.o048300)).vigilance-tomorrow_&]:text-legende [:not(:where(.o048301)).vigilance-tomorrow_&]:py-0.5 [:not(:where(.o048301)).vigilance-tomorrow_&]:px-2 tempo-${css}`, text: `Jour ${adjective}` });
 }
 
 /** « Demain : jour rouge », ou pas encore annoncé. */
@@ -192,9 +192,9 @@ function tempoTile(state) {
   if (tomorrow) {
     // Demain annoncé : sa couleur aussi, pour la voir d'un coup d'œil.
     const line = lookup(TEMPO_COLORS, tomorrow.state) ? ["Demain : ", tempoBadge(tomorrow.state)] : [tempoTomorrowText(tomorrow)];
-    parts.push(el("p", { class: "vigilance-tomorrow [margin:0.6rem_0_0] pt-2 [border-top:1px_solid_var(--line)] text-text-2" }, ...line));
+    parts.push(el("p", { class: "vigilance-tomorrow mt-2.5 mx-0 mb-0 pt-2 [border-top:1px_solid_var(--line)] text-text-2" }, ...line));
   }
   // Le jour Tempo commence à 6 h : à 3 h du matin, c'est encore celui de la veille.
-  parts.push(el("p", { class: "sub text-[0.82rem] text-muted [.tile.light.on_&]:[color:inherit] [.tile.light.on_&]:[opacity:0.85] [&.is-stale]:[color:color-mix(in_srgb,_var(--tint-alertes)_70%,_var(--text))] [&.is-stale::before]:[content:''] [&.is-stale::before]:inline-block [&.is-stale::before]:w-[0.45em] [&.is-stale::before]:h-[0.45em] [&.is-stale::before]:mr-[0.35em] [&.is-stale::before]:[border-radius:50%] [&.is-stale::before]:[background:var(--tint-alertes)] [&.is-stale::before]:[vertical-align:0.1em]", text: "Un jour Tempo va de 6 h à 6 h." }));
+  parts.push(el("p", { class: "sub text-petit text-muted [.tile.light.on_&]:[color:inherit] [.tile.light.on_&]:[opacity:0.85] [&.is-stale]:[color:color-mix(in_srgb,_var(--tint-alertes)_55%,_var(--text))] [&.is-stale::before]:[content:''] [&.is-stale::before]:inline-block [&.is-stale::before]:w-[0.45em] [&.is-stale::before]:h-[0.45em] [&.is-stale::before]:mr-[0.35em] [&.is-stale::before]:rounded-full [&.is-stale::before]:[background:var(--tint-alertes)] [&.is-stale::before]:[vertical-align:0.1em]", text: "Un jour Tempo va de 6 h à 6 h." }));
   return el("div", { id: tileId(state.entity_id), class: `${tileClass(state, "tempo")} tempo-${color?.[0] ?? "unknown"}` }, ...parts);
 }

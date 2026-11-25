@@ -10,16 +10,16 @@
 function tileHead(state, icon, subtitle, extra) {
   const head = el(
     "div",
-    { class: "tile-head flex items-center gap-3 pr-[1.9rem] min-w-0 [&>div]:min-w-0 [&>div]:flex-1 [:not(:where(.o010000)).tile-toggle_&]:pr-0 [:not(:where(.o010500)).has-knob_&]:pr-[1.9rem]" },
+    { class: "tile-head flex items-center gap-3 pr-8 min-w-0 [&>div]:min-w-0 [&>div]:flex-1 [:not(:where(.o010000)).tile-toggle_&]:pr-0 [:not(:where(.o010500)).has-knob_&]:pr-8" },
     el("span", { class: "icon" }, svgIcon(icon)),
-    el("div", {}, el("div", { class: "name", text: nameOf(state), title: state.entity_id }), el("div", { class: "sub text-[0.82rem] text-muted [.tile.light.on_&]:[color:inherit] [.tile.light.on_&]:[opacity:0.85] [&.is-stale]:[color:color-mix(in_srgb,_var(--tint-alertes)_70%,_var(--text))] [&.is-stale::before]:[content:''] [&.is-stale::before]:inline-block [&.is-stale::before]:w-[0.45em] [&.is-stale::before]:h-[0.45em] [&.is-stale::before]:mr-[0.35em] [&.is-stale::before]:[border-radius:50%] [&.is-stale::before]:[background:var(--tint-alertes)] [&.is-stale::before]:[vertical-align:0.1em]", text: subtitle })),
+    el("div", {}, el("div", { class: "name", text: nameOf(state), title: state.entity_id }), el("div", { class: "sub text-petit text-muted [.tile.light.on_&]:[color:inherit] [.tile.light.on_&]:[opacity:0.85] [&.is-stale]:[color:color-mix(in_srgb,_var(--tint-alertes)_55%,_var(--text))] [&.is-stale::before]:[content:''] [&.is-stale::before]:inline-block [&.is-stale::before]:w-[0.45em] [&.is-stale::before]:h-[0.45em] [&.is-stale::before]:mr-[0.35em] [&.is-stale::before]:rounded-full [&.is-stale::before]:[background:var(--tint-alertes)] [&.is-stale::before]:[vertical-align:0.1em]", text: subtitle })),
   );
   if (extra) head.append(extra);
   return head;
 }
 
 /** L'interrupteur dessiné à droite d'une tuile qu'on allume d'un toucher. */
-const knob = () => el("span", { class: "knob flex-none w-[50px] h-[30px] [border-radius:15px] bg-line p-[3px] flex [transition:background_0.2s] [&::after]:[content:''] [&::after]:w-[24px] [&::after]:h-[24px] [&::after]:[border-radius:50%] [&::after]:[background:#ffffff] [&::after]:[box-shadow:0_1px_3px_rgb(0_0_0_/_0.2)] [&::after]:[transition:transform_0.2s] [.tile.on_&]:bg-accent [.tile.on_&::after]:[transform:translateX(20px)] [.tile.readonly_&]:hidden [[data-theme|=plan]_&]:[border-radius:4px] [[data-theme|=plan]_&]:bg-card-2 [[data-theme|=plan]_&]:[box-shadow:inset_0_0_0_1px_var(--ink-line)] [[data-theme|=plan]_&::after]:[border-radius:2px] [[data-theme|=plan]_&::after]:[box-shadow:0_0_0_1px_var(--ink-line)] [[data-theme|=plan]_.tile.on_&]:bg-accent [[data-theme|=plan]_.tile.on_&]:[box-shadow:none]", "aria-hidden": "true" });
+const knob = () => el("span", { class: "knob flex-none w-[50px] h-[30px] rounded-champ bg-line p-1 flex [transition:background_0.2s] [&::after]:[content:''] [&::after]:w-[24px] [&::after]:h-[24px] [&::after]:rounded-full [&::after]:[background:#ffffff] [&::after]:[box-shadow:0_1px_3px_rgb(0_0_0_/_0.2)] [&::after]:[transition:transform_0.2s] [.tile.on_&]:bg-accent [.tile.light.on_&]:bg-glow [.tile.on_&::after]:[transform:translateX(20px)] [.tile.readonly_&]:hidden", "aria-hidden": "true" });
 
 /** Un curseur se remplit jusqu'à sa valeur (et suit le doigt). */
 function fillSlider(slider) {
@@ -31,6 +31,21 @@ function fillSlider(slider) {
   };
   update();
   slider.addEventListener("input", update);
+}
+
+/** Le curseur d'une tuile : la barre reste de 28 px (18 px sur téléphone),
+ *  mais on le prend sur 44 px de haut, et son pouce est plus grand. Les
+ *  marges négatives gardent la tuile de la même hauteur. */
+const TILE_RANGE = "h-11 -my-2 bg-none bg-transparent"
+  + " [&::-webkit-slider-runnable-track]:h-7 [&::-webkit-slider-runnable-track]:rounded-champ [&::-webkit-slider-runnable-track]:[background:linear-gradient(90deg,var(--accent)_0_var(--fill,50%),var(--card-2)_var(--fill,50%)_100%)]"
+  + " [&::-moz-range-track]:h-7 [&::-moz-range-track]:rounded-champ [&::-moz-range-track]:[background:linear-gradient(90deg,var(--accent)_0_var(--fill,50%),var(--card-2)_var(--fill,50%)_100%)]"
+  + " [.tile.light.on_&::-webkit-slider-runnable-track]:[background:linear-gradient(90deg,var(--glow-bar)_0_var(--fill,50%),color-mix(in_srgb,var(--glow-line)_70%,var(--card))_var(--fill,50%)_100%)]"
+  + " [.tile.light.on_&::-moz-range-track]:[background:linear-gradient(90deg,var(--glow-bar)_0_var(--fill,50%),color-mix(in_srgb,var(--glow-line)_70%,var(--card))_var(--fill,50%)_100%)]"
+  + " [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-9 [&::-webkit-slider-thumb]:-mt-1 [&::-moz-range-thumb]:w-2 [&::-moz-range-thumb]:h-9"
+  + " focus-visible:outline-3 focus-visible:outline-accent focus-visible:outline-offset-1";
+function tileSlider(slider) {
+  slider.classList.add(...TILE_RANGE.split(" "));
+  fillSlider(slider);
 }
 
 function tileClass(state, kind) {

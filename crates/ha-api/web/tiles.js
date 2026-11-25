@@ -201,18 +201,19 @@ function renderPlan() {
     const room = el(
       "button",
       { type: "button", class: `room ${state} flex flex-row items-center justify-start bg-none shadow-none gap-2 min-w-0 min-h-[60px] p-2 pr-2.5 `
-          + `rounded-[14px] border-0 text-left cursor-pointer transition-transform hover:-translate-y-px `
+          + `rounded-champ border-0 text-left cursor-pointer transition-transform hover:-translate-y-px `
           + `focus-visible:outline-3 focus-visible:outline-accent focus-visible:outline-offset-2 ${tone}`,
         "aria-label": [area.name, detail, temp ? `${temp.slice(0, -1)} degrés` : ""].filter(Boolean).join(", ") },
-      el("span", { class: `grid place-items-center size-9 shrink-0 rounded-[10px] [&_svg]:size-[18px] ${iconTone}` }, svgIcon(roomIcon(area.name))),
+      el("span", { class: `grid place-items-center size-9 shrink-0 rounded-puce [&_svg]:size-[18px] ${iconTone}` }, svgIcon(roomIcon(area.name))),
       el("span", { class: "grid min-w-0 flex-1 gap-px leading-tight" },
-        el("span", { class: "font-semibold text-[0.95rem] line-clamp-2 [overflow-wrap:anywhere]", text: area.name }),
-        el("span", { class: `flex items-baseline gap-1.5 min-w-0 text-[0.8rem] ${state ? "" : "text-muted"}` },
-          temp ? el("b", { class: "shrink-0 font-semibold text-[0.9rem] tabular-nums", text: temp }) : "",
+        el("span", { class: "font-semibold text-courant line-clamp-2 [overflow-wrap:anywhere]", text: area.name, title: area.name }),
+        el("span", { class: `flex items-baseline gap-1.5 min-w-0 text-petit ${state ? "" : "text-muted"}` },
+          temp ? el("b", { class: "shrink-0 font-semibold text-corps tabular-nums", text: temp }) : "",
           el("span", { class: "truncate opacity-90", text: detail || `${info.count} appareil${info.count > 1 ? "s" : ""}` }))),
     );
     // Mise en page « tableau » : la pièce s'ouvre en fenêtre, par-dessus la
     // maquette (house.js) ; sinon, seule, à la place des sections.
+    room.dataset.room = area.name;
     room.addEventListener("click", () => (isBoard() ? openRoom(area.name) : showRoom(area.name)));
     return room;
   });
@@ -224,7 +225,7 @@ function renderPlan() {
     legend.append(el("span", {}, el("b", { text: `${number.format(mean)}°` }), " en moyenne"));
   }
   swap(card,
-    el("div", { class: "plan-head flex justify-between items-baseline gap-2 [:not(:where(.o005500))&_h2]:[font-family:var(--font-display)] [:not(:where(.o005501))&_h2]:text-[1.1rem] [:not(:where(.o005502))&_h2]:[text-transform:none] [:not(:where(.o005503))&_h2]:[letter-spacing:-0.01em] [:not(:where(.o005504))&_h2]:text-text [:not(:where(.o063600))[data-theme|=plan]_&_h2]:[font-family:var(--font-mono)] [:not(:where(.o063601))[data-theme|=plan]_&_h2]:text-[0.8rem] [:not(:where(.o063602))[data-theme|=plan]_&_h2]:font-medium [:not(:where(.o063603))[data-theme|=plan]_&_h2]:uppercase [:not(:where(.o063604))[data-theme|=plan]_&_h2]:[letter-spacing:0.14em] [:not(:where(.o063605))[data-theme|=plan]_&_h2]:[color:var(--ink)] [[data-layout=board]_&]:hidden" }, el("h2", { text: "La maison" })),
+    el("div", { class: "plan-head flex justify-between items-baseline gap-2 [:not(:where(.o005500))&_h2]:[font-family:var(--font-display)] [:not(:where(.o005501))&_h2]:text-moyen [:not(:where(.o005502))&_h2]:[text-transform:none] [:not(:where(.o005503))&_h2]:[letter-spacing:-0.01em] [:not(:where(.o005504))&_h2]:text-text" }, el("h2", { text: "La maison" })),
     el("div", { class: "plan grid grid-cols-[repeat(auto-fill,minmax(min(100%,150px),1fr))] auto-rows-auto gap-2" }, ...rooms),
     legend,
   );
@@ -242,6 +243,38 @@ function roomIcon(name) {
   return rules.find(([pattern]) => pattern.test(plain))?.[1] ?? ICONS.home;
 }
 
+// Les scènes qu'on vient de toucher : leur bouton reste « en cours » (il
+// pulse, bordure de l'accent) jusqu'à 5 s, même redessiné entre-temps.
+const scenesBusy = new Map();
+const SCENE_BUSY_MS = 5000;
+
+function sceneDone(entityId) {
+  clearTimeout(scenesBusy.get(entityId));
+  scenesBusy.delete(entityId);
+  const button = document.getElementById(`scene-${entityId}`);
+  button?.classList.remove("pending");
+  button?.removeAttribute("aria-busy");
+}
+
+/** Les appareils qu'une scène vise (attribut `targets`), s'ils sont connus. */
+function sceneTargets(state) {
+  const targets = state.attributes.targets;
+  return targets && typeof targets === "object" && !Array.isArray(targets) ? new Set(Object.keys(targets)) : null;
+}
+
+/** Sur téléphone, la ligne des scènes défile : un fondu sur le bord qui en
+ *  cache encore (droite, gauche ou les deux) le montre. */
+function scenesEdges(nav = $("#scenes")) {
+  const more = nav.scrollWidth - nav.clientWidth;
+  const left = nav.scrollLeft > 4;
+  const right = more - nav.scrollLeft > 4;
+  const edge = left && right ? "deux" : left ? "gauche" : right ? "droite" : "";
+  if (edge) nav.dataset.bord = edge;
+  else delete nav.dataset.bord;
+}
+$("#scenes").addEventListener("scroll", () => scenesEdges(), { passive: true });
+window.addEventListener("resize", () => scenesEdges());
+
 function renderScenes() {
   const list = [...entities.values()]
     .filter((s) => ["scene", "script"].includes(domainOf(s)) && canControl(s))
@@ -251,19 +284,34 @@ function renderScenes() {
   swap(nav, ...list.map((state) => {
     const isScript = domainOf(state) === "script";
     const running = isScript && state.state === "on";
+    const busy = scenesBusy.has(state.entity_id);
     const button = el(
       "button",
-      { type: "button", id: `scene-${state.entity_id}`, class: running ? "scene on" : "scene", "aria-pressed": isScript ? String(running) : "false" },
-      svgIcon(isScript ? (running ? ICONS.stop : ICONS.play) : ICONS.sparkle),
+      {
+        type: "button", id: `scene-${state.entity_id}`,
+        class: `scene${running ? " on" : ""}${busy ? " pending" : ""} aria-busy:border-accent aria-busy:bg-accent-soft focus-visible:outline-3 focus-visible:outline-accent focus-visible:outline-offset-2`,
+        // Un script en marche s'arrête d'un toucher : un bouton à bascule.
+        // Une scène se lance, sans état : un simple bouton.
+        ...(isScript && { "aria-pressed": String(running) }),
+        ...(busy && { "aria-busy": "true" }),
+      },
+      svgIcon(isScript && running ? ICONS.stop : hubSceneLook(state, 0).icon),
       el("span", { text: nameOf(state) }),
     );
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
+      const id = state.entity_id;
+      clearTimeout(scenesBusy.get(id));
+      scenesBusy.set(id, setTimeout(() => sceneDone(id), SCENE_BUSY_MS));
       button.classList.add("pending");
-      setTimeout(() => button.classList.remove("pending"), 5000);
-      callService(domainOf(state), running ? "turn_off" : "turn_on", { entity_id: state.entity_id });
+      button.setAttribute("aria-busy", "true");
+      const outcome = running
+        ? await serviceStatus(domainOf(state), "turn_off", { entity_id: id })
+        : await runUndoable(nameOf(state), domainOf(state), "turn_on", { entity_id: id }, sceneTargets(state));
+      if (outcome === "refus") sceneDone(id);
     });
     return button;
   }));
+  scenesEdges(nav);
 }
 
 // L'heure, chaque minute (et la salutation avec). Les panneaux du tableau

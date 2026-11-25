@@ -159,26 +159,30 @@ async function copyText(area) {
 // Rien n'est enregistré avant « Enregistrer », sauf l'envoi d'une image.
 
 // `pages` : la copie de tous les onglets ; `draft` : celui qu'on règle.
-const drawingEdit = { pages: null, draft: null, placing: -1, tracing: -1, view: null, cut: null };
+const drawingEdit = { pages: null, draft: null, placing: -1, tracing: -1, view: null, cut: null, baseline: "" };
+
+/** Des réglages du dessin non enregistrés ? (Les images, elles, partent tout de suite.) */
+const drawingDirty = () => drawingEdit.pages !== null && JSON.stringify(drawingEdit.pages) !== drawingEdit.baseline;
 
 async function openDrawingEditor() {
   $("#account-dialog").close();
   await loadHouse(true);
   await Promise.all(house.images.map((image) => houseImage(image.name)));
   drawingEdit.pages = structuredClone(house.pages);
+  drawingEdit.baseline = JSON.stringify(drawingEdit.pages);
   drawingEdit.draft = drawingEdit.pages.find((page) => page.id === house.config?.id) ?? drawingEdit.pages[0];
   drawingEdit.placing = -1;
   drawingEdit.tracing = -1;
   drawingEdit.cut = null;
   drawingStatus("");
   renderDrawingEditor();
-  $("#drawing").showModal();
+  ouvrirFenetre($("#drawing"), false);
 }
 
 function drawingStatus(text, kind = "") {
   const status = $("#drawing-status");
   status.textContent = text;
-  status.className = `auto-status text-[0.9rem] [margin:0.8rem_0_0.3rem] [white-space:pre-wrap] [overflow-wrap:anywhere] [:not(:where(.o037900))&.ok]:text-ok [:not(:where(.o038000))&.error]:text-alert ${kind}`;
+  status.className = `auto-status text-corps mt-3 mx-0 mb-1 [white-space:pre-wrap] [overflow-wrap:anywhere] [:not(:where(.o037900))&.ok]:text-ok [:not(:where(.o038000))&.error]:text-alert ${kind}`;
 }
 
 function renderDrawingPreview() {
@@ -188,7 +192,7 @@ function renderDrawingPreview() {
   drawingEdit.view.zones[drawingEdit.tracing]?.node.classList.add("placing");
   const hint = $("#drawing-place-hint");
   hint.hidden = drawingEdit.placing < 0 && drawingEdit.tracing < 0;
-  hint.textContent = drawingEdit.tracing >= 0 ? "Fais glisser sur le dessin pour tracer la zone (du coin en haut à gauche au coin opposé)." : "Touche le dessin là où poser la valeur.";
+  hint.textContent = drawingEdit.tracing >= 0 ? (zoneDraw.first ? "Touche maintenant le coin opposé de la zone." : "Fais glisser sur le dessin pour tracer la zone, ou touche un coin puis le coin opposé.") : "Touche le dessin là où poser la valeur.";
   $("#drawing-preview").classList.toggle("placing", drawingEdit.placing >= 0 || drawingEdit.tracing >= 0);
 }
 
@@ -208,7 +212,7 @@ function imageOptions(selected, empty) {
 }
 
 function drawingFieldset(title, hint, ...children) {
-  return el("fieldset", { class: "drawing-part m-0 [padding:0.7rem_0.9rem_0.9rem] grid gap-[0.6rem] [border:1px_solid_var(--line)] [border-radius:14px] min-w-0 [:not(:where(.o089000))&_legend]:[padding:0_0.35rem] [:not(:where(.o089001))&_legend]:font-semibold" }, el("legend", { text: title }), hint ? el("p", { class: "auto-meta text-muted text-[0.8rem] [&.run-loop]:text-alert [:not(:where(.o089100)).drawing-part>&]:m-0 [:not(:where(.o092300)).chart-card_&]:m-0", text: hint }) : "", ...children);
+  return el("fieldset", { class: "drawing-part m-0 pt-3 px-3.5 pb-3.5 grid gap-2.5 [border:1px_solid_var(--line)] rounded-champ min-w-0 [:not(:where(.o089000))&_legend]:py-0 [:not(:where(.o089000))&_legend]:px-1.5 [:not(:where(.o089001))&_legend]:font-semibold" }, el("legend", { text: title }), hint ? el("p", { class: "auto-meta text-muted text-petit [&.run-loop]:text-alert [:not(:where(.o089100)).drawing-part>&]:m-0 [:not(:where(.o092300)).chart-card_&]:m-0", text: hint }) : "", ...children);
 }
 
 // ---------------------------------------------------------------- Découpe
@@ -385,7 +389,7 @@ function cutPreview(found, after) {
   full.width = found.width;
   full.height = found.height;
   full.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(after.data), found.width, found.height), 0, 0);
-  const canvas = el("canvas", { class: "cut-preview block max-w-[100%] h-[auto] [margin:10px_0] [border-radius:10px]" });
+  const canvas = el("canvas", { class: "cut-preview block max-w-[100%] h-[auto] my-2.5 mx-0 rounded-puce" });
   canvas.width = Math.round(found.width * scale);
   canvas.height = Math.round(found.height * scale);
   const context = canvas.getContext("2d");
@@ -410,11 +414,11 @@ function cutPart(draft, refresh) {
   before.addEventListener("change", () => { cut.before = before.value; });
   const after = imageOptions(cut.after, "— choisir —");
   after.addEventListener("change", () => { cut.after = after.value; });
-  const threshold = el("input", { type: "range", min: "8", max: "80", value: String(cut.threshold), "aria-label": "Sensibilité" });
+  const threshold = el("input", { type: "range", class: "h-11 py-2 bg-clip-content", min: "8", max: "80", value: String(cut.threshold), "aria-label": "Sensibilité" });
   threshold.addEventListener("change", () => { cut.threshold = Number(threshold.value); });
-  const gap = el("input", { type: "range", min: "0", max: "10", value: String(cut.gap), "aria-label": "Regrouper" });
+  const gap = el("input", { type: "range", class: "h-11 py-2 bg-clip-content", min: "0", max: "10", value: String(cut.gap), "aria-label": "Regrouper" });
   gap.addEventListener("change", () => { cut.gap = Number(gap.value); });
-  const search = el("button", { type: "button", class: "ghost small", text: "Chercher les différences" });
+  const search = el("button", { type: "button", class: "ghost small min-h-11", text: "Chercher les différences" });
   search.addEventListener("click", async () => {
     if (!cut.before || !cut.after || cut.before === cut.after) return drawingStatus("Choisis deux images différentes.", "error");
     search.disabled = true;
@@ -436,7 +440,7 @@ function cutPart(draft, refresh) {
     refresh();
   });
   const children = [
-    el("div", { class: "drawing-grid grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_220px),_1fr))] gap-[0.6rem] [:not(:where(.o090000))&_input]:w-full [:not(:where(.o090001))&_input]:min-w-0 [:not(:where(.o090000))&_select]:w-full [:not(:where(.o090001))&_select]:min-w-0" },
+    el("div", { class: "drawing-grid grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_220px),_1fr))] gap-2.5 [:not(:where(.o090000))&_input]:w-full [:not(:where(.o090001))&_input]:min-w-0 [:not(:where(.o090000))&_select]:w-full [:not(:where(.o090001))&_select]:min-w-0" },
       field("Avant (tout éteint, volets ouverts)", before),
       field("Après (allumé, ou volets fermés)", after),
       field("Sensibilité", threshold),
@@ -459,11 +463,11 @@ function cutPart(draft, refresh) {
       kind.addEventListener("change", () => { entry.kind = kind.value; });
       const entity = el("input", { type: "text", list: "entity-list", value: entry.entity_id, placeholder: "light.porche", autocapitalize: "none", spellcheck: "false", "aria-label": `Appareil du calque ${index + 1}` });
       entity.addEventListener("change", () => { entry.entity_id = entity.value.trim(); });
-      return el("li", { class: "drawing-item grid gap-2 [justify-items:stretch] p-[0.7rem] [border-radius:12px] bg-card-2 [&>button]:[justify-self:start]" },
-        el("label", { class: "check [.preset-form_&]:text-[0.9rem] [label&]:flex [label&]:items-center [label&]:gap-[0.45rem] [label&]:text-text" }, keep, el("b", { text: ` Endroit ${index + 1}` })),
-        el("div", { class: "drawing-grid grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_220px),_1fr))] gap-[0.6rem] [:not(:where(.o090000))&_input]:w-full [:not(:where(.o090001))&_input]:min-w-0 [:not(:where(.o090000))&_select]:w-full [:not(:where(.o090001))&_select]:min-w-0" }, field("Nom de l'image", name), field("Sorte", kind), field("Appareil", entity)));
+      return el("li", { class: "drawing-item grid gap-2 [justify-items:stretch] p-3 rounded-champ bg-card-2 [&>button]:[justify-self:start]" },
+        el("label", { class: "check min-h-11 [.preset-form_&]:text-corps [label&]:flex [label&]:items-center [label&]:gap-2 [label&]:text-text" }, keep, el("b", { text: ` Endroit ${index + 1}` })),
+        el("div", { class: "drawing-grid grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_220px),_1fr))] gap-2.5 [:not(:where(.o090000))&_input]:w-full [:not(:where(.o090001))&_input]:min-w-0 [:not(:where(.o090000))&_select]:w-full [:not(:where(.o090001))&_select]:min-w-0" }, field("Nom de l'image", name), field("Sorte", kind), field("Appareil", entity)));
     });
-    const create = el("button", { type: "button", class: "ghost small", text: "Créer les calques cochés" });
+    const create = el("button", { type: "button", class: "ghost small min-h-11", text: "Créer les calques cochés" });
     create.addEventListener("click", async () => {
       const chosen = cut.entries.map((entry, index) => ({ entry, region: cut.found.regions[index] })).filter(({ entry }) => entry.keep);
       for (const { entry } of chosen) {
@@ -504,7 +508,7 @@ function cutPart(draft, refresh) {
       drawingStatus(`${done} calque(s) créé(s) : vérifie-les dans l'aperçu, puis « Enregistrer ».`, "ok");
       refresh();
     });
-    children.push(el("ol", { class: "drawing-items list-none m-0 p-0 grid gap-[0.6rem]" }, ...rows), create);
+    children.push(el("ol", { class: "drawing-items list-none m-0 p-0 grid gap-2.5" }, ...rows), create);
   }
   return drawingFieldset(
     "Découper des calques",
@@ -519,11 +523,11 @@ function renderDrawingEditor() {
   const refresh = () => renderDrawingEditor();
 
   // Les images.
-  const list = el("ul", { class: "drawing-images list-none m-0 p-0 grid gap-[0.35rem] [:not(:where(.o089300))&_li]:flex [:not(:where(.o089301))&_li]:items-center [:not(:where(.o089302))&_li]:gap-[0.6rem] [:not(:where(.o089303))&_li]:flex-wrap [&_code]:[font-family:var(--font-mono)]" }, ...house.images.map((image) => {
-    const remove = el("button", { type: "button", class: "ghost small danger", text: "Retirer" });
+  const list = el("ul", { class: "drawing-images list-none m-0 p-0 grid gap-1.5 [:not(:where(.o089300))&_li]:flex [:not(:where(.o089301))&_li]:items-center [:not(:where(.o089302))&_li]:gap-2.5 [:not(:where(.o089303))&_li]:flex-wrap [&_code]:[font-family:var(--font-mono)]" }, ...house.images.map((image) => {
+    const remove = el("button", { type: "button", class: "ghost small danger min-h-11", text: "Retirer" });
     remove.addEventListener("click", async () => {
       // Effacée du serveur, pas seulement du brouillon : on demande.
-      if (!window.confirm(`Retirer l'image « ${image.name} » du serveur ? Les calques qui s'en servent ne l'afficheront plus.`)) return;
+      if (!await confirmer(`« ${image.name} » sera retirée du serveur. Les calques qui s'en servent ne l'afficheront plus.`, { titre: "Retirer l'image ?", ok: "Retirer", danger: true })) return;
       const response = await authFetch(`/api/home/images/${encodeURIComponent(image.name)}`, { method: "DELETE" });
       if (!response) return drawingStatus("Serveur injoignable : l'image n'est pas retirée.", "error");
       const data = await response.json().catch(() => ({}));
@@ -533,14 +537,14 @@ function renderDrawingEditor() {
       refresh();
     });
     const size = `${Math.max(1, Math.round(image.size / 1024))} Kio`;
-    return el("li", {}, el("code", { text: image.name }), el("span", { class: "auto-meta text-muted text-[0.8rem] [&.run-loop]:text-alert [:not(:where(.o089100)).drawing-part>&]:m-0 [:not(:where(.o092300)).chart-card_&]:m-0", text: size }), remove);
+    return el("li", {}, el("code", { text: image.name }), el("span", { class: "auto-meta text-muted text-petit [&.run-loop]:text-alert [:not(:where(.o089100)).drawing-part>&]:m-0 [:not(:where(.o092300)).chart-card_&]:m-0", text: size }), remove);
   }));
   const nameInput = el("input", { type: "text", placeholder: "ex. jour, nuit, garage_ouvert", maxlength: "40", autocapitalize: "none", spellcheck: "false", "aria-label": "Nom de l'image" });
   const fileInput = el("input", { type: "file", accept: "image/png,image/jpeg,image/webp", "aria-label": "Fichier de l'image" });
   fileInput.addEventListener("change", () => {
     if (nameInput.value === "" && fileInput.files[0]) nameInput.value = slug(fileInput.files[0].name.replace(/\.[a-z0-9]+$/i, "")).replaceAll(".", "_").slice(0, 40);
   });
-  const send = el("button", { type: "button", class: "ghost small", text: "Envoyer" });
+  const send = el("button", { type: "button", class: "ghost small min-h-11", text: "Envoyer" });
   send.addEventListener("click", async () => {
     const file = fileInput.files[0];
     const name = nameInput.value.trim();
@@ -568,7 +572,7 @@ function renderDrawingEditor() {
     "Images",
     "PNG, JPEG ou WebP, 3 Mio au plus. Les calques doivent avoir exactement la taille du fond, avec de la transparence (PNG ou WebP).",
     list,
-    el("div", { class: "drawing-row flex flex-wrap gap-2 items-center [:not(:where(.o089700))&_input[type=text]]:[flex:1_1_12rem] [:not(:where(.o089701))&_input[type=text]]:min-w-0 [:not(:where(.o089800))&_input[type=file]]:[flex:1_1_14rem] [:not(:where(.o089801))&_input[type=file]]:min-w-0 [&_input[type=file]]:text-[0.85rem]" }, nameInput, fileInput, send),
+    el("div", { class: "drawing-row flex flex-wrap gap-2 items-center [:not(:where(.o089700))&_input[type=text]]:[flex:1_1_12rem] [:not(:where(.o089701))&_input[type=text]]:min-w-0 [:not(:where(.o089800))&_input[type=file]]:[flex:1_1_14rem] [:not(:where(.o089801))&_input[type=file]]:min-w-0 [&_input[type=file]]:text-corps" }, nameInput, fileInput, send),
   );
 
   // Les demandes pour l'IA : choisir l'image à faire, copier la demande.
@@ -589,10 +593,10 @@ function renderDrawingEditor() {
     el("optgroup", { label: "Si l'IA se trompe" }, ...AI_CORRECTIONS.map(([key, label]) => el("option", { value: `correction:${key}`, text: label }))));
   aiChoice.value = drawingEdit.aiChoice ?? (draft.background ? "nuit" : "analyse");
   // Modifiable : on peut préciser où est le porche avant de copier.
-  const aiText = el("textarea", { class: "ai-prompt w-full min-h-[9rem] [resize:vertical] [:not(:where(.o105203))&]:[font-family:var(--font-mono)] [:not(:where(.o105204))&]:text-[0.78rem] [:not(:where(.o105205))&]:[line-height:1.45] [padding:0.6rem_0.7rem] [border-radius:12px] [border:1px_solid_var(--line)] bg-card-2 text-text", rows: "8", spellcheck: "false", "aria-label": "Demande à copier (modifiable)" });
+  const aiText = el("textarea", { class: "ai-prompt w-full min-h-[9rem] [resize:vertical] [:not(:where(.o105203))&]:[font-family:var(--font-mono)] [:not(:where(.o105204))&]:text-legende [:not(:where(.o105205))&]:[line-height:1.45] py-2.5 px-3 rounded-champ [border:1px_solid_var(--line)] bg-card-2 text-text", rows: "8", spellcheck: "false", "aria-label": "Demande à copier (modifiable)" });
   const aiAttach = el("span");
   const aiSave = el("span");
-  const aiCopy = el("button", { type: "button", class: "primary small", text: "Copier la demande" });
+  const aiCopy = el("button", { type: "button", class: "primary small min-h-11", text: "Copier la demande" });
   const aiShow = () => {
     drawingEdit.aiStyle = aiStyle.value;
     drawingEdit.aiChoice = aiChoice.value;
@@ -611,9 +615,9 @@ function renderDrawingEditor() {
   const ai = drawingFieldset(
     "Faire les images avec l'IA",
     "Choisis l'image à faire, copie la demande et colle-la dans une IA qui retouche les photos (Gemini, ChatGPT…), avec l'image indiquée. Fais toujours les variantes à partir du fond de jour, jamais l'une de l'autre : le dessin ne bouge pas.",
-    el("div", { class: "drawing-grid grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_220px),_1fr))] gap-[0.6rem] [:not(:where(.o090000))&_input]:w-full [:not(:where(.o090001))&_input]:min-w-0 [:not(:where(.o090000))&_select]:w-full [:not(:where(.o090001))&_select]:min-w-0" }, field("Style", aiStyle), field("Image à faire", aiChoice)),
+    el("div", { class: "drawing-grid grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_220px),_1fr))] gap-2.5 [:not(:where(.o090000))&_input]:w-full [:not(:where(.o090001))&_input]:min-w-0 [:not(:where(.o090000))&_select]:w-full [:not(:where(.o090001))&_select]:min-w-0" }, field("Style", aiStyle), field("Image à faire", aiChoice)),
     aiText,
-    el("dl", { class: "ai-steps grid [grid-template-columns:auto_1fr] [gap:0.25rem_0.8rem] m-0 text-[0.84rem] [:not(:where(.o105400))&_dt]:text-muted [:not(:where(.o105500))&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:[overflow-wrap:anywhere]" }, el("dt", { text: "Joindre" }), el("dd", {}, aiAttach), el("dt", { text: "Enregistrer sous" }), el("dd", {}, aiSave)),
+    el("dl", { class: "ai-steps grid [grid-template-columns:auto_1fr] gap-y-1 gap-x-3 m-0 text-petit [:not(:where(.o105400))&_dt]:text-muted [:not(:where(.o105500))&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:[overflow-wrap:anywhere]" }, el("dt", { text: "Joindre" }), el("dd", {}, aiAttach), el("dt", { text: "Enregistrer sous" }), el("dd", {}, aiSave)),
     aiCopy,
   );
 
@@ -644,7 +648,7 @@ function renderDrawingEditor() {
       });
       cells.push(field(weatherLabel, select));
     }
-    groups.push(el("div", { class: "drawing-ambiance-group grid gap-[0.4rem] [:not(:where(.o091300))&>b]:text-[0.85rem]" }, el("b", { text: momentLabel }), el("div", { class: "drawing-ambiances grid [grid-template-columns:repeat(auto-fill,_minmax(min(100%,_180px),_1fr))] gap-[0.6rem] [:not(:where(.o091100))&_select]:w-full [:not(:where(.o091101))&_select]:min-w-0" }, ...cells)));
+    groups.push(el("div", { class: "drawing-ambiance-group grid gap-1.5 [:not(:where(.o091300))&>b]:text-corps" }, el("b", { text: momentLabel }), el("div", { class: "drawing-ambiances grid [grid-template-columns:repeat(auto-fill,_minmax(min(100%,_180px),_1fr))] gap-2.5 [:not(:where(.o091100))&_select]:w-full [:not(:where(.o091101))&_select]:min-w-0" }, ...cells)));
   }
   const forced = el("select", { "aria-label": "Ambiance affichée" },
     el("option", { value: "", text: "Automatique (météo et soleil)" }),
@@ -664,8 +668,8 @@ function renderDrawingEditor() {
     "Fonds et ambiances",
     "Comme sur les tableaux de domo-blog : un fond par ambiance, choisi d'après le soleil et la météo. Il en manque un ? Le plus proche s'affiche (orage → pluie → nuageux → soleil ; la nuit, puis le même temps de jour). Le crépuscule (soleil entre −6° et +6°) ne sert que si tu lui donnes au moins un fond. La pluie par 1 °C ou moins dehors compte comme de la neige.",
     ...groups,
-    el("div", { class: "drawing-grid grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_220px),_1fr))] gap-[0.6rem] [:not(:where(.o090000))&_input]:w-full [:not(:where(.o090001))&_input]:min-w-0 [:not(:where(.o090000))&_select]:w-full [:not(:where(.o090001))&_select]:min-w-0" }, field("Ambiance affichée", forced)),
-    el("p", { class: "auto-meta text-muted text-[0.8rem] [&.run-loop]:text-alert [:not(:where(.o089100)).drawing-part>&]:m-0 [:not(:where(.o092300)).chart-card_&]:m-0", text: nowText }),
+    el("div", { class: "drawing-grid grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_220px),_1fr))] gap-2.5 [:not(:where(.o090000))&_input]:w-full [:not(:where(.o090001))&_input]:min-w-0 [:not(:where(.o090000))&_select]:w-full [:not(:where(.o090001))&_select]:min-w-0" }, field("Ambiance affichée", forced)),
+    el("p", { class: "auto-meta text-muted text-petit [&.run-loop]:text-alert [:not(:where(.o089100)).drawing-part>&]:m-0 [:not(:where(.o092300)).chart-card_&]:m-0", text: nowText }),
   );
 
   // Les effets animés.
@@ -688,8 +692,8 @@ function renderDrawingEditor() {
   const effects = drawingFieldset(
     "Effets animés",
     "Sur le dessin, le temps qu'il fait : pluie, averses, orage, grêle, neige, brouillard, vent, et des étoiles par nuit claire. Ils suivent la météo comme les ambiances ; « Toujours » sert à essayer. Pas d'animation si l'appareil demande de réduire les mouvements.",
-    el("div", { class: "drawing-grid grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_220px),_1fr))] gap-[0.6rem] [:not(:where(.o090000))&_input]:w-full [:not(:where(.o090001))&_input]:min-w-0 [:not(:where(.o090000))&_select]:w-full [:not(:where(.o090001))&_select]:min-w-0" }, field("Effets", effectMode), field("Intensité", effectLevel)),
-    el("p", { class: "auto-meta text-muted text-[0.8rem] [&.run-loop]:text-alert [:not(:where(.o089100)).drawing-part>&]:m-0 [:not(:where(.o092300)).chart-card_&]:m-0", text: `Maintenant : ${nowEffect ? (EFFECTS.find(([key]) => key === nowEffect)?.[1] ?? nowEffect).toLowerCase() : "aucun effet"}` }),
+    el("div", { class: "drawing-grid grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_220px),_1fr))] gap-2.5 [:not(:where(.o090000))&_input]:w-full [:not(:where(.o090001))&_input]:min-w-0 [:not(:where(.o090000))&_select]:w-full [:not(:where(.o090001))&_select]:min-w-0" }, field("Effets", effectMode), field("Intensité", effectLevel)),
+    el("p", { class: "auto-meta text-muted text-petit [&.run-loop]:text-alert [:not(:where(.o089100)).drawing-part>&]:m-0 [:not(:where(.o092300)).chart-card_&]:m-0", text: `Maintenant : ${nowEffect ? (EFFECTS.find(([key]) => key === nowEffect)?.[1] ?? nowEffect).toLowerCase() : "aucun effet"}` }),
   );
 
   // Les calques.
@@ -713,17 +717,17 @@ function renderDrawingEditor() {
     const when = el("select", {}, ...WHEN_LABELS.map(([value, text]) => el("option", { value, text })));
     when.value = layer.when;
     when.addEventListener("change", () => { layer.when = when.value; renderDrawingPreview(); });
-    const remove = el("button", { type: "button", class: "ghost small danger", text: "Retirer" });
+    const remove = el("button", { type: "button", class: "ghost small danger min-h-11", text: "Retirer" });
     remove.addEventListener("click", () => { draft.layers.splice(index, 1); refresh(); });
     const shown = layerShown(layer, houseNight());
-    const head = el("div", { class: "drawing-item-head flex items-center gap-[0.6rem]" }, el("b", { text: `Calque ${index + 1}` }),
+    const head = el("div", { class: "drawing-item-head flex items-center gap-2.5" }, el("b", { text: `Calque ${index + 1}` }),
       el("span", { class: shown ? "badge ok" : "badge", text: shown ? "visible maintenant" : "caché maintenant" }), remove);
     if (layer.area !== undefined) {
       const room = el("select", {}, ...areas.map((area) => el("option", { value: area.name, text: area.name })));
       room.value = layer.area;
       room.addEventListener("change", () => { layer.area = room.value; renderDrawingPreview(); });
-      return el("li", { class: "drawing-item grid gap-2 [justify-items:stretch] p-[0.7rem] [border-radius:12px] bg-card-2 [&>button]:[justify-self:start]" }, head,
-        el("div", { class: "drawing-grid grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_220px),_1fr))] gap-[0.6rem] [:not(:where(.o090000))&_input]:w-full [:not(:where(.o090001))&_input]:min-w-0 [:not(:where(.o090000))&_select]:w-full [:not(:where(.o090001))&_select]:min-w-0" },
+      return el("li", { class: "drawing-item grid gap-2 [justify-items:stretch] p-3 rounded-champ bg-card-2 [&>button]:[justify-self:start]" }, head,
+        el("div", { class: "drawing-grid grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_220px),_1fr))] gap-2.5 [:not(:where(.o090000))&_input]:w-full [:not(:where(.o090001))&_input]:min-w-0 [:not(:where(.o090000))&_select]:w-full [:not(:where(.o090001))&_select]:min-w-0" },
           field("Image", image), field("Suit", kind), field("Pièce", room), field("Moment", when)));
     }
     const entity = el("input", { type: "text", list: "entity-list", value: layer.entity_id, placeholder: "cover.garage", autocapitalize: "none", spellcheck: "false" });
@@ -747,14 +751,14 @@ function renderDrawingEditor() {
       not.disabled = position.checked;
       renderDrawingPreview();
     });
-    return el("li", { class: "drawing-item grid gap-2 [justify-items:stretch] p-[0.7rem] [border-radius:12px] bg-card-2 [&>button]:[justify-self:start]" }, head,
-      el("div", { class: "drawing-grid grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_220px),_1fr))] gap-[0.6rem] [:not(:where(.o090000))&_input]:w-full [:not(:where(.o090001))&_input]:min-w-0 [:not(:where(.o090000))&_select]:w-full [:not(:where(.o090001))&_select]:min-w-0" },
+    return el("li", { class: "drawing-item grid gap-2 [justify-items:stretch] p-3 rounded-champ bg-card-2 [&>button]:[justify-self:start]" }, head,
+      el("div", { class: "drawing-grid grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_220px),_1fr))] gap-2.5 [:not(:where(.o090000))&_input]:w-full [:not(:where(.o090001))&_input]:min-w-0 [:not(:where(.o090000))&_select]:w-full [:not(:where(.o090001))&_select]:min-w-0" },
         field("Image", image), field("Suit", kind), field("Appareil", entity),
         field("Quand son état est (séparés par des virgules)", states), field("Moment", when)),
-      el("label", { class: "check [.preset-form_&]:text-[0.9rem] [label&]:flex [label&]:items-center [label&]:gap-[0.45rem] [label&]:text-text" }, not, " Sauf ces états (visible pour tous les autres)"),
-      el("label", { class: "check [.preset-form_&]:text-[0.9rem] [label&]:flex [label&]:items-center [label&]:gap-[0.45rem] [label&]:text-text" }, position, " Suit la position du volet (l'image est le volet fermé ; à 25 %, il est dessiné aux trois quarts)"));
+      el("label", { class: "check min-h-11 [.preset-form_&]:text-corps [label&]:flex [label&]:items-center [label&]:gap-2 [label&]:text-text" }, not, " Sauf ces états (visible pour tous les autres)"),
+      el("label", { class: "check min-h-11 [.preset-form_&]:text-corps [label&]:flex [label&]:items-center [label&]:gap-2 [label&]:text-text" }, position, " Suit la position du volet (l'image est le volet fermé ; à 25 %, il est dessiné aux trois quarts)"));
   });
-  const addLayer = el("button", { type: "button", class: "ghost small", text: "+ Ajouter un calque" });
+  const addLayer = el("button", { type: "button", class: "ghost small min-h-11", text: "+ Ajouter un calque" });
   addLayer.disabled = house.images.length === 0;
   addLayer.addEventListener("click", () => {
     draft.layers.push({ image: house.images.at(-1)?.name ?? "", entity_id: "", states: ["on"], not: false, when: "always" });
@@ -763,7 +767,7 @@ function renderDrawingEditor() {
   const layers = drawingFieldset(
     "Calques",
     "Ex. : l'image garage_ouvert quand cover.garage est open ou opening ; porche_allume quand light.porche est on, la nuit ; fenetre_cuisine quand une lampe de la Cuisine est allumée.",
-    el("ol", { class: "drawing-items list-none m-0 p-0 grid gap-[0.6rem]" }, ...layerRows),
+    el("ol", { class: "drawing-items list-none m-0 p-0 grid gap-2.5" }, ...layerRows),
     addLayer,
   );
 
@@ -777,25 +781,25 @@ function renderDrawingEditor() {
       else delete label.name;
       renderDrawingPreview();
     });
-    const place = el("button", { type: "button", class: drawingEdit.placing === index ? "primary small" : "ghost small", text: drawingEdit.placing === index ? "Touche le dessin…" : `Placer (${number.format(label.x)} %, ${number.format(label.y)} %)` });
+    const place = el("button", { type: "button", class: drawingEdit.placing === index ? "primary small min-h-11" : "ghost small min-h-11", text: drawingEdit.placing === index ? "Touche le dessin…" : `Placer (${number.format(label.x)} %, ${number.format(label.y)} %)` });
     place.addEventListener("click", () => {
       drawingEdit.placing = drawingEdit.placing === index ? -1 : index;
       drawingEdit.tracing = -1;
       refresh();
       showPreview();
     });
-    const remove = el("button", { type: "button", class: "ghost small danger", text: "Retirer" });
+    const remove = el("button", { type: "button", class: "ghost small danger min-h-11", text: "Retirer" });
     remove.addEventListener("click", () => {
       draft.labels.splice(index, 1);
       drawingEdit.placing = -1;
       refresh();
     });
-    return el("li", { class: "drawing-item grid gap-2 [justify-items:stretch] p-[0.7rem] [border-radius:12px] bg-card-2 [&>button]:[justify-self:start]" },
-      el("div", { class: "drawing-item-head flex items-center gap-[0.6rem]" }, el("b", { text: `Valeur ${index + 1}` }), remove),
-      el("div", { class: "drawing-grid grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_220px),_1fr))] gap-[0.6rem] [:not(:where(.o090000))&_input]:w-full [:not(:where(.o090001))&_input]:min-w-0 [:not(:where(.o090000))&_select]:w-full [:not(:where(.o090001))&_select]:min-w-0" }, field("Appareil", entity), field("Nom affiché", name)),
+    return el("li", { class: "drawing-item grid gap-2 [justify-items:stretch] p-3 rounded-champ bg-card-2 [&>button]:[justify-self:start]" },
+      el("div", { class: "drawing-item-head flex items-center gap-2.5" }, el("b", { text: `Valeur ${index + 1}` }), remove),
+      el("div", { class: "drawing-grid grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_220px),_1fr))] gap-2.5 [:not(:where(.o090000))&_input]:w-full [:not(:where(.o090001))&_input]:min-w-0 [:not(:where(.o090000))&_select]:w-full [:not(:where(.o090001))&_select]:min-w-0" }, field("Appareil", entity), field("Nom affiché", name)),
       place);
   });
-  const addLabel = el("button", { type: "button", class: "ghost small", text: "+ Ajouter une valeur" });
+  const addLabel = el("button", { type: "button", class: "ghost small min-h-11", text: "+ Ajouter une valeur" });
   addLabel.addEventListener("click", () => {
     draft.labels.push({ entity_id: "", x: 50, y: 50 });
     drawingEdit.placing = -1;
@@ -806,7 +810,7 @@ function renderDrawingEditor() {
   const labels = drawingFieldset(
     "Valeurs sur le dessin",
     "Une température, une puissance, un état… posé où tu veux : « Placer », puis touche le dessin.",
-    el("ol", { class: "drawing-items list-none m-0 p-0 grid gap-[0.6rem]" }, ...labelRows),
+    el("ol", { class: "drawing-items list-none m-0 p-0 grid gap-2.5" }, ...labelRows),
     addLabel,
   );
 
@@ -814,11 +818,11 @@ function renderDrawingEditor() {
   const actionRows = draft.actions.map((id, index) => {
     const entity = el("input", { type: "text", list: "entity-list", value: id, placeholder: "light.porche", autocapitalize: "none", spellcheck: "false", "aria-label": `Bouton ${index + 1}` });
     entity.addEventListener("change", () => { draft.actions[index] = entity.value.trim(); });
-    const remove = el("button", { type: "button", class: "ghost small danger", text: "Retirer" });
+    const remove = el("button", { type: "button", class: "ghost small danger min-h-11", text: "Retirer" });
     remove.addEventListener("click", () => { draft.actions.splice(index, 1); refresh(); });
-    return el("li", { class: "drawing-row flex flex-wrap gap-2 items-center [:not(:where(.o089700))&_input[type=text]]:[flex:1_1_12rem] [:not(:where(.o089701))&_input[type=text]]:min-w-0 [:not(:where(.o089800))&_input[type=file]]:[flex:1_1_14rem] [:not(:where(.o089801))&_input[type=file]]:min-w-0 [&_input[type=file]]:text-[0.85rem]" }, entity, remove);
+    return el("li", { class: "drawing-row flex flex-wrap gap-2 items-center [:not(:where(.o089700))&_input[type=text]]:[flex:1_1_12rem] [:not(:where(.o089701))&_input[type=text]]:min-w-0 [:not(:where(.o089800))&_input[type=file]]:[flex:1_1_14rem] [:not(:where(.o089801))&_input[type=file]]:min-w-0 [&_input[type=file]]:text-corps" }, entity, remove);
   });
-  const addAction = el("button", { type: "button", class: "ghost small", text: "+ Ajouter un bouton" });
+  const addAction = el("button", { type: "button", class: "ghost small min-h-11", text: "+ Ajouter un bouton" });
   addAction.disabled = draft.actions.length >= 12;
   addAction.addEventListener("click", () => {
     draft.actions.push("");
@@ -828,7 +832,7 @@ function renderDrawingEditor() {
   const actions = drawingFieldset(
     "Boutons sous le dessin",
     "Le porche, le parking, les portes de garage… : un toucher allume, éteint, ouvre ou ferme (12 au plus).",
-    el("ol", { class: "drawing-items list-none m-0 p-0 grid gap-[0.6rem]" }, ...actionRows),
+    el("ol", { class: "drawing-items list-none m-0 p-0 grid gap-2.5" }, ...actionRows),
     addAction,
   );
 
@@ -854,25 +858,26 @@ function renderDrawingEditor() {
     const name = el("input", { type: "text", value: zone.name ?? "", placeholder: zone.area !== undefined ? "(le nom de la pièce)" : "(le nom de l'appareil)", maxlength: "60" });
     name.addEventListener("change", () => { if (name.value.trim()) zone.name = name.value.trim(); else delete zone.name; });
     const tracing = drawingEdit.tracing === index;
-    const trace = el("button", { type: "button", class: tracing ? "primary small" : "ghost small", text: tracing ? "Trace sur le dessin…" : `Tracer (${number.format(zone.w)} × ${number.format(zone.h)} %)` });
+    const trace = el("button", { type: "button", class: tracing ? "primary small min-h-11" : "ghost small min-h-11", text: tracing ? "Trace sur le dessin…" : `Tracer (${number.format(zone.w)} × ${number.format(zone.h)} %)` });
     trace.addEventListener("click", () => {
       drawingEdit.tracing = tracing ? -1 : index;
+      zoneDraw.first = null;
       drawingEdit.placing = -1;
       refresh();
       showPreview();
     });
-    const remove = el("button", { type: "button", class: "ghost small danger", text: "Retirer" });
+    const remove = el("button", { type: "button", class: "ghost small danger min-h-11", text: "Retirer" });
     remove.addEventListener("click", () => {
       draft.zones.splice(index, 1);
       drawingEdit.tracing = -1;
       refresh();
     });
-    return el("li", { class: "drawing-item grid gap-2 [justify-items:stretch] p-[0.7rem] [border-radius:12px] bg-card-2 [&>button]:[justify-self:start]" },
-      el("div", { class: "drawing-item-head flex items-center gap-[0.6rem]" }, el("b", { text: `Zone ${index + 1}` }), remove),
-      el("div", { class: "drawing-grid grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_220px),_1fr))] gap-[0.6rem] [:not(:where(.o090000))&_input]:w-full [:not(:where(.o090001))&_input]:min-w-0 [:not(:where(.o090000))&_select]:w-full [:not(:where(.o090001))&_select]:min-w-0" }, field("Un toucher…", kind), field(zone.area !== undefined ? "Pièce" : "Appareil", target), field("Nom affiché", name)),
+    return el("li", { class: "drawing-item grid gap-2 [justify-items:stretch] p-3 rounded-champ bg-card-2 [&>button]:[justify-self:start]" },
+      el("div", { class: "drawing-item-head flex items-center gap-2.5" }, el("b", { text: `Zone ${index + 1}` }), remove),
+      el("div", { class: "drawing-grid grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_220px),_1fr))] gap-2.5 [:not(:where(.o090000))&_input]:w-full [:not(:where(.o090001))&_input]:min-w-0 [:not(:where(.o090000))&_select]:w-full [:not(:where(.o090001))&_select]:min-w-0" }, field("Un toucher…", kind), field(zone.area !== undefined ? "Pièce" : "Appareil", target), field("Nom affiché", name)),
       trace);
   });
-  const addZone = el("button", { type: "button", class: "ghost small", text: "+ Ajouter une zone" });
+  const addZone = el("button", { type: "button", class: "ghost small min-h-11", text: "+ Ajouter une zone" });
   addZone.disabled = draft.zones.length >= 24;
   addZone.addEventListener("click", () => {
     draft.zones.push({ entity_id: "", x: 40, y: 40, w: 20, h: 20 });
@@ -885,7 +890,7 @@ function renderDrawingEditor() {
   const bell = [...entities.values()].find(isDoorbell);
   let addBell = "";
   if (bell && !draft.zones.some((z) => z.entity_id === bell.entity_id)) {
-    addBell = el("button", { type: "button", class: "ghost small", text: "+ Placer la sonnette" });
+    addBell = el("button", { type: "button", class: "ghost small min-h-11", text: "+ Placer la sonnette" });
     addBell.disabled = draft.zones.length >= 24;
     addBell.addEventListener("click", () => {
       draft.zones.push({ entity_id: bell.entity_id, name: doorbellPlace(bell), x: 45, y: 50, w: 8, h: 14 });
@@ -898,8 +903,8 @@ function renderDrawingEditor() {
   const zones = drawingFieldset(
     "Zones à toucher",
     "Le porche, la porte du garage, le salon… : trace un rectangle sur le dessin. Un toucher allume, éteint, ouvre ou ferme l'appareil, ou ouvre la pièce ; un appui long ouvre l'historique (24 au plus). La sonnette : trace sa zone sur la porte d'entrée ; elle s'allume avec la photo quand on sonne.",
-    el("ol", { class: "drawing-items list-none m-0 p-0 grid gap-[0.6rem]" }, ...zoneRows),
-    el("div", { class: "drawing-zone-buttons flex flex-wrap gap-[6px]" }, addZone, addBell),
+    el("ol", { class: "drawing-items list-none m-0 p-0 grid gap-2.5" }, ...zoneRows),
+    el("div", { class: "drawing-zone-buttons flex flex-wrap gap-1.5" }, addZone, addBell),
   );
   zones.classList.add("drawing-zones");
 
@@ -915,13 +920,13 @@ function renderDrawingEditor() {
     const hours = el("select", {}, ...CHART_HOURS.map(([value, text]) => el("option", { value: String(value), text })));
     hours.value = String(chart.hours);
     hours.addEventListener("change", () => { chart.hours = Number(hours.value); });
-    const remove = el("button", { type: "button", class: "ghost small danger", text: "Retirer" });
+    const remove = el("button", { type: "button", class: "ghost small danger min-h-11", text: "Retirer" });
     remove.addEventListener("click", () => { draft.charts.splice(index, 1); refresh(); });
-    return el("li", { class: "drawing-item grid gap-2 [justify-items:stretch] p-[0.7rem] [border-radius:12px] bg-card-2 [&>button]:[justify-self:start]" },
-      el("div", { class: "drawing-item-head flex items-center gap-[0.6rem]" }, el("b", { text: `Courbe ${index + 1}` }), remove),
-      el("div", { class: "drawing-grid grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_220px),_1fr))] gap-[0.6rem] [:not(:where(.o090000))&_input]:w-full [:not(:where(.o090001))&_input]:min-w-0 [:not(:where(.o090000))&_select]:w-full [:not(:where(.o090001))&_select]:min-w-0" }, field("Capteur", entity), field("Nom affiché", name), field("Couleur", color), field("Durée", hours)));
+    return el("li", { class: "drawing-item grid gap-2 [justify-items:stretch] p-3 rounded-champ bg-card-2 [&>button]:[justify-self:start]" },
+      el("div", { class: "drawing-item-head flex items-center gap-2.5" }, el("b", { text: `Courbe ${index + 1}` }), remove),
+      el("div", { class: "drawing-grid grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_220px),_1fr))] gap-2.5 [:not(:where(.o090000))&_input]:w-full [:not(:where(.o090001))&_input]:min-w-0 [:not(:where(.o090000))&_select]:w-full [:not(:where(.o090001))&_select]:min-w-0" }, field("Capteur", entity), field("Nom affiché", name), field("Couleur", color), field("Durée", hours)));
   });
-  const addChart = el("button", { type: "button", class: "ghost small", text: "+ Ajouter une courbe" });
+  const addChart = el("button", { type: "button", class: "ghost small min-h-11", text: "+ Ajouter une courbe" });
   addChart.disabled = draft.charts.length >= 6;
   addChart.addEventListener("click", () => {
     draft.charts.push({ entity_id: "", color: CHART_COLORS[draft.charts.length % CHART_COLORS.length][0], hours: 24 });
@@ -931,7 +936,7 @@ function renderDrawingEditor() {
   const charts = drawingFieldset(
     "Courbes",
     "Dans la colonne de gauche de l'onglet : la puissance d'un appareil, une température… sur 6 heures, 24 heures ou 7 jours (6 au plus). Toucher une courbe ouvre son historique.",
-    el("ol", { class: "drawing-items list-none m-0 p-0 grid gap-[0.6rem]" }, ...chartRows),
+    el("ol", { class: "drawing-items list-none m-0 p-0 grid gap-2.5" }, ...chartRows),
     addChart,
   );
 
@@ -958,7 +963,7 @@ function pagesPart() {
     drawingEdit.tracing = -1;
     refresh();
   });
-  const add = el("button", { type: "button", class: "ghost small", text: "+ Nouvel onglet" });
+  const add = el("button", { type: "button", class: "ghost small min-h-11", text: "+ Nouvel onglet" });
   add.disabled = drawingEdit.pages.length >= 8;
   add.addEventListener("click", () => {
     const page = { id: pageId("Nouvel onglet"), name: "Nouvel onglet", areas: [], ...emptyDrawing() };
@@ -967,14 +972,14 @@ function pagesPart() {
     refresh();
     $("#drawing-form .drawing-part input")?.select();
   });
-  const remove = el("button", { type: "button", class: "ghost small danger", text: "Retirer cet onglet" });
+  const remove = el("button", { type: "button", class: "ghost small danger min-h-11", text: "Retirer cet onglet" });
   remove.disabled = drawingEdit.pages.length === 1;
   remove.addEventListener("click", () => {
     drawingEdit.pages = drawingEdit.pages.filter((page) => page !== draft);
     drawingEdit.draft = drawingEdit.pages[0];
     refresh();
   });
-  const first = el("button", { type: "button", class: "ghost small", text: "Mettre en premier" });
+  const first = el("button", { type: "button", class: "ghost small min-h-11", text: "Mettre en premier" });
   first.disabled = drawingEdit.pages[0] === draft;
   first.addEventListener("click", () => {
     drawingEdit.pages = [draft, ...drawingEdit.pages.filter((page) => page !== draft)];
@@ -988,21 +993,21 @@ function pagesPart() {
     if (choose.selectedOptions[0]) choose.selectedOptions[0].textContent = draft.name;
   });
   // Les pièces de cet onglet (aucune cochée : toutes).
-  const rooms = el("div", { class: "drawing-rooms flex flex-wrap [gap:0.4rem_1rem]" }, ...areas.map((area) => {
+  const rooms = el("div", { class: "drawing-rooms flex flex-wrap gap-y-1.5 gap-x-4" }, ...areas.map((area) => {
     const box = el("input", { type: "checkbox" });
     box.checked = draft.areas.includes(area.name);
     box.addEventListener("change", () => {
       draft.areas = box.checked ? [...draft.areas, area.name] : draft.areas.filter((a) => a !== area.name);
     });
-    return el("label", { class: "check [.preset-form_&]:text-[0.9rem] [label&]:flex [label&]:items-center [label&]:gap-[0.45rem] [label&]:text-text" }, box, ` ${area.name}`);
+    return el("label", { class: "check min-h-11 [.preset-form_&]:text-corps [label&]:flex [label&]:items-center [label&]:gap-2 [label&]:text-text" }, box, ` ${area.name}`);
   }));
   return drawingFieldset(
     "Onglets",
     "Chaque onglet a son dessin, ses boutons, et les pièces qu'il montre (aucune cochée : toute la maison). Le premier s'ouvre par défaut.",
-    el("div", { class: "drawing-row flex flex-wrap gap-2 items-center [:not(:where(.o089700))&_input[type=text]]:[flex:1_1_12rem] [:not(:where(.o089701))&_input[type=text]]:min-w-0 [:not(:where(.o089800))&_input[type=file]]:[flex:1_1_14rem] [:not(:where(.o089801))&_input[type=file]]:min-w-0 [&_input[type=file]]:text-[0.85rem]" }, choose, add),
-    el("div", { class: "drawing-grid grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_220px),_1fr))] gap-[0.6rem] [:not(:where(.o090000))&_input]:w-full [:not(:where(.o090001))&_input]:min-w-0 [:not(:where(.o090000))&_select]:w-full [:not(:where(.o090001))&_select]:min-w-0" }, field("Nom de l'onglet", name)),
+    el("div", { class: "drawing-row flex flex-wrap gap-2 items-center [:not(:where(.o089700))&_input[type=text]]:[flex:1_1_12rem] [:not(:where(.o089701))&_input[type=text]]:min-w-0 [:not(:where(.o089800))&_input[type=file]]:[flex:1_1_14rem] [:not(:where(.o089801))&_input[type=file]]:min-w-0 [&_input[type=file]]:text-corps" }, choose, add),
+    el("div", { class: "drawing-grid grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_220px),_1fr))] gap-2.5 [:not(:where(.o090000))&_input]:w-full [:not(:where(.o090001))&_input]:min-w-0 [:not(:where(.o090000))&_select]:w-full [:not(:where(.o090001))&_select]:min-w-0" }, field("Nom de l'onglet", name)),
     areas.length > 0 ? field("Pièces montrées", rooms) : "",
-    el("div", { class: "drawing-row flex flex-wrap gap-2 items-center [:not(:where(.o089700))&_input[type=text]]:[flex:1_1_12rem] [:not(:where(.o089701))&_input[type=text]]:min-w-0 [:not(:where(.o089800))&_input[type=file]]:[flex:1_1_14rem] [:not(:where(.o089801))&_input[type=file]]:min-w-0 [&_input[type=file]]:text-[0.85rem]" }, first, remove),
+    el("div", { class: "drawing-row flex flex-wrap gap-2 items-center [:not(:where(.o089700))&_input[type=text]]:[flex:1_1_12rem] [:not(:where(.o089701))&_input[type=text]]:min-w-0 [:not(:where(.o089800))&_input[type=file]]:[flex:1_1_14rem] [:not(:where(.o089801))&_input[type=file]]:min-w-0 [&_input[type=file]]:text-corps" }, first, remove),
   );
 }
 
@@ -1020,8 +1025,10 @@ $("#drawing-preview").addEventListener("click", (event) => {
   renderDrawingEditor();
 });
 
-// Tracer une zone : on fait glisser sur l'aperçu, du premier coin à l'autre.
-const zoneDraw = { start: null, rect: null };
+// Tracer une zone : on fait glisser sur l'aperçu, du premier coin à l'autre ;
+// sans glisser (un doigt qui tremble, un stylet, le clavier d'aide), deux
+// touchers suffisent : un coin, puis le coin opposé.
+const zoneDraw = { start: null, rect: null, first: null, mark: null };
 
 function previewPercent(event) {
   const box = $("#drawing-preview .house-base")?.getBoundingClientRect();
@@ -1061,8 +1068,25 @@ for (const type of ["pointerup", "pointercancel"]) {
     zoneDraw.start = null;
     zoneDraw.rect?.remove();
     zoneDraw.rect = null;
-    if (!box || box.w < 1 || box.h < 1) return; // un simple toucher : on recommence
-    Object.assign(drawingEdit.draft.zones[drawingEdit.tracing], box);
+    if (!point) return;
+    let zone = box;
+    if (!box || box.w < 1 || box.h < 1) {
+      // Un simple toucher : le premier coin, ou le second.
+      if (!zoneDraw.first) {
+        zoneDraw.first = point;
+        zoneDraw.mark = el("span", { class: "house-zone edit tracing" });
+        placeZone(zoneDraw.mark, { ...point, w: 1, h: 1 });
+        $("#drawing-preview").append(zoneDraw.mark);
+        $("#drawing-place-hint").textContent = "Touche maintenant le coin opposé de la zone.";
+        return;
+      }
+      zone = traceBox(zoneDraw.first, point);
+      if (zone.w < 1 || zone.h < 1) return;
+    }
+    zoneDraw.first = null;
+    zoneDraw.mark?.remove();
+    zoneDraw.mark = null;
+    Object.assign(drawingEdit.draft.zones[drawingEdit.tracing], zone);
     drawingEdit.tracing = -1;
     renderDrawingEditor();
   });
@@ -1076,15 +1100,20 @@ $("#drawing-save").addEventListener("click", async () => {
     page.zones = page.zones.filter((zone) => (zone.area ?? zone.entity_id ?? "") !== "");
   }
   const button = $("#drawing-save");
-  button.disabled = true;
+  if (button.disabled) return;
+  // « Enregistrement… » pendant l'envoi ; en cas d'erreur, tout reste comme réglé.
+  const restore = boutonEnCours(button, "Enregistrement…");
   const { status, data } = await api("PUT", "/api/home/drawing", { pages: drawingEdit.pages }).catch(() => ({ status: 0, data: {} }));
-  button.disabled = false;
-  if (status !== 200) return drawingStatus(data.error ?? "Enregistrement impossible.", "error");
+  restore();
+  if (status !== 200) return drawingStatus(data.error ?? (status === 0 ? "Le serveur ne répond pas : rien n'est perdu, réessaie." : "Enregistrement impossible."), "error");
+  drawingEdit.baseline = JSON.stringify(drawingEdit.pages);
   house.pages = cleanPages(data.config);
   selectPage(drawingEdit.draft.id);
   $("#drawing").close();
   flash("Dessin de la maison enregistré");
 });
 
-for (const id of ["#drawing-close", "#drawing-cancel"]) $(id).addEventListener("click", () => $("#drawing").close());
+for (const id of ["#drawing-close", "#drawing-cancel"]) $(id).addEventListener("click", () => fenetreFermer($("#drawing")));
+// Échap, la croix ou Annuler avec des réglages non enregistrés : on demande d'abord.
+fenetreGarde($("#drawing"), drawingDirty);
 $("#open-drawing").addEventListener("click", openDrawingEditor);

@@ -51,32 +51,59 @@ async function loadCerveau() {
   const prefs = await api("GET", "/api/cerveau/preferences");
   if (prefs.status !== 200) return;
   const box = $("#cerveau-prefs-text");
-  // Un texte en cours d'écriture n'est pas écrasé.
-  if (document.activeElement !== box) box.value = typeof prefs.data.texte === "string" ? prefs.data.texte : "";
+  // Un texte en cours d'écriture (ou modifié, pas encore enregistré) n'est pas écrasé.
+  const saved = typeof prefs.data.texte === "string" ? prefs.data.texte : "";
+  if (document.activeElement !== box && !cerveauModifie()) box.value = saved;
+  account.cerveauTexte = saved;
   const by = typeof prefs.data.modifie_par === "string" && typeof prefs.data.modifie_le === "string"
     ? `Modifiées par ${prefs.data.modifie_par} le ${new Date(prefs.data.modifie_le).toLocaleString("fr", { dateStyle: "short", timeStyle: "short" })}. `
     : "";
   $("#cerveau-prefs-status").textContent = by + used;
 }
 
+/** Le texte des préférences a-t-il changé depuis qu'il a été lu ou enregistré ? */
+function cerveauModifie() {
+  return !$("#cerveau-prefs").hidden && typeof account.cerveauTexte === "string"
+    && $("#cerveau-prefs-text").value !== account.cerveauTexte;
+}
+
+// Enregistrer : « Enregistrement… » pendant l'envoi, « Enregistré » à côté du
+// bouton, et une erreur sous le texte, qui reste tel qu'écrit.
 $("#cerveau-prefs-save").addEventListener("click", async (event) => {
   const button = event.currentTarget;
-  button.disabled = true;
+  const box = $("#cerveau-prefs-text");
+  if (button.disabled) return;
+  champErreur(box);
+  const restore = boutonEnCours(button, "Enregistrement…");
+  let problem = "";
   try {
-    const { status, data } = await api("PUT", "/api/cerveau/preferences", { texte: $("#cerveau-prefs-text").value });
+    const { status, data } = await api("PUT", "/api/cerveau/preferences", { texte: box.value });
     if (status === 200) {
-      $("#cerveau-prefs-text").value = data.texte;
-      flash("Préférences enregistrées.");
+      box.value = typeof data.texte === "string" ? data.texte : box.value;
+      account.cerveauTexte = box.value;
       loadCerveau().catch(() => {});
     } else {
-      flash(typeof data?.error === "string" ? data.error : "Préférences refusées.");
+      problem = typeof data?.error === "string" ? data.error : "Préférences refusées.";
     }
   } catch {
-    flash("Préférences non enregistrées : le serveur ne répond pas.");
+    problem = "Préférences non enregistrées : le serveur ne répond pas. Le texte est gardé, réessaie.";
   } finally {
-    button.disabled = false;
+    restore();
   }
+  if (problem) champErreur(box, problem);
+  else accountSaved(button);
 });
+$("#cerveau-prefs-text").setAttribute("enterkeyhint", "enter");
+
+/** « Enregistré », quelques secondes, à côté du bouton qui vient de servir. */
+function accountSaved(anchor, text = "Enregistré", error = false) {
+  anchor.parentElement.querySelector(".compte-enregistre")?.remove();
+  const pill = error
+    ? el("span", { class: "compte-enregistre inline-flex items-center self-center py-0.5 px-2 rounded-full bg-alert-soft text-alert-ink text-legende font-semibold", role: "alert", text })
+    : el("span", { class: "compte-enregistre inline-flex items-center gap-1 self-center py-0.5 px-2 rounded-full bg-ok-soft text-text text-legende font-semibold [&_svg]:w-3.5 [&_svg]:h-3.5", role: "status" }, svgIcon(["M5 12l5 5L20 7"]), text);
+  anchor.after(pill);
+  setTimeout(() => pill.remove(), 3000);
+}
 
 /** Un message bref en bas de l'écran (une commande refusée…). */
 function flash(text) {
@@ -98,13 +125,15 @@ $("#dock-automations").addEventListener("click", () => $("#open-automations").cl
 $("#dock-energy").addEventListener("click", () => openEnergy());
 for (const opener of ["#dock-account", "#open-account"]) {
   $(opener).addEventListener("click", () => {
-    $("#account-dialog").showModal();
+    ouvrirFenetre($("#account-dialog"), false);
     watchIntegrations();
     loadPush().catch(() => {});
     loadCerveau().catch(() => {});
   });
 }
-$("#account-close").addEventListener("click", () => $("#account-dialog").close());
+$("#account-close").addEventListener("click", () => fenetreFermer($("#account-dialog")));
+// Fermer par erreur (Échap, la croix) avec des préférences non enregistrées : on demande.
+fenetreGarde($("#account-dialog"), cerveauModifie);
 
 // ---------------------------------------------------------------- Assist
 // « Ferme le volet de la chambre » : la phrase est comprise sur le serveur
@@ -139,7 +168,7 @@ function assistRemember(data) {
 
 function assistSay(from, text, kind = "") {
   const log = $("#assist-log");
-  log.append(el("li", { class: `assist-line flex [:not(:where(.o106200))&_p]:m-0 [&_p]:[padding:0.55rem_0.8rem] [&_p]:[border-radius:14px] [&_p]:max-w-[85%] [:not(:where(.o106204))&_p]:[overflow-wrap:anywhere] [&_p]:[line-height:1.4] [&.from-me]:justify-end [:not(:where(.o106400))&.from-me_p]:bg-accent [:not(:where(.o106401))&.from-me_p]:[color:var(--accent-ink,_#fff)] [:not(:where(.o106402))&.from-me_p]:[border-bottom-right-radius:4px] [:not(:where(.o106500))&.from-home_p]:bg-card-2 [:not(:where(.o106501))&.from-home_p]:text-text [:not(:where(.o106502))&.from-home_p]:[border-bottom-left-radius:4px] [&.is-error_p]:[box-shadow:inset_3px_0_0_var(--alert)] from-${from}${kind ? ` ${kind}` : ""}` }, el("p", { text })));
+  log.append(el("li", { class: `assist-line flex [:not(:where(.o106200))&_p]:m-0 [&_p]:py-2 [&_p]:px-3 [&_p]:rounded-champ [&_p]:max-w-[85%] [:not(:where(.o106204))&_p]:[overflow-wrap:anywhere] [&_p]:[line-height:1.4] [&.from-me]:justify-end [:not(:where(.o106400))&.from-me_p]:bg-accent [:not(:where(.o106401))&.from-me_p]:[color:var(--accent-ink,_#fff)] [:not(:where(.o106402))&.from-me_p]:rounded-br-trait [:not(:where(.o106500))&.from-home_p]:bg-card-2 [:not(:where(.o106501))&.from-home_p]:text-text [:not(:where(.o106502))&.from-home_p]:rounded-bl-trait [&.is-error_p]:[box-shadow:inset_3px_0_0_var(--alert)] from-${from}${kind ? ` ${kind}` : ""}` }, el("p", { text })));
   while (log.children.length > ASSIST_KEEP) log.firstElementChild.remove();
   log.lastElementChild.scrollIntoView({ block: "end" });
   // Une réponse en erreur : l'orbe de la voix rougit un instant (orbe.js).
@@ -179,8 +208,7 @@ async function assistAsk(text) {
 }
 
 $("#open-assist").addEventListener("click", () => {
-  $("#assist").showModal();
-  $("#assist-text").focus();
+  ouvrirFenetre($("#assist"), $("#assist-text"));
 });
 $("#assist-close").addEventListener("click", () => $("#assist").close());
 $("#assist-form").addEventListener("submit", (event) => {
@@ -316,15 +344,30 @@ function renderPush(blocker) {
   for (const button of document.querySelectorAll("#push button")) button.disabled = pushView.busy;
   const others = info.devices.filter((d) => d !== mine);
   $("#push-devices").replaceChildren(...others.map((device) => {
-    const remove = el("button", { type: "button", class: "ghost small", text: "Retirer" });
+    const remove = el("button", { type: "button", class: "ghost small min-h-11", text: "Retirer", "aria-label": `Retirer ${device.name}` });
     remove.addEventListener("click", () => pushAction(async () => {
       await api("DELETE", `/api/push/subscriptions/${device.id}`);
     }));
     const seen = device.last_success ? `prévenu il y a ${ago(device.last_success)}` : "jamais prévenu";
-    return el("li", { class: "push-device flex items-center justify-between gap-[0.7rem] [padding:0.5rem_0.75rem] [border-radius:12px] bg-card-2 [:not(:where(.o114700))&_span]:grid [&_span]:min-w-0 [:not(:where(.o114800))&_strong]:[overflow-wrap:anywhere] [:not(:where(.o114900))&_small]:text-muted" },
+    return el("li", { class: "push-device flex items-center justify-between gap-3 py-2 px-3 rounded-champ bg-card-2 [:not(:where(.o114700))&_span]:grid [&_span]:min-w-0 [:not(:where(.o114800))&_strong]:[overflow-wrap:anywhere] [:not(:where(.o114900))&_small]:text-muted" },
       el("span", {}, el("strong", { text: device.name }), el("small", { text: device.failures > 0 ? `${seen} · ${device.failures} échec(s)` : seen })),
       remove);
   }));
+}
+
+/** Le résultat d'une action, dans la section (pas en bas de l'écran). */
+function pushNote(text, error = false) {
+  let note = $("#push-note");
+  if (!note) {
+    note = el("p", { id: "push-note", class: "m-0 text-petit", role: "status" });
+    $("#push-categories").before(note);
+  }
+  note.textContent = text;
+  note.classList.toggle("text-alert-ink", error);
+  note.classList.toggle("font-semibold", error);
+  note.classList.toggle("text-muted", !error);
+  clearTimeout(pushNote.timer);
+  pushNote.timer = setTimeout(() => { note.textContent = ""; }, 6000);
 }
 
 /** Une action à la fois ; la section est relue après. */
@@ -335,7 +378,7 @@ async function pushAction(action) {
   try {
     await action();
   } catch (error) {
-    flash(error instanceof Error && error.message ? error.message : "Action impossible.");
+    pushNote(error instanceof Error && error.message ? error.message : "Action impossible.", true);
   } finally {
     pushView.busy = false;
     await loadPush().catch(() => {});
@@ -360,20 +403,20 @@ $("#push-enable").addEventListener("click", () => pushAction(async () => {
     await subscription.unsubscribe().catch(() => {});
     throw new Error(typeof data.error === "string" ? `${data.error}.` : "Abonnement refusé par le serveur.");
   }
-  flash("Notifications activées sur cet appareil.");
+  pushNote("Notifications activées sur cet appareil.");
 }));
 
 $("#push-disable").addEventListener("click", () => pushAction(async () => {
   const mine = pushView.info.devices.find((d) => d.endpoint === pushView.subscription?.endpoint);
   if (mine) await api("DELETE", `/api/push/subscriptions/${mine.id}`);
   await pushView.subscription?.unsubscribe();
-  flash("Notifications désactivées sur cet appareil.");
+  pushNote("Notifications désactivées sur cet appareil.");
 }));
 
 $("#push-test").addEventListener("click", () => pushAction(async () => {
   const { status } = await api("POST", "/api/push/test");
   if (status !== 202) throw new Error("Essai impossible.");
-  flash("Essai envoyé : la notification arrive dans quelques secondes.");
+  pushNote("Essai envoyé : la notification arrive dans quelques secondes.");
 }));
 
 for (const box of document.querySelectorAll("#push-categories input")) {
@@ -384,7 +427,10 @@ for (const box of document.querySelectorAll("#push-categories input")) {
     }
     pushAction(async () => {
       const mine = pushView.info.devices.find((d) => d.endpoint === pushView.subscription?.endpoint);
-      if (mine) await api("PATCH", `/api/push/subscriptions/${mine.id}`, { categories });
+      if (!mine) return;
+      const { status } = await api("PATCH", `/api/push/subscriptions/${mine.id}`, { categories });
+      if (status >= 300) throw new Error("Choix non enregistré : réessaie.");
+      pushNote("Enregistré.");
     });
   });
 }
@@ -392,7 +438,7 @@ for (const box of document.querySelectorAll("#push-categories input")) {
 /** Toucher une notification « ordre à valider » ouvre la cloche. */
 function openFromNotification(url) {
   if (typeof url === "string" && url.endsWith("#notifications") && !$("#dashboard-view").hidden) {
-    $("#notices").showModal();
+    ouvrirFenetre($("#notices"));
     renderNotices();
   }
 }
@@ -430,12 +476,12 @@ async function loadIntegrations() {
     if (item.restarts > 0) lines.push(`relancée ${item.restarts} fois`);
     const plural = item.entities > 1 ? "s" : "";
     const devices = `${item.entities} appareil${plural}${item.unavailable && item.entities > 0 ? ` indisponible${plural}` : ""}`;
-    return el("li", { class: `integration flex items-center gap-[0.7rem] [padding:0.55rem_0.75rem] [border-radius:12px] bg-card-2 i-${kind}` },
-      el("span", { class: "integration-dot flex-none w-[10px] h-[10px] [border-radius:50%] bg-muted [:not(:where(.o115300)).i-connected_&]:bg-ok [.i-connected_&]:[box-shadow:0_0_0_3px_var(--ok-soft)] [:not(:where(.o115400)).i-retrying_&]:[background:var(--glow-bar,_#d9a00d)] [:not(:where(.o115400)).i-starting_&]:[background:var(--glow-bar,_#d9a00d)] [:not(:where(.o115500)).i-crashed_&]:bg-alert [@media(prefers-reduced-motion:no-preference)]:[.i-starting_&]:[animation:pulse_1s_ease-in-out_infinite]", "aria-hidden": "true" }),
-      el("span", { class: "integration-text flex-1 grid min-w-0 [line-height:1.3] [:not(:where(.o115700))&_b]:text-[0.9rem] [:not(:where(.o115800))&_span]:text-[0.78rem] [:not(:where(.o115801))&_span]:text-muted [&_span]:[overflow-wrap:anywhere] [:not(:where(.o115900)).i-crashed_&_span]:text-text-2 [:not(:where(.o115900)).i-retrying_&_span]:text-text-2" },
+    return el("li", { class: `integration flex items-center gap-3 py-2 px-3 rounded-champ bg-card-2 i-${kind}` },
+      el("span", { class: "integration-dot flex-none w-[10px] h-[10px] rounded-full bg-muted [:not(:where(.o115300)).i-connected_&]:bg-ok [.i-connected_&]:[box-shadow:0_0_0_3px_var(--ok-soft)] [:not(:where(.o115400)).i-retrying_&]:[background:var(--glow-bar,_#d9a00d)] [:not(:where(.o115400)).i-starting_&]:[background:var(--glow-bar,_#d9a00d)] [:not(:where(.o115500)).i-crashed_&]:bg-alert [@media(prefers-reduced-motion:no-preference)]:[.i-starting_&]:[animation:pulse_1s_ease-in-out_infinite]", "aria-hidden": "true" }),
+      el("span", { class: "integration-text flex-1 grid min-w-0 [line-height:1.3] [:not(:where(.o115700))&_b]:text-corps [:not(:where(.o115800))&_span]:text-legende [:not(:where(.o115801))&_span]:text-muted [&_span]:[overflow-wrap:anywhere] [:not(:where(.o115900)).i-crashed_&_span]:text-text-2 [:not(:where(.o115900)).i-retrying_&_span]:text-text-2" },
         el("b", { text: String(item.name ?? item.id) }),
         el("span", { text: `${lookup(INTEGRATION_LABELS, kind) ?? kind} ${lines.length > 0 ? "· " : ""}${lines.join(" · ")}` })),
-      el("span", { class: "integration-count flex-none [:not(:where(.o116001))&]:text-[0.76rem] text-muted [:not(:where(.o116003))&]:[font-variant-numeric:tabular-nums]", text: devices }));
+      el("span", { class: "integration-count flex-none [:not(:where(.o116001))&]:text-legende text-muted [:not(:where(.o116003))&]:[font-variant-numeric:tabular-nums]", text: devices }));
   }));
 }
 
@@ -473,12 +519,12 @@ function renderBatteries() {
     const kind = numeric && level <= BATTERY_EMPTY ? "crashed"
       : level === "low" || (numeric && level <= BATTERY_LOW) ? "retrying" : "connected";
     const advice = kind === "crashed" ? "à changer tout de suite" : kind === "retrying" ? "à changer bientôt" : "bonne";
-    return el("li", { class: `integration flex items-center gap-[0.7rem] [padding:0.55rem_0.75rem] [border-radius:12px] bg-card-2 i-${kind}` },
-      el("span", { class: "integration-dot flex-none w-[10px] h-[10px] [border-radius:50%] bg-muted [:not(:where(.o115300)).i-connected_&]:bg-ok [.i-connected_&]:[box-shadow:0_0_0_3px_var(--ok-soft)] [:not(:where(.o115400)).i-retrying_&]:[background:var(--glow-bar,_#d9a00d)] [:not(:where(.o115400)).i-starting_&]:[background:var(--glow-bar,_#d9a00d)] [:not(:where(.o115500)).i-crashed_&]:bg-alert [@media(prefers-reduced-motion:no-preference)]:[.i-starting_&]:[animation:pulse_1s_ease-in-out_infinite]", "aria-hidden": "true" }),
-      el("span", { class: "integration-text flex-1 grid min-w-0 [line-height:1.3] [:not(:where(.o115700))&_b]:text-[0.9rem] [:not(:where(.o115800))&_span]:text-[0.78rem] [:not(:where(.o115801))&_span]:text-muted [&_span]:[overflow-wrap:anywhere] [:not(:where(.o115900)).i-crashed_&_span]:text-text-2 [:not(:where(.o115900)).i-retrying_&_span]:text-text-2" },
+    return el("li", { class: `integration flex items-center gap-3 py-2 px-3 rounded-champ bg-card-2 i-${kind}` },
+      el("span", { class: "integration-dot flex-none w-[10px] h-[10px] rounded-full bg-muted [:not(:where(.o115300)).i-connected_&]:bg-ok [.i-connected_&]:[box-shadow:0_0_0_3px_var(--ok-soft)] [:not(:where(.o115400)).i-retrying_&]:[background:var(--glow-bar,_#d9a00d)] [:not(:where(.o115400)).i-starting_&]:[background:var(--glow-bar,_#d9a00d)] [:not(:where(.o115500)).i-crashed_&]:bg-alert [@media(prefers-reduced-motion:no-preference)]:[.i-starting_&]:[animation:pulse_1s_ease-in-out_infinite]", "aria-hidden": "true" }),
+      el("span", { class: "integration-text flex-1 grid min-w-0 [line-height:1.3] [:not(:where(.o115700))&_b]:text-corps [:not(:where(.o115800))&_span]:text-legende [:not(:where(.o115801))&_span]:text-muted [&_span]:[overflow-wrap:anywhere] [:not(:where(.o115900)).i-crashed_&_span]:text-text-2 [:not(:where(.o115900)).i-retrying_&_span]:text-text-2" },
         el("b", { text: nameOf(state) }),
         el("span", { text: level === "low" ? "Pile faible : à changer bientôt" : `Pile ${advice}` })),
-      el("span", { class: "integration-count flex-none [:not(:where(.o116001))&]:text-[0.76rem] text-muted [:not(:where(.o116003))&]:[font-variant-numeric:tabular-nums]", text: numeric ? `${Math.round(level)}\u202f%` : "" }));
+      el("span", { class: "integration-count flex-none [:not(:where(.o116001))&]:text-legende text-muted [:not(:where(.o116003))&]:[font-variant-numeric:tabular-nums]", text: numeric ? `${Math.round(level)}\u202f%` : "" }));
   }));
 }
 
@@ -510,21 +556,24 @@ async function loadTablets() {
   box.hidden = status !== 200;
   if (status !== 200 || !Array.isArray(data)) return;
   $("#tablet-list").replaceChildren(...data.map((tablet) => {
-    const forget = el("button", { type: "button", class: "ghost small", text: "Déconnecter" });
+    const forget = el("button", { type: "button", class: "ghost small min-h-11", text: "Déconnecter", "aria-label": `Déconnecter ${tablet.label}` });
     forget.addEventListener("click", async () => {
-      if (!window.confirm(`Déconnecter « ${tablet.label} » ? Il faudra la reconnecter avec le mot de passe de son compte.`)) return;
+      if (!await confirmer(`Déconnecter « ${tablet.label} » ? Il faudra la reconnecter avec le mot de passe de son compte.`, { titre: "Déconnecter la tablette ?", ok: "Déconnecter", danger: true })) return;
       forget.disabled = true;
       const { status: done } = await api("DELETE", `/api/auth/tablets/${tablet.id}`).catch(() => ({ status: 0 }));
-      if (done !== 204 && done !== 404) flash("Déconnexion impossible.");
+      if (done !== 204 && done !== 404) {
+        forget.disabled = false;
+        return accountSaved(forget, "Déconnexion impossible", true);
+      }
       loadTablets();
     });
-    return el("li", { class: "push-device flex items-center justify-between gap-[0.7rem] [padding:0.5rem_0.75rem] [border-radius:12px] bg-card-2 [:not(:where(.o114700))&_span]:grid [&_span]:min-w-0 [:not(:where(.o114800))&_strong]:[overflow-wrap:anywhere] [:not(:where(.o114900))&_small]:text-muted" },
+    return el("li", { class: "push-device flex items-center justify-between gap-3 py-2 px-3 rounded-champ bg-card-2 [:not(:where(.o114700))&_span]:grid [&_span]:min-w-0 [:not(:where(.o114800))&_strong]:[overflow-wrap:anywhere] [:not(:where(.o114900))&_small]:text-muted" },
       el("span", {},
         el("strong", { text: tablet.label }),
         el("small", { text: `compte ${tablet.user} · active ${daysAgo(tablet.last_used_at)}` })),
       forget);
   }));
-  if (data.length === 0) $("#tablet-list").append(el("li", { class: "push-device flex items-center justify-between gap-[0.7rem] [padding:0.5rem_0.75rem] [border-radius:12px] bg-card-2 [:not(:where(.o114700))&_span]:grid [&_span]:min-w-0 [:not(:where(.o114800))&_strong]:[overflow-wrap:anywhere] [:not(:where(.o114900))&_small]:text-muted" }, el("small", { text: "Aucune tablette murale pour l'instant." })));
+  if (data.length === 0) $("#tablet-list").append(el("li", { class: "push-device flex items-center justify-between gap-3 py-2 px-3 rounded-champ bg-card-2 [:not(:where(.o114700))&_span]:grid [&_span]:min-w-0 [:not(:where(.o114800))&_strong]:[overflow-wrap:anywhere] [:not(:where(.o114900))&_small]:text-muted" }, el("small", { text: "Aucune tablette murale pour l'instant." })));
 }
 
 // ---------------------------------------------------------------- Système

@@ -353,6 +353,12 @@ for (const type of ["pointerup", "pointercancel"]) {
 /** Envoie un ordre. Renvoie true s'il est parti (ou attend sa validation),
  *  false sinon : la raison est déjà dite à l'écran. */
 async function callService(domain, service, data) {
+  return (await serviceStatus(domain, service, data)) !== "refus";
+}
+
+/** Comme `callService`, mais dit ce qu'il est advenu de l'ordre : "ok" (parti),
+ *  "attente" (une personne doit le valider) ou "refus" (raison dite à l'écran). */
+async function serviceStatus(domain, service, data) {
   const response = await authFetch(`/api/services/${domain}/${service}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -361,24 +367,24 @@ async function callService(domain, service, data) {
   if (!response) {
     flash("Serveur injoignable : l'ordre n'est pas parti.");
     unmarkPending(data.entity_id);
-    return false;
+    return "refus";
   }
-  if (response.ok && response.status !== 202) return true;
-  if (response.status === 401) return false;
+  if (response.ok && response.status !== 202) return "ok";
+  if (response.status === 401) return "refus";
   const body = await response.json().catch(() => ({}));
   unmarkPending(data.entity_id);
   if (response.status === 403) {
     // Déverrouiller une porte : le serveur redemande le mot de passe.
     if (body.confirm === true) {
       askConfirmation(() => callService(domain, service, data));
-      return false;
+      return "refus";
     }
     flash(typeof body.error === "string" ? `${body.error}.` : "Ton compte ne permet pas cette commande.");
   } else if (response.status === 202) {
     // Pièce protégée, heures calmes : l'ordre attend qu'un membre de la
     // famille le valide.
     flash(typeof body.message === "string" ? `${body.message}.` : "Ordre en attente de validation.");
-    return true;
+    return "attente";
   } else if (response.status === 400) {
     // L'ordre ne convient pas à l'appareil (« consigne entre 7 et 30 ») :
     // le serveur l'a refusé avant de l'envoyer.
@@ -390,7 +396,7 @@ async function callService(domain, service, data) {
   } else {
     flash(`La commande a échoué (erreur ${response.status}).`);
   }
-  return false;
+  return "refus";
 }
 
 // La tuile « clignote » jusqu'à ce que l'appareil confirme (ou 5 s au plus).
@@ -405,6 +411,99 @@ function markPending(entityId) {
 
 function unmarkPending(entityId) {
   for (const tile of tilesOf(entityId)) tile.classList.remove("pending");
+}
+
+// ---------------------------------------------------------------- Annuler
+// Après une action groupée (une scène, un script), le message du bas propose
+// « Annuler » quelques secondes : les lumières, prises et volets qu'elle a
+// changés reviennent comme avant. Le chauffage, les serrures, la musique ne
+// sont pas touchés (pas sûrs de revenir à l'identique, ou pas sans danger).
+const UNDO_MS = 6000;
+
+/** Le message bref du bas (`flash`, account.js) avec un bouton d'action. */
+function flashAction(text, label, action, delay = UNDO_MS) {
+  const box = $("#flash");
+  const button = el("button", {
+    type: "button",
+    class: "shrink-0 min-h-11 -my-2.5 -mr-2 px-3 rounded-champ border-0 bg-bg/15 [color:inherit] font-semibold underline underline-offset-2 cursor-pointer hover:bg-bg/25 focus-visible:outline-3 focus-visible:outline-accent focus-visible:outline-offset-2",
+    text: label,
+  });
+  button.addEventListener("click", () => {
+    clearTimeout(flash.timer);
+    box.hidden = true;
+    action();
+  });
+  box.replaceChildren(el("span", { class: "min-w-0", text }), button);
+  box.hidden = false;
+  clearTimeout(flash.timer);
+  flash.timer = setTimeout(() => { box.hidden = true; }, delay);
+}
+
+/** Ce qu'on sait remettre comme avant : lumières, prises et volets que ce
+ *  compte commande (`ids` : seulement ceux-là, sinon tous). */
+function undoSnapshot(ids = null) {
+  const saved = new Map();
+  for (const state of entities.values()) {
+    if (ids && !ids.has(state.entity_id)) continue;
+    const domain = domainOf(state);
+    const reversible = domain === "light"
+      || (domain === "switch" && state.entity_id !== SHEDDING && state.entity_id !== SHADE)
+      || domain === "cover";
+    if (!reversible || !["on", "off", "open", "closed"].includes(state.state) || !canControl(state)) continue;
+    saved.set(state.entity_id, {
+      state: state.state,
+      brightness: state.attributes.brightness,
+      position: state.attributes.current_position,
+    });
+  }
+  return saved;
+}
+
+/** Les ordres qui remettent `saved` (undoSnapshot) : seulement ce qui a changé. */
+function undoOrders(saved) {
+  const orders = [];
+  for (const [id, before] of saved) {
+    const now = entities.get(id);
+    if (!now) continue;
+    const domain = domainOf(now);
+    if (domain === "cover") {
+      const position = now.attributes.current_position;
+      if (typeof before.position === "number" && typeof position === "number") {
+        if (Math.abs(position - before.position) > 1) orders.push([domain, "set_cover_position", { entity_id: id, position: before.position }]);
+      } else if (now.state !== before.state) {
+        orders.push([domain, before.state === "open" ? "open_cover" : "close_cover", { entity_id: id }]);
+      }
+    } else if (before.state === "off") {
+      if (now.state !== "off") orders.push([domain, "turn_off", { entity_id: id }]);
+    } else if (now.state !== "on") {
+      orders.push([domain, "turn_on", { entity_id: id, ...(domain === "light" && typeof before.brightness === "number" && { brightness: before.brightness }) }]);
+    } else if (domain === "light" && typeof before.brightness === "number" && Math.abs((now.attributes.brightness ?? 255) - before.brightness) > 2) {
+      orders.push([domain, "turn_on", { entity_id: id, brightness: before.brightness }]);
+    }
+  }
+  return orders;
+}
+
+/** Remet comme avant ce qu'une action groupée a changé, et le dit. */
+async function undoGroup(saved) {
+  const orders = undoOrders(saved);
+  if (orders.length === 0) {
+    flash("Rien à annuler : tout est déjà comme avant.");
+    return;
+  }
+  for (const [, , data] of orders) markPending(data.entity_id);
+  const results = await Promise.all(orders.map(([domain, service, data]) => callService(domain, service, data)));
+  const done = results.filter(Boolean).length;
+  if (done > 0) flash(`Annulé : ${done} appareil${done > 1 ? "s" : ""} remis comme avant.`);
+}
+
+/** Lance une action groupée (scène, script…) et propose de l'annuler.
+ *  `ids` : les appareils qu'elle vise, s'ils sont connus. */
+async function runUndoable(label, domain, service, data, ids = null) {
+  const saved = undoSnapshot(ids);
+  const outcome = await serviceStatus(domain, service, data);
+  if (outcome === "ok" && saved.size > 0) flashAction(`« ${label} » : c'est parti.`, "Annuler", () => undoGroup(saved));
+  return outcome;
 }
 
 // ---------------------------------------------------------------- Affichage
@@ -468,10 +567,10 @@ function looseStates(states = [...entities.values()]) {
 const view = { room: null };
 
 // Les tuiles d'une section, en grille.
-const TILE_GRID = "tile-grid grid [grid-template-columns:repeat(auto-fill,_minmax(min(100%,_200px),_1fr))] [align-items:start] gap-[12px] [@media(min-width:1000px)]:[:not(:where(.o079300))[data-layout=board]_&]:[grid-template-columns:repeat(auto-fill,_minmax(260px,_1fr))] [:not(:where(.o102200)).room-body_&]:[grid-template-columns:1fr] [.room-body_&>*]:[grid-column:1_/_-1] [@media(min-width:1000px)]:[.room-view_.room-body_&>*]:[break-inside:avoid]";
+const TILE_GRID = "tile-grid grid [grid-template-columns:repeat(auto-fill,_minmax(min(100%,_200px),_1fr))] [align-items:start] gap-3 [:not(:where(.o102200)).room-body_&]:[grid-template-columns:1fr] [.room-body_&>*]:[grid-column:1_/_-1] [@media(min-width:1000px)]:[.room-view_.room-body_&>*]:[break-inside:avoid]";
 // Sur téléphone, les tuiles d'une section forment une seule carte : une
 // ligne par appareil, séparées d'un filet (au lieu d'une carte chacune).
-const PHONE_LIST = "phone-list max-sm:gap-0 max-sm:bg-card max-sm:rounded-carte max-sm:shadow-carte max-sm:overflow-hidden max-sm:[&>.tile]:rounded-none max-sm:[&>.tile]:shadow-none max-sm:[&>.tile]:bg-transparent max-sm:[&>.tile]:px-[14px] max-sm:[&>.tile]:py-[11px] max-sm:[&>.tile]:gap-[8px] max-sm:[&>.tile+.tile]:border-t max-sm:[&>.tile+.tile]:border-line max-sm:[&>.tile.light.on]:text-text max-sm:[&>.tile>input[type=range]]:h-[18px] max-sm:[&>.tile>input[type=range]]:ml-[50px] max-sm:[&>.tile>input[type=range]]:w-[calc(100%-50px)] max-sm:[&>.tile.sensor]:grid-cols-[minmax(0,1fr)_auto] max-sm:[&>.tile.sensor]:items-center max-sm:[&>.tile.sensor>.tile-head]:pr-0 max-sm:[&>.tile.sensor>.value]:text-[1.4rem] max-sm:[&>.tile.sensor>.value]:mr-[2rem] max-sm:[&>.tile.sensor>:not(.tile-head,.value,.history-button)]:col-span-full max-sm:[&_.history-button]:top-[7px] max-sm:[&_.history-button]:right-[6px] max-sm:[&_.history-button]:opacity-70";
+const PHONE_LIST = "phone-list max-sm:gap-0 max-sm:bg-card max-sm:rounded-carte max-sm:shadow-carte max-sm:overflow-hidden max-sm:[&>.tile]:rounded-none max-sm:[&>.tile]:shadow-none max-sm:[&>.tile]:bg-transparent max-sm:[&>.tile]:px-3.5 max-sm:[&>.tile]:py-3 max-sm:[&>.tile]:gap-2 max-sm:[&>.tile+.tile]:border-t max-sm:[&>.tile+.tile]:border-line max-sm:[&>.tile.light.on]:text-text max-sm:[&>.tile>input[type=range]]:ml-12 max-sm:[&>.tile>input[type=range]]:w-[calc(100%-50px)] max-sm:[&>.tile>input[type=range]::-webkit-slider-runnable-track]:h-4.5 max-sm:[&>.tile>input[type=range]::-moz-range-track]:h-4.5 max-sm:[&>.tile>input[type=range]::-webkit-slider-thumb]:h-7 max-sm:[&>.tile>input[type=range]::-webkit-slider-thumb]:-mt-1.25 max-sm:[&>.tile>input[type=range]::-moz-range-thumb]:h-7 max-sm:[&>.tile.sensor]:grid-cols-[minmax(0,1fr)_auto] max-sm:[&>.tile.sensor]:items-center max-sm:[&>.tile.sensor>.tile-head]:pr-0 max-sm:[&>.tile.sensor>.value]:text-titre max-sm:[&>.tile.sensor>.value]:mr-8 max-sm:[&>.tile.sensor>:not(.tile-head,.value,.history-button)]:col-span-full max-sm:[&_.history-button]:top-px max-sm:[&_.history-button]:right-0 max-sm:[&_.history-button]:opacity-70";
 
 /** Dans la section d'une pièce, « Salon lampe 1 » devient « Lampe 1 » et
  *  « Température Salon », « Température » : le titre dit déjà la pièce. */
@@ -533,14 +632,14 @@ function sectionSummary(title) {
 function sectionHead(title, grid, room) {
   const folded = isFolded(title);
   grid.hidden = folded;
-  const summary = el("span", { class: "section-summary ml-auto shrink-0 normal-case tracking-normal font-medium text-[0.8rem] tabular-nums", text: room ? sectionSummary(title) : "" });
+  const summary = el("span", { class: "section-summary ml-auto shrink-0 normal-case tracking-normal font-medium text-petit tabular-nums", text: room ? sectionSummary(title) : "" });
   if (room) summary.dataset.room = title;
   const chevron = svgIcon(ICONS.down);
   chevron.setAttribute("class", `size-4 shrink-0 transition-transform ${folded ? "-rotate-90" : ""}`);
   const button = el("button", {
     type: "button", "aria-expanded": String(!folded),
-    class: "section-toggle [:where(&)]:[all:unset] flex w-full min-h-6 max-sm:min-h-10 items-center gap-2 cursor-pointer rounded-md hover:text-text focus-visible:outline-3 focus-visible:outline-accent focus-visible:outline-offset-2",
-  }, el("span", { class: "min-w-0 truncate", text: title }), summary, chevron);
+    class: "section-toggle [:where(&)]:[all:unset] flex w-full min-h-11 -mt-2.5 -mb-1 max-sm:my-0 items-center gap-2 cursor-pointer rounded-trait hover:text-text focus-visible:outline-3 focus-visible:outline-accent focus-visible:outline-offset-2",
+  }, el("span", { class: "min-w-0 truncate", text: title, title }), summary, chevron);
   button.addEventListener("click", () => {
     const fold = !grid.hidden;
     setFolded(title, fold);
@@ -575,7 +674,7 @@ function renderAll() {
     back.addEventListener("click", () => showRoom(null));
     container.replaceChildren(
       el("section", {},
-        el("div", { class: "room-view-head flex items-center gap-3 [:not(:where(.o008200))&_h2]:[font-family:var(--font-display)] [:not(:where(.o008201))&_h2]:text-[1.6rem] [:not(:where(.o008202))&_h2]:font-semibold [:not(:where(.o008203))&_h2]:[letter-spacing:-0.02em] [:not(:where(.o008204))&_h2]:[text-transform:none] [:not(:where(.o008205))&_h2]:text-text" }, back, el("h2", { text: room.name })),
+        el("div", { class: "room-view-head flex items-center gap-3 [:not(:where(.o008200))&_h2]:[font-family:var(--font-display)] [:not(:where(.o008201))&_h2]:text-titre-l [:not(:where(.o008202))&_h2]:font-semibold [:not(:where(.o008203))&_h2]:[letter-spacing:-0.02em] [:not(:where(.o008204))&_h2]:[text-transform:none] [:not(:where(.o008205))&_h2]:text-text" }, back, el("h2", { text: room.name })),
         el("div", { class: `${TILE_GRID} ${PHONE_LIST}` }, ...items.map((state) => shortenName(renderTile(state), room.name))),
       ),
     );
@@ -619,11 +718,43 @@ function renderAll() {
   $("#empty").hidden = entities.size > 0;
 }
 
-function showRoom(name) {
+/** Montre une pièce seule (`name`), ou toute la maison (`null`). Ouvrir une
+ *  pièce ajoute une étape à l'historique : le geste ou le bouton « retour »
+ *  du téléphone ramène à la maison. En revenant, la tuile de la pièce dans
+ *  « La maison » reprend la place et le focus. */
+function showRoom(name, { fromHistory = false } = {}) {
+  const previous = view.room;
   view.room = name;
+  if (!fromHistory) {
+    if (name !== null && history.state?.piece === undefined) history.pushState({ piece: name }, "");
+    else if (name !== null) history.replaceState({ piece: name }, "");
+    // L'étape de la pièce est retirée ; le `popstate` qui suit ne fait rien.
+    else if (history.state?.piece !== undefined) history.back();
+  }
   renderAll();
-  $("#sections").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+  const behavior = matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+  const tile = name === null && previous !== null
+    ? [...document.querySelectorAll("#plan .room")].find((room) => room.dataset.room === previous)
+    : null;
+  if (tile) {
+    tile.scrollIntoView({ behavior, block: "center" });
+    tile.focus({ preventScroll: true });
+  } else {
+    $("#sections").scrollIntoView({ behavior, block: "start" });
+  }
 }
+window.addEventListener("popstate", () => {
+  if (view.room !== null && history.state?.piece === undefined) showRoom(null, { fromHistory: true });
+});
+
+// L'onglet du bas actif (classe `active`, posée par plusieurs fichiers) est
+// aussi dit aux lecteurs d'écran.
+new MutationObserver(() => {
+  for (const tab of document.querySelectorAll(".dock > a, .dock > button")) {
+    if (tab.classList.contains("active")) tab.setAttribute("aria-current", "page");
+    else tab.removeAttribute("aria-current");
+  }
+}).observe($(".dock"), { subtree: true, attributes: true, attributeFilter: ["class"] });
 
 /** Le jeton n'est plus bon (expiré, révoqué) : retour à la connexion. */
 function sessionExpired() {

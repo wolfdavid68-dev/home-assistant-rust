@@ -68,7 +68,9 @@ function showParcel(state) {
   parcel.current = state.attributes.dernier.id;
   renderParcel(state);
   const dialog = $("#parcel");
-  if (!dialog.open) dialog.showModal();
+  // Rien à saisir : toucher le fond la ferme ; le focus va sur « OK », puis revient.
+  dialog.setAttribute("data-fond-ferme", "");
+  if (!dialog.open) ouvrirFenetre(dialog);
   clearTimeout(parcel.closeTimer);
   parcel.closeTimer = setTimeout(closeParcel, PARCEL_OPEN);
 }

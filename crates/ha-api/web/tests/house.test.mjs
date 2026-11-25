@@ -227,3 +227,26 @@ describe("houseImageAddress", () => {
     assert.equal(houseImageAddress({ name: "a b", version: "x&y" }), "/api/home/images/a%20b?v=x%26y");
   });
 });
+
+describe("houseNight et ambianceOf en v4", () => {
+  // Une page à part : hubV4On et le thème sont simulés dans son bac à sable.
+  const v4 = load("utils.js", "house.js", "house-effets.js");
+  v4("var finite = (v) => typeof v === 'number' && Number.isFinite(v); var hubV4Wanted = true; var hubV4On = () => hubV4Wanted; document.documentElement = { dataset: { theme: 'light' } };");
+  v4("entities.set('sun.sun', { entity_id: 'sun.sun', state: 'below_horizon', attributes: { elevation: -2 } });");
+  const page = { background: "jour.png", night: "nuit.png", ambiances: { crepuscule: "soir.png" } };
+
+  test("sans la v4 : le soleil décide (nuit, crépuscule)", () => {
+    v4("hubV4Wanted = false;");
+    assert.equal(v4("houseNight()"), true);
+    assert.equal(v4("ambianceOf")(page), "crepuscule");
+  });
+
+  test("en v4 : le thème décide, Clair = jour, Sombre = nuit, sans crépuscule", () => {
+    v4("hubV4Wanted = true; document.documentElement.dataset.theme = 'light';");
+    assert.equal(v4("houseNight()"), false);
+    assert.equal(v4("ambianceOf")(page), "jour");
+    v4("document.documentElement.dataset.theme = 'dark';");
+    assert.equal(v4("houseNight()"), true);
+    assert.equal(v4("ambianceOf")(page), "nuit");
+  });
+});

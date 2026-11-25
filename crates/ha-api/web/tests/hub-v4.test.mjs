@@ -20,8 +20,12 @@ const hubV4WhiteRange = run("hubV4WhiteRange");
 const hubV4ClosedPart = run("hubV4ClosedPart");
 const hubV4CoverLabel = run("hubV4CoverLabel");
 const hubV4MomentRows = run("hubV4MomentRows");
+const hubV4MomentHeat = run("hubV4MomentHeat");
 const hubV4Expiry = run("hubV4Expiry");
 const hubV4AskedBy = run("hubV4AskedBy");
+const hubV4Suggested = run("hubV4Suggested");
+const hubV4TempoText = run("hubV4TempoText");
+const hubV4CoursesText = run("hubV4CoursesText");
 
 const cover = (state, attributes = {}) => ({ entity_id: "cover.salon", state, attributes });
 
@@ -195,6 +199,36 @@ describe("hubV4MomentRows", () => {
   test("une scène qui ne dit rien ne donne aucune ligne", () => {
     assert.deepEqual(plain(hubV4MomentRows(undefined, get)), []);
     assert.deepEqual(plain(hubV4MomentRows({ "media_player.radio": { state: "on" } }, get)), []);
+  });  test("le chauffage et la musique qui s'arrête", () => {
+    const more = new Map([
+      ["climate.etage", { entity_id: "climate.etage", state: "heat", attributes: { friendly_name: "Étage", preset_mode: "confort" } }],
+      ["media_player.salon", { entity_id: "media_player.salon", state: "playing", attributes: { friendly_name: "Salle à manger" } }],
+    ]);
+    const rows = plain(hubV4MomentRows({
+      "climate.etage": { state: "on", preset_mode: "eco" },
+      "media_player.salon": { state: "off" },
+    }, (id) => more.get(id)));
+    assert.deepEqual(rows, [
+      { domain: "climate", label: "Chauffage", now: "en confort", then: "Eco", done: false },
+      { domain: "media_player", label: "Musique", now: "Salle à manger", then: "s'arrête", done: false },
+    ]);
+  });
+});
+
+describe("hubV4MomentHeat", () => {
+  const heat = (state, attributes = {}) => ({ state, attributes });
+  test("un préréglage, une consigne, ou coupé", () => {
+    assert.equal(hubV4MomentHeat([{ state: "on", temperature: 19 }], [heat("heat", { temperature: 21 })]).then, "19°");
+    assert.equal(hubV4MomentHeat([{ state: "off" }], [heat("heat")]).then, "coupé");
+    assert.equal(hubV4MomentHeat([{ state: "on", hvac_mode: "off" }], [heat("off")]).then, "déjà coupé");
+  });
+  test("déjà fait", () => {
+    const row = plain(hubV4MomentHeat([{ state: "on", preset_mode: "nuit" }], [heat("heat", { preset_mode: "nuit" })]));
+    assert.deepEqual(row, { now: "en nuit", then: "déjà nuit", done: true });
+  });
+  test("une cible qui ne dit rien : pas de ligne", () => {
+    assert.equal(hubV4MomentHeat([{ state: "on" }], [heat("heat")]), null);
+    assert.equal(hubV4MomentHeat([{ state: "on", preset_mode: "eco" }, { state: "on", preset_mode: "confort" }], []), null);
   });
 });
 
@@ -210,5 +244,35 @@ describe("hubV4Expiry et hubV4AskedBy", () => {
     assert.equal(hubV4AskedBy("à la voix (Alexa)", at), "Demandé à la voix (Alexa) · 21:42");
     assert.equal(hubV4AskedBy("", at), "Demandé à 21:42");
     assert.equal(hubV4AskedBy("", "n'importe quoi"), "Demandé");
+  });
+});
+
+describe("hubV4Suggested : la scène de l'heure (Moments)", () => {
+  const names = ["Bonjour", "Bonne nuit", "Cinéma", "Je pars", "Je rentre", "Soirée"];
+  test("le matin, le midi, le soir, la nuit", () => {
+    assert.equal(hubV4Suggested(names, 7), 0);
+    assert.equal(hubV4Suggested(names, 13), 3);
+    assert.equal(hubV4Suggested(names, 18), 4);
+    assert.equal(hubV4Suggested(names, 22), 1);
+    assert.equal(hubV4Suggested(names, 2), 1);
+  });
+  test("rien qui corresponde : pas de suggestion", () => {
+    assert.equal(hubV4Suggested(["Cinéma", "Lecture"], 7), -1);
+    assert.equal(hubV4Suggested([], 22), -1);
+  });
+});
+
+describe("hubV4TempoText et hubV4CoursesText", () => {
+  test("la couleur du jour, puis le jour", () => {
+    assert.equal(hubV4TempoText("Bleu", "aujourd'hui"), "Bleu aujourd'hui");
+    assert.equal(hubV4TempoText("Rouge", "demain"), "Rouge demain");
+  });
+  test("pas encore annoncé, ou un état inconnu", () => {
+    assert.equal(hubV4TempoText("unknown", "demain"), "Demain : pas encore annoncé");
+    assert.equal(hubV4TempoText("unavailable", "aujourd'hui"), "Aujourd'hui : indisponible");
+  });
+  test("la liste des courses : vide ou le nombre", () => {
+    assert.equal(hubV4CoursesText(0), "vides");
+    assert.equal(hubV4CoursesText(3), "3");
   });
 });

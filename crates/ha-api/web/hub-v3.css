@@ -1,6 +1,22 @@
 /* v3/v4 : l'accueil « ciel ». Actif seulement si <html data-hub-style="v3">.
    Il suit le thème : ciel de jour en Clair, ciel de nuit en Sombre. */
 
+/* Instrument Serif (licence OFL, fonts/OFL-instrumentserif.txt) : le récit de la v4. */
+@font-face {
+  font-family: "Instrument Serif";
+  src: url("/fonts/instrument-serif.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Instrument Serif";
+  src: url("/fonts/instrument-serif-italic.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
 /* ---------------------------------------------------------------- Jetons et fond */
 /* La palette de l'accueil, deux valeurs (Sombre par défaut, Clair plus bas).
    Posée sur la racine : les écrans v4 hors de .hub (sonnette, incrustations)
@@ -128,7 +144,7 @@
   min-height: 44px;
   padding: 0 12px;
   border: 0;
-  border-radius: 14px;
+  border-radius: var(--radius-champ);
   background: color-mix(in srgb, var(--v3-voile) 7%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v3-voile) 6%, transparent);
   color: var(--v3-ink);
@@ -136,7 +152,7 @@
   cursor: pointer;
 }
 :root[data-hub-style="v3"] .hub .hub-scene b,
-:root[data-hub-style="v3"] .hub .hub-scenes.narrow .hub-scene b { font-size: 14px; font-weight: 500; line-height: 1.2; }
+:root[data-hub-style="v3"] .hub .hub-scenes.narrow .hub-scene b { font-size: var(--text-corps); font-weight: 500; line-height: 1.2; }
 :root[data-hub-style="v3"] .hub .hub-scene-icon { display: grid; place-items: center; flex: none; width: 18px; height: 18px; background: none; border-radius: 0; }
 :root[data-hub-style="v3"] .hub .hub-scene-icon svg { width: 18px; height: 18px; }
 :root[data-hub-style="v3"] .hub .hub-scene.t-go .hub-scene-icon { color: var(--v3-amber); }
@@ -164,7 +180,7 @@
   width: 100%;
   padding: 0;
   border: 0;
-  border-radius: 14px;
+  border-radius: var(--radius-champ);
   background: none;
   color: var(--v3-ink);
   font: inherit;
@@ -179,7 +195,7 @@
   width: 48px;
   height: 48px;
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: var(--radius-puce);
   color: #21133f;
   background: linear-gradient(140deg, #6d4fb0, #b9a3ff 58%, #ff9bd2);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v3-voile) 12%, transparent);
@@ -187,8 +203,8 @@
 :root[data-hub-style="v3"] .hub .hub-v3-art svg { width: 22px; height: 22px; }
 :root[data-hub-style="v3"] .hub .hub-v3-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 :root[data-hub-style="v3"] .hub .hub-v3-music-text { display: grid; gap: 2px; flex: 1; min-width: 0; }
-:root[data-hub-style="v3"] .hub .hub-v3-music-title { display: block; overflow: hidden; font-size: 14px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
-:root[data-hub-style="v3"] .hub .hub-v3-music-sub { display: block; overflow: hidden; font-size: 13px; color: var(--v3-mute); white-space: nowrap; text-overflow: ellipsis; }
+:root[data-hub-style="v3"] .hub .hub-v3-music-title { display: block; overflow: hidden; font-size: var(--text-corps); font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+:root[data-hub-style="v3"] .hub .hub-v3-music-sub { display: block; overflow: hidden; font-size: var(--text-petit); color: var(--v3-mute); white-space: nowrap; text-overflow: ellipsis; }
 :root[data-hub-style="v3"] .hub .hub-v3-music-ctl { display: flex; align-items: center; gap: 4px; margin-top: 8px; }
 :root[data-hub-style="v3"] .hub .hub-v3-play,
 :root[data-hub-style="v3"] .hub .hub-v3-next {
@@ -198,7 +214,7 @@
   height: 44px;
   padding: 0;
   border: 0;
-  border-radius: 14px;
+  border-radius: var(--radius-champ);
   background: transparent;
   color: var(--v3-ink);
   cursor: pointer;
@@ -221,16 +237,16 @@
 :root[data-hub-style="v3"] .hub .hub-weather-now { gap: 14px; }
 :root[data-hub-style="v3"] .hub .hub-weather-now svg { width: 40px; height: 40px; color: var(--v3-ink2); stroke-width: 1.4; }
 :root[data-hub-style="v3"] .hub .hub-weather-now strong { font-family: var(--font); font-size: 60px; font-weight: 200; line-height: 1; letter-spacing: -0.04em; color: var(--v3-ink); }
-:root[data-hub-style="v3"] .hub .hub-weather-now span { font-size: 13px; line-height: 1.4; color: var(--v3-ink2); }
+:root[data-hub-style="v3"] .hub .hub-weather-now span { font-size: var(--text-petit); line-height: 1.4; color: var(--v3-ink2); }
 :root[data-hub-style="v3"] .hub .hub-weather-now small { color: var(--v3-mute); }
 :root[data-hub-style="v3"] .hub .hub-forecast { gap: 4px; margin-top: 12px; }
-:root[data-hub-style="v3"] .hub .hub-forecast li { gap: 1px; padding: 6px 0; border-radius: 12px; background: color-mix(in srgb, var(--v3-voile) 4%, transparent); font-size: 13px; color: var(--v3-mute); }
-:root[data-hub-style="v3"] .hub .hub-forecast b { font-size: 14px; font-weight: 500; color: var(--v3-ink); }
+:root[data-hub-style="v3"] .hub .hub-forecast li { gap: 1px; padding: 6px 0; border-radius: 12px; background: color-mix(in srgb, var(--v3-voile) 4%, transparent); font-size: var(--text-petit); color: var(--v3-mute); }
+:root[data-hub-style="v3"] .hub .hub-forecast b { font-size: var(--text-corps); font-weight: 500; color: var(--v3-ink); }
 
 /* Tempo : une rangée sans carte. */
-:root[data-hub-style="v3"] .hub .hub-v3-tempo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; color: var(--v3-ink2); }
+:root[data-hub-style="v3"] .hub .hub-v3-tempo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: var(--text-petit); color: var(--v3-ink2); }
 :root[data-hub-style="v3"] .hub .hub-v3-tempo-label { color: var(--v3-mute); }
-:root[data-hub-style="v3"] .hub .tempo-badge { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: 999px; font-size: 13px; font-weight: 600; line-height: 1; }
+:root[data-hub-style="v3"] .hub .tempo-badge { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: 999px; font-size: var(--text-petit); font-weight: 600; line-height: 1; }
 :root[data-hub-style="v3"] .hub .tempo-badge.tempo-blue { background: rgb(91 141 255 / 0.16); color: var(--v3-ink); }
 :root[data-hub-style="v3"] .hub .tempo-badge.tempo-white { background: color-mix(in srgb, var(--v3-voile) 14%, transparent); color: var(--v3-ink); }
 :root[data-hub-style="v3"] .hub .tempo-badge.tempo-red { background: color-mix(in srgb, var(--v3-alert) 20%, transparent); color: var(--v3-alert); }
@@ -241,11 +257,11 @@
 :root[data-hub-style="v3"] .hub .hub-event { min-height: 44px; padding: 8px; border-radius: 12px; color: var(--v3-ink); }
 :root[data-hub-style="v3"] .hub .hub-event.next { background: color-mix(in srgb, var(--v3-sky) 10%, transparent); }
 :root[data-hub-style="v3"] .hub .hub-event-bar { width: 3px; background: var(--ev, var(--v3-pink)); }
-:root[data-hub-style="v3"] .hub .hub-event-time { font-family: var(--font-mono); font-size: 13px; color: var(--v3-mute); }
-:root[data-hub-style="v3"] .hub .hub-event-text small { font-size: 13px; color: var(--v3-mute); }
+:root[data-hub-style="v3"] .hub .hub-event-time { font-family: var(--font-mono); font-size: var(--text-petit); color: var(--v3-mute); }
+:root[data-hub-style="v3"] .hub .hub-event-text small { font-size: var(--text-petit); color: var(--v3-mute); }
 :root[data-hub-style="v3"] .hub .hub-event-when { color: var(--v3-sky); }
 :root[data-hub-style="v3"] .hub .hub-event-when.now { color: var(--v3-ok); }
-:root[data-hub-style="v3"] .hub .hub-empty { font-size: 14px; color: var(--v3-mute); }
+:root[data-hub-style="v3"] .hub .hub-empty { font-size: var(--text-corps); color: var(--v3-mute); }
 
 /* Chauffage : une tuile de verre, des rangées de consigne. */
 :root[data-hub-style="v3"] .hub .hub-v3-heating {
@@ -258,7 +274,7 @@
 }
 :root[data-hub-style="v3"] .hub .hub-v3-heat-head { display: flex; align-items: center; gap: 8px; }
 :root[data-hub-style="v3"] .hub .hub-v3-heat-head svg { width: 18px; height: 18px; flex: none; color: var(--v3-heat); }
-:root[data-hub-style="v3"] .hub .hub-v3-heat-head h3 { margin: 0; font-size: 15px; font-weight: 600; color: var(--v3-ink); }
+:root[data-hub-style="v3"] .hub .hub-v3-heat-head h3 { margin: 0; font-size: var(--text-courant); font-weight: 600; color: var(--v3-ink); }
 :root[data-hub-style="v3"] .hub .hub-v3-heat-chip {
   display: inline-flex;
   align-items: center;
@@ -266,7 +282,7 @@
   margin-left: auto;
   padding: 0 8px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: var(--text-legende);
   font-weight: 600;
   color: var(--v3-ink2);
   background: color-mix(in srgb, var(--v3-voile) 10%, transparent);
@@ -283,7 +299,7 @@
   margin-top: 8px;
   padding: 8px 12px;
   border: 0;
-  border-radius: 14px;
+  border-radius: var(--radius-champ);
   background: color-mix(in srgb, var(--v3-voile) 5%, transparent);
   color: var(--v3-ink);
   font: inherit;
@@ -291,9 +307,9 @@
   cursor: pointer;
 }
 :root[data-hub-style="v3"] .hub .hub-v3-zone-text { display: grid; gap: 2px; min-width: 0; }
-:root[data-hub-style="v3"] .hub .hub-v3-zone-text b { font-size: 15px; font-weight: 600; }
-:root[data-hub-style="v3"] .hub .hub-v3-zone-text small { font-size: 13px; color: var(--v3-mute); }
-:root[data-hub-style="v3"] .hub .hub-v3-zone-target { flex: none; font-size: 20px; font-weight: 300; font-variant-numeric: tabular-nums; color: var(--v3-ink); }
+:root[data-hub-style="v3"] .hub .hub-v3-zone-text b { font-size: var(--text-courant); font-weight: 600; }
+:root[data-hub-style="v3"] .hub .hub-v3-zone-text small { font-size: var(--text-petit); color: var(--v3-mute); }
+:root[data-hub-style="v3"] .hub .hub-v3-zone-target { flex: none; font-size: var(--text-grand); font-weight: 300; font-variant-numeric: tabular-nums; color: var(--v3-ink); }
 :root[data-hub-style="v3"] .hub .hub-v3-zone.heating .hub-v3-zone-target { color: var(--v3-heat); }
 :root[data-hub-style="v3"] .hub .hub-v3-zone.water:not(.heating) .hub-v3-zone-target { color: var(--v3-ink2); }
 
@@ -301,7 +317,7 @@
 :root[data-hub-style="v3"] .hub .hub-pill {
   padding: 7px 14px;
   border-radius: 999px;
-  font-size: 14px;
+  font-size: var(--text-corps);
   color: var(--v3-ink2);
   background: var(--v3-glass);
   -webkit-backdrop-filter: blur(20px) saturate(150%);
@@ -314,7 +330,7 @@
   height: 32px;
   padding: 0 12px;
   border-radius: 999px;
-  font-size: 13px;
+  font-size: var(--text-petit);
   color: var(--v3-ink2);
   background: color-mix(in srgb, var(--v3-ok) 10%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v3-ok) 22%, transparent);
@@ -334,7 +350,7 @@
   height: 44px;
   padding: 0;
   border: 0;
-  border-radius: 14px;
+  border-radius: var(--radius-champ);
   color: var(--v3-ink);
   background: var(--v3-glass);
   -webkit-backdrop-filter: blur(20px) saturate(150%);
@@ -353,7 +369,7 @@
   height: 18px;
   padding: 0 5px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: var(--text-micro);
   font-weight: 700;
   line-height: 1;
   color: #2a1406;
@@ -368,7 +384,7 @@
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   color: #2a1406;
-  font-size: 14px;
+  font-size: var(--text-corps);
   font-weight: 650;
 }
 :root[data-hub-style="v3"] .hub .hub-v3-avatar::before {
@@ -399,7 +415,7 @@
   padding: 4px;
   overflow-x: auto;
   scrollbar-width: none;
-  border-radius: 18px;
+  border-radius: var(--radius-panneau);
   background: var(--v3-glass);
   -webkit-backdrop-filter: blur(20px) saturate(150%);
   backdrop-filter: blur(20px) saturate(150%);
@@ -419,10 +435,10 @@
   height: 36px;
   padding: 0 4px;
   border: 0;
-  border-radius: 14px;
+  border-radius: var(--radius-champ);
   background: transparent;
   color: var(--v3-ink2);
-  font-size: 14px;
+  font-size: var(--text-corps);
   font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
@@ -442,7 +458,7 @@
   top: 4px;
   width: var(--v3-seg);
   height: 36px;
-  border-radius: 14px;
+  border-radius: var(--radius-champ);
   pointer-events: none;
   background: color-mix(in srgb, var(--v3-voile) 13%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v3-voile) 10%, transparent);
@@ -459,11 +475,11 @@
    72 px dès 1076 px, 62 px (sans les points de couleur) dès 1016 px. */
 @media (max-width: 1279px) {
   :root[data-hub-style="v3"] .hub .hub-v3-lens { --v3-seg: 72px; }
-  :root[data-hub-style="v3"] .hub .hub-v3-seg { gap: 4px; padding: 0 3px; font-size: 13px; }
+  :root[data-hub-style="v3"] .hub .hub-v3-seg { gap: 4px; padding: 0 3px; font-size: var(--text-petit); }
 }
 @media (max-width: 1075px) {
   :root[data-hub-style="v3"] .hub .hub-v3-lens { --v3-seg: 62px; }
-  :root[data-hub-style="v3"] .hub .hub-v3-seg { font-size: 12px; }
+  :root[data-hub-style="v3"] .hub .hub-v3-seg { font-size: var(--text-legende); }
   :root[data-hub-style="v3"] .hub .hub-v3-sd { display: none; }
 }
 
@@ -537,7 +553,7 @@
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: 13px;
+  font-size: var(--text-petit);
   color: var(--v3-ink2);
 }
 :root[data-hub-style="v3"] .hub .hub-v3-read-icon { display: grid; flex: none; color: var(--v3-lens); }
@@ -551,7 +567,7 @@
   border-radius: 999px;
   background: var(--v3-lens);
   color: var(--v3-lens-ink);
-  font-size: 12.5px;
+  font-size: var(--text-petit);
   font-weight: 650;
   white-space: nowrap;
   cursor: pointer;
@@ -574,7 +590,7 @@
   border-radius: 999px;
   background: var(--v3-lens);
   color: var(--v3-lens-ink);
-  font-size: 14px;
+  font-size: var(--text-corps);
   font-weight: 650;
   font-variant-numeric: tabular-nums;
   line-height: 1;
@@ -606,7 +622,7 @@
   max-width: 18ch;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 11px;
+  font-size: var(--text-micro);
   font-weight: 500;
   opacity: 0.78;
 }
@@ -614,7 +630,7 @@
   height: auto;
   min-height: 28px;
   padding-block: 4px;
-  border-radius: 14px;
+  border-radius: var(--radius-champ);
   line-height: 1.2;
 }
 :root[data-hub-style="v3"] .hub .hub-v3-pin:disabled { cursor: default; opacity: 0.6; }
@@ -635,7 +651,7 @@
   padding: 4px;
   overflow-x: auto;
   scrollbar-width: none;
-  border-radius: 18px;
+  border-radius: var(--radius-panneau);
   background: var(--v3-glass);
   -webkit-backdrop-filter: blur(20px) saturate(150%);
   backdrop-filter: blur(20px) saturate(150%);
@@ -659,10 +675,10 @@
   height: 36px;
   padding: 0 12px 0 10px;
   border: 0;
-  border-radius: 14px;
+  border-radius: var(--radius-champ);
   background: transparent;
   color: var(--v3-ink2);
-  font-size: 13px;
+  font-size: var(--text-petit);
   font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
@@ -699,7 +715,7 @@
   background: transparent;
   box-shadow: none;
   color: var(--v3-ink2);
-  font-size: 13px;
+  font-size: var(--text-petit);
   font-weight: 500;
   cursor: pointer;
 }
@@ -715,15 +731,15 @@
 :root[data-hub-style="v3"] .hub .house-tag {
   padding: 5px 9px 6px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-puce);
   color: var(--v3-ink);
   background: color-mix(in srgb, var(--v3-scrim) 66%, transparent);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v3-voile) 10%, transparent), 0 8px 20px -10px rgb(0 0 0 / 0.8);
 }
-:root[data-hub-style="v3"] .hub .house-label-name { font-size: 11px; color: var(--v3-mute); }
-:root[data-hub-style="v3"] .hub .house-tag strong { font-size: 13px; color: var(--v3-ink); }
+:root[data-hub-style="v3"] .hub .house-label-name { font-size: var(--text-micro); color: var(--v3-mute); }
+:root[data-hub-style="v3"] .hub .house-tag strong { font-size: var(--text-petit); color: var(--v3-ink); }
 :root[data-hub-style="v3"] .hub .house-zone { transition: opacity 0.5s var(--v3-ease); }
 :root[data-hub-style="v3"] .hub .house-base { transition: filter 0.5s var(--v3-ease); }
 :root[data-hub-style="v3"] .hub .house-stage.default-drawing .house-base { filter: invert(1) hue-rotate(180deg) brightness(1.15); mix-blend-mode: screen; }
@@ -731,6 +747,10 @@
 /* Une bascule active assombrit le dessin. */
 :root[data-hub-style="v3"] .hub #hub-house[data-lens]:not([data-lens="vivant"]) .house-base { filter: brightness(0.55) saturate(0.8); }
 :root[data-hub-style="v3"] .hub #hub-house[data-lens]:not([data-lens="vivant"]) .house-stage.default-drawing .house-base { filter: invert(1) hue-rotate(180deg) brightness(0.75); }
+/* En Clair, le dessin par défaut (traits bleus sur blanc) reste tel quel : inversé,
+   il deviendrait blanc sur le ciel clair et disparaîtrait. */
+:root[data-hub-style="v3"][data-theme="light"] .hub .house-stage.default-drawing .house-base { filter: none; mix-blend-mode: multiply; }
+:root[data-hub-style="v3"][data-theme="light"] .hub #hub-house[data-lens]:not([data-lens="vivant"]) .house-stage.default-drawing .house-base { filter: saturate(0.3) opacity(0.55); }
 
 /* Ce qui ne correspond pas à la bascule s'efface. */
 :root[data-hub-style="v3"] .hub #hub-house[data-lens="lumieres"] :is(.house-label, .house-zone):not([data-kind="lumieres"]),
@@ -780,11 +800,11 @@
   min-height: 0;
   padding: 0 10px;
   border: 0;
-  border-radius: 18px;
+  border-radius: var(--radius-panneau);
   background: transparent;
   box-shadow: none;
   color: var(--v3-ink2);
-  font-size: 13px;
+  font-size: var(--text-petit);
   font-weight: 500;
   cursor: pointer;
 }
@@ -831,6 +851,253 @@
   :root[data-hub-style="v3"] .hub :is(.hub-scene, .hub-v3-music-open, .hub-v3-play, .hub-v3-next, .hub-v3-ib, .hub-v3-seg, .hub-v3-zone, .hub-v3-alloff, .hub-v3-room-chip, .hub-dock button, .hub-views button):active:not(:disabled) { transform: none; }
 }
 
+/* ================================================================ v4 : l'ambiance
+   La v4 (<html data-hub-v4>) reprend tout ce qui précède et change l'ambiance :
+   ciel de nuit indigo → prune avec lune et étoiles (Sombre), ciel de jour
+   bleu pâle → pêche avec soleil et nuages (Clair), récit en serif, chiffres
+   fins, accent ambre, verre teinté, maison plus grande. La v3 ne change pas. */
+
+/* Geist est variable (100 à 900), mais sa @font-face de base (css/legacy.css)
+   s'arrête à 400-600 : un poids 200 y tombe sur 400. Ce second nom vise le
+   même fichier (un seul téléchargement) avec toute la plage, pour la v4
+   seulement. */
+@font-face {
+  font-family: "Geist v4";
+  src: url("/fonts/geist.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root[data-hub-v4] {
+  --v4-star: 255 248 232;
+  --v4-moon: radial-gradient(circle at 36% 34%, #fffdf0 0%, #f6efcf 48%, #e6dbb2 100%);
+  --v4-moon-halo: 0 0 18px 4px rgb(255 242 205 / 0.30), 0 0 70px 26px rgb(255 232 190 / 0.10);
+  --v4-mist: rgb(150 112 190 / 0.16);
+  --v3-sky-bg:
+    radial-gradient(90% 38% at 50% 100%, rgb(122 78 140 / 0.30), transparent 72%),
+    linear-gradient(180deg, #090c1f 0%, #0c1030 22%, #0f1436 40%, #181a40 54%, #221d49 66%, #30254f 78%, #3e2c55 90%, #4a3159 100%);
+}
+:root[data-hub-v4][data-theme="light"] {
+  --v4-sun: radial-gradient(circle at 40% 38%, #fffbea 0%, #ffe8a8 52%, #ffd27a 100%);
+  --v4-sun-halo: 0 0 26px 8px rgb(255 214 130 / 0.50), 0 0 120px 48px rgb(255 222 160 / 0.32);
+  --v4-cloud: rgb(255 255 255 / 0.78);
+  --v4-mist: rgb(255 236 214 / 0.55);
+  --v3-sky-bg:
+    radial-gradient(70% 40% at 72% 6%, rgb(255 236 196 / 0.55), transparent 70%),
+    linear-gradient(180deg, #cddff1 0%, #dbe6f2 24%, #e9ecf0 44%, #f5e9de 66%, #f8e4d2 84%, #f5e8d8 100%);
+}
+
+/* Les incrustations v4 (hub-v4.js, hub-v4-sonnette.js) : voile, ombre autour
+   de la pièce montrée, schéma des champs. Bleu nuit la nuit, crème le jour. */
+:root[data-hub-v4] {
+  --v4-scheme: dark;
+  --v4-veil: radial-gradient(ellipse at center, rgb(7 10 28 / 0.35), rgb(7 10 28 / 0.78));
+  --v4-shade: rgb(7 10 28 / 0.72);
+}
+:root[data-hub-v4][data-theme="light"] {
+  /* Plus foncés qu'en v3 : sur le verre crème de la v4, l'orangé du chauffage
+     et le vert « RAS » restaient juste sous AA (4,4:1) en petit texte. */
+  --v3-heat: #a23d10;
+  --v3-ok: #17693f;
+  --v4-scheme: light;
+  --v4-veil: radial-gradient(ellipse at center, rgb(248 240 228 / 0.30), rgb(236 226 212 / 0.72));
+  --v4-shade: rgb(240 232 220 / 0.70);
+}
+
+/* Accent ambre (le bleu ciel garde son sens : volets, Tempo bleu). */
+:root[data-hub-v4] .hub {
+  --accent: var(--v3-amber);
+  --accent-soft: color-mix(in srgb, var(--v3-amber) 16%, transparent);
+  /* Verre teinté indigo, bordure d'un pixel très légère, ombre douce. */
+  --v3-glass: rgb(28 27 74 / 0.58);
+  --v3-glass-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06), inset 0 0 0 1px rgb(255 255 255 / 0.07), 0 1px 1px rgb(4 4 20 / 0.25), 0 22px 44px -22px rgb(4 4 20 / 0.75);
+  font-family: "Geist v4", var(--font);
+}
+:root[data-hub-v4][data-theme="light"] .hub {
+  --v3-glass: rgb(255 253 249 / 0.76);
+  --v3-glass-shadow: inset 0 1px 0 rgb(255 255 255 / 0.7), inset 0 0 0 1px rgb(60 48 30 / 0.07), 0 1px 2px rgb(90 70 40 / 0.06), 0 16px 36px -18px rgb(90 70 40 / 0.24);
+}
+:root[data-hub-v4] .hub :focus-visible { outline-color: var(--v3-amber); }
+
+/* Le ciel : étoiles et brume derrière tout (la .hub fixe forme un contexte d'empilement). */
+:root[data-hub-v4] .hub::before,
+:root[data-hub-v4] .hub::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+:root[data-hub-v4] .hub::before {
+  background:
+    radial-gradient(circle at 33.1% 10.4%, rgb(var(--v4-star) / 0.38) 0 0.6px, transparent 1.5px),
+    radial-gradient(circle at 53.4% 22.5%, rgb(var(--v4-star) / 0.6) 0 0.6px, transparent 1.5px),
+    radial-gradient(circle at 22.6% 6.8%, rgb(var(--v4-star) / 0.38) 0 1px, transparent 1.9px),
+    radial-gradient(circle at 10.7% 30.8%, rgb(var(--v4-star) / 0.41) 0 1.1px, transparent 2px),
+    radial-gradient(circle at 23.4% 37.1%, rgb(var(--v4-star) / 0.5) 0 0.6px, transparent 1.5px),
+    radial-gradient(circle at 44.1% 31.7%, rgb(var(--v4-star) / 0.5) 0 0.6px, transparent 1.5px),
+    radial-gradient(circle at 61.6% 9.5%, rgb(var(--v4-star) / 0.4) 0 1px, transparent 1.9px),
+    radial-gradient(circle at 31.6% 47.7%, rgb(var(--v4-star) / 0.35) 0 0.7px, transparent 1.6px),
+    radial-gradient(circle at 56.8% 14.5%, rgb(var(--v4-star) / 0.55) 0 0.6px, transparent 1.5px),
+    radial-gradient(circle at 8% 5.3%, rgb(var(--v4-star) / 0.5) 0 0.7px, transparent 1.6px),
+    radial-gradient(circle at 66.5% 25.5%, rgb(var(--v4-star) / 0.5) 0 1px, transparent 1.9px),
+    radial-gradient(circle at 45.5% 18.8%, rgb(var(--v4-star) / 0.6) 0 0.7px, transparent 1.6px),
+    radial-gradient(circle at 81.4% 34.2%, rgb(var(--v4-star) / 0.45) 0 0.8px, transparent 1.7px),
+    radial-gradient(circle at 35% 25.1%, rgb(var(--v4-star) / 0.7) 0 1.1px, transparent 2px),
+    radial-gradient(circle at 93.3% 4.4%, rgb(var(--v4-star) / 0.42) 0 0.8px, transparent 1.7px),
+    radial-gradient(circle at 48.9% 4.2%, rgb(var(--v4-star) / 0.6) 0 0.6px, transparent 1.5px),
+    radial-gradient(circle at 72.4% 15.1%, rgb(var(--v4-star) / 0.45) 0 0.8px, transparent 1.7px),
+    radial-gradient(circle at 88.6% 18.8%, rgb(var(--v4-star) / 0.38) 0 1px, transparent 1.9px),
+    radial-gradient(circle at 15% 17.1%, rgb(var(--v4-star) / 0.38) 0 0.6px, transparent 1.5px),
+    radial-gradient(circle at 69.3% 38.2%, rgb(var(--v4-star) / 0.4) 0 1px, transparent 1.9px),
+    radial-gradient(circle at 39% 39.4%, rgb(var(--v4-star) / 0.55) 0 0.6px, transparent 1.5px),
+    radial-gradient(circle at 78.1% 6.2%, rgb(var(--v4-star) / 0.5) 0 1px, transparent 1.9px),
+    /* Brume basse. */
+    radial-gradient(120% 30% at 50% 104%, var(--v4-mist), transparent 70%);
+}
+/* Quelques étoiles plus vives qui scintillent très lentement. */
+:root[data-hub-v4] .hub::after {
+  background:
+    radial-gradient(circle at 75.8% 7.6%, rgb(var(--v4-star) / 0.8) 0 0.9px, transparent 1.9px),
+    radial-gradient(circle at 90% 26.3%, rgb(var(--v4-star) / 0.7) 0 0.7px, transparent 1.6px),
+    radial-gradient(circle at 54.7% 36%, rgb(var(--v4-star) / 0.75) 0 0.8px, transparent 1.7px),
+    radial-gradient(circle at 28.7% 19.9%, rgb(var(--v4-star) / 0.75) 0 0.8px, transparent 1.7px),
+    radial-gradient(circle at 40.5% 9.9%, rgb(var(--v4-star) / 0.7) 0 0.7px, transparent 1.6px),
+    radial-gradient(circle at 19.5% 12.1%, rgb(var(--v4-star) / 0.8) 0 1px, transparent 1.9px),
+    radial-gradient(circle at 63.5% 31.6%, rgb(var(--v4-star) / 0.65) 0 0.6px, transparent 1.5px),
+    radial-gradient(circle at 85.6% 42.9%, rgb(var(--v4-star) / 0.6) 0 1px, transparent 1.9px);
+  animation: hub-v4-twinkle 7s ease-in-out infinite alternate;
+}
+@keyframes hub-v4-twinkle {
+  from { opacity: 0.35; }
+  to { opacity: 1; }
+}
+/* Le jour : pas d'étoiles ; deux nuages légers et une brume chaude. */
+:root[data-hub-v4][data-theme="light"] .hub::before {
+  background:
+    radial-gradient(ellipse 130px 26px at 61% 15%, var(--v4-cloud), transparent 72%),
+    radial-gradient(ellipse 80px 22px at 56.5% 13%, var(--v4-cloud), transparent 72%),
+    radial-gradient(ellipse 150px 24px at 37% 30%, rgb(255 255 255 / 0.5), transparent 72%),
+    radial-gradient(ellipse 70px 20px at 40.5% 28.5%, rgb(255 255 255 / 0.55), transparent 72%),
+    radial-gradient(120% 30% at 50% 104%, var(--v4-mist), transparent 70%);
+}
+:root[data-hub-v4][data-theme="light"] .hub::after { content: none; }
+
+/* La lune (le soleil le jour), en haut à droite de la zone de la maison. */
+:root[data-hub-v4] .hub .hub-center::before {
+  content: "";
+  position: absolute;
+  top: 104px;
+  right: 6%;
+  z-index: -1;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--v4-moon);
+  box-shadow: var(--v4-moon-halo);
+  pointer-events: none;
+}
+:root[data-hub-v4][data-theme="light"] .hub .hub-center::before {
+  width: 46px;
+  height: 46px;
+  background: var(--v4-sun);
+  box-shadow: var(--v4-sun-halo);
+}
+
+/* Récit en serif : « Bonsoir. » droite, « Tout est calme. » en italique ambre. */
+:root[data-hub-v4] .hub .hub-v3-hello {
+  font-family: "Instrument Serif", Georgia, "Times New Roman", serif;
+  font-size: clamp(34px, 3.7vw, 48px);
+  font-weight: 400;
+  line-height: 1.04;
+  letter-spacing: -0.012em;
+}
+:root[data-hub-v4] .hub .hub-v3-hello em { font-style: italic; color: var(--v3-amber); }
+/* Le même récit sur l'écran téléphone (hub-v4-telephone.js). */
+:root[data-hub-v4] .hub .hub-v4-tel h1:has(> em) {
+  font-family: "Instrument Serif", Georgia, "Times New Roman", serif;
+  font-weight: 400;
+  letter-spacing: -0.012em;
+}
+:root[data-hub-v4] .hub .hub-v4-tel h1 > em { font-style: italic; color: var(--v3-amber); }
+
+/* Chiffres fins : l'heure et la température. */
+:root[data-hub-v4] .hub .hub-clock {
+  font-family: "Geist v4", var(--font);
+  font-weight: 200;
+  letter-spacing: -0.035em;
+}
+:root[data-hub-v4] .hub .hub-weather-now strong { font-family: "Geist v4", var(--font); font-weight: 200; }
+
+/* La maison : plus grande, centrée. Une image 3D détourée (.cutout) se pose
+   telle quelle sur le ciel ; sinon (fond non uni), ses bords se fondent
+   doucement dans le ciel au lieu de l'ovale net du thème sombre. */
+@media (min-width: 1100px) {
+  :root[data-hub-v4] .hub { grid-template-columns: minmax(250px, 22%) minmax(0, 1fr) minmax(270px, 24%); }
+}
+:root[data-hub-v4] .hub .hub-house { inset: 50px -2% 0; }
+:root[data-hub-v4] .hub .hub-house #house-stage { width: min(100cqw, calc(100cqh * var(--ratio, 1.35))); }
+:root[data-hub-v4] .hub .hub-house #house-stage:not(.cutout) {
+  -webkit-mask-image: radial-gradient(farthest-side, #000 72%, transparent 100%);
+  mask-image: radial-gradient(farthest-side, #000 72%, transparent 100%);
+}
+
+/* Le ciel suit la météo, comme l'image de la maison (data-meteo, posé par
+   house.js) : éclaircies = astre voilé ; nuageux, vent, brouillard = ciel
+   gris, sans étoiles ; pluie, averses, orage, grêle = plus sombre ; neige =
+   pâle et froid. La pluie et la neige elles-mêmes tombent sur la maison
+   (effets du dessin). Les teintes de jour gardent l'ambre lisible (AA). */
+:root[data-hub-v4][data-meteo="eclaircies"] .hub .hub-center::before { opacity: 0.8; }
+:root[data-hub-v4]:is([data-meteo="nuageux"], [data-meteo="vent"], [data-meteo="brouillard"]) .hub .hub-center::before { opacity: 0.22; filter: blur(3px); }
+:root[data-hub-v4]:is([data-meteo="pluie"], [data-meteo="averses"], [data-meteo="orage"], [data-meteo="grele"], [data-meteo="neige"], [data-meteo="pluie-neige"]) .hub .hub-center::before { opacity: 0; }
+:root[data-hub-v4]:not([data-meteo="soleil"], [data-meteo="eclaircies"]) .hub::after { content: none; }
+
+/* La nuit couverte : des bancs de nuages sombres à la place des étoiles. */
+:root[data-hub-v4]:not([data-meteo="soleil"], [data-meteo="eclaircies"]) .hub::before {
+  background:
+    radial-gradient(ellipse 34% 9% at 64% 14%, var(--v4-cloud-bank), transparent 72%),
+    radial-gradient(ellipse 30% 8% at 30% 24%, var(--v4-cloud-bank), transparent 72%),
+    radial-gradient(ellipse 26% 7% at 84% 32%, var(--v4-cloud-bank), transparent 72%),
+    radial-gradient(120% 30% at 50% 104%, var(--v4-mist), transparent 70%);
+}
+:root[data-hub-v4] { --v4-cloud-bank: rgb(70 72 104 / 0.45); }
+:root[data-hub-v4][data-theme="light"] { --v4-cloud-bank: rgb(255 255 255 / 0.6); }
+
+:root[data-hub-v4]:is([data-meteo="nuageux"], [data-meteo="vent"]) {
+  --v3-sky-bg: linear-gradient(180deg, #14172b 0%, #1b1e35 40%, #252840 75%, #2c2e47 100%);
+}
+:root[data-hub-v4][data-meteo="brouillard"] {
+  --v4-mist: rgb(170 168 196 / 0.32);
+  --v3-sky-bg: linear-gradient(180deg, #1b1d30 0%, #24263b 45%, #303246 80%, #383a4e 100%);
+}
+:root[data-hub-v4]:is([data-meteo="pluie"], [data-meteo="averses"], [data-meteo="orage"], [data-meteo="grele"], [data-meteo="pluie-neige"]) {
+  --v4-cloud-bank: rgb(52 54 78 / 0.55);
+  --v3-sky-bg: linear-gradient(180deg, #0f111f 0%, #161929 40%, #1f2233 75%, #262838 100%);
+}
+:root[data-hub-v4][data-meteo="neige"] {
+  --v4-cloud-bank: rgb(120 132 170 / 0.32);
+  --v3-sky-bg: linear-gradient(180deg, #182036 0%, #212a43 45%, #2e3853 80%, #36405b 100%);
+}
+:root[data-hub-v4][data-theme="light"]:is([data-meteo="nuageux"], [data-meteo="vent"]) {
+  --v3-sky-bg: linear-gradient(180deg, #d3dae3 0%, #dde1e6 35%, #e7e6e4 70%, #ece6de 100%);
+}
+:root[data-hub-v4][data-theme="light"][data-meteo="brouillard"] {
+  --v4-mist: rgb(244 243 240 / 0.8);
+  --v3-sky-bg: linear-gradient(180deg, #dfe1e4 0%, #e6e7e8 45%, #ecebe9 80%, #efedea 100%);
+}
+:root[data-hub-v4][data-theme="light"]:is([data-meteo="pluie"], [data-meteo="averses"], [data-meteo="orage"], [data-meteo="grele"], [data-meteo="pluie-neige"]) {
+  --v4-cloud-bank: rgb(236 238 242 / 0.55);
+  --v3-sky-bg: linear-gradient(180deg, #d4dae1 0%, #d9dde2 35%, #e0e0e1 70%, #e4e0da 100%);
+}
+:root[data-hub-v4][data-theme="light"][data-meteo="neige"] {
+  --v3-sky-bg: linear-gradient(180deg, #e2e9f1 0%, #ebf0f5 40%, #f3f5f7 75%, #f6f4f0 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-hub-v4] .hub::after { animation: none; }
+}
+
 /* ---------------------------------------------------------------- Hors v3 : le réglage du style */
 .hub-style-pick { display: grid; gap: .3rem; }
 .hub-style-pick select { width: 100%; }
@@ -838,3 +1105,182 @@
 .hub-v3-pins { display: none; }
 
 :root[data-hub-style="v3"][data-theme="light"] .hub { color-scheme: light; }
+
+/* ===== v4 accueil : composants ===== */
+/* Ce que la v4 change aux blocs repris de la v3 (le reste est en classes Tailwind
+   dans hub-v3.js, hub-v4.js et hub.js). La v3 n'est pas touchée : tout est sous
+   :root[data-hub-v4]. */
+
+/* Les pièces sur la maison (Vivant) : une pastille sombre « • Salon », le point
+   ambre si une lumière y est allumée. Toucher ouvre la pièce. */
+:root[data-hub-v4] .hub #hub-house[data-lens="vivant"] .hub-v3-pins { display: block; }
+/* Sur le téléphone (hub-v4-telephone.js), la maison est petite : pas de pastilles sur Vivant, comme la maquette. */
+:root[data-hub-v4][data-hub-tel] #hub-house[data-lens="vivant"] .hub-v3-pins { display: none; }
+:root[data-hub-v4] .hub .hub-v3-pin.hub-v4-room-pin {
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px 0 9px;
+  background: color-mix(in srgb, var(--v3-scrim) 80%, transparent);
+  color: var(--v3-ink);
+  font-size: var(--text-legende);
+  font-weight: 500;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v3-voile) 12%, transparent), 0 6px 16px -8px rgb(0 0 0 / 0.7);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+@media (hover: hover) {
+  :root[data-hub-v4] .hub .hub-v3-pins .hub-v3-pin.hub-v4-room-pin:hover { background-color: color-mix(in srgb, var(--v3-scrim) 94%, transparent); }
+}
+
+/* Les onglets du dessin (Devant / Jardin) au milieu, sous la maison, avec le bouton des réglages. */
+:root[data-hub-v4] .hub .hub-views { left: 50%; transform: translateX(-50%); }
+:root[data-hub-v4] .hub .hub-views .hub-v4-tune { display: grid; place-items: center; width: 40px; margin-left: 4px; padding: 0; color: var(--v3-ink2); }
+:root[data-hub-v4] .hub .hub-views .hub-v4-tune svg { width: 18px; height: 18px; }
+
+/* Moments : la scène de l'heure, en tête et sur toute la largeur. */
+:root[data-hub-v4] .hub .hub-scenes .hub-scene { min-height: 40px; }
+:root[data-hub-v4] .hub .hub-scenes .hub-scene.hub-v4-suggest:not(.on) {
+  min-height: 48px;
+  background: color-mix(in srgb, var(--v3-amber) 13%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v3-amber) 30%, transparent);
+}
+:root[data-hub-v4] .hub .hub-scene.hub-v4-suggest .hub-scene-icon { color: var(--v3-amber); }
+@media (hover: hover) {
+  :root[data-hub-v4] .hub .hub-scene.hub-v4-suggest:not(.on):hover { background-color: color-mix(in srgb, var(--v3-amber) 20%, transparent); }
+}
+
+/* Les colonnes, un peu plus serrées que la v3 : tout tient à 1280 × 670 comme la maquette. */
+:root[data-hub-v4] .hub .hub-left { gap: 10px; }
+:root[data-hub-v4] .hub .hub-right { gap: 10px; }
+/* Si la colonne manque de hauteur, les moments défilent : la musique reste entière en bas. */
+:root[data-hub-v4] .hub .hub-left > .hub-scenes { flex: 0 1 auto; min-height: 52px; overflow-y: auto; scrollbar-width: none; }
+:root[data-hub-v4] .hub .hub-left > .hub-scenes::-webkit-scrollbar { display: none; }
+:root[data-hub-v4] .hub .hub-left > .hub-scenes.hub-v4-more {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
+}
+:root[data-hub-v4] .hub .hub-left > :not(.hub-scenes) { flex-shrink: 0; }
+
+/* Musique : précédent, lecture, suivant, puis le volume. */
+:root[data-hub-v4] .hub .hub-v3-music { padding: 12px 12px 8px; }
+:root[data-hub-v4] .hub .hub-v3-art { width: 44px; height: 44px; }
+:root[data-hub-v4] .hub .hub-v3-music-ctl { gap: 2px; margin-top: 6px; }
+:root[data-hub-v4] .hub .hub-v3-music-ctl :is(.hub-v3-play, .hub-v3-next) { width: 40px; height: 40px; border-radius: 12px; }
+:root[data-hub-v4] .hub .hub-v3-music-ctl svg { width: 18px; height: 18px; }
+:root[data-hub-v4] .hub .hub-v4-volume { height: 40px; background: none; box-shadow: none; }
+:root[data-hub-v4] .hub .hub-v4-volume::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--v3-ink) var(--fill, 0%), color-mix(in srgb, var(--v3-voile) 20%, transparent) var(--fill, 0%));
+}
+:root[data-hub-v4] .hub .hub-v4-volume::-moz-range-track { height: 4px; border-radius: 999px; background: color-mix(in srgb, var(--v3-voile) 20%, transparent); }
+:root[data-hub-v4] .hub .hub-v4-volume::-moz-range-progress { height: 4px; border-radius: 999px; background: var(--v3-ink); }
+:root[data-hub-v4] .hub .hub-v4-volume::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--v3-ink);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.4);
+}
+:root[data-hub-v4] .hub .hub-v4-volume::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: var(--v3-ink); }
+
+/* Chauffage : la consigne dans une pastille, un chevron ; l'eau chaude sur une ligne. */
+:root[data-hub-v4] .hub .hub-v3-zone.hub-v4-zone { gap: 10px; min-height: 44px; margin-top: 6px; padding: 4px 8px 4px 12px; }
+:root[data-hub-v4] .hub .hub-v4-zone .hub-v3-zone-text { flex: 1; }
+:root[data-hub-v4] .hub .hub-v4-zone .hub-v3-zone-target {
+  display: inline-grid;
+  place-items: center;
+  min-width: 48px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: var(--text-corps);
+  font-weight: 600;
+  background: color-mix(in srgb, var(--v3-voile) 6%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v3-voile) 18%, transparent);
+}
+/* La couleur du chauffage, foncée vers l'encre : lisible (AA) sur la pastille, de jour comme de nuit. */
+:root[data-hub-v4] .hub .hub-v4-zone.heating .hub-v3-zone-target,
+:root[data-hub-v4] .hub .hub-v3-heat-chip.running {
+  color: color-mix(in srgb, var(--v3-heat) 72%, var(--v3-ink));
+  background: color-mix(in srgb, var(--v3-heat) 12%, transparent);
+}
+:root[data-hub-v4] .hub .hub-v4-zone.heating .hub-v3-zone-target { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v3-heat) 45%, transparent); }
+:root[data-hub-v4] .hub .hub-v4-chevron { display: grid; flex: none; margin-left: -4px; color: var(--v3-mute); }
+:root[data-hub-v4] .hub .hub-v4-chevron svg { width: 16px; height: 16px; }
+:root[data-hub-v4] .hub .hub-v3-zone.hub-v4-zone.water { min-height: 36px; margin-top: 4px; background: none; }
+:root[data-hub-v4] .hub .hub-v4-zone.water .hub-v3-zone-text { display: flex; align-items: baseline; gap: 6px; }
+:root[data-hub-v4] .hub .hub-v3-zone.hub-v4-zone.water .hub-v3-zone-target {
+  min-width: 0;
+  height: auto;
+  padding: 0 4px;
+  background: none;
+  box-shadow: none;
+  font-size: var(--text-courant);
+  color: var(--v3-ink);
+}
+
+/* Le dock : des icônes seules (le nom reste pour le lecteur d'écran), l'accueil surligné. */
+:root[data-hub-v4] .hub .hub-dock { gap: 4px; padding: 6px 8px; }
+:root[data-hub-v4] .hub .hub-dock button { position: relative; gap: 0; min-width: 0; width: 52px; height: 44px; padding: 0; border-radius: var(--radius-champ); }
+:root[data-hub-v4] .hub .hub-dock button > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+:root[data-hub-v4] .hub .hub-dock .hub-talk-button::before { display: none; }
+:root[data-hub-v4] .hub .hub-dock #hub-v4-home[aria-current="page"] {
+  color: var(--v3-amber);
+  background: color-mix(in srgb, var(--v3-voile) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v3-voile) 10%, transparent);
+}
+
+/* L'agenda et le chauffage, un peu moins rembourrés. */
+:root[data-hub-v4] .hub :is(.hub-agenda, .hub-v3-heating) { padding: 12px; }
+/* Tempo : un petit titre et les pastilles, serrés. */
+:root[data-hub-v4] .hub .hub-v3-tempo { row-gap: 4px; column-gap: 6px; }
+
+/* ===== Ergonomie : zones de toucher, refus, mouvement réduit ===== */
+/* Le dessin ne change pas : une zone transparente (::before) agrandit la cible
+   jusqu'à 44 px, sans déborder sur la voisine. Les pièces du dessin et leurs
+   pastilles ont une zone calculée (hubV3Hits, hub-v3.js) : 44 px, coupée à
+   mi-chemin de la pièce voisine. */
+:root[data-hub-style="v3"] .hub :is(.hub-v3-pin, .house-zone).hub-hit::before { content: ""; position: absolute; inset: var(--hit, 0); }
+/* Musique (v4) : précédent, lecture, suivant font 40 px, à 2 px l'un de l'autre :
+   44 px de haut, et en largeur tout ce qui ne mord pas sur le voisin. */
+:root[data-hub-v4] .hub .hub-v3-music-ctl :is(.hub-v3-play, .hub-v3-next) { position: relative; }
+:root[data-hub-v4] .hub .hub-v3-music-ctl :is(.hub-v3-play, .hub-v3-next)::before { content: ""; position: absolute; inset: -2px -1px; }
+:root[data-hub-v4] .hub .hub-v3-music-ctl .hub-v4-prev::before { left: -3px; }
+:root[data-hub-v4] .hub .hub-v3-music-ctl .hub-v3-next:not(.hub-v4-prev)::before { right: -3px; }
+/* Le volume : 44 px à prendre, la même piste fine au milieu. */
+:root[data-hub-v4] .hub .hub-v4-volume { height: 44px; margin-block: -2px; }
+/* Tempo (une ligne de 24 px qui ouvre le détail) et l'eau chaude (36 px). */
+:root[data-hub-v4] .hub .hub-v3-tempo[role="button"] { position: relative; }
+:root[data-hub-v4] .hub .hub-v3-tempo[role="button"]::before { content: ""; position: absolute; inset: -10px 0; }
+:root[data-hub-v4] .hub .hub-v3-zone.hub-v4-zone.water { position: relative; }
+:root[data-hub-v4] .hub .hub-v3-zone.hub-v4-zone.water::before { content: ""; position: absolute; inset: -4px 0; }
+/* Les pastilles de Vivant (26 px) : 44 px de haut par défaut, avant le calcul. */
+:root[data-hub-v4] .hub .hub-v3-pin.hub-v4-room-pin:not(.hub-hit)::before { inset: -9px -2px; }
+
+/* Un ordre refusé : un anneau rouge là où on a touché, 4 s (le message s'affiche en bas). */
+:root[data-hub-style="v3"] :is(.hub, .hub-v4-ovs, .hub-v4-page) [data-echec] {
+  outline: 2px solid var(--v3-alert);
+  outline-offset: 2px;
+  animation: hub-v3-echec 0.4s var(--v3-ease);
+}
+@keyframes hub-v3-echec {
+  25% { translate: -3px 0; }
+  75% { translate: 3px 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-hub-style="v3"] :is(.hub, .hub-v4-ovs, .hub-v4-page) [data-echec] { animation: none; }
+}
+/* Musique : le bouton touché attend la réponse du lecteur. */
+:root[data-hub-style="v3"] .hub :is(.hub-v3-play, .hub-v3-next, .hub-v4-volume).pending { opacity: 0.6; }

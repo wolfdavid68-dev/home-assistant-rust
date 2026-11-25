@@ -1,24 +1,29 @@
 // Accueil v4 sur le téléphone : la vue étroite de la maquette « Hub maison ».
 //
 // Sur un écran étroit, quand la v4 est choisie (Mon compte → Style de
-// l'accueil), l'accueil v4 s'affiche aussi, mais en colonne : la date et
-// l'heure, le salut, l'ordre qui attend, le dessin de la maison et ses
-// lentilles (avec ses onglets : sur la tablette, #hub-views, caché ici), les
-// réglages de la lentille choisie (chauffage, volets, lumières), quatre cartes (météo, chauffage, Tempo, agenda), la musique en
-// bas, et cinq onglets. Le dessin n'est pas recopié : c'est le même #hub-house
-// que sur la tablette, déplacé ici puis remis à sa place. Toucher une pièce,
-// une carte ou la musique ouvre les mêmes incrustations que sur la tablette,
-// qui montent du bas de l'écran (hub-v4.js).
+// l'accueil), l'accueil v4 s'affiche aussi, mais en colonne, comme la planche
+// « Téléphone » de la maquette : la date et l'heure, « En direct » et l'avatar,
+// le salut en serif, le résumé, l'ordre qui attend, le dessin de la maison sous
+// la lune (le soleil le jour), ses onglets (vue de dehors, étages, « Toute la
+// maison »), les lentilles, les réglages de la lentille choisie (chauffage,
+// volets, lumières), quatre cartes (météo, chauffage, Tempo, agenda), la
+// musique dans le flux, et cinq onglets fixés en bas. Le dessin n'est pas
+// recopié : c'est le même #hub-house que sur la tablette, déplacé ici puis
+// remis à sa place. Toucher une pièce, une carte ou la musique ouvre les mêmes
+// incrustations que sur la tablette, qui montent du bas de l'écran (hub-v4.js).
 //
-// Styles en classes Tailwind. Chargé après hub-v4-sonnette.js. Pas d'innerHTML.
+// Styles en classes Tailwind, couleurs par les jetons du thème (nuit en
+// Sombre, jour en Clair). Chargé après hub-v4-sonnette.js. Pas d'innerHTML.
 "use strict";
 
 // Plus étroit que ça : un téléphone (le seuil « sm » de Tailwind, comme les
 // incrustations qui montent du bas).
 const hubV4TelMedia = matchMedia("(max-width: 639px)");
 const hubV4Tel = { ui: null, placed: false };
-const HUB_V4_TEL_GLASS = "bg-scrim/52 backdrop-blur-[18px] backdrop-saturate-150 "
-  + "shadow-[inset_0_1px_0_color-mix(in_srgb,var(--v3-voile)_9%,transparent),inset_0_0_0_1px_color-mix(in_srgb,var(--v3-voile)_6%,transparent)]";
+// Le verre des cartes : celui de la tablette (indigo la nuit, crème le jour).
+const HUB_V4_TEL_GLASS = "bg-v-glass backdrop-blur-[18px] backdrop-saturate-150 shadow-[var(--v3-glass-shadow)]";
+// « dim. 1 nov. » : le jour d'un rendez-vous plus lointain.
+const hubV4TelDay = new Intl.DateTimeFormat("fr", { weekday: "short", day: "numeric", month: "short" });
 
 /** L'accueil v4 en colonne, sur ce téléphone ? */
 function hubV4Phone() {
@@ -48,22 +53,37 @@ function hubV4TelHeat(zones) {
   };
 }
 
-/** La carte de l'agenda : le rendez-vous en cours ou le prochain, d'ici
- *  demain soir. `events` : [{ summary, startDate, endDate, allDay }]. */
-function hubV4TelNext(events, now) {
+/** La carte de l'agenda, en deux lignes comme la maquette : aujourd'hui
+ *  (« Rien aujourd'hui », « 17:30 · Dentiste », « En cours · Réunion ») et le
+ *  rendez-vous suivant (« Piscine demain 09:05 », « Toussaint dim. 1 nov. »,
+ *  "" sans rien). `events` : [{ summary, startDate, endDate, allDay }]. */
+function hubV4TelAgenda(events, now) {
   const midnight = new Date(now);
   midnight.setHours(24, 0, 0, 0);
-  const timed = events
-    .filter((e) => !e.allDay && e.endDate > now)
-    .sort((a, b) => a.startDate - b.startDate);
-  const first = timed[0];
-  if (first) {
-    const value = first.startDate <= now ? "En cours"
-      : first.startDate < midnight ? hubV4Clock(first.startDate) : `Demain ${hubV4Clock(first.startDate)}`;
-    return { value, sub: first.summary };
+  const tomorrow = new Date(now);
+  tomorrow.setHours(48, 0, 0, 0);
+  const coming = events
+    .filter((e) => e.endDate > now)
+    .sort((a, b) => a.startDate - b.startDate || Number(b.allDay) - Number(a.allDay));
+  const todays = coming.filter((e) => e.startDate < midnight);
+  const timed = todays.find((e) => !e.allDay);
+  const day = todays.find((e) => e.allDay);
+  let today = "Rien aujourd'hui";
+  if (timed) today = `${timed.startDate <= now ? "En cours" : hubV4Clock(timed.startDate)} · ${timed.summary}`;
+  else if (day) today = `${day.summary} aujourd'hui`;
+  const next = coming.find((e) => e.startDate >= midnight);
+  let later = "";
+  if (next) {
+    const date = next.startDate < tomorrow ? "demain" : hubV4TelDay.format(next.startDate);
+    later = next.allDay ? `${next.summary} ${date}` : `${next.summary} ${date} ${hubV4Clock(next.startDate)}`;
   }
-  const day = events.find((e) => e.allDay && e.startDate < midnight);
-  return day ? { value: "Aujourd'hui", sub: day.summary } : null;
+  return { today, later };
+}
+
+/** « Bleu aujourd'hui » : l'adjectif de Tempo, avec sa majuscule. */
+function hubV4TelTempo(adjective, when) {
+  const word = String(adjective ?? "");
+  return word ? `${word.charAt(0).toUpperCase()}${word.slice(1)} ${when}` : "";
 }
 
 /** L'onglet où se touchent les pièces : celui affiché s'il a des zones de
@@ -91,28 +111,41 @@ function hubV4TelOrder(items, rooms) {
 const HUB_V4_TEL_PANELS = ["lumieres", "volets", "chauffage"];
 
 // ---------------------------------------------------------------- Les éléments
+// Un bouton d'ici n'a pas sa propre taille de texte : une règle de la page
+// (`[&_button]:[font:inherit]`, plus précise qu'une classe seule) la remet à
+// celle du parent. La taille se pose donc sur le texte, dans un <span>.
 
-/** Une carte de la grille : petit titre, valeur, ligne dessous. */
-function hubV4TelCard(icon, title, open) {
-  const value = el("b", { class: "max-w-full text-[20px] font-semibold leading-tight truncate" });
-  const sub = el("small", { class: `max-w-full text-[12px] ${HUB_V4_MUTE} truncate` });
+/** Une carte de la grille : petit titre avec son icône (teintée par `tone`),
+ *  puis son contenu, en bas. */
+function hubV4TelCard(icon, tone, title, open) {
+  const body = el("span", { class: "flex flex-col items-start gap-1 min-w-0 max-w-full" });
   const node = el("button", {
     type: "button",
-    class: `flex flex-col items-start justify-between gap-1 min-h-20 min-w-0 p-3.5 rounded-[20px] border-0 text-left `
-      + `text-inherit cursor-pointer ${HUB_V4_TEL_GLASS} ${HUB_V4_FOCUS}`,
-  }, el("span", { class: `flex items-center gap-1.5 text-[12px] font-medium ${HUB_V4_MUTE} [&_svg]:size-3.5` },
-    svgIcon(icon), title), value, sub);
+    class: "flex flex-col items-stretch justify-between gap-2.5 min-h-24 min-w-0 p-3.5 rounded-panneau border-0 text-left "
+      + `text-v-ink cursor-pointer ${HUB_V4_TEL_GLASS} ${HUB_V4_FOCUS}`,
+  }, el("span", { class: `flex items-center gap-1.5 text-legende font-medium ${HUB_V4_MUTE}` },
+    el("span", { class: `grid shrink-0 ${tone} [&_svg]:size-3.5` }, svgIcon(icon)), title), body);
   node.addEventListener("click", open);
-  return { node, value, sub };
+  return { node, body };
+}
+
+/** Un grand chiffre fin (« 11,7° », « 18° · 19° »). */
+function hubV4TelBig() {
+  return el("b", { class: "font-chiffres text-titre-l font-extralight leading-none tracking-[-0.02em] whitespace-nowrap" });
+}
+
+/** Une ligne de texte d'une carte. */
+function hubV4TelLine(tone) {
+  return el("span", { class: `block max-w-full text-legende leading-snug truncate ${tone}` });
 }
 
 /** Un onglet du bas. */
 function hubV4TelTab(icon, label, run) {
   const node = el("button", {
     type: "button",
-    class: `flex flex-col items-center gap-1 min-w-0 pt-1.5 border-0 bg-transparent text-[11px] font-medium `
-      + `${HUB_V4_MUTE} cursor-pointer aria-[current=page]:text-v-amber2 [&_svg]:size-6 ${HUB_V4_FOCUS}`,
-  }, svgIcon(icon), el("span", { text: label }));
+    class: `flex flex-col items-center justify-center gap-1 min-w-0 min-h-12 p-0 border-0 bg-transparent ${HUB_V4_MUTE} `
+      + `cursor-pointer aria-[current=page]:text-v-amber [&_svg]:size-[22px] ${HUB_V4_FOCUS}`,
+  }, svgIcon(icon), el("span", { class: "max-w-full text-legende font-medium leading-none truncate", text: label }));
   node.addEventListener("click", run);
   return node;
 }
@@ -131,73 +164,104 @@ function hubV4TelBuild() {
   if (hubV4Tel.ui) return hubV4Tel.ui;
   const button = (attributes, ...children) => el("button", { type: "button", ...attributes }, ...children);
   const ui = {
-    when: el("span", { class: "flex-1 min-w-0 truncate" }),
-    live: el("span", { class: `flex items-center gap-1.5 shrink-0 ${HUB_V4_MUTE}` }),
+    when: el("span", { class: "flex-1 min-w-0 text-legende font-medium text-v-ink2 truncate" }),
+    live: el("span", {
+      class: "flex items-center gap-1.5 shrink-0 h-7 px-2.5 rounded-full bg-v-ok/10 ring-1 ring-inset ring-v-ok/25 "
+        + "text-legende font-medium text-v-ink data-off:bg-v-alert/10 data-off:ring-v-alert/25",
+    }),
     bell: button({
-      class: `relative grid place-items-center size-10 shrink-0 p-0 rounded-full border-0 bg-voile/8 text-inherit `
+      class: `relative grid place-items-center size-11 shrink-0 p-0 rounded-full border-0 bg-transparent text-v-ink `
         + `cursor-pointer [&_svg]:size-5 ${HUB_V4_FOCUS}`,
       "aria-label": "Notifications",
     }, svgIcon(ICONS.bell)),
     badge: el("span", {
-      class: "absolute -top-1 -right-1 grid place-items-center min-w-5 h-5 px-1 rounded-full bg-[#ffbf5e] text-[11px] font-bold text-[#1a1530]",
+      class: "absolute top-0.5 right-0.5 grid place-items-center min-w-5 h-5 px-1 rounded-full bg-v-amber text-micro font-bold text-v-inverse",
     }),
+    // L'avatar : la lettre du compte sur un disque ambre-rose, le point vert
+    // quand quelqu'un est à la maison. Le toucher montre qui est là.
     avatar: button({
-      class: `grid place-items-center size-10 shrink-0 p-0 rounded-full border-0 bg-[#b9a3ff] text-[15px] font-bold `
-        + `text-[#1a1530] cursor-pointer ${HUB_V4_FOCUS}`,
+      class: `grid place-items-center size-11 shrink-0 -mr-1.5 p-0 rounded-full border-0 bg-transparent cursor-pointer ${HUB_V4_FOCUS}`,
       "aria-label": "Qui est là",
     }),
-    hello: el("h1", { class: "m-0 font-titre text-[32px] font-semibold leading-[1.08] tracking-[-0.03em]" }),
-    calm: el("em", { class: "block not-italic text-v-sky" }),
-    summary: el("p", { class: `m-0 mt-2 text-[14px] leading-snug ${HUB_V4_MUTE}` }),
-    approval: el("div", {
-      class: "flex items-center gap-3 mx-4 pl-4 pr-1.5 py-1.5 rounded-full bg-v-amber/14 text-v-amber2 text-[14px] font-medium",
-      role: "status",
+    avatarDisc: el("span", {
+      class: "relative grid place-items-center size-8 rounded-full bg-[linear-gradient(140deg,var(--v3-amber),var(--v3-pink))] "
+        + "text-corps font-semibold text-v-inverse [&_svg]:size-4",
     }),
-    approvalText: el("span", { class: "flex-1 min-w-0 truncate" }),
+    avatarDot: el("span", {
+      class: "absolute -right-0.5 -bottom-0.5 size-3 rounded-full bg-v-ok ring-2 ring-scrim",
+      "aria-hidden": "true",
+    }),
+    avatarLetter: el("span", { "aria-hidden": "true" }),
+    hello: el("h1", { class: "m-0 font-recit text-affiche font-normal leading-[1.05] tracking-[-0.01em] text-v-ink" }),
+    calm: el("em", { class: "block italic text-v-amber" }),
+    summary: el("p", { class: "m-0 mt-2 text-corps leading-snug text-v-ink2" }),
+    approval: el("div", { class: "flex px-5", role: "status" }),
+    approvalText: el("span", { class: "min-w-0 text-legende font-medium text-v-ink2 truncate" }),
     approvalGo: button({
-      class: `min-h-9 px-4 rounded-full border-0 bg-[#ffbf5e] text-[13px] font-semibold text-[#1a1530] cursor-pointer ${HUB_V4_FOCUS}`,
-    }, "Voir"),
+      class: "flex items-center gap-2.5 max-w-full min-h-11 pl-3.5 pr-4 rounded-champ border-0 bg-v-amber/12 "
+        + "ring-1 ring-inset ring-v-amber/25 backdrop-blur-[12px] text-left text-v-ink cursor-pointer "
+        + `[&_svg]:size-4 ${HUB_V4_FOCUS}`,
+    }),
     houseSlot: el("div", { class: "relative shrink-0" }),
-    // Les onglets du dessin (vue de dehors, étages) et « Toute la maison ».
+    // La lune (le soleil le jour) au-dessus de la maison, derrière elle ;
+    // voilée par les nuages, absente sous la pluie, comme sur la tablette.
+    sky: el("span", {
+      class: "pointer-events-none absolute top-[6%] right-[8%] -z-1 size-9 rounded-full bg-[image:var(--v4-moon)] "
+        + "shadow-[var(--v4-moon-halo)] [[data-theme=light]_&]:size-10 [[data-theme=light]_&]:bg-[image:var(--v4-sun)] "
+        + "[[data-theme=light]_&]:shadow-[var(--v4-sun-halo)] [[data-meteo=eclaircies]_&]:opacity-80 "
+        + "[:is([data-meteo=nuageux],[data-meteo=vent],[data-meteo=brouillard])_&]:opacity-20 "
+        + "[:is([data-meteo=nuageux],[data-meteo=vent],[data-meteo=brouillard])_&]:blur-[3px] "
+        + "[:is([data-meteo=pluie],[data-meteo=averses],[data-meteo=orage],[data-meteo=grele],[data-meteo=neige],[data-meteo=pluie-neige])_&]:hidden",
+      "aria-hidden": "true",
+    }),
+    // Les onglets du dessin (vue de dehors, étages) et « Toute la maison »,
+    // posés en haut du dessin.
     pages: el("nav", {
-      class: "flex gap-2 px-4 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+      class: "absolute top-0 inset-x-0 z-[2] flex gap-0.5 px-3 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
       "aria-label": "Vue",
     }),
     pagesMark: "",
     lens: el("nav", {
-      class: "flex gap-2 px-4 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+      class: "flex gap-2 px-4 overflow-x-auto scroll-px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
       "aria-label": "Ce que montre la maison",
     }),
     cards: el("div", { class: "grid grid-cols-2 gap-2.5 px-4" }),
+    // La musique, dans le flux sous les cartes (comme la maquette) : rien
+    // n'est caché sous elle.
     music: el("section", {
-      class: "fixed left-3 right-3 bottom-[calc(76px+env(safe-area-inset-bottom))] z-[1] flex items-center gap-3 p-2 pr-2.5 "
-        + "rounded-[22px] bg-scrim/82 backdrop-blur-[20px] backdrop-saturate-150 "
-        + "shadow-[inset_0_1px_0_color-mix(in_srgb,var(--v3-voile)_9%,transparent),inset_0_0_0_1px_color-mix(in_srgb,var(--v3-voile)_6%,transparent),0_18px_40px_-18px_rgb(0_0_0/0.65)]",
+      class: `flex items-center gap-1 mx-4 p-2 pr-1 rounded-panneau text-v-ink ${HUB_V4_TEL_GLASS}`,
       "aria-label": "Musique",
     }),
-    musicOpen: button({ class: `flex flex-1 items-center gap-3 min-w-0 p-0 border-0 bg-transparent text-left text-inherit cursor-pointer ${HUB_V4_FOCUS}` }),
+    musicOpen: button({ class: `flex flex-1 items-center gap-3 min-w-0 min-h-12 p-0 border-0 bg-transparent text-left text-inherit cursor-pointer rounded-champ ${HUB_V4_FOCUS}` }),
     musicImg: el("img", { class: "absolute inset-0 size-full object-cover", alt: "", decoding: "async", draggable: "false" }),
-    musicTitle: el("b", { class: "text-[14px] font-semibold truncate" }),
-    musicSub: el("small", { class: `text-[12px] ${HUB_V4_MUTE} truncate` }),
-    play: button({ class: `grid place-items-center size-11 shrink-0 p-0 rounded-full border-0 bg-voile/10 text-inherit cursor-pointer disabled:opacity-40 [&_svg]:size-5 ${HUB_V4_FOCUS}` }),
+    musicTitle: el("b", { class: "text-corps font-semibold leading-snug truncate" }),
+    musicSub: el("small", { class: `text-legende leading-snug ${HUB_V4_MUTE} truncate` }),
+    play: button({ class: `grid place-items-center size-11 shrink-0 p-0 rounded-full border-0 bg-transparent text-inherit cursor-pointer disabled:opacity-40 [&_svg]:size-5 ${HUB_V4_FOCUS}` }),
     next: button({ class: `grid place-items-center size-11 shrink-0 p-0 rounded-full border-0 bg-transparent text-inherit cursor-pointer disabled:opacity-40 [&_svg]:size-5 ${HUB_V4_FOCUS}`, "aria-label": "Morceau suivant" },
       svgIcon(ICONS.next)),
   };
   ui.musicImg.hidden = true;
   ui.bell.append(ui.badge);
   ui.bell.addEventListener("click", () => hubV4Bell());
+  ui.avatarDisc.append(ui.avatarLetter, ui.avatarDot);
+  ui.avatar.append(ui.avatarDisc);
   ui.avatar.addEventListener("click", () => hubV4People());
-  ui.approval.append(ui.approvalText, ui.approvalGo);
+  ui.approvalGo.append(el("span", { class: "grid shrink-0 text-v-amber" }, svgIcon(ICONS.list)), ui.approvalText,
+    el("span", { class: "shrink-0 text-petit font-semibold text-v-amber2", text: "Voir" }));
+  ui.approval.append(ui.approvalGo);
   ui.approvalGo.addEventListener("click", () => hubV4Approval());
+  ui.houseSlot.append(ui.sky, ui.pages);
 
-  // Les lentilles : les mêmes que sur la tablette (hub-v3.js).
+  // Les lentilles : les mêmes que sur la tablette (hub-v3.js), une pastille
+  // « • Vivant », l'ambre sur celle choisie.
   ui.segs = HUB_V3_LENSES.map((lens) => {
     const seg = button({
-      class: `shrink-0 min-h-9 px-3.5 rounded-full border-0 bg-voile/8 text-[13px] font-medium text-inherit cursor-pointer `
-        + `transition-colors aria-pressed:bg-[#ffbf5e] aria-pressed:text-[#1a1530] ${HUB_V4_FOCUS}`,
+      class: "flex items-center gap-2 shrink-0 min-h-11 px-4 rounded-full border-0 bg-voile/8 text-v-ink cursor-pointer "
+        + `transition-colors aria-pressed:bg-v-amber aria-pressed:text-v-inverse ${HUB_V4_FOCUS}`,
       "data-lens": lens.id,
       "aria-pressed": "false",
-    }, lens.label);
+    }, el("span", { class: "size-1.5 rounded-full bg-current opacity-60", "aria-hidden": "true" }),
+    el("span", { class: "text-petit font-medium", text: lens.label }));
     seg.addEventListener("click", () => {
       hubV3.lens = lens.id;
       // Une lentille montre les pièces : depuis la vue de dehors, l'étage d'abord.
@@ -211,8 +275,12 @@ function hubV4TelBuild() {
   ui.lens.append(...ui.segs);
   hubV4TelPanelBuild(ui);
 
-  ui.weather = hubV4TelCard(ICONS.cloud, "Météo", () => hubV4Weather());
-  ui.heat = hubV4TelCard(ICONS.flame, "Chauffage", () => {
+  ui.weather = hubV4TelCard(ICONS.cloud, HUB_V4_MUTE, "Météo", () => hubV4Weather());
+  ui.weatherBig = hubV4TelBig();
+  ui.weatherSky = el("span", { class: "min-w-0 text-legende text-v-ink2 truncate" });
+  ui.weather.body.append(el("span", { class: "flex items-baseline gap-1.5 min-w-0 max-w-full" }, ui.weatherBig, ui.weatherSky));
+
+  ui.heat = hubV4TelCard(ICONS.temperature, "text-v-heat", "Chauffage", () => {
     // Toutes les zones de chauffage, réglables : la page « Toute la maison ».
     if (typeof hubV4Page === "function" && hubV4Page(HUB_V4_ALL)) return;
     // Sans elle : la lentille du chauffage, sur un étage qui a ses pièces.
@@ -222,18 +290,30 @@ function hubV4TelBuild() {
     hubV4TelRenderLens();
     hubV4Tel.ui.houseSlot.scrollIntoView({ block: "center", behavior: hubV4TelMotion() });
   });
-  ui.tempo = hubV4TelCard(ICONS.bolt, "Tempo", () => hubV4Tempo());
-  ui.agenda = hubV4TelCard(ICONS.calendar, "Agenda", () => hubV4Agenda());
+  ui.heatBig = hubV4TelBig();
+  ui.heatSub = hubV4TelLine("text-v-ink2");
+  ui.heat.body.append(ui.heatBig, ui.heatSub);
+
+  ui.tempo = hubV4TelCard(ICONS.bolt, HUB_V4_MUTE, "Tempo", () => hubV4Tempo());
   ui.tempoDot = el("span", {
-    class: "inline-block size-2.5 mr-2 rounded-full align-middle bg-voile/40 data-[c=blue]:bg-[#5b8cff] "
-      + "data-[c=white]:bg-white data-[c=white]:ring-1 data-[c=white]:ring-voile/30 data-[c=red]:bg-[#ff6b6b]",
+    class: "inline-block shrink-0 size-2.5 rounded-full bg-voile/40 data-[c=blue]:bg-v-sky "
+      + "data-[c=white]:bg-white data-[c=white]:ring-1 data-[c=white]:ring-voile/30 data-[c=red]:bg-v-alert",
     "aria-hidden": "true",
   });
+  ui.tempoToday = el("span", { class: "min-w-0 truncate" });
+  ui.tempoSub = hubV4TelLine(HUB_V4_MUTE);
+  ui.tempo.body.append(el("span", { class: "flex items-center gap-2 max-w-full text-petit font-medium text-v-ink" },
+    ui.tempoDot, ui.tempoToday), ui.tempoSub);
+
+  ui.agenda = hubV4TelCard(ICONS.calendar, HUB_V4_MUTE, "Agenda", () => hubV4Agenda());
+  ui.agendaToday = el("span", { class: "block max-w-full text-petit font-medium leading-snug text-v-ink truncate" });
+  ui.agendaLater = hubV4TelLine("text-v-ink2");
+  ui.agenda.body.append(ui.agendaToday, ui.agendaLater);
   ui.cards.append(ui.weather.node, ui.heat.node, ui.tempo.node, ui.agenda.node);
 
   const art = el("span", {
-    class: "relative grid place-items-center size-11 shrink-0 overflow-hidden rounded-xl "
-      + "bg-[linear-gradient(135deg,#ff9bd2,#b9a3ff_55%,#9ad8ff)] text-[#1a1530] [&_svg]:size-5",
+    class: "relative grid place-items-center size-11 shrink-0 overflow-hidden rounded-[12px] "
+      + "bg-[linear-gradient(140deg,var(--v3-violet),var(--v3-pink)_55%,var(--v3-amber))] text-v-inverse [&_svg]:size-5",
     "aria-hidden": "true",
   }, svgIcon(ICONS.music), ui.musicImg);
   ui.musicOpen.append(art, el("span", { class: "flex flex-col min-w-0" }, ui.musicTitle, ui.musicSub));
@@ -253,8 +333,8 @@ function hubV4TelBuild() {
   });
   ui.home.setAttribute("aria-current", "page");
   ui.tabs = el("nav", {
-    class: "fixed inset-x-0 bottom-0 z-[1] grid grid-cols-5 pt-1 pb-[max(10px,env(safe-area-inset-bottom))] "
-      + "bg-scrim/72 backdrop-blur-[20px] backdrop-saturate-150 border-0 border-t border-solid border-voile/8",
+    class: "fixed inset-x-0 bottom-0 z-[1] grid grid-cols-5 px-1 pt-1.5 pb-[max(8px,env(safe-area-inset-bottom))] "
+      + "bg-scrim/80 backdrop-blur-[20px] backdrop-saturate-150 border-0 border-t border-solid border-voile/8",
     "aria-label": "Navigation",
   },
   ui.home,
@@ -266,15 +346,16 @@ function hubV4TelBuild() {
   }),
   hubV4TelTab(HUB_ICONS.grid, "Plus", hubV4TelLeave(null)));
 
+  // En bas : la place des onglets fixés, et un peu d'air sous la musique.
   ui.root = el("div", {
     id: "hub-tel",
-    class: "hub-v4-tel hidden [[data-hub-tel]_&]:flex flex-col gap-4 min-h-full "
-      + "pt-[max(12px,env(safe-area-inset-top))] pb-[calc(152px+env(safe-area-inset-bottom))] "
+    class: "hub-v4-tel hidden [[data-hub-tel]_&]:flex flex-col gap-3.5 min-h-full "
+      + "pt-[max(10px,env(safe-area-inset-top))] pb-[calc(92px+env(safe-area-inset-bottom))] "
       + "text-v-ink [font-variant-numeric:tabular-nums]",
   },
-  el("header", { class: "flex items-center gap-2.5 px-5 text-[13px] font-medium" }, ui.when, ui.live, ui.bell, ui.avatar),
-  el("div", { class: "px-5" }, ui.hello, ui.summary),
-  ui.approval, ui.pages, ui.houseSlot, ui.lens, ui.panel, ui.cards, ui.music, ui.tabs);
+  el("header", { class: "flex items-center gap-2 pl-5 pr-4" }, ui.when, ui.live, ui.bell, ui.avatar),
+  el("div", { class: "px-5 pt-1" }, ui.hello, ui.summary),
+  ui.approval, ui.houseSlot, ui.lens, ui.panel, ui.cards, ui.music, ui.tabs);
 
   // En colonne, l'accueil défile ; seule la vue téléphone s'y affiche.
   $("#hub").classList.add("[[data-hub-tel]_&]:block!", "[[data-hub-tel]_&]:p-0!", "[[data-hub-tel]_&]:overflow-y-auto!",
@@ -301,9 +382,9 @@ function hubV4TelPanelBuild(ui) {
   ui.syncHeat = hubV4Keyed(ui.heatList, (id) => hubV4HeatTile(id, nameOf(entities.get(id))));
 
   const covers = hubV4Tile(ICONS.blinds, "sky", "Volets");
-  ui.coverAll = el("button", { type: "button", class: `${HUB_V4_BTN} min-h-9 px-3 text-[13px]` });
+  ui.coverAll = el("button", { type: "button", class: HUB_V4_BTN });
   ui.coverAll.addEventListener("click", () => {
-    if (hubV3ActionRun("volets")) hubV3Wait(ui.coverAll);
+    hubV3ActionRun("volets", ui.coverAll);
   });
   covers.head.append(ui.coverAll);
   const coverList = el("div", { class: "flex flex-col gap-4" });
@@ -312,20 +393,20 @@ function hubV4TelPanelBuild(ui) {
   ui.syncCovers = hubV4Keyed(coverList, (id) => hubV4CoverRow(id, ""));
 
   const lights = hubV4Tile(ICONS.bulb, "amber", "Lumières");
-  ui.lightsOff = el("button", { type: "button", class: `${HUB_V4_BTN} min-h-9 px-3 text-[13px]`, text: "Tout éteindre" });
+  ui.lightsOff = el("button", { type: "button", class: HUB_V4_BTN, text: "Tout éteindre" });
   ui.lightsOff.addEventListener("click", () => {
-    if (hubV3ActionRun("lumieres")) hubV3Wait(ui.lightsOff);
+    hubV3ActionRun("lumieres", ui.lightsOff);
   });
   lights.head.append(ui.lightsOff);
   const roomGrid = el("div", { class: "grid grid-cols-2 gap-2" });
   lights.node.append(roomGrid);
   ui.lights = lights.node;
   ui.syncRooms = hubV4Keyed(roomGrid, (room) => {
-    const count = el("span", { class: `text-[13px] ${HUB_V4_MUTE} group-data-full:text-v-amber2` });
+    const count = el("span", { class: `text-petit ${HUB_V4_MUTE} group-data-full:text-v-amber2` });
     const node = el("button", {
       type: "button",
-      class: "group flex items-center justify-between gap-2 min-h-12 px-3.5 rounded-[14px] border-0 bg-voile/6 text-left "
-        + "text-[14px] font-semibold text-inherit cursor-pointer transition-colors hover:bg-voile/10 "
+      class: "group flex items-center justify-between gap-2 min-h-12 px-3.5 rounded-champ border-0 bg-voile/6 text-left "
+        + "text-corps font-semibold text-inherit cursor-pointer transition-colors hover:bg-voile/10 "
         + `data-full:bg-v-amber/16 ${HUB_V4_FOCUS}`,
     }, el("span", { class: "truncate", text: room }), count);
     node.addEventListener("click", () => hubV4Room(room));
@@ -430,13 +511,17 @@ function hubV4TelRenderPages() {
   if (mark === ui.pagesMark) return;
   ui.pagesMark = mark;
   ui.pages.hidden = pages.length < 2 && !all;
-  const pill = (text, pressed, run) => {
+  // Une pastille de verre, dans une cible de 44 px ; `pressed` null : un
+  // lien (« Toute la maison »), pas un onglet à choisir.
+  const pill = (text, pressed, run, ...more) => {
     const node = el("button", {
       type: "button",
-      class: `shrink-0 min-h-9 px-3.5 rounded-full border-0 bg-voile/8 text-[13px] font-medium text-inherit cursor-pointer `
-        + `transition-colors aria-pressed:bg-v-ink aria-pressed:text-v-inverse ${HUB_V4_FOCUS}`,
-      "aria-pressed": String(pressed),
-    }, text);
+      class: `group grid place-items-center shrink-0 min-h-11 px-0.5 border-0 bg-transparent text-v-ink cursor-pointer ${HUB_V4_FOCUS}`,
+      ...(pressed === null ? {} : { "aria-pressed": String(pressed) }),
+    }, el("span", {
+      class: "flex items-center gap-1 px-3 py-1.5 rounded-full bg-scrim/60 backdrop-blur-[10px] ring-1 ring-inset ring-voile/10 "
+        + "text-legende font-medium transition-colors group-aria-pressed:bg-v-ink group-aria-pressed:text-v-inverse [&_svg]:size-3.5",
+    }, text, ...more));
     node.addEventListener("click", run);
     return node;
   };
@@ -445,7 +530,7 @@ function hubV4TelRenderPages() {
     selectPage(page.id);
     hubV4TelRenderPages();
   }));
-  const whole = all ? [pill("Toute la maison", false, () => hubV4Page(HUB_V4_ALL))] : [];
+  const whole = all ? [pill("Toute la maison", null, () => hubV4Page(HUB_V4_ALL), svgIcon(HUB_V4_ICONS.go))] : [];
   swap(ui.pages, ...tabs, ...whole);
 }
 
@@ -456,32 +541,45 @@ function hubV4TelRenderLens() {
 
 function hubV4TelRenderTop(now) {
   const ui = hubV4Tel.ui;
-  const day = fullDate.format(now);
-  setText(ui.when, `${day.charAt(0).toUpperCase()}${day.slice(1)} · ${hourMinute.format(now)}`);
   const live = $("#connection")?.classList.contains("live");
-  swap(ui.live, el("i", { class: live ? "size-2 rounded-full bg-v-ok" : "size-2 rounded-full bg-v-alert" }),
+  swap(ui.live, el("i", { class: live ? "size-1.5 rounded-full bg-v-ok" : "size-1.5 rounded-full bg-v-alert" }),
     live ? "En direct" : "Hors ligne");
+  ui.live.toggleAttribute("data-off", !live);
   const notices = $("#open-notices");
-  ui.bell.hidden = !notices || notices.hidden;
   const count = $("#notice-count");
   const n = count && !count.hidden ? count.textContent.trim() : "";
+  // La cloche, seulement quand une notification attend (la maquette n'en a pas).
+  ui.bell.hidden = !notices || notices.hidden || n === "";
   setText(ui.badge, n);
   ui.badge.hidden = n === "";
   setAttr(ui.bell, "aria-label", n ? `Notifications : ${n}` : "Notifications");
+  // « Mercredi 25 novembre · 20:36 » ; avec la cloche, la place manque :
+  // « Mer. 25 nov. · 20:36 ».
+  const day = (ui.bell.hidden ? fullDate : hubV4TelDay).format(now);
+  setText(ui.when, `${day.charAt(0).toUpperCase()}${day.slice(1)} · ${hourMinute.format(now)}`);
   const account = $("#open-account");
-  setText(ui.avatar, account ? account.textContent.trim().charAt(0).toUpperCase() : "");
+  const letter = account ? account.textContent.trim().charAt(0).toUpperCase() : "";
+  if (letter) swap(ui.avatarLetter, letter);
+  else swap(ui.avatarLetter, svgIcon(ICONS.person));
+  const home = [...entities.values()].some((s) => domainOf(s) === "person" && s.state === "home");
+  ui.avatarDot.hidden = !home;
 }
 
 function hubV4TelRenderHello(now) {
   const ui = hubV4Tel.ui;
-  setText(ui.calm, hubV3Attention(alerts().length));
-  swap(ui.hello, hubV3Hello(now.getHours()), " ", ui.calm);
+  // « Bonsoir. » seul quand tout est calme (comme la maquette) ; sinon, ce
+  // qui demande l'attention, en italique ambre dessous.
+  const count = alerts().length;
+  setText(ui.calm, hubV3Attention(count));
+  if (count > 0) swap(ui.hello, hubV3Hello(now.getHours()), " ", ui.calm);
+  else swap(ui.hello, hubV3Hello(now.getHours()));
   // La phrase du résumé est celle de la tablette (hub-v3.js), déjà à jour.
   const summary = hubV3.ui?.summary.textContent ?? "";
   setText(ui.summary, summary);
   ui.summary.hidden = summary === "";
   const text = hubV4TelApproval(hubV4Approvals().length);
   setText(ui.approvalText, text);
+  setAttr(ui.approvalGo, "aria-label", text ? `${text} : voir` : "");
   ui.approval.hidden = text === "";
 }
 
@@ -491,8 +589,8 @@ function hubV4TelRenderCards(now) {
   ui.weather.node.hidden = !weather;
   if (weather) {
     const t = weather.attributes.temperature;
-    setText(ui.weather.value, finite(t) ? `${number.format(t)}°` : "—");
-    setText(ui.weather.sub, lookup(WEATHER_LABELS, weather.state)?.[0] ?? "");
+    setText(ui.weatherBig, finite(t) ? `${number.format(t)}°` : "—");
+    setText(ui.weatherSky, lookup(WEATHER_LABELS, weather.state)?.[0] ?? "");
   }
 
   const zones = heatingStates(null)
@@ -501,8 +599,8 @@ function hubV4TelRenderCards(now) {
   const heat = hubV4TelHeat(zones);
   ui.heat.node.hidden = heat === null;
   if (heat) {
-    setText(ui.heat.value, heat.value);
-    setText(ui.heat.sub, heat.sub);
+    setText(ui.heatBig, heat.value);
+    setText(ui.heatSub, heat.sub);
   }
 
   const today = entities.get(TEMPO_TODAY);
@@ -510,19 +608,23 @@ function hubV4TelRenderCards(now) {
   if (today) {
     const [css, adjective] = lookup(TEMPO_COLORS, today.state) ?? ["", ""];
     setAttr(ui.tempoDot, "data-c", css);
-    swap(ui.tempo.value, ui.tempoDot, adjective ? `Jour ${adjective}` : statusText(today));
+    setText(ui.tempoToday, hubV4TelTempo(adjective, "aujourd'hui") || statusText(today));
     const tomorrow = entities.get(TEMPO_TOMORROW);
-    setText(ui.tempo.sub, tomorrow ? tempoTomorrowText(tomorrow) : "");
+    const next = tomorrow ? lookup(TEMPO_COLORS, tomorrow.state) : null;
+    setText(ui.tempoSub, next ? hubV4TelTempo(next[1], "demain") : tomorrow ? tempoTomorrowText(tomorrow) : "");
+    ui.tempoSub.hidden = !tomorrow;
   }
 
   const calendars = typeof agendaCalendars === "function" ? agendaCalendars() : [];
   ui.agenda.node.hidden = calendars.length === 0;
   if (calendars.length > 0) {
+    // Aujourd'hui, puis le rendez-vous suivant dans la semaine.
     const end = new Date(now);
-    end.setHours(48, 0, 0, 0);
-    const next = hubV4TelNext(agendaEvents(now, end, calendars), now);
-    setText(ui.agenda.value, next ? next.value : "Rien");
-    setText(ui.agenda.sub, next ? next.sub : "d'ici demain soir");
+    end.setHours(24 * 8, 0, 0, 0);
+    const lines = hubV4TelAgenda(agendaEvents(now, end, calendars), now);
+    setText(ui.agendaToday, lines.today);
+    setText(ui.agendaLater, lines.later);
+    ui.agendaLater.hidden = lines.later === "";
   }
 }
 

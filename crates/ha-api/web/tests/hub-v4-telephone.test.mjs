@@ -11,7 +11,8 @@ const run = load("utils.js", "hub-v3.js", "hub-v4.js", "hub-v4-pieces.js", "hub-
 const hubV4TelApproval = run("hubV4TelApproval");
 const hubV4TelZoneName = run("hubV4TelZoneName");
 const hubV4TelHeat = run("hubV4TelHeat");
-const hubV4TelNext = run("hubV4TelNext");
+const hubV4TelAgenda = run("hubV4TelAgenda");
+const hubV4TelTempo = run("hubV4TelTempo");
 const hubV4TelRoomsPage = run("hubV4TelRoomsPage");
 const hubV4CanPosition = run("hubV4CanPosition");
 const hubV4TelOrder = run("hubV4TelOrder");
@@ -49,24 +50,40 @@ describe("hubV4TelHeat", () => {
   });
 });
 
-describe("hubV4TelNext", () => {
+describe("hubV4TelAgenda", () => {
   const now = new Date(2026, 10, 19, 14, 0);
   const at = (day, hour, minute = 0) => new Date(2026, 10, day, hour, minute);
-  test("le rendez-vous en cours", () => {
-    const events = [{ summary: "Réunion", startDate: at(19, 13, 30), endDate: at(19, 15), allDay: false }];
-    assert.deepEqual(plain(hubV4TelNext(events, now)), { value: "En cours", sub: "Réunion" });
+  test("rien aujourd'hui, rien ensuite", () => {
+    assert.deepEqual(plain(hubV4TelAgenda([], now)), { today: "Rien aujourd'hui", later: "" });
   });
-  test("le prochain, aujourd'hui puis demain", () => {
-    const later = { summary: "Dentiste", startDate: at(19, 17, 30), endDate: at(19, 18), allDay: false };
-    const tomorrow = { summary: "Piscine", startDate: at(20, 9, 5), endDate: at(20, 10), allDay: false };
-    assert.deepEqual(plain(hubV4TelNext([tomorrow, later], now)), { value: "17:30", sub: "Dentiste" });
-    assert.deepEqual(plain(hubV4TelNext([tomorrow], now)), { value: "Demain 09:05", sub: "Piscine" });
+  test("le rendez-vous en cours, puis celui de demain", () => {
+    const events = [
+      { summary: "Piscine", startDate: at(20, 9, 5), endDate: at(20, 10), allDay: false },
+      { summary: "Réunion", startDate: at(19, 13, 30), endDate: at(19, 15), allDay: false },
+    ];
+    assert.deepEqual(plain(hubV4TelAgenda(events, now)), { today: "En cours · Réunion", later: "Piscine demain 09:05" });
   });
-  test("un rendez-vous fini ne compte plus ; la journée entière ensuite", () => {
-    const done = { summary: "Courses", startDate: at(19, 9), endDate: at(19, 10), allDay: false };
-    const day = { summary: "Anniversaire", startDate: at(19, 0), endDate: at(20, 0), allDay: true };
-    assert.deepEqual(plain(hubV4TelNext([done, day], now)), { value: "Aujourd'hui", sub: "Anniversaire" });
-    assert.equal(hubV4TelNext([done], now), null);
+  test("le prochain d'aujourd'hui ; un fini ne compte plus", () => {
+    const events = [
+      { summary: "Courses", startDate: at(19, 9), endDate: at(19, 10), allDay: false },
+      { summary: "Dentiste", startDate: at(19, 17, 30), endDate: at(19, 18), allDay: false },
+    ];
+    assert.deepEqual(plain(hubV4TelAgenda(events, now)), { today: "17:30 · Dentiste", later: "" });
+  });
+  test("journées entières : aujourd'hui, puis un jour plus loin (comme la maquette)", () => {
+    const birthday = { summary: "Anniversaire", startDate: at(19, 0), endDate: at(20, 0), allDay: true };
+    const holiday = { summary: "Toussaint", startDate: new Date(2026, 10, 22), endDate: new Date(2026, 10, 23), allDay: true };
+    assert.deepEqual(plain(hubV4TelAgenda([holiday, birthday], now)), { today: "Anniversaire aujourd'hui", later: "Toussaint dim. 22 nov." });
+    assert.deepEqual(plain(hubV4TelAgenda([holiday], now)), { today: "Rien aujourd'hui", later: "Toussaint dim. 22 nov." });
+  });
+});
+
+describe("hubV4TelTempo", () => {
+  test("l'adjectif avec sa majuscule", () => {
+    assert.equal(hubV4TelTempo("bleu", "aujourd'hui"), "Bleu aujourd'hui");
+    assert.equal(hubV4TelTempo("rouge", "demain"), "Rouge demain");
+    assert.equal(hubV4TelTempo("", "demain"), "");
+    assert.equal(hubV4TelTempo(undefined, "demain"), "");
   });
 });
 

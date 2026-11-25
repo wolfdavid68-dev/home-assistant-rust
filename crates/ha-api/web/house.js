@@ -195,8 +195,12 @@ function houseUrl(name) {
 
 // ---------------------------------------------------------------- Le dessin
 
-/** Fait-il nuit ? (Le soleil, s'il est connu ; sinon, jamais.) */
+/** Fait-il nuit ? (Le soleil, s'il est connu ; sinon, jamais.) En v4, le
+ *  ciel de l'accueil suit le thème (Clair = jour, Sombre = nuit) : la maison
+ *  aussi, pour que son image, ses fenêtres allumées et ses étoiles aillent
+ *  avec le ciel. */
 function houseNight() {
+  if (typeof hubV4On === "function" && hubV4On()) return document.documentElement.dataset.theme === "dark";
   return entities.get("sun.sun")?.state === "below_horizon";
 }
 
@@ -237,7 +241,9 @@ const momentOf = (ambiance) => ambiance.split("-")[0];
 /** L'ambiance du moment (« nuit-pluie »…), ou celle imposée par le réglage. */
 function ambianceOf(page) {
   if (page.forced) return page.forced;
-  const moment = hasDusk(page) && houseDusk() ? "crepuscule" : houseNight() ? "nuit" : "jour";
+  // En v4, pas de crépuscule : l'image suit le ciel du thème (voir houseNight).
+  const v4 = typeof hubV4On === "function" && hubV4On();
+  const moment = !v4 && hasDusk(page) && houseDusk() ? "crepuscule" : houseNight() ? "nuit" : "jour";
   const weather = weatherKind();
   return weather === "soleil" ? moment : `${moment}-${weather}`;
 }
@@ -403,7 +409,7 @@ function labelValue(state) {
  * calques, les valeurs. Renvoie de quoi les mettre à jour.
  */
 function drawHouse(stage, config, { interactive }) {
-  const base = el("img", { class: "house-base [:not(:where(.o066500))[data-theme=plan-nuit]_.house-stage.default-drawing_&]:[filter:invert(1)_hue-rotate(180deg)_brightness(1.15)] [:not(:where(.o066501))[data-theme=plan-nuit]_.house-stage.default-drawing_&]:[mix-blend-mode:screen] [:not(:where(.o066500))[data-theme=maquette]_.house-stage.default-drawing_&]:[filter:invert(1)_hue-rotate(180deg)_brightness(1.15)] [:not(:where(.o066501))[data-theme=maquette]_.house-stage.default-drawing_&]:[mix-blend-mode:screen]", alt: "La maison", draggable: "false" });
+  const base = el("img", { class: "house-base [transition:opacity_0.6s_ease] [&.under-ambiance]:opacity-0", alt: "La maison", draggable: "false" });
   const custom = config.background ? houseUrl(config.background) : null;
   base.src = custom ?? HOUSE_DEFAULT;
   stage.classList.toggle("default-drawing", custom === null);
@@ -441,8 +447,8 @@ function drawHouse(stage, config, { interactive }) {
   const labels = config.labels.map((label) => {
     const value = el("strong");
     const name = el("span", { class: "house-label-name text-[clamp(0.56rem,_1.5cqw,_0.68rem)] text-muted uppercase [letter-spacing:0.05em]" });
-    const tag = el("span", { class: "house-tag absolute [:not(:where(.o067201))&]:[left:13px] [:not(:where(.o067202))&]:[bottom:12px] grid [padding:3px_7px_4px] [border:1.25px_solid_var(--ink)] [border-radius:3px] [background:color-mix(in_srgb,_var(--card)_92%,_transparent)] text-text whitespace-nowrap [line-height:1.2] [:not(:where(.o067400))&_strong]:[font-family:var(--font-mono)] [:not(:where(.o067401))&_strong]:text-[clamp(0.68rem,_1.9cqw,_0.85rem)] [:not(:where(.o067402))&_strong]:font-medium [:not(:where(.o067403))&_strong]:[font-variant-numeric:tabular-nums] [:not(:where(.o067600)).house-label.left_&]:[left:auto] [:not(:where(.o067601)).house-label.left_&]:[right:13px] [:not(:where(.o067800)).house-label.below_&]:[bottom:auto] [:not(:where(.o067801)).house-label.below_&]:[top:12px] [.house-label:focus-visible_&]:[outline:3px_solid_var(--accent)] [.house-label:focus-visible_&]:[outline-offset:2px] [.house-label:hover_&]:bg-card [[data-theme=maquette]_&]:[border:0] [[data-theme=maquette]_&]:[border-radius:8px] [[data-theme=maquette]_&]:[background:rgb(0_0_0_/_0.6)]" }, name, value);
-    const node = el(interactive ? "button" : "span", { class: "house-label [:where(&)]:[all:unset] absolute w-0 h-0 cursor-pointer [:not(:where(.o067000))&::before]:[content:''] [:not(:where(.o067001))&::before]:absolute [:not(:where(.o067002))&::before]:[left:-4px] [:not(:where(.o067003))&::before]:[top:-4px] [:not(:where(.o067004))&::before]:w-[8px] [:not(:where(.o067005))&::before]:h-[8px] [&::before]:[border-radius:50%] [:not(:where(.o067007))&::before]:bg-card [&::before]:[box-shadow:0_0_0_1.5px_var(--ink)] [:not(:where(.o067100))&::after]:[content:''] [:not(:where(.o067101))&::after]:absolute [:not(:where(.o067102))&::after]:[left:3px] [:not(:where(.o067103))&::after]:[bottom:3px] [:not(:where(.o067104))&::after]:w-[14px] [:not(:where(.o067105))&::after]:h-[1px] [:not(:where(.o067106))&::after]:[background:var(--ink)] [&::after]:[transform:rotate(-45deg)] [&::after]:[transform-origin:left_center] [:not(:where(.o067500))&.left::after]:[left:auto] [:not(:where(.o067501))&.left::after]:[right:3px] [:not(:where(.o067502))&.left::after]:[transform:rotate(45deg)] [&.left::after]:[transform-origin:right_center] [:not(:where(.o067700))&.below::after]:[bottom:auto] [:not(:where(.o067701))&.below::after]:[top:3px] [:not(:where(.o067702))&.below::after]:[transform:rotate(45deg)] [&.below.left::after]:[transform:rotate(-45deg)] [:not(:where(.o068200))&.placing::before]:[animation:place_1s_ease-in-out_infinite] [[data-theme=maquette]_&::before]:[box-shadow:0_0_0_1.5px_#ffffff] [[data-theme=maquette]_&::after]:[background:#ffffff] [.drawing-preview_&]:[cursor:inherit] [@media(prefers-reduced-motion:reduce)]:[:not(:where(.o090800))&.placing::before]:[animation:none]" }, tag);
+    const tag = el("span", { class: "house-tag absolute [:not(:where(.o067201))&]:[left:13px] [:not(:where(.o067202))&]:[bottom:12px] grid py-1 px-2 [border:1.25px_solid_var(--ink)] rounded-trait [background:color-mix(in_srgb,_var(--card)_92%,_transparent)] text-text whitespace-nowrap [line-height:1.2] [:not(:where(.o067400))&_strong]:[font-family:var(--font-mono)] [:not(:where(.o067401))&_strong]:text-[clamp(0.68rem,_1.9cqw,_0.85rem)] [:not(:where(.o067402))&_strong]:font-medium [:not(:where(.o067403))&_strong]:[font-variant-numeric:tabular-nums] [:not(:where(.o067600)).house-label.left_&]:[left:auto] [:not(:where(.o067601)).house-label.left_&]:[right:13px] [:not(:where(.o067800)).house-label.below_&]:[bottom:auto] [:not(:where(.o067801)).house-label.below_&]:[top:12px] [.house-label:focus-visible_&]:[outline:3px_solid_var(--accent)] [.house-label:focus-visible_&]:[outline-offset:2px] [.house-label:hover_&]:bg-card" }, name, value);
+    const node = el(interactive ? "button" : "span", { class: "house-label [:where(&)]:[all:unset] absolute w-0 h-0 cursor-pointer [:not(:where(.o067000))&::before]:[content:''] [:not(:where(.o067001))&::before]:absolute [:not(:where(.o067002))&::before]:[left:-4px] [:not(:where(.o067003))&::before]:[top:-4px] [:not(:where(.o067004))&::before]:w-[8px] [:not(:where(.o067005))&::before]:h-[8px] [&::before]:rounded-full [:not(:where(.o067007))&::before]:bg-card [&::before]:[box-shadow:0_0_0_1.5px_var(--ink)] [:not(:where(.o067100))&::after]:[content:''] [:not(:where(.o067101))&::after]:absolute [:not(:where(.o067102))&::after]:[left:3px] [:not(:where(.o067103))&::after]:[bottom:3px] [:not(:where(.o067104))&::after]:w-[14px] [:not(:where(.o067105))&::after]:h-[1px] [:not(:where(.o067106))&::after]:[background:var(--ink)] [&::after]:[transform:rotate(-45deg)] [&::after]:[transform-origin:left_center] [:not(:where(.o067500))&.left::after]:[left:auto] [:not(:where(.o067501))&.left::after]:[right:3px] [:not(:where(.o067502))&.left::after]:[transform:rotate(45deg)] [&.left::after]:[transform-origin:right_center] [:not(:where(.o067700))&.below::after]:[bottom:auto] [:not(:where(.o067701))&.below::after]:[top:3px] [:not(:where(.o067702))&.below::after]:[transform:rotate(45deg)] [&.below.left::after]:[transform:rotate(-45deg)] [:not(:where(.o068200))&.placing::before]:[animation:place_1s_ease-in-out_infinite] [.drawing-preview_&]:[cursor:inherit] [@media(prefers-reduced-motion:reduce)]:[:not(:where(.o090800))&.placing::before]:[animation:none]" }, tag);
     if (interactive) node.type = "button";
     node.style.left = `${label.x}%`;
     node.style.top = `${label.y}%`;
@@ -455,7 +461,7 @@ function drawHouse(stage, config, { interactive }) {
     return { label, name, value, node };
   });
   stage.replaceChildren(...parts);
-  const view = { stage, config, ambiance, layers, fx, zones, labels };
+  const view = { stage, config, base, ambiance, layers, fx, zones, labels };
   // La taille du dessin n'est connue qu'une fois l'image chargée : ses
   // proportions servent à le faire tenir dans la hauteur de l'écran.
   stage.classList.remove("cutout");
@@ -589,11 +595,20 @@ function updateHouse(view) {
   if (!view) return;
   const isNight = houseNight();
   view.stage.classList.toggle("is-night", isNight);
+  // Le temps qu'il fait, pour le ciel de l'accueil v4 (hub-v3.css) : il
+  // change avec l'image de la maison (soleil, nuages, pluie, neige…).
+  document.documentElement.dataset.meteo = weatherKind();
   if (view.ambiance) {
     const chosen = backgroundFor(view.config, ambianceOf(view.config));
     const url = chosen && chosen !== view.config.background ? houseUrl(chosen) : null;
     if (url && view.ambiance.getAttribute("src") !== url) view.ambiance.src = url;
     view.ambiance.classList.toggle("off", url === null);
+    // Le fond s'efface sous l'ambiance, une fois celle-ci chargée : en Sombre,
+    // les images de la maison se fondent dans le ciel (mode « éclaircir »),
+    // et une image de nuit posée sur celle de jour n'en garderait presque rien.
+    const ready = url !== null && view.ambiance.complete && view.ambiance.naturalWidth > 0;
+    if (url !== null && !ready) view.ambiance.addEventListener("load", () => updateHouse(view), { once: true });
+    view.base?.classList.toggle("under-ambiance", ready);
   }
   for (const { layer, img } of view.layers) {
     const shown = layerShown(layer, isNight);
@@ -696,7 +711,10 @@ function zoneTouch(zone, node) {
     node.classList.add("hit", "pending");
     setTimeout(() => node.classList.remove("hit"), 700);
     setTimeout(() => node.classList.remove("pending"), 5000);
-    callService(command[0], command[1], { entity_id: state.entity_id });
+    callService(command[0], command[1], { entity_id: state.entity_id }).then((ok) => {
+      // Refusé : la zone le dit là où on a touché (accueil v3/v4, hub-v3.js).
+      if (ok === false && typeof hubV3Failed === "function") hubV3Failed(node);
+    });
   });
 }
 
