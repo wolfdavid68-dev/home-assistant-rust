@@ -95,7 +95,7 @@ macro_rules! asset {
 
 /// Tous les fichiers servis. Le JavaScript est découpé par thème ; l'ordre
 /// de chargement est donné par `index.html` (voir l'en-tête de `app.js`).
-static ASSETS: [Asset; 48] = [
+static ASSETS: [Asset; 50] = [
     asset!("/", "index.html", "text/html; charset=utf-8", REVALIDATE),
     asset!("/utils.js", "utils.js", JS, REVALIDATE),
     asset!("/app.js", "app.js", JS, REVALIDATE),
@@ -200,6 +200,19 @@ static ASSETS: [Asset; 48] = [
     asset!(
         "/fonts/bricolage-grotesque.woff2",
         "fonts/bricolage-grotesque.woff2",
+        "font/woff2",
+        ONE_WEEK
+    ),
+    // Instrument Serif : les titres et le récit de l'accueil v4.
+    asset!(
+        "/fonts/instrument-serif.woff2",
+        "fonts/instrument-serif.woff2",
+        "font/woff2",
+        ONE_WEEK
+    ),
+    asset!(
+        "/fonts/instrument-serif-italic.woff2",
+        "fonts/instrument-serif-italic.woff2",
         "font/woff2",
         ONE_WEEK
     ),

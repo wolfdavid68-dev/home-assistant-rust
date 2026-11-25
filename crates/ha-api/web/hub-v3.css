@@ -1,6 +1,22 @@
 /* v3/v4 : l'accueil « ciel ». Actif seulement si <html data-hub-style="v3">.
    Il suit le thème : ciel de jour en Clair, ciel de nuit en Sombre. */
 
+/* Instrument Serif (licence OFL, fonts/OFL-instrumentserif.txt) : le récit de la v4. */
+@font-face {
+  font-family: "Instrument Serif";
+  src: url("/fonts/instrument-serif.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Instrument Serif";
+  src: url("/fonts/instrument-serif-italic.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
 /* ---------------------------------------------------------------- Jetons et fond */
 /* La palette de l'accueil, deux valeurs (Sombre par défaut, Clair plus bas).
    Posée sur la racine : les écrans v4 hors de .hub (sonnette, incrustations)

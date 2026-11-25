@@ -53,6 +53,8 @@ async fn dashboard_files_are_served_with_security_headers() {
         ("/fonts/geist.woff2", "font/woff2"),
         ("/fonts/geist-mono.woff2", "font/woff2"),
         ("/fonts/bricolage-grotesque.woff2", "font/woff2"),
+        ("/fonts/instrument-serif.woff2", "font/woff2"),
+        ("/fonts/instrument-serif-italic.woff2", "font/woff2"),
         ("/sw.js", "text/javascript; charset=utf-8"),
         ("/smartthings", "text/html; charset=utf-8"),
         ("/icon-192.png", "image/png"),

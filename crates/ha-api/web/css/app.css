@@ -71,6 +71,8 @@
   --font-sans: var(--font);
   --font-titre: var(--font-display);
   --font-code: var(--font-mono);
+  /* Le récit de l'accueil v4 (titres, « Tout est calme. ») : Instrument Serif, OFL. */
+  --font-recit: "Instrument Serif", Georgia, "Times New Roman", serif;
   --radius-carte: var(--radius);
   --shadow-carte: var(--shadow);
   --shadow-flottant: var(--shadow-float);
