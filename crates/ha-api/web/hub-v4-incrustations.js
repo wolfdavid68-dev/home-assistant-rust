@@ -17,7 +17,7 @@ const HUB_V4_ICON_BTN = "grid place-items-center size-11 shrink-0 p-0 rounded-fu
   + HUB_V4_FOCUS;
 const HUB_V4_INPUT = "w-full min-h-12 px-4 rounded-[16px] border-0 bg-voile/8 text-courant text-inherit "
   + "placeholder:text-v-mute/80 [color-scheme:var(--v4-scheme)] " + HUB_V4_FOCUS;
-const HUB_V4_CHIP = "min-h-10 px-3 rounded-full border-0 bg-voile/8 text-petit text-inherit cursor-pointer "
+const HUB_V4_CHIP = "relative before:absolute before:-inset-y-0.5 before:inset-x-0 min-h-10 px-3 rounded-full border-0 bg-voile/8 text-petit text-inherit cursor-pointer "
   + "transition-colors hover:bg-voile/14 " + HUB_V4_FOCUS;
 // Un « + » et une coche, en traits (comme ICONS).
 const HUB_V4_MORE_ICONS = { plus: ["M12 5v14", "M5 12h14"] };
@@ -737,11 +737,16 @@ function hubV4Bell() {
         const item = el("li", { class: HUB_V4_ROW }, icon, text, time);
         if (canControl(state)) {
           const dismiss = el("button", {
-            type: "button", class: `${HUB_V4_ICON_BTN} size-9 bg-transparent`, "aria-label": `Retirer : ${String(a.title ?? "l'avis")}`,
+            type: "button", class: `${HUB_V4_ICON_BTN} size-9 bg-transparent relative before:absolute before:-inset-1`, "aria-label": `Retirer : ${String(a.title ?? "l'avis")}`,
           }, svgIcon(HUB_V4_ICONS.close));
           dismiss.addEventListener("click", () => {
             dismiss.disabled = true;
-            callService("persistent_notification", "dismiss", { entity_id: state.entity_id });
+            // Refusé : le bouton revient, avec l'anneau rouge.
+            callService("persistent_notification", "dismiss", { entity_id: state.entity_id }).then((ok) => {
+              if (ok !== false || !dismiss.isConnected) return;
+              dismiss.disabled = false;
+              hubV3Failed(dismiss);
+            });
           });
           item.append(dismiss);
         }
@@ -1015,8 +1020,8 @@ function hubV4Water() {
       swap(modes, ...presets.map((preset) => {
         const node = el("button", {
           type: "button", "aria-pressed": String(a.preset_mode === preset),
-          class: "min-h-10 px-2 rounded-[12px] border-0 bg-transparent text-petit font-medium text-inherit cursor-pointer "
-            + "transition-colors hover:bg-voile/8 aria-pressed:bg-[#ffbf5e] aria-pressed:text-[#1f1305] "
+          class: `${HUB_HIT_Y2} min-h-10 px-2 rounded-[12px] border-0 bg-transparent text-petit font-medium text-inherit cursor-pointer `
+            + "[&.pending]:opacity-60 transition-colors hover:bg-voile/8 aria-pressed:bg-[#ffbf5e] aria-pressed:text-[#1f1305] "
             + `disabled:opacity-40 disabled:cursor-default ${HUB_V4_FOCUS}`,
           text: lookup(PRESET_LABELS, preset) ?? `${preset.charAt(0).toUpperCase()}${preset.slice(1)}`,
         });
@@ -1024,8 +1029,7 @@ function hubV4Water() {
         node.addEventListener("click", () => {
           const now = get();
           if (!now || !hubV4Ready(now)) return;
-          markPending(HUB_V3_WATER);
-          callService("climate", "set_preset_mode", { entity_id: HUB_V3_WATER, preset_mode: preset });
+          hubV3Send(node, "climate", "set_preset_mode", { entity_id: HUB_V3_WATER, preset_mode: preset });
         });
         return node;
       }));

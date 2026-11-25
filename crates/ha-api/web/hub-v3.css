@@ -1246,3 +1246,41 @@
 :root[data-hub-v4] .hub :is(.hub-agenda, .hub-v3-heating) { padding: 12px; }
 /* Tempo : un petit titre et les pastilles, serrés. */
 :root[data-hub-v4] .hub .hub-v3-tempo { row-gap: 4px; column-gap: 6px; }
+
+/* ===== Ergonomie : zones de toucher, refus, mouvement réduit ===== */
+/* Le dessin ne change pas : une zone transparente (::before) agrandit la cible
+   jusqu'à 44 px, sans déborder sur la voisine. Les pièces du dessin et leurs
+   pastilles ont une zone calculée (hubV3Hits, hub-v3.js) : 44 px, coupée à
+   mi-chemin de la pièce voisine. */
+:root[data-hub-style="v3"] .hub :is(.hub-v3-pin, .house-zone).hub-hit::before { content: ""; position: absolute; inset: var(--hit, 0); }
+/* Musique (v4) : précédent, lecture, suivant font 40 px, à 2 px l'un de l'autre :
+   44 px de haut, et en largeur tout ce qui ne mord pas sur le voisin. */
+:root[data-hub-v4] .hub .hub-v3-music-ctl :is(.hub-v3-play, .hub-v3-next) { position: relative; }
+:root[data-hub-v4] .hub .hub-v3-music-ctl :is(.hub-v3-play, .hub-v3-next)::before { content: ""; position: absolute; inset: -2px -1px; }
+:root[data-hub-v4] .hub .hub-v3-music-ctl .hub-v4-prev::before { left: -3px; }
+:root[data-hub-v4] .hub .hub-v3-music-ctl .hub-v3-next:not(.hub-v4-prev)::before { right: -3px; }
+/* Le volume : 44 px à prendre, la même piste fine au milieu. */
+:root[data-hub-v4] .hub .hub-v4-volume { height: 44px; margin-block: -2px; }
+/* Tempo (une ligne de 24 px qui ouvre le détail) et l'eau chaude (36 px). */
+:root[data-hub-v4] .hub .hub-v3-tempo[role="button"] { position: relative; }
+:root[data-hub-v4] .hub .hub-v3-tempo[role="button"]::before { content: ""; position: absolute; inset: -10px 0; }
+:root[data-hub-v4] .hub .hub-v3-zone.hub-v4-zone.water { position: relative; }
+:root[data-hub-v4] .hub .hub-v3-zone.hub-v4-zone.water::before { content: ""; position: absolute; inset: -4px 0; }
+/* Les pastilles de Vivant (26 px) : 44 px de haut par défaut, avant le calcul. */
+:root[data-hub-v4] .hub .hub-v3-pin.hub-v4-room-pin:not(.hub-hit)::before { inset: -9px -2px; }
+
+/* Un ordre refusé : un anneau rouge là où on a touché, 4 s (le message s'affiche en bas). */
+:root[data-hub-style="v3"] :is(.hub, .hub-v4-ovs, .hub-v4-page) [data-echec] {
+  outline: 2px solid var(--v3-alert);
+  outline-offset: 2px;
+  animation: hub-v3-echec 0.4s var(--v3-ease);
+}
+@keyframes hub-v3-echec {
+  25% { translate: -3px 0; }
+  75% { translate: 3px 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-hub-style="v3"] :is(.hub, .hub-v4-ovs, .hub-v4-page) [data-echec] { animation: none; }
+}
+/* Musique : le bouton touché attend la réponse du lecteur. */
+:root[data-hub-style="v3"] .hub :is(.hub-v3-play, .hub-v3-next, .hub-v4-volume).pending { opacity: 0.6; }

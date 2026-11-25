@@ -257,3 +257,25 @@ describe("hubV4RateText / hubV4BackupText / hubV4HolidayText", () => {
     assert.equal(hubV4HolidayText(undefined), "");
   });
 });
+
+describe("hubV4DialPartAt : le cadran sous le doigt", () => {
+  const hubV4DialPartAt = run("hubV4DialPartAt");
+  const near = (a, b) => Math.abs(a - b) < 1e-9;
+
+  test("le début, le milieu et la fin de l'arc", () => {
+    // Le début : en bas à gauche (135°) ; le haut (270°) : la moitié ; en bas à droite (45°) : la fin.
+    assert.ok(near(hubV4DialPartAt(100 + 80 * Math.cos(3 * Math.PI / 4), 100 + 80 * Math.sin(3 * Math.PI / 4)), 0));
+    assert.ok(near(hubV4DialPartAt(100, 20), 0.5));
+    assert.ok(near(hubV4DialPartAt(100 + 80 * Math.cos(Math.PI / 4), 100 + 80 * Math.sin(Math.PI / 4)), 1));
+  });
+
+  test("dans l'ouverture du bas : le bout le plus proche", () => {
+    assert.equal(hubV4DialPartAt(110, 178), 1);
+    assert.equal(hubV4DialPartAt(90, 178), 0);
+  });
+
+  test("loin de l'arc (au centre, dehors) : rien", () => {
+    assert.equal(hubV4DialPartAt(100, 100), null);
+    assert.equal(hubV4DialPartAt(100, -20), null);
+  });
+});

@@ -204,6 +204,8 @@ function hubV3Init() {
       hubV3RenderPins();
     });
     observer.observe(stage, { childList: true });
+    // Le dessin change de taille (image chargée, écran tourné, vue téléphone) : les zones de toucher suivent.
+    if (typeof ResizeObserver === "function") new ResizeObserver(hubV3HitsSoon).observe(stage);
   }
   renderHubV3();
 }
@@ -294,20 +296,21 @@ function hubV3Build() {
     leaveHub();
     openMusic();
   });
-  const act = (handler) => () => {
+  // Le bouton touché attend la réponse ; un refus s'y voit (hubV3Send).
+  const act = (node, handler) => () => {
     const state = musicPlayer();
-    if (state && canControl(state)) handler(state);
+    if (!state || !canControl(state)) return;
+    const [service, data = {}] = handler(state);
+    hubV3Send(node, "media_player", service, { entity_id: state.entity_id, ...data });
   };
-  ui.play.addEventListener("click", act((state) => musicCommand(state,
-    state.state === "playing" ? "media_pause" : "media_play")));
-  ui.prev.addEventListener("click", act((state) => musicCommand(state, "media_previous_track")));
+  ui.play.addEventListener("click", act(ui.play, (state) => [state.state === "playing" ? "media_pause" : "media_play"]));
+  ui.prev.addEventListener("click", act(ui.prev, () => ["media_previous_track"]));
   fillSlider(ui.volume);
   ui.volume.addEventListener("input", () => setText(ui.volumeValue, `${ui.volume.value} %`));
-  ui.volume.addEventListener("change", act((state) => musicCommand(state, "volume_set",
-    { volume_level: Number(ui.volume.value) / 100 })));
+  ui.volume.addEventListener("change", act(ui.volume, () => ["volume_set", { volume_level: Number(ui.volume.value) / 100 }]));
   // L'invite de la v4 : « Toute la maison › » ouvre la page de la maison (hub-v4-pieces.js).
   // La couleur et la graisse sur le texte : le bouton hérite de celles de la phrase (.hub button).
-  const all = button({ class: "inline-flex items-center gap-0.5 h-8 px-1 -my-1 rounded-lg border-0 bg-transparent cursor-pointer "
+  const all = button({ class: `${HUB_HIT_Y6} inline-flex items-center gap-0.5 h-8 px-1 -my-1 rounded-lg border-0 bg-transparent cursor-pointer `
     + "hover:underline [&>svg]:size-3.5 [&>svg]:text-v-amber focus-visible:outline-2 focus-visible:outline-v-sky" },
   el("span", { class: "font-semibold text-v-amber", text: "Toute la maison" }), svgIcon(HUB_V4_ICONS.go));
   all.addEventListener("click", () => {
@@ -321,14 +324,14 @@ function hubV3Build() {
     hubV3.lens = "vivant";
     hubV3RenderLens();
   });
-  ui.next.addEventListener("click", act((state) => musicCommand(state, "media_next_track")));
+  ui.next.addEventListener("click", act(ui.next, () => ["media_next_track"]));
   // Les boutons de l'en-tête restent les vrais : ceux-ci les déclenchent.
   ui.bell.addEventListener("click", () => $("#open-notices")?.click());
   ui.assist.addEventListener("click", () => $("#open-assist")?.click());
   ui.account.addEventListener("click", () => $("#open-account")?.click());
   // Le bouton de la phrase suit la lentille (voir hubV3Action).
   ui.allOff.addEventListener("click", () => {
-    if (hubV3ActionRun(hubV3.lens)) hubV3Wait(ui.allOff);
+    hubV3ActionRun(hubV3.lens, ui.allOff);
   });
 
   hubV3.ui = ui;
@@ -481,6 +484,12 @@ function hubV3RenderMusic() {
   setText(ui.musicSub, [active ? hubV3Clean(a.media_artist) || status : status, nameOf(state)].filter(Boolean).join(" · "));
   showCover(ui.musicImg, active ? a.entity_picture : null);
   ui.music.classList.toggle("playing", playing);
+  // Le lecteur a répondu (état, morceau, volume) : ses boutons n'attendent plus.
+  const mark = [state.state, a.media_title, a.volume_level].join("|");
+  if (ui.music.dataset.mark !== mark) {
+    ui.music.dataset.mark = mark;
+    for (const node of [ui.play, ui.prev, ui.next, ui.volume]) node.classList.remove("pending");
+  }
   setAttr(ui.musicOpen, "aria-label", `Ouvrir le lecteur${title ? ` : ${title}` : ""}`);
   swap(ui.play, svgIcon(playing ? ICONS.pause : ICONS.play));
   setAttr(ui.play, "aria-label", playing ? "Mettre en pause" : "Lancer la lecture");
@@ -732,25 +741,23 @@ function hubV3RoomLights(area) {
 }
 
 /** Une pièce éclairée s'éteint ; une pièce éteinte s'allume. Faux si rien n'est parti. */
-function hubV3ToggleRoom(name) {
+function hubV3ToggleRoom(name, node = null) {
   const area = areas.find((a) => a.name === name);
   if (!area) return false;
   const lights = hubV3RoomLights(area).filter(canControl);
   const lit = lights.filter((s) => s.state === "on");
   const service = lit.length > 0 ? "turn_off" : "turn_on";
   const targets = lit.length > 0 ? lit : lights.filter((s) => s.state === "off");
-  for (const state of targets) {
-    markPending(state.entity_id);
-    callService("light", service, { entity_id: state.entity_id });
-  }
-  return targets.length > 0;
+  // Plusieurs lampes d'un coup : « Annuler » les remet comme avant.
+  return hubV3Orders(node, targets.map((s) => ["light", service, { entity_id: s.entity_id }]),
+    targets.length > 1 ? `${name} : lumières ${service === "turn_off" ? "éteintes" : "allumées"}` : "");
 }
 
 /** Un bouton de pièce : l'icône de la lentille, le nom (dans la rangée) et ce qu'elle montre. */
 function hubV3RoomButton(name, cls, withName, lens) {
   // En v4, sur Vivant : une pastille sombre « • Salon », le point ambre si une lumière est allumée.
   if (lens === "vivant") {
-    const node = el("button", { type: "button", class: `${cls} hub-v4-room-pin` },
+    const node = el("button", { type: "button", class: `${cls} hub-v4-room-pin`, "aria-haspopup": "dialog" },
       el("span", { class: "size-1.5 shrink-0 rounded-full bg-v-mute [.lit>&]:bg-v-amber "
         + "[.lit>&]:shadow-[0_0_6px_var(--v3-amber)]", "aria-hidden": "true" }),
       el("span", { text: name }));
@@ -773,7 +780,7 @@ function hubV3RoomButton(name, cls, withName, lens) {
   if (!withName) attributes.title = name;
   const node = el("button", attributes, ...parts);
   node.addEventListener("click", () => {
-    if (hubV3Tap(lens, name)) hubV3Wait(node);
+    hubV3Tap(lens, name, node);
   });
   return { node, count, sub };
 }
@@ -929,22 +936,22 @@ function hubV3Paint(lens, item, name, members) {
   }
 }
 
-/** Ferme les volets ouverts ; s'ils sont tous fermés, les ouvre. Faux si rien n'est parti. */
-function hubV3MoveCovers(covers) {
+/** Ferme les volets ouverts ; s'ils sont tous fermés, les ouvre. Faux si rien n'est parti.
+ *  `node` : le bouton touché (il attend, montre un refus) ; `room` : la pièce, pour le bandeau « Annuler ». */
+function hubV3MoveCovers(covers, node = null, room = "") {
   const movable = covers.filter((s) => canControl(s) && s.state !== "unavailable" && s.state !== "unknown");
   const open = movable.filter((s) => s.state === "open" || s.state === "opening");
   const service = open.length > 0 ? "close_cover" : "open_cover";
   const targets = open.length > 0 ? open : movable;
-  for (const state of targets) {
-    markPending(state.entity_id);
-    callService("cover", service, { entity_id: state.entity_id });
-  }
-  return targets.length > 0;
+  const done = targets.length > 1 ? `volets ${service === "close_cover" ? "fermés" : "ouverts"}`
+    : `volet ${service === "close_cover" ? "fermé" : "ouvert"}`;
+  return hubV3Orders(node, targets.map((s) => ["cover", service, { entity_id: s.entity_id }]),
+    room ? `${room} : ${done}` : `${done.charAt(0).toUpperCase()}${done.slice(1)}`);
 }
 
 /** Toucher une pastille. Vrai si une commande est partie (la pastille attend la réponse).
  *  Chauffage et Sécurité ouvrent la pièce : jamais de déverrouillage d'un seul geste. */
-function hubV3Tap(lens, name) {
+function hubV3Tap(lens, name, node = null) {
   // En v4, sur Vivant : la page de la pièce (hub-v4.js).
   if (lens === "vivant") {
     if (typeof hubV4OpenRoom === "function") hubV4OpenRoom(name);
@@ -952,10 +959,10 @@ function hubV3Tap(lens, name) {
   }
   // En v4, une pièce touchée s'ouvre en incrustation (hub-v4.js).
   if (lens === "lumieres" && typeof hubV4Room === "function" && hubV4Room(name)) return false;
-  if (lens === "lumieres") return hubV3ToggleRoom(name);
+  if (lens === "lumieres") return hubV3ToggleRoom(name, node);
   const area = areas.find((a) => a.name === name);
   if (!area) return false;
-  if (lens === "volets") return hubV3MoveCovers(hubV3Members("volets", area));
+  if (lens === "volets") return hubV3MoveCovers(hubV3Members("volets", area), node, name);
   if (lens === "musique") {
     const players = hubV3Members("musique", area);
     const player = players.find((s) => s.state === "playing") ?? players[0];
@@ -992,18 +999,15 @@ function hubV3Action(lens) {
 }
 
 /** Le geste du bouton de la phrase. Vrai si une commande est partie. */
-function hubV3ActionRun(lens) {
+function hubV3ActionRun(lens, node = null) {
   if (lens === "lumieres") {
     // Tout éteindre : une commande par lumière allumée que ce compte commande,
     // comme « Éteindre les lumières » dans la fiche d'une pièce.
     const lit = [...entities.values()].filter((s) => isLight(s) && s.state === "on" && canControl(s));
-    for (const state of lit) {
-      markPending(state.entity_id);
-      callService("light", "turn_off", { entity_id: state.entity_id });
-    }
-    return lit.length > 0;
+    return hubV3Orders(node, lit.map((s) => ["light", "turn_off", { entity_id: s.entity_id }]),
+      "Lumières éteintes");
   }
-  if (lens === "volets") return hubV3MoveCovers([...entities.values()].filter(hubV3IsShutter));
+  if (lens === "volets") return hubV3MoveCovers([...entities.values()].filter(hubV3IsShutter), node);
   if (lens === "musique") {
     const player = musicPlayer();
     if (!player || !canControl(player)) return false;
@@ -1067,6 +1071,7 @@ function hubV3Sync(map, parent, wanted, make, lens) {
 function hubV3RenderPins() {
   const ui = hubV3.ui;
   if (!ui || !hubV3.placed) return;
+  hubV3HitsSoon();
   const lens = hubV3.lens;
   // En v4, Vivant pose aussi une pastille par pièce : son nom, pour l'ouvrir.
   const home = lens === "vivant" && typeof hubV4On === "function" && hubV4On();
@@ -1128,3 +1133,250 @@ function hubV3RenderPins() {
 }
 
 document.addEventListener("DOMContentLoaded", hubV3Init);
+
+// ------------------------------------------------------------- Ergonomie
+// Ce que l'accueil v3/v4 fait pour le doigt : chaque ordre se voit pris tout
+// de suite (le bouton attend) et un refus se voit là où on a touché ; une
+// action groupée propose « Annuler » quelques secondes ; les petites cibles
+// du dessin ont une zone de toucher de 44 px sans changer leur dessin.
+
+const HUB_V3_UNDO_MS = 6000;
+const HUB_V3_FAIL_MS = 4000;
+const hubV3Fails = new WeakMap();
+const hubV3Undo = { bar: null, timer: 0 };
+const hubV3HitTimer = { id: 0 };
+// Une zone de toucher de 44 px autour d'une cible plus petite, sans changer
+// son dessin : le pseudo-élément ::before, transparent, déborde de 2 à 6 px.
+const HUB_HIT_Y2 = "relative before:absolute before:-inset-y-0.5 before:inset-x-0";
+const HUB_HIT_Y4 = "relative before:absolute before:-inset-y-1 before:inset-x-0";
+const HUB_HIT_Y6 = "relative before:absolute before:-inset-y-1.5 before:inset-x-0";
+const HUB_HIT_6 = "relative before:absolute before:-inset-1.5";
+
+/**
+ * Envoie des ordres pour un bouton (`node`, ou null) : il attend la réponse
+ * (grisé), et si l'un est refusé, il le montre (anneau rouge) là où on a
+ * touché. `undo` : le texte du bandeau « Annuler » (une action groupée), ou "".
+ * `orders` : [[domaine, service, données]]. Faux si rien n'est parti.
+ */
+function hubV3Orders(node, orders, undo = "") {
+  if (orders.length === 0) return false;
+  const before = undo ? hubV3Snapshot() : null;
+  if (node) {
+    hubV3Unfail(node);
+    hubV3Wait(node);
+  }
+  const sent = orders.map(([domain, service, data]) => {
+    if (data.entity_id && typeof markPending === "function") markPending(data.entity_id);
+    return Promise.resolve(callService(domain, service, data)).catch(() => false);
+  });
+  // Après le geste : une fenêtre qui se ferme aussitôt (le moment lancé) n'emporte pas le bandeau.
+  if (before) {
+    const targets = new Set(orders.map(([, , data]) => data.entity_id).filter(Boolean));
+    Promise.resolve().then(() => hubV3UndoOffer(undo, before, targets));
+  }
+  Promise.all(sent).then((results) => {
+    if (!results.includes(false)) return;
+    if (node) hubV3Failed(node);
+    // Rien n'est parti : rien à annuler.
+    if (before && results.every((ok) => ok === false)) hubV3UndoClose();
+    // Le message du refus (flash, en bas de la page) est caché sous une page ou
+    // une fenêtre v4 ouverte : il s'y montre aussi, dans le même bandeau.
+    const said = $("#flash");
+    if (said && !said.hidden && said.textContent && hubV3TopDialog()) hubV3Bar(said.textContent, null, HUB_V3_FAIL_MS);
+  });
+  return true;
+}
+
+/** Un seul ordre depuis un bouton (voir hubV3Orders). */
+function hubV3Send(node, domain, service, data) {
+  return hubV3Orders(node, [[domain, service, data]]);
+}
+
+/** Le bouton dit que l'ordre n'est pas passé (le message, lui, s'affiche en bas). */
+function hubV3Failed(node) {
+  node.classList.remove("pending");
+  clearTimeout(hubV3Waits.get(node));
+  node.dataset.echec = "";
+  clearTimeout(hubV3Fails.get(node));
+  hubV3Fails.set(node, setTimeout(() => hubV3Unfail(node), HUB_V3_FAIL_MS));
+}
+
+function hubV3Unfail(node) {
+  clearTimeout(hubV3Fails.get(node));
+  delete node.dataset.echec;
+}
+
+/** Ce qu'« Annuler » sait remettre : lumières, prises, volets (pas le chauffage ni les serrures,
+ *  ni le délestage et la protection solaire, que la maison mène seule). */
+function hubV3Restorable(state) {
+  const domain = domainOf(state);
+  return (domain === "light" || domain === "switch" || domain === "cover")
+    && !["switch.delestage", "switch.protection_solaire"].includes(state.entity_id)
+    && state.state !== "unavailable" && state.state !== "unknown";
+}
+
+/** L'état d'avant de tout ce qu'« Annuler » sait remettre. */
+function hubV3Snapshot() {
+  return [...entities.values()].filter((s) => hubV3Restorable(s) && canControl(s)).map((s) => {
+    const a = s.attributes ?? {};
+    return {
+      id: s.entity_id, domain: domainOf(s), state: s.state, brightness: a.brightness,
+      kelvin: a.color_mode === "color_temp" ? a.color_temp_kelvin : undefined,
+      position: a.current_position, positioned: typeof hubV4CanPosition === "function" && hubV4CanPosition(s),
+    };
+  });
+}
+
+/**
+ * Les ordres qui remettent l'état d'avant (testé). `before` : hubV3Snapshot ;
+ * `now(id)` : l'état actuel ; `targets` : les appareils visés par l'action,
+ * remis même s'ils n'ont pas encore bougé (l'ordre peut être en route).
+ */
+function hubV3UndoOrders(before, now, targets = new Set()) {
+  const orders = [];
+  const num = (v) => typeof v === "number" && Number.isFinite(v);
+  for (const was of before) {
+    const state = now(was.id);
+    if (!state || state.state === "unavailable") continue;
+    const a = state.attributes ?? {};
+    // Un écart d'un point (arrondi de l'appareil) ne compte pas.
+    const moved = state.state !== was.state
+      || (was.domain === "light" && was.state === "on" && num(was.brightness) && Math.abs((a.brightness ?? 0) - was.brightness) > 2)
+      || (was.domain === "cover" && num(was.position) && Math.abs((a.current_position ?? -99) - was.position) > 1);
+    if (!moved && !targets.has(was.id)) continue;
+    const entity_id = was.id;
+    if (was.domain === "cover") {
+      if (was.positioned && num(was.position)) orders.push(["cover", "set_cover_position", { entity_id, position: was.position }]);
+      else if (was.state === "closed") orders.push(["cover", "close_cover", { entity_id }]);
+      else if (was.state === "open") orders.push(["cover", "open_cover", { entity_id }]);
+    } else if (was.state === "on") {
+      const data = { entity_id };
+      if (was.domain === "light" && num(was.brightness)) data.brightness = was.brightness;
+      if (was.domain === "light" && num(was.kelvin)) data.color_temp_kelvin = was.kelvin;
+      orders.push([was.domain, "turn_on", data]);
+    } else if (was.state === "off") {
+      orders.push([was.domain, "turn_off", { entity_id }]);
+    }
+  }
+  return orders;
+}
+
+/** La page ou la fenêtre v4 ouverte (la plus haute), ou null. */
+function hubV3TopDialog() {
+  return [...document.querySelectorAll("dialog[open]")].filter((d) => d.matches(".hub-v4-page, .hub-v4-ovs")).at(-1) ?? null;
+}
+
+/** Le bandeau « Annuler » : il remet comme avant ce que l'action a changé. */
+function hubV3UndoOffer(text, before, targets) {
+  const undo = el("button", {
+    type: "button",
+    class: "relative min-h-10 px-4 rounded-full border-0 bg-v-amber/16 text-corps font-semibold text-v-amber cursor-pointer "
+      + "transition-colors hover:bg-v-amber/24 before:absolute before:-inset-y-0.5 before:inset-x-0 "
+      + "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v-amber",
+    text: "Annuler",
+  });
+  undo.addEventListener("click", () => {
+    const orders = hubV3UndoOrders(before, (id) => entities.get(id), targets);
+    hubV3UndoClose();
+    hubV3Orders(null, orders);
+  });
+  hubV3Bar(text, undo, HUB_V3_UNDO_MS);
+}
+
+/**
+ * Le petit bandeau v4 du bas (un seul à la fois), au-dessus de ce qui est
+ * ouvert (page, fenêtre) ou de l'accueil : un texte, et un bouton s'il y en a un.
+ */
+function hubV3Bar(text, button, ms) {
+  hubV3UndoClose();
+  const bar = el("div", {
+    class: "hub-v3-undo fixed left-1/2 bottom-[calc(96px+env(safe-area-inset-bottom))] z-50 -translate-x-1/2 "
+      + `flex items-center gap-3 max-w-[calc(100vw-24px)] pl-5 ${button ? "py-1.5 pr-1.5 rounded-full" : "py-3 pr-5 rounded-panneau"} `
+      + "bg-scrim/88 backdrop-blur-[16px] backdrop-saturate-150 text-v-ink font-sans "
+      + "shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--v3-voile)_10%,transparent),0_18px_40px_-18px_rgb(0_0_0/0.7)] "
+      + "animate-v4-pop motion-reduce:animate-none",
+    role: button ? "status" : "alert",
+  }, el("span", { class: `min-w-0 text-corps ${button ? "truncate" : "text-balance"}`, text }));
+  if (button) bar.append(button);
+  // Le doigt (ou le focus) sur le bandeau le retient ; il repart en le quittant.
+  const wait = () => {
+    clearTimeout(hubV3Undo.timer);
+    hubV3Undo.timer = setTimeout(hubV3UndoClose, ms);
+  };
+  bar.addEventListener("focusin", () => clearTimeout(hubV3Undo.timer));
+  bar.addEventListener("focusout", wait);
+  bar.addEventListener("pointerenter", () => clearTimeout(hubV3Undo.timer));
+  bar.addEventListener("pointerleave", wait);
+  (hubV3TopDialog() ?? document.body).append(bar);
+  hubV3Undo.bar = bar;
+  wait();
+}
+
+function hubV3UndoClose() {
+  clearTimeout(hubV3Undo.timer);
+  hubV3Undo.bar?.remove();
+  hubV3Undo.bar = null;
+}
+
+/**
+ * Les zones de toucher de petites cibles voisines (testé) : chacune grandit
+ * jusqu'à `min` px de côté, sans passer la ligne à mi-chemin d'une voisine
+ * (le doigt va à la plus proche). `boxes` : [{ left, top, right, bottom }] ;
+ * renvoie de combien (px) étendre chaque côté : [{ t, r, b, l }].
+ */
+function hubV3HitPads(boxes, min = 44) {
+  const pads = boxes.map((b) => {
+    const x = Math.max(0, (min - (b.right - b.left)) / 2);
+    const y = Math.max(0, (min - (b.bottom - b.top)) / 2);
+    return { t: y, r: x, b: y, l: x };
+  });
+  for (let i = 0; i < boxes.length; i++) {
+    for (let j = i + 1; j < boxes.length; j++) {
+      const a = boxes[i], b = boxes[j], pa = pads[i], pb = pads[j];
+      const apart = a.right + pa.r <= b.left - pb.l || b.right + pb.r <= a.left - pa.l
+        || a.bottom + pa.b <= b.top - pb.t || b.bottom + pb.b <= a.top - pa.t;
+      if (apart) continue;
+      // L'écart entre les cibles elles-mêmes, sur chaque axe (négatif : elles se recouvrent).
+      const gx = Math.max(b.left - a.right, a.left - b.right);
+      const gy = Math.max(b.top - a.bottom, a.top - b.bottom);
+      if (gx < 0 && gy < 0) continue;
+      const split = (lo, loPad, hi, hiPad, gap) => {
+        // `lo` finit avant `hi` : chacun s'arrête au milieu de l'écart.
+        lo[loPad] = Math.min(lo[loPad], gap / 2);
+        hi[hiPad] = Math.min(hi[hiPad], gap / 2);
+      };
+      if (gx >= gy) {
+        if (a.right <= b.left) split(pa, "r", pb, "l", gx);
+        else split(pb, "r", pa, "l", gx);
+      } else if (a.bottom <= b.top) split(pa, "b", pb, "t", gy);
+      else split(pb, "b", pa, "t", gy);
+    }
+  }
+  return pads.map((p) => ({ t: Math.floor(p.t), r: Math.floor(p.r), b: Math.floor(p.b), l: Math.floor(p.l) }));
+}
+
+/** Pose les zones de toucher (classe hub-hit, variable --hit) sur des cibles affichées. */
+function hubV3Hits(nodes) {
+  const shown = nodes.filter((node) => node.isConnected && node.getClientRects().length > 0);
+  const boxes = shown.map((node) => node.getBoundingClientRect());
+  const pads = hubV3HitPads(boxes);
+  shown.forEach((node, i) => {
+    // Un dessin réduit (transform) : les px du ::before sont ceux de l'élément.
+    const k = node.offsetWidth > 0 ? boxes[i].width / node.offsetWidth : 1;
+    const p = pads[i];
+    const inset = [p.t, p.r, p.b, p.l].map((v) => `${-Math.round(v / (k || 1))}px`).join(" ");
+    node.classList.add("hub-hit");
+    if (node.style.getPropertyValue("--hit") !== inset) node.style.setProperty("--hit", inset);
+  });
+}
+
+/** Les pièces du dessin et leurs pastilles, une fois posées (après leur entrée animée). */
+function hubV3HitsSoon() {
+  clearTimeout(hubV3HitTimer.id);
+  hubV3HitTimer.id = setTimeout(() => {
+    const box = $("#hub-house");
+    if (!box || !hubV3On() || !hub.on) return;
+    hubV3Hits([...box.querySelectorAll(".house-zone:not(.edit)")]);
+    hubV3Hits([...box.querySelectorAll(".hub-v3-pins .hub-v3-pin")]);
+  }, 500);
+}

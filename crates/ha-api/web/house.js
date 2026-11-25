@@ -711,7 +711,10 @@ function zoneTouch(zone, node) {
     node.classList.add("hit", "pending");
     setTimeout(() => node.classList.remove("hit"), 700);
     setTimeout(() => node.classList.remove("pending"), 5000);
-    callService(command[0], command[1], { entity_id: state.entity_id });
+    callService(command[0], command[1], { entity_id: state.entity_id }).then((ok) => {
+      // Refusé : la zone le dit là où on a touché (accueil v3/v4, hub-v3.js).
+      if (ok === false && typeof hubV3Failed === "function") hubV3Failed(node);
+    });
   });
 }
 

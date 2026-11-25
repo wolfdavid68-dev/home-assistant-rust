@@ -384,7 +384,7 @@ function hubV4TelPanelBuild(ui) {
   const covers = hubV4Tile(ICONS.blinds, "sky", "Volets");
   ui.coverAll = el("button", { type: "button", class: HUB_V4_BTN });
   ui.coverAll.addEventListener("click", () => {
-    if (hubV3ActionRun("volets")) hubV3Wait(ui.coverAll);
+    hubV3ActionRun("volets", ui.coverAll);
   });
   covers.head.append(ui.coverAll);
   const coverList = el("div", { class: "flex flex-col gap-4" });
@@ -395,7 +395,7 @@ function hubV4TelPanelBuild(ui) {
   const lights = hubV4Tile(ICONS.bulb, "amber", "Lumières");
   ui.lightsOff = el("button", { type: "button", class: HUB_V4_BTN, text: "Tout éteindre" });
   ui.lightsOff.addEventListener("click", () => {
-    if (hubV3ActionRun("lumieres")) hubV3Wait(ui.lightsOff);
+    hubV3ActionRun("lumieres", ui.lightsOff);
   });
   lights.head.append(ui.lightsOff);
   const roomGrid = el("div", { class: "grid grid-cols-2 gap-2" });

@@ -309,8 +309,20 @@ function nudgeHeating(entityId, direction) {
   if (!state || state.state !== "heat") return;
   const target = heatTarget(state);
   if (target === null) return;
+  setHeating(entityId, target + direction * heatLimits(state).step, false);
+}
+
+/**
+ * Une consigne voulue (−/+, le cadran glissé ou au clavier) : bornée, sur le
+ * pas de l'appareil (`snap`), envoyée 0,7 s après le dernier geste.
+ */
+function setHeating(entityId, value, snap = true) {
+  const state = entities.get(entityId);
+  if (!state || state.state !== "heat" || !Number.isFinite(value)) return;
+  const target = heatTarget(state);
   const { step, min, max } = heatLimits(state);
-  const next = Math.round(Math.min(max, Math.max(min, target + direction * step)) * 10) / 10;
+  const wanted = snap ? Math.round(value / step) * step : value;
+  const next = Math.round(Math.min(max, Math.max(min, wanted)) * 10) / 10;
   if (next === target) return;
   const old = heatPending.get(entityId);
   clearTimeout(old?.send);

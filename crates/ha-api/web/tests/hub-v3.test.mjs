@@ -213,3 +213,91 @@ describe("hubV3IsSecurity", () => {
     }
   });
 });
+
+describe("hubV3HitPads : zones de toucher de 44 px sans chevauchement", () => {
+  const hubV3HitPads = run("hubV3HitPads");
+  const box = (left, top, w, h) => ({ left, top, right: left + w, bottom: top + h });
+  const hit = (b, p) => ({ left: b.left - p.l, top: b.top - p.t, right: b.right + p.r, bottom: b.bottom + p.b });
+
+  test("une petite cible seule grandit jusqu'à 44 px, centrée", () => {
+    const [p] = plain(hubV3HitPads([box(100, 100, 21, 18)]));
+    assert.deepEqual(p, { t: 13, r: 11, b: 13, l: 11 });
+  });
+
+  test("une grande cible ne grandit pas", () => {
+    assert.deepEqual(plain(hubV3HitPads([box(0, 0, 60, 50)])), [{ t: 0, r: 0, b: 0, l: 0 }]);
+  });
+
+  test("deux voisines se partagent l'écart à mi-chemin", () => {
+    const boxes = [box(100, 100, 21, 18), box(130, 102, 21, 18)];
+    const pads = plain(hubV3HitPads(boxes));
+    // 9 px entre elles : 4 de chaque côté (arrondi en dessous), pas de chevauchement.
+    assert.equal(pads[0].r, 4);
+    assert.equal(pads[1].l, 4);
+    const [a, b] = boxes.map((bx, i) => hit(bx, pads[i]));
+    assert.ok(a.right <= b.left);
+    // L'autre axe garde ses 44 px.
+    assert.equal(a.bottom - a.top, 44);
+  });
+
+  test("l'une au-dessus de l'autre : partage en hauteur", () => {
+    const boxes = [box(100, 100, 120, 26), box(110, 136, 90, 26)];
+    const pads = plain(hubV3HitPads(boxes));
+    const [a, b] = boxes.map((bx, i) => hit(bx, pads[i]));
+    assert.ok(a.bottom <= b.top);
+    assert.equal(pads[0].t, 9);
+    assert.equal(pads[1].b, 9);
+  });
+
+  test("des cibles qui se recouvrent déjà : rien n'est retiré", () => {
+    const pads = plain(hubV3HitPads([box(0, 0, 30, 30), box(20, 20, 30, 30)]));
+    assert.deepEqual(pads, [{ t: 7, r: 7, b: 7, l: 7 }, { t: 7, r: 7, b: 7, l: 7 }]);
+  });
+});
+
+describe("hubV3UndoOrders : « Annuler » remet l'état d'avant", () => {
+  const hubV3UndoOrders = run("hubV3UndoOrders");
+  const was = (id, domain, state, extra = {}) => ({ id, domain, state, ...extra });
+  const now = (map) => (id) => map[id];
+  const st = (state, attributes = {}) => ({ state, attributes });
+
+  test("une lampe éteinte par la scène se rallume à son intensité", () => {
+    const orders = plain(hubV3UndoOrders(
+      [was("light.salon", "light", "on", { brightness: 128, kelvin: 2700 })],
+      now({ "light.salon": st("off") }),
+    ));
+    assert.deepEqual(orders, [["light", "turn_on", { entity_id: "light.salon", brightness: 128, color_temp_kelvin: 2700 }]]);
+  });
+
+  test("ce qui n'a pas bougé et n'était pas visé reste tel quel", () => {
+    const orders = hubV3UndoOrders(
+      [was("light.cuisine", "light", "off"), was("switch.prise", "switch", "on")],
+      now({ "light.cuisine": st("off"), "switch.prise": st("on") }),
+    );
+    assert.equal(orders.length, 0);
+  });
+
+  test("un appareil visé est remis même s'il n'a pas encore bougé", () => {
+    const orders = plain(hubV3UndoOrders(
+      [was("switch.prise", "switch", "on")],
+      now({ "switch.prise": st("on") }),
+      new Set(["switch.prise"]),
+    ));
+    assert.deepEqual(orders, [["switch", "turn_on", { entity_id: "switch.prise" }]]);
+  });
+
+  test("un volet revient à sa position, ou à ouvert / fermé", () => {
+    const orders = plain(hubV3UndoOrders(
+      [was("cover.a", "cover", "open", { position: 40, positioned: true }), was("cover.b", "cover", "closed")],
+      now({ "cover.a": st("closing", { current_position: 30 }), "cover.b": st("open") }),
+    ));
+    assert.deepEqual(orders, [
+      ["cover", "set_cover_position", { entity_id: "cover.a", position: 40 }],
+      ["cover", "close_cover", { entity_id: "cover.b" }],
+    ]);
+  });
+
+  test("un appareil devenu indisponible est laissé", () => {
+    assert.equal(hubV3UndoOrders([was("light.x", "light", "on")], now({ "light.x": st("unavailable") })).length, 0);
+  });
+});

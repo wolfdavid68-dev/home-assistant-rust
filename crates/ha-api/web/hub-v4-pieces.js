@@ -23,7 +23,7 @@ const HUB_V4_TILE = "flex flex-col gap-3 p-4 rounded-[24px] bg-scrim/72 backdrop
 const HUB_V4_TILE_HEAD = "flex items-center gap-2.5 min-h-9 [&>svg]:size-5 [&>svg]:shrink-0";
 const HUB_V4_TILE_TITLE = "flex-1 min-w-0 text-courant font-semibold truncate";
 // Une pastille de la barre du haut (pièce, étage).
-const HUB_V4_PILL = "flex items-center gap-1 min-h-9 px-3 rounded-full border-0 bg-transparent text-petit font-medium "
+const HUB_V4_PILL = "relative before:absolute before:-inset-y-1 before:inset-x-0 flex items-center gap-1 min-h-9 px-3 rounded-full border-0 bg-transparent text-petit font-medium "
   + `text-inherit whitespace-nowrap cursor-pointer transition-colors hover:bg-voile/10 ${HUB_V4_MUTE} `
   + "aria-[current=page]:bg-voile/14 aria-[current=page]:text-v-ink [&_svg]:size-3.5 " + HUB_V4_FOCUS;
 // Un fond de verre pour la barre du haut (retour, pastilles).
@@ -124,6 +124,21 @@ function hubV4Zoom(zone, stage, ratio, options = {}) {
 function hubV4DialPart(value, min, max) {
   if (!Number.isFinite(value) || !(max > min)) return 0;
   return Math.min(1, Math.max(0, (value - min) / (max - min)));
+}
+
+/**
+ * La part du cadran (0 à 1) sous un point (repère SVG 200 × 172), ou null
+ * loin de l'arc (au centre, au-dehors). Dans l'ouverture du bas, le bout le
+ * plus proche.
+ */
+function hubV4DialPartAt(x, y) {
+  const { c, r, from, sweep } = HUB_V4_DIAL;
+  const distance = Math.hypot(x - c, y - c);
+  if (distance < r - 30 || distance > r + 30) return null;
+  const angle = (Math.atan2(y - c, x - c) * 180 / Math.PI + 360) % 360;
+  const part = ((angle - from + 360) % 360) / sweep;
+  if (part <= 1) return part;
+  return part < 1 + (360 - sweep) / sweep / 2 ? 1 : 0;
 }
 
 /** L'arc du cadran jusqu'à `part` (0 à 1) : son tracé SVG et son extrémité. */
@@ -329,7 +344,7 @@ function hubV4HeatTile(entityId, title) {
   const modes = [["confort", "Confort"], ["eco", "Éco"]].map(([preset, text]) => {
     const node = el("button", {
       type: "button", "aria-pressed": "false", text,
-      class: "min-h-8 px-2.5 rounded-[9px] border-0 bg-transparent text-petit font-medium text-inherit cursor-pointer "
+      class: `${HUB_HIT_Y6} min-h-8 px-2.5 rounded-[9px] border-0 bg-transparent text-petit font-medium text-inherit cursor-pointer `
         + "transition-colors hover:bg-voile/10 aria-pressed:bg-v-heat/24 aria-pressed:text-v-heat "
         + `disabled:opacity-40 disabled:cursor-default [&.pending]:opacity-60 ${HUB_V4_FOCUS}`,
     });
@@ -337,9 +352,7 @@ function hubV4HeatTile(entityId, title) {
     node.addEventListener("click", () => {
       const state = entities.get(entityId);
       if (!state || !hubV4Ready(state)) return;
-      markPending(entityId);
-      callService("climate", "set_preset_mode", { entity_id: entityId, preset_mode: preset });
-      hubV3Wait(node);
+      hubV3Send(node, "climate", "set_preset_mode", { entity_id: entityId, preset_mode: preset });
     });
     return node;
   });
@@ -380,13 +393,72 @@ function hubV4HeatTile(entityId, title) {
     el("span", { class: "size-1.5 rounded-full bg-v-ink", "aria-hidden": "true" }), nowText);
   const low = el("span", {});
   const high = el("span", {});
-  const dial = el("div", { class: "relative flex-1 min-w-0 max-w-[200px]" }, svg,
-    el("div", { class: "absolute inset-x-0 top-[31%] flex flex-col items-center gap-1.5", "aria-live": "polite" }, target, now),
+  // La poignée : une prise de 44 px sur le bouton du cadran, qu'on fait glisser
+  // le long de l'arc (sans faire défiler la page). Toucher l'arc ailleurs y met la consigne.
+  const handle = el("span", {
+    class: "absolute left-(--kx) top-(--ky) size-11 -translate-x-1/2 -translate-y-1/2 rounded-full touch-none cursor-grab "
+      + "active:cursor-grabbing data-off:hidden",
+    "aria-hidden": "true",
+  });
+  const ring = el("div", {
+    class: `relative rounded-carte touch-pan-y ${HUB_V4_FOCUS}`,
+    role: "slider", tabindex: "0", "aria-label": `Consigne : ${title}`, "aria-orientation": "horizontal",
+  }, svg, handle);
+  const dial = el("div", { class: "relative flex-1 min-w-0 max-w-[200px]" }, ring,
+    el("div", { class: "pointer-events-none absolute inset-x-0 top-[31%] flex flex-col items-center gap-1.5", "aria-live": "polite" }, target, now),
     el("div", { class: `flex justify-between px-[13%] -mt-2 text-legende ${HUB_V4_MUTE}`, "aria-hidden": "true" }, low, high));
   // Le mode en mots quand Confort/Éco n'existe pas (ou en dérogation).
   const mode = el("span", { class: `text-petit ${HUB_V4_MUTE}` });
   tile.head.append(mode, modeRow);
   tile.node.append(el("div", { class: "flex items-center justify-between gap-2" }, minus, dial, plus));
+
+  // Le cadran se règle aussi au doigt et au clavier (flèches : un pas ; Page haut/bas : 1° ; Début/Fin).
+  const arcEnds = (state) => ({
+    lo: finite(state.attributes.min_temp) ? state.attributes.min_temp : 7,
+    hi: finite(state.attributes.max_temp) ? state.attributes.max_temp : 28,
+  });
+  const heating = () => {
+    const state = entities.get(entityId);
+    return state && hubV4Ready(state) && state.state === "heat" && heatTarget(state) !== null ? state : null;
+  };
+  const toPart = (part) => {
+    const state = heating();
+    if (!state || part === null) return;
+    const { lo, hi } = arcEnds(state);
+    setHeating(entityId, lo + part * (hi - lo));
+    refresh();
+  };
+  const partAt = (event) => {
+    const box = svg.getBoundingClientRect();
+    if (box.width === 0) return null;
+    return hubV4DialPartAt((event.clientX - box.left) / box.width * 2 * c, (event.clientY - box.top) / box.height * 172);
+  };
+  let grab = null;
+  handle.addEventListener("pointerdown", (event) => {
+    if (!heating()) return;
+    grab = event.pointerId;
+    handle.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+  });
+  handle.addEventListener("pointermove", (event) => {
+    if (grab === event.pointerId) toPart(partAt(event));
+  });
+  for (const type of ["pointerup", "pointercancel"]) handle.addEventListener(type, () => { grab = null; });
+  svg.addEventListener("click", (event) => toPart(partAt(event)));
+  ring.addEventListener("keydown", (event) => {
+    const state = heating();
+    if (!state) return;
+    const value = heatTarget(state);
+    const { step, min, max } = heatLimits(state);
+    const next = {
+      ArrowUp: value + step, ArrowRight: value + step, ArrowDown: value - step, ArrowLeft: value - step,
+      PageUp: value + 1, PageDown: value - 1, Home: min, End: max,
+    }[event.key];
+    if (next === undefined) return;
+    event.preventDefault();
+    setHeating(entityId, next);
+    refresh();
+  });
   const show = (node, on) => setAttr(node, "visibility", on ? "visible" : "hidden");
   const refresh = () => {
     const state = entities.get(entityId);
@@ -410,11 +482,20 @@ function hubV4HeatTile(entityId, title) {
     setAttr(knob, "cx", String(end.x));
     setAttr(knob, "cy", String(end.y));
     show(knob, value !== null);
+    handle.style.setProperty("--kx", `${end.x / (2 * c) * 100}%`);
+    handle.style.setProperty("--ky", `${end.y / 172 * 100}%`);
     const mark = hubV4DialArc(hubV4DialPart(current, lo, hi));
     setAttr(nowDot, "cx", String(mark.x));
     setAttr(nowDot, "cy", String(mark.y));
     show(nowDot, finite(current));
     const ready = hubV4Ready(state);
+    handle.toggleAttribute("data-off", !ready || value === null);
+    setAttr(ring, "aria-valuemin", String(min));
+    setAttr(ring, "aria-valuemax", String(max));
+    setAttr(ring, "aria-valuenow", String(value ?? min));
+    setAttr(ring, "aria-valuetext", value === null ? (state.state === "off" ? "Arrêt" : "Indisponible")
+      : `${number.format(value)}°${finite(current) ? `, il fait ${number.format(current)}°` : ""}`);
+    setAttr(ring, "aria-disabled", String(!ready || value === null));
     minus.disabled = !ready || value === null || value - step < min - 1e-9;
     plus.disabled = !ready || value === null || value + step > max + 1e-9;
     const presets = Array.isArray(attrs.preset_modes) ? attrs.preset_modes : [];
@@ -451,8 +532,7 @@ function hubV4LampButton(entityId, room) {
   node.addEventListener("click", () => {
     const state = entities.get(entityId);
     if (!state || !hubV4Ready(state)) return;
-    markPending(entityId);
-    callService("light", state.state === "on" ? "turn_off" : "turn_on", { entity_id: entityId });
+    hubV3Send(node, "light", state.state === "on" ? "turn_off" : "turn_on", { entity_id: entityId });
   });
   // Un appui long (ou clic droit) : la fenêtre de la lampe, pour l'intensité.
   node.addEventListener("contextmenu", (event) => {
@@ -487,15 +567,13 @@ function hubV4CoverRow(entityId, room) {
   const send = (service, data, node) => {
     const state = entities.get(entityId);
     if (!state || !hubV4Ready(state)) return;
-    markPending(entityId);
-    callService("cover", service, { entity_id: entityId, ...data });
-    hubV3Wait(node);
+    hubV3Send(node, "cover", service, { entity_id: entityId, ...data });
   };
   const buttons = [["Ouvrir", "open_cover", {}], ["Mi-hauteur", "set_cover_position", { position: 50 }], ["Fermer", "close_cover", {}]]
     .map(([text, service, data]) => {
       const node = el("button", {
         type: "button", "aria-pressed": "false", text,
-        class: "flex-1 min-h-10 px-2 rounded-[11px] border-0 bg-transparent text-petit font-medium text-inherit cursor-pointer "
+        class: `${HUB_HIT_Y2} flex-1 min-h-10 px-2 rounded-[11px] border-0 bg-transparent text-petit font-medium text-inherit cursor-pointer `
           + "transition-colors hover:bg-voile/10 aria-pressed:bg-v-sky/16 aria-pressed:ring-1 aria-pressed:ring-inset "
           + "aria-pressed:ring-v-sky/45 aria-pressed:font-semibold disabled:opacity-40 disabled:cursor-default "
           + `[&.pending]:opacity-60 ${HUB_V4_FOCUS}`,
@@ -748,10 +826,8 @@ function hubV4RoomBody(name) {
   // « Lumières 3 sur 5 » côte à côte, « Tout éteindre » au bout.
   lightsTile.titleNode.className = "min-w-0 text-courant font-semibold truncate";
   const lightsCount = el("span", { class: `flex-1 text-petit ${HUB_V4_MUTE}` });
-  const allButton = el("button", { type: "button", class: `${HUB_V4_BTN} min-h-9 px-3 rounded-[11px] text-petit` });
-  allButton.addEventListener("click", () => {
-    if (hubV3ToggleRoom(name)) hubV3Wait(allButton);
-  });
+  const allButton = el("button", { type: "button", class: `${HUB_V4_BTN} ${HUB_HIT_Y4} min-h-9 px-3 rounded-[11px] text-petit` });
+  allButton.addEventListener("click", () => hubV3ToggleRoom(name, allButton));
   lightsTile.head.append(lightsCount, allButton);
   const lampGrid = el("div", { class: "grid grid-cols-2 gap-2" });
   lightsTile.node.append(lampGrid);
@@ -815,7 +891,7 @@ function hubV4RoomBody(name) {
     if (typeof account !== "undefined" && account.permissions?.history) {
       see = el("button", {
         type: "button",
-        class: "self-end min-h-9 -my-1 px-2 rounded-puce border-0 bg-transparent text-petit font-semibold text-v-amber "
+        class: `${HUB_HIT_Y4} self-end min-h-9 -my-1 px-2 rounded-puce border-0 bg-transparent text-petit font-semibold text-v-amber `
           + `cursor-pointer hover:underline ${HUB_V4_FOCUS}`,
       });
       see.addEventListener("click", () => openLogbook(id));
@@ -876,7 +952,7 @@ const HUB_V4_ALL_ROW = "flex items-center gap-3 min-h-11 px-3 py-1.5 rounded-cha
 // En Clair, le vert v-ok seul est juste sous AA (4,46:1) sur le ciel crème : un peu d'encre en plus.
 const HUB_V4_ALL_TONES = { ok: "text-v-ok", bad: "font-semibold text-v-alert", info: "text-v-sky", mute: "text-v-mute" };
 // Un bouton d'un choix segmenté (Annonces).
-const HUB_V4_ALL_SEG = "flex-1 min-h-10 px-2 rounded-[11px] border-0 bg-transparent text-petit font-medium text-inherit cursor-pointer "
+const HUB_V4_ALL_SEG = `${HUB_HIT_Y2} flex-1 min-h-10 px-2 rounded-[11px] border-0 bg-transparent text-petit font-medium text-inherit cursor-pointer `
   + "transition-colors hover:bg-voile/10 aria-pressed:bg-v-sky/16 aria-pressed:ring-1 aria-pressed:ring-inset "
   + "aria-pressed:ring-v-sky/45 aria-pressed:font-semibold disabled:opacity-40 disabled:cursor-default "
   + `[&.pending]:opacity-60 ${HUB_V4_FOCUS}`;
@@ -944,8 +1020,7 @@ function hubV4PlugButton(entityId) {
   node.addEventListener("click", () => {
     const state = entities.get(entityId);
     if (!state || !hubV4Ready(state)) return;
-    markPending(entityId);
-    callService(domainOf(state), state.state === "on" ? "turn_off" : "turn_on", { entity_id: entityId });
+    hubV3Send(node, domainOf(state), state.state === "on" ? "turn_off" : "turn_on", { entity_id: entityId });
   });
   const refresh = () => {
     const state = entities.get(entityId);
@@ -1079,7 +1154,7 @@ function hubV4HouseBody() {
   const plugsTile = hubV4Tile(ICONS.plug, "amber", "Prises");
   plugsTile.titleNode.className = "min-w-0 text-courant font-semibold truncate";
   const plugsCount = el("span", { class: `flex-1 text-petit ${HUB_V4_MUTE}` });
-  const plugsOff = el("button", { type: "button", class: `${HUB_V4_BTN} min-h-9 px-3 rounded-[11px] text-petit`, text: "Tout éteindre" });
+  const plugsOff = el("button", { type: "button", class: `${HUB_V4_BTN} ${HUB_HIT_Y4} min-h-9 px-3 rounded-[11px] text-petit`, text: "Tout éteindre" });
   plugsTile.head.append(plugsCount, plugsOff);
   const plugGrid = el("div", { class: "grid grid-cols-2 gap-2" });
   plugsTile.node.append(plugGrid);
@@ -1088,11 +1163,9 @@ function hubV4HouseBody() {
     .sort((a, b) => ((b.state === "on") - (a.state === "on")) || nameOf(a).localeCompare(nameOf(b), "fr"));
   plugsOff.addEventListener("click", () => {
     const on = plugs().filter((s) => s.state === "on" && hubV4Ready(s));
-    for (const state of on) {
-      markPending(state.entity_id);
-      callService(domainOf(state), "turn_off", { entity_id: state.entity_id });
-    }
-    if (on.length > 0) hubV3Wait(plugsOff);
+    // Plusieurs prises d'un coup : « Annuler » rallume celles qui l'étaient.
+    hubV3Orders(plugsOff, on.map((s) => [domainOf(s), "turn_off", { entity_id: s.entity_id }]),
+      on.length > 1 ? "Prises éteintes" : "Prise éteinte");
   });
   const syncPlugs = hubV4Keyed(plugGrid, (id) => hubV4PlugButton(id));
   paints.push(() => {
@@ -1219,7 +1292,7 @@ function hubV4HouseBody() {
   // « Partout » : le bouton principal (il ouvre la fenêtre d'annonce) ; « Carillon seul » sonne tout de suite.
   const everywhere = el("button", {
     type: "button",
-    class: "flex-1 min-h-10 px-2 rounded-[11px] border-0 bg-v-sky/16 ring-1 ring-inset ring-v-sky/45 text-petit font-semibold "
+    class: `${HUB_HIT_Y2} flex-1 min-h-10 px-2 rounded-[11px] border-0 bg-v-sky/16 ring-1 ring-inset ring-v-sky/45 text-petit font-semibold `
       + "text-inherit cursor-pointer transition-colors hover:bg-v-sky/24 disabled:opacity-40 disabled:cursor-default "
       + HUB_V4_FOCUS,
     text: "Partout", "aria-haspopup": "dialog", title: "Dire un message sur toutes les enceintes",
@@ -1232,8 +1305,7 @@ function hubV4HouseBody() {
   chime.addEventListener("click", () => {
     const say = hubV4Speakers();
     if (!say || say.tts.state === "unavailable") return;
-    callService("tts", "speak", { entity_id: say.tts.entity_id, media_player_entity_id: say.speakers, volume: hubV4ChimeVolume });
-    hubV3Wait(chime);
+    hubV3Send(chime, "tts", "speak", { entity_id: say.tts.entity_id, media_player_entity_id: say.speakers, volume: hubV4ChimeVolume });
   });
   const volumes = [30, 50, 70].map((level) => {
     const node = el("button", { type: "button", class: HUB_V4_ALL_SEG, "aria-pressed": "false", text: `${level} %` });
@@ -1280,7 +1352,8 @@ function hubV4Page(name) {
     : name !== HUB_V4_ALL && !areas.some((a) => a.name === name)) return false;
   hubV4Close();
   const back = hubV4Pg.dialog ? hubV4Pg.back : document.activeElement;
-  hubV4PageClose(false);
+  // D'une page à l'autre : la même étape d'historique.
+  hubV4PageClose(false, null, true);
 
   const body = name === HUB_V4_ENERGY ? hubV4EnergyBody()
     : name === HUB_V4_ALL ? hubV4HouseBody() : hubV4RoomBody(name);
@@ -1336,6 +1409,12 @@ function hubV4Page(name) {
   body.refresh();
   document.body.append(dialog);
   dialog.showModal();
+  // Une étape d'historique : le geste (ou le bouton) retour du navigateur ramène à l'accueil,
+  // comme « ‹ Maison » et Échap. D'une page à l'autre, la même étape.
+  if (typeof history !== "undefined") {
+    if (history.state?.hubV4Page === undefined) history.pushState({ hubV4Page: name }, "");
+    else history.replaceState({ hubV4Page: name }, "");
+  }
   hubV4Pg.place();
   // Sur un écran étroit, la barre défile : la pièce ouverte se montre.
   nav.querySelector("[aria-current=page]")?.scrollIntoView?.({ block: "nearest", inline: "center" });
@@ -1347,8 +1426,9 @@ function hubV4PagePlace() {
   hubV4Pg.place?.();
 }
 
-/** Ferme la page (`focus` : rendre le focus à ce qui l'avait avant). */
-function hubV4PageClose(focus = true, only = null) {
+/** Ferme la page (`focus` : rendre le focus à ce qui l'avait avant). `keep` : garder
+ *  l'étape d'historique (une autre page la reprend, ou le retour du navigateur l'a déjà retirée). */
+function hubV4PageClose(focus = true, only = null, keep = false) {
   const dialog = hubV4Pg.dialog;
   if (!dialog || (only && only !== dialog)) return;
   hubV4Pg.dialog = null;
@@ -1359,6 +1439,8 @@ function hubV4PageClose(focus = true, only = null) {
   removeEventListener("resize", hubV4PagePlace);
   if (dialog.open) dialog.close();
   dialog.remove();
+  // L'étape de la page est retirée ; le `popstate` qui suit ne fait rien.
+  if (!keep && typeof history !== "undefined" && history.state?.hubV4Page !== undefined) history.back();
   if (focus && hubV4Pg.back?.isConnected && !document.querySelector("dialog[open]")) hubV4Pg.back.focus();
 }
 
@@ -1374,6 +1456,13 @@ function renderHubV4Page() {
     return;
   }
   hubV4Pg.refresh?.();
+}
+
+// Le retour du navigateur (geste du téléphone, Alt+←) ferme la page ouverte.
+if (typeof addEventListener === "function") {
+  addEventListener("popstate", () => {
+    if (hubV4Pg.dialog && history.state?.hubV4Page === undefined) hubV4PageClose(true, null, true);
+  });
 }
 
 // En v4, « Toute la maison » du dock ouvre sa page ; le tableau complet est

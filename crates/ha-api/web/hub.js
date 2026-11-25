@@ -176,7 +176,11 @@ function renderHubAlert() {
   if (found.length > 1) parts.push(el("span", { text: ` et ${found.length - 1} de plus` }));
   if (domainOf(state) === "cover" && canControl(state)) {
     const close = el("button", { type: "button", class: "hub-alert-action [border:0] rounded-full [padding:5px_14px] [background:rgb(255_255_255_/_0.16)] font-semibold cursor-pointer", text: "Fermer" });
-    close.addEventListener("click", () => callService("cover", "close_cover", { entity_id: state.entity_id }));
+    close.addEventListener("click", () => {
+      // L'accueil v3/v4 : le bouton attend la réponse et montre un refus.
+      if (typeof hubV3Send === "function") hubV3Send(close, "cover", "close_cover", { entity_id: state.entity_id });
+      else callService("cover", "close_cover", { entity_id: state.entity_id });
+    });
     parts.push(close);
   }
   swap(pill, ...parts);
@@ -394,6 +398,12 @@ function renderHubScenes() {
         el("small", { class: "text-legende text-v-ink2", text: "Suggéré à cette heure" })) : el("b", { text: nameOf(state) }));
     button.addEventListener("click", () => {
       if (!running && typeof hubV4Moment === "function" && hubV4Moment(state)) return;
+      // Une scène lancée de l'accueil v3/v4 : « Annuler » la défait (lumières, prises, volets).
+      if (typeof hubV3Orders === "function" && hubV3On()) {
+        const undo = domainOf(state) === "scene" ? `« ${nameOf(state)} » lancé` : "";
+        hubV3Orders(button, [[domainOf(state), running ? "turn_off" : "turn_on", { entity_id: state.entity_id }]], undo);
+        return;
+      }
       button.classList.add("pending");
       setTimeout(() => button.classList.remove("pending"), 5000);
       callService(domainOf(state), running ? "turn_off" : "turn_on", { entity_id: state.entity_id });

@@ -165,7 +165,8 @@ function hubV4Overlay({ icon, tone = "amber", title, sub, body, more, spot, refr
     "aria-label": "Fermer",
   }, svgIcon(HUB_V4_ICONS.close));
   close.addEventListener("click", () => hubV4Close());
-  const head = el("header", { class: "flex items-center gap-3 min-h-12" },
+  // Sur le téléphone, l'en-tête sert aussi de poignée : il ne fait pas défiler la feuille.
+  const head = el("header", { class: "flex items-center gap-3 min-h-12 max-sm:touch-none" },
     el("span", {
       class: "grid place-items-center size-11 shrink-0 rounded-2xl bg-v-amber/16 text-v-amber [&_svg]:size-[22px] "
         + "data-[tone=sky]:bg-v-sky/16 data-[tone=sky]:text-v-sky "
@@ -186,7 +187,9 @@ function hubV4Overlay({ icon, tone = "amber", title, sub, body, more, spot, refr
       + "max-sm:inset-x-0 max-sm:top-auto max-sm:bottom-0 max-sm:w-auto max-sm:max-h-[88dvh] max-sm:rounded-b-none "
       + "max-sm:pt-2 max-sm:pb-[max(12px,env(safe-area-inset-bottom))] max-sm:animate-v4-sheet translate-y-(--dy)",
   }, el("span", {
-    class: "hidden max-sm:block shrink-0 mx-auto w-10 h-1.5 rounded-full bg-voile/25 touch-none",
+    // La barre à tirer : fine, avec une prise de 44 px de haut autour.
+    class: "hidden max-sm:block relative shrink-0 mx-auto w-10 h-1.5 rounded-full bg-voile/25 touch-none "
+      + "before:absolute before:-inset-x-6 before:-top-2.5 before:-bottom-3",
     "aria-hidden": "true",
   }), head, ...body);
   pop.style.setProperty("--dy", "0px");
@@ -367,9 +370,7 @@ function hubV4Room(name) {
         + "group-aria-checked:after:translate-x-5 motion-reduce:after:transition-none",
       "aria-hidden": "true",
     }));
-    toggle.addEventListener("click", () => {
-      if (hubV3ToggleRoom(name)) hubV3Wait(toggle);
-    });
+    toggle.addEventListener("click", () => hubV3ToggleRoom(name, toggle));
     body.push(toggle);
 
     const lamps = el("div", {
@@ -389,9 +390,7 @@ function hubV4Room(name) {
         if (!now || !hubV4Ready(now)) return;
         // Une lampe qui varie se règle dans sa propre fenêtre.
         if (domainOf(now) === "light" && hubV4Dimmable(now) && hubV4Lamp(now.entity_id, hubV4RoomSpot(name))) return;
-        markPending(now.entity_id);
-        callService("light", now.state === "on" ? "turn_off" : "turn_on", { entity_id: now.entity_id });
-        hubV3Wait(node);
+        hubV3Send(node, "light", now.state === "on" ? "turn_off" : "turn_on", { entity_id: now.entity_id });
       });
       return node;
     };
@@ -444,21 +443,18 @@ function hubV4Room(name) {
       if (states.length === 1) hubV4Cover(states[0].entity_id, hubV4RoomSpot(name));
     });
     body.push(head);
-    const move = (service) => {
+    // Plusieurs volets d'un coup : « Annuler » les remet comme avant.
+    const move = (service, node) => {
       const targets = covers().filter(hubV4Ready);
-      for (const state of targets) {
-        markPending(state.entity_id);
-        callService("cover", service, { entity_id: state.entity_id });
-      }
-      return targets.length > 0;
+      const done = { open_cover: "montent", close_cover: "descendent" }[service];
+      return hubV3Orders(node, targets.map((s) => ["cover", service, { entity_id: s.entity_id }]),
+        done ? `${name} : ${targets.length > 1 ? "les volets" : "le volet"} ${done}` : "");
     };
     // Des flèches seules, comme la maquette : le mot reste pour les lecteurs d'écran.
     const buttons = HUB_V4_MOVES.map(([text, icon, service]) => {
       const node = el("button", { type: "button", class: `${HUB_V4_BTN} px-2 [&_svg]:size-[18px]`, "aria-label": text },
         svgIcon(HUB_V4_MOVE_ICONS[icon]));
-      node.addEventListener("click", () => {
-        if (move(service)) hubV3Wait(node);
-      });
+      node.addEventListener("click", () => move(service, node));
       return node;
     });
     body.push(el("div", { class: "grid grid-cols-3 gap-2", role: "group", "aria-label": "Volets" }, ...buttons));
@@ -512,7 +508,7 @@ const HUB_V4_MAIN = "flex items-center justify-center gap-1.5 min-h-12 px-4 roun
 // Un curseur : la vraie glissière est invisible, posée sur le dessin.
 const HUB_V4_RANGE = "absolute inset-0 size-full m-0 opacity-0 cursor-pointer disabled:cursor-default";
 const HUB_V4_TRACK = "has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-v-amber "
-  + "has-disabled:opacity-40";
+  + "has-disabled:opacity-40 [&.pending]:opacity-70";
 // L'intitulé d'un groupe de réglages (« Lumière », « Où », « 4 jours ») : discret, comme la maquette.
 const HUB_V4_LABEL = `px-1 pt-1 text-petit ${HUB_V4_MUTE}`;
 // Monter, arrêter, descendre : des flèches et un rond (la maquette), pour la pièce et le volet.
@@ -548,7 +544,7 @@ function hubV4Choices(label, tone, items) {
     const node = el("button", {
       type: "button", "aria-pressed": "false",
       class: "min-h-11 px-2 rounded-[12px] border-0 bg-transparent text-petit font-medium text-inherit cursor-pointer "
-        + `transition-colors hover:bg-voile/8 ${pressed} disabled:opacity-40 disabled:cursor-default ${HUB_V4_FOCUS}`,
+        + `transition-colors hover:bg-voile/8 ${pressed} disabled:opacity-40 disabled:cursor-default [&.pending]:opacity-60 ${HUB_V4_FOCUS}`,
       text,
     });
     node.addEventListener("click", run);
@@ -632,12 +628,10 @@ function hubV4Lamp(entityId, spot = null) {
   const room = hubV4AreaOf(entityId);
   const body = [];
   const paints = [];
-  const send = (data) => {
+  const send = (data, node = null) => {
     const now = get();
     if (!now || !hubV4Ready(now)) return false;
-    markPending(entityId);
-    callService("light", "turn_on", { entity_id: entityId, ...data });
-    return true;
+    return hubV3Send(node, "light", "turn_on", { entity_id: entityId, ...data });
   };
 
   // Dans l'ordre de la maquette : l'intensité, le blanc, puis les niveaux tout prêts.
@@ -668,10 +662,10 @@ function hubV4Lamp(entityId, spot = null) {
     });
     range.addEventListener("change", () => {
       hold = Date.now() + HUB_V4_HOLD;
-      send({ brightness: hubV4Brightness(Number(range.value)) });
+      send({ brightness: hubV4Brightness(Number(range.value)) }, bar);
     });
-    levels = hubV4Choices("Niveaux", "amber", HUB_V4_LEVELS.map(([text, percent]) => [text, () => {
-      if (!send({ brightness: hubV4Brightness(percent) })) return;
+    levels = hubV4Choices("Niveaux", "amber", HUB_V4_LEVELS.map(([text, percent]) => [text, (event) => {
+      if (!send({ brightness: hubV4Brightness(percent) }, event.currentTarget)) return;
       hold = Date.now() + HUB_V4_HOLD;
       range.value = String(percent);
       show(percent);
@@ -717,7 +711,7 @@ function hubV4Lamp(entityId, spot = null) {
     });
     range.addEventListener("change", () => {
       hold = Date.now() + HUB_V4_HOLD;
-      send({ color_temp_kelvin: Number(range.value) });
+      send({ color_temp_kelvin: Number(range.value) }, track);
     });
     body.push(el("span", { class: HUB_V4_LABEL, text: "Couleur du blanc" }), track,
       el("div", { class: `flex justify-between px-1 text-legende ${HUB_V4_MUTE}` },
@@ -739,9 +733,7 @@ function hubV4Lamp(entityId, spot = null) {
   main.addEventListener("click", () => {
     const now = get();
     if (!now || !hubV4Ready(now)) return;
-    markPending(entityId);
-    callService("light", now.state === "on" ? "turn_off" : "turn_on", { entity_id: entityId });
-    hubV3Wait(main);
+    hubV3Send(main, "light", now.state === "on" ? "turn_off" : "turn_on", { entity_id: entityId });
   });
   body.push(main);
   paints.push((now) => {
@@ -804,12 +796,10 @@ function hubV4Cover(entityId, spot = null) {
   const first = get();
   if (!first || domainOf(first) !== "cover") return false;
   const room = hubV4AreaOf(entityId);
-  const send = (service, data = {}) => {
+  const send = (service, data = {}, node = null) => {
     const now = get();
     if (!now || !hubV4Ready(now)) return false;
-    markPending(entityId);
-    callService("cover", service, { entity_id: entityId, ...data });
-    return true;
+    return hubV3Send(node, "cover", service, { entity_id: entityId, ...data });
   };
 
   const big = el("b", { class: "font-chiffres text-titre-l font-extralight leading-none" });
@@ -832,15 +822,13 @@ function hubV4Cover(entityId, spot = null) {
         type: "button", class: `${HUB_V4_BTN} justify-start h-[52px] data-strong:bg-voile/16`,
       }, svgIcon(HUB_V4_MOVE_ICONS[icon]), el("span", { text }));
       if (service === "stop_cover") node.dataset.strong = "";
-      node.addEventListener("click", () => {
-        if (send(service)) hubV3Wait(node);
-      });
+      node.addEventListener("click", () => send(service, {}, node));
       return node;
     });
   const positioned = hubV4CanPosition(first);
-  const items = [["Ouvert", () => send("open_cover")]];
-  if (positioned) items.push(["Mi-hauteur", () => send("set_cover_position", { position: 50 })]);
-  items.push(["Fermé", () => send("close_cover")]);
+  const items = [["Ouvert", (event) => send("open_cover", {}, event.currentTarget)]];
+  if (positioned) items.push(["Mi-hauteur", (event) => send("set_cover_position", { position: 50 }, event.currentTarget)]);
+  items.push(["Fermé", (event) => send("close_cover", {}, event.currentTarget)]);
   const choices = hubV4Choices("Position", "sky", items);
 
   const sub = el("span", { class: `text-petit ${HUB_V4_MUTE} truncate` });
@@ -1023,7 +1011,8 @@ function hubV4Moment(state) {
   let ticker = 0;
   const launch = () => {
     clearInterval(ticker);
-    callService("scene", "turn_on", { entity_id: entityId });
+    // Le moment touche plusieurs appareils : « Annuler » remet lumières, prises et volets comme avant.
+    hubV3Orders(null, [["scene", "turn_on", { entity_id: entityId }]], `« ${nameOf(state)} » lancé`);
     hubV4Close();
   };
   const cancel = el("button", { type: "button", class: HUB_V4_BTN, text: "Annuler" });
@@ -1234,7 +1223,7 @@ function hubV4CoursesRow() {
   const left = todoItems(state).filter((item) => item.status !== "completed").length;
   const row = el("button", {
     type: "button",
-    class: "flex items-center gap-2.5 w-full min-h-10 mt-1.5 px-3 rounded-champ border-0 bg-voile/6 text-left cursor-pointer "
+    class: `${HUB_HIT_Y2} flex items-center gap-2.5 w-full min-h-10 mt-1.5 px-3 rounded-champ border-0 bg-voile/6 text-left cursor-pointer `
       + "hover:bg-voile/10 [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-v-mute " + HUB_V4_FOCUS,
     "aria-label": left > 0 ? `Courses et tâches : ${left} à faire` : "Courses et tâches : rien à faire",
   }, svgIcon(HUB_V4_HOME_ICONS.cart),
@@ -1251,7 +1240,7 @@ function hubV4AgendaHead() {
   if (typeof hubV4NewEvent === "function" && entities.get("calendar.maison") && canControl(entities.get("calendar.maison"))) {
     const add = el("button", {
       type: "button",
-      class: "grid place-items-center size-8 shrink-0 p-0 rounded-full border-0 bg-transparent text-v-ink cursor-pointer "
+      class: `${HUB_HIT_6} grid place-items-center size-8 shrink-0 p-0 rounded-full border-0 bg-transparent text-v-ink cursor-pointer `
         + "hover:bg-voile/10 [&>svg]:size-[18px] " + HUB_V4_FOCUS,
       "aria-label": "Ajouter un rendez-vous",
       title: "Ajouter un rendez-vous",
