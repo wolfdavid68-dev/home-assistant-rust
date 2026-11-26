@@ -241,11 +241,21 @@ describe("houseNight et ambianceOf en v4", () => {
     assert.equal(v4("ambianceOf")(page), "crepuscule");
   });
 
-  test("en v4 : le thème décide, Clair = jour, Sombre = nuit, sans crépuscule", () => {
+  test("en v4 Clair : l'heure décide, comme sans la v4", () => {
     v4("hubV4Wanted = true; document.documentElement.dataset.theme = 'light';");
+    v4("entities.set('sun.sun', { entity_id: 'sun.sun', state: 'below_horizon', attributes: { elevation: -2 } });");
+    assert.equal(v4("houseNight()"), true);
+    assert.equal(v4("ambianceOf")(page), "crepuscule");
+    v4("entities.set('sun.sun', { entity_id: 'sun.sun', state: 'below_horizon', attributes: { elevation: -30 } });");
+    assert.equal(v4("ambianceOf")(page), "nuit");
+    v4("entities.set('sun.sun', { entity_id: 'sun.sun', state: 'above_horizon', attributes: { elevation: 30 } });");
     assert.equal(v4("houseNight()"), false);
     assert.equal(v4("ambianceOf")(page), "jour");
-    v4("document.documentElement.dataset.theme = 'dark';");
+  });
+
+  test("en v4 Sombre : la nuit à toute heure, sans crépuscule", () => {
+    v4("hubV4Wanted = true; document.documentElement.dataset.theme = 'dark';");
+    v4("entities.set('sun.sun', { entity_id: 'sun.sun', state: 'above_horizon', attributes: { elevation: 2 } });");
     assert.equal(v4("houseNight()"), true);
     assert.equal(v4("ambianceOf")(page), "nuit");
   });

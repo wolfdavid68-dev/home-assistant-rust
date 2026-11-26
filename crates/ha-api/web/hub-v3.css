@@ -1,5 +1,6 @@
 /* v3/v4 : l'accueil « ciel ». Actif seulement si <html data-hub-style="v3">.
-   Il suit le thème : ciel de jour en Clair, ciel de nuit en Sombre. */
+   Il suit le thème : en Clair, ciel de jour ou bleu du soir selon l'heure ;
+   en Sombre, ciel de nuit. */
 
 /* Instrument Serif (licence OFL, fonts/OFL-instrumentserif.txt) : le récit de la v4. */
 @font-face {
@@ -1094,6 +1095,35 @@
   --v3-sky-bg: linear-gradient(180deg, #e2e9f1 0%, #ebf0f5 40%, #f3f5f7 75%, #f6f4f0 100%);
 }
 
+
+/* Clair, la nuit (data-ciel="nuit", posé par house.js) : le ciel reste clair,
+   pour la lecture, mais passe au bleu du soir ; la lune remplace le soleil et
+   la maison montre son image de nuit. */
+:root[data-hub-v4][data-theme="light"][data-ciel="nuit"] {
+  --v4-cloud: rgb(236 240 250 / 0.5);
+  --v4-cloud-bank: rgb(226 230 242 / 0.5);
+  --v4-mist: rgb(206 200 226 / 0.5);
+  /* L'astre de jour (tablette et téléphone) devient une lune argentée : en
+     jaune, sur ce bleu, elle passerait pour le soleil. */
+  --v4-sun: radial-gradient(circle at 36% 34%, #ffffff 0%, #f1f3f8 50%, #d5dae7 100%);
+  --v4-sun-halo: 0 0 12px 3px rgb(255 255 255 / 0.6), 0 0 48px 18px rgb(236 240 255 / 0.4);
+  --v3-sky-bg:
+    radial-gradient(60% 36% at 78% 8%, rgb(240 238 250 / 0.5), transparent 70%),
+    linear-gradient(180deg, #a9b5d2 0%, #b8c1da 22%, #c9cee0 44%, #d7d6e3 66%, #e0dbe3 84%, #e6e0e2 100%);
+}
+:root[data-hub-v4][data-theme="light"][data-ciel="nuit"]:is([data-meteo="nuageux"], [data-meteo="vent"]) {
+  --v3-sky-bg: linear-gradient(180deg, #b4bccb 0%, #c1c7d2 35%, #ced1d8 70%, #d8d8dc 100%);
+}
+:root[data-hub-v4][data-theme="light"][data-ciel="nuit"][data-meteo="brouillard"] {
+  --v4-mist: rgb(226 226 232 / 0.75);
+  --v3-sky-bg: linear-gradient(180deg, #c3c6ce 0%, #cfd1d6 45%, #d9d9dc 80%, #dfdee0 100%);
+}
+:root[data-hub-v4][data-theme="light"][data-ciel="nuit"]:is([data-meteo="pluie"], [data-meteo="averses"], [data-meteo="orage"], [data-meteo="grele"], [data-meteo="pluie-neige"]) {
+  --v3-sky-bg: linear-gradient(180deg, #a9b1c0 0%, #b7bdc9 35%, #c6c9d1 70%, #d0d0d5 100%);
+}
+:root[data-hub-v4][data-theme="light"][data-ciel="nuit"][data-meteo="neige"] {
+  --v3-sky-bg: linear-gradient(180deg, #c2cde0 0%, #cfd8e6 40%, #dde3ec 75%, #e5e7ec 100%);
+}
 @media (prefers-reduced-motion: reduce) {
   :root[data-hub-v4] .hub::after { animation: none; }
 }
