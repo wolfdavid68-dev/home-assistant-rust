@@ -61,19 +61,21 @@ du soleil).
 
 ## La régler
 
-Dans **Mon compte**, sous **Mode tablette murale** : **Vue hub, la maison au centre** (cochée par
-défaut). Comme le mode tablette et l'écran de veille, c'est un réglage **de cet appareil
-seulement**. Sur la tablette, on y arrive par **Toute la maison**, puis l'avatar en haut.
+Dans **Réglages**, **Apparence** : **v3** (par défaut : fond sombre dégradé, les pièces en onglets,
+le dessin de la maison au centre, les volets dessous) ou **v4**, l'accueil « Hub maison » de cette
+page. Ce sont les deux seules apparences : il n'y a plus d'accueil « Actuel », ni de case « Vue hub »,
+ni d'autre thème. On ne change d'apparence que là. En v4, un second choix règle le jour et la nuit
+(**Automatique**, **Clair** ou **Sombre**). Comme le mode tablette et l'écran de veille, c'est un
+réglage **de cet appareil seulement**.
 
-Juste en dessous, **Les scènes du hub (6 au plus)** : coche celles à montrer. Sans choix, ce sont
+Dans **Réglages**, **Accueil**, **Les scènes du hub (6 au plus)** : coche celles à montrer. Sans choix, ce sont
 les 6 premières par ordre alphabétique. Une scène supprimée disparaît du choix ; si plus aucune
 scène choisie n'existe, le choix par défaut revient.
 
-La vue hub ne s'affiche que :
-
-- en **mode tablette murale** ;
-- sur un écran **à l'horizontale d'au moins 900 pixels** de large (une tablette de 10 pouces).
-  Tournée à la verticale, ou sur un téléphone, c'est le tableau de bord habituel.
+En **v4**, la vue hub s'affiche sur tous les écrans, mode tablette ou non ; sur un téléphone, en
+colonne (vue téléphone de la v4). En **v3**, l'accueil est l'apparence v3 elle-même, sur l'ordinateur,
+la tablette et le téléphone. En v4, l'agenda et la musique passent devant l'accueil ; en les
+fermant, ou avec le bouton **Maison**, on revient à l'accueil v4, jamais à un autre écran.
 
 ## Sécurité
 

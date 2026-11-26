@@ -30,11 +30,12 @@ const hubV4CoursesText = run("hubV4CoursesText");
 const cover = (state, attributes = {}) => ({ entity_id: "cover.salon", state, attributes });
 
 describe("hubV3Style", () => {
-  test("seuls v3 et v4 sont retenus", () => {
+  test("v4 si choisie, sinon v3 (la maquette, par défaut)", () => {
     assert.equal(hubV3Style("v3"), "v3");
     assert.equal(hubV3Style("v4"), "v4");
-    assert.equal(hubV3Style(null), "");
-    assert.equal(hubV3Style("v9"), "");
+    assert.equal(hubV3Style(null), "v3");
+    assert.equal(hubV3Style(""), "v3");
+    assert.equal(hubV3Style("v9"), "v3");
   });
 });
 
