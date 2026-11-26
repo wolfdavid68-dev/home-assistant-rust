@@ -195,12 +195,17 @@ function houseUrl(name) {
 
 // ---------------------------------------------------------------- Le dessin
 
-/** Fait-il nuit ? (Le soleil, s'il est connu ; sinon, jamais.) En v4, le
- *  ciel de l'accueil suit le thème (Clair = jour, Sombre = nuit) : la maison
- *  aussi, pour que son image, ses fenêtres allumées et ses étoiles aillent
- *  avec le ciel. */
+/** La v4 en Sombre : ciel de nuit à toute heure. */
+function houseV4Dark() {
+  return typeof hubV4On === "function" && hubV4On() && document.documentElement.dataset.theme === "dark";
+}
+
+/** Fait-il nuit ? Le soleil, s'il est connu (sinon, jamais). En v4, Sombre
+ *  garde un ciel de nuit à toute heure : la maison aussi, pour que son image,
+ *  ses fenêtres allumées et ses étoiles aillent avec le ciel. En Clair, la
+ *  maison suit l'heure, comme le ciel (data-ciel, voir updateHouse). */
 function houseNight() {
-  if (typeof hubV4On === "function" && hubV4On()) return document.documentElement.dataset.theme === "dark";
+  if (houseV4Dark()) return true;
   return entities.get("sun.sun")?.state === "below_horizon";
 }
 
@@ -241,9 +246,8 @@ const momentOf = (ambiance) => ambiance.split("-")[0];
 /** L'ambiance du moment (« nuit-pluie »…), ou celle imposée par le réglage. */
 function ambianceOf(page) {
   if (page.forced) return page.forced;
-  // En v4, pas de crépuscule : l'image suit le ciel du thème (voir houseNight).
-  const v4 = typeof hubV4On === "function" && hubV4On();
-  const moment = !v4 && hasDusk(page) && houseDusk() ? "crepuscule" : houseNight() ? "nuit" : "jour";
+  // En v4 Sombre, pas de crépuscule : toujours la nuit (voir houseNight).
+  const moment = !houseV4Dark() && hasDusk(page) && houseDusk() ? "crepuscule" : houseNight() ? "nuit" : "jour";
   const weather = weatherKind();
   return weather === "soleil" ? moment : `${moment}-${weather}`;
 }
@@ -598,6 +602,8 @@ function updateHouse(view) {
   // Le temps qu'il fait, pour le ciel de l'accueil v4 (hub-v3.css) : il
   // change avec l'image de la maison (soleil, nuages, pluie, neige…).
   document.documentElement.dataset.meteo = weatherKind();
+  // Le moment, pour le ciel clair de la v4 : lune et bleu du soir la nuit.
+  document.documentElement.dataset.ciel = isNight ? "nuit" : "jour";
   if (view.ambiance) {
     const chosen = backgroundFor(view.config, ambianceOf(view.config));
     const url = chosen && chosen !== view.config.background ? houseUrl(chosen) : null;

@@ -22,7 +22,7 @@ const HUB_V4_GAP = 16;
 const HUB_V4_MARGIN = 8;
 const hubV4 = { dialog: null, refresh: null };
 
-// En v4, la maison suit le thème (houseNight) : quand le thème change
+// En v4, la maison suit le thème (houseNight : Sombre = nuit, Clair = l'heure) : quand le thème change
 // (choix dans Apparence, ou le système qui passe en sombre), elle se redessine.
 if (typeof MutationObserver === "function") new MutationObserver(() => {
   if (typeof house !== "undefined" && house.view && typeof updateHouse === "function") updateHouse(house.view);

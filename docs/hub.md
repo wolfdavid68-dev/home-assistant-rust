@@ -65,7 +65,9 @@ Dans **Réglages**, **Apparence** : **v3** (par défaut : fond sombre dégradé,
 le dessin de la maison au centre, les volets dessous) ou **v4**, l'accueil « Hub maison » de cette
 page. Ce sont les deux seules apparences : il n'y a plus d'accueil « Actuel », ni de case « Vue hub »,
 ni d'autre thème. On ne change d'apparence que là. En v4, un second choix règle le jour et la nuit
-(**Automatique**, **Clair** ou **Sombre**). Comme le mode tablette et l'écran de veille, c'est un
+(**Automatique**, **Clair** ou **Sombre**) : en Sombre, ciel et maison de nuit à toute heure ; en
+Clair, ils suivent l'heure (crépuscule, puis bleu du soir, lune et maison éclairée la nuit, le ciel
+restant assez clair pour lire). Comme le mode tablette et l'écran de veille, c'est un
 réglage **de cet appareil seulement**.
 
 Dans **Réglages**, **Accueil**, **Les scènes du hub (6 au plus)** : coche celles à montrer. Sans choix, ce sont
