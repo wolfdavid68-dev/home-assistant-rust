@@ -231,8 +231,19 @@
           <section class="set-pane grid content-start gap-3.5" data-pane="apparence" aria-labelledby="set-apparence" hidden>
             <header class="flex flex-wrap items-center gap-2.5"><h3 id="set-apparence" class="m-0 font-titre text-titre focus:outline-none" tabindex="-1">Apparence</h3><span class="px-2.5 py-0.5 rounded-full text-legende leading-4 font-semibold bg-glow-soft text-glow-ink">Sur cet appareil</span></header>
             <div class="grid gap-2 p-4 border border-line rounded-panneau bg-card">
-              <label hidden>
+              <label class="grid gap-1 font-semibold">
                 Apparence
+                <select id="hub-style" class="max-w-full min-w-0 font-normal">
+                  <option value="v3">v3</option>
+                  <option value="v4">v4</option>
+                </select>
+              </label>
+              <p class="account text-corps m-0 text-muted [:not(:where(.o024100))&_strong]:text-text [.assist-dialog_&]:m-0">Sur cet appareil : l'ordinateur, la tablette ou le téléphone. Elle ne change qu'ici.</p>
+            </div>
+            <div id="theme-v4" class="grid gap-2 p-4 border border-line rounded-panneau bg-card">
+              <p class="m-0 font-semibold">v4 : jour et nuit</p>
+              <label hidden>
+                Jour et nuit de la v4
                 <select id="theme">
                   <option value="auto">Automatique (clair ou sombre, comme l'appareil)</option>
                   <option value="light">Clair</option>
@@ -244,7 +255,7 @@
                 <button class="theme-tile overflow-hidden p-0 border-2 border-line rounded-champ bg-card text-text text-corps cursor-pointer aria-checked:border-accent aria-checked:ring-3 aria-checked:ring-accent-soft aria-checked:font-semibold" type="button" role="radio" data-theme="light"><i class="flex h-20" aria-hidden="true"><span class="flex-1 grid grid-cols-2 gap-1.5 content-start p-2.5 bg-[#e8e5df]"><span class="col-span-2 h-2 w-3/5 rounded-full bg-[#1f1b17]"></span><span class="h-8 rounded-trait bg-[#f4f2ee]"></span><span class="h-8 rounded-trait bg-[#f4e7c6]"></span><span class="h-1.5 w-2/3 rounded-full bg-[#4b44c8]"></span></span></i><span class="block px-2 py-2">Clair</span></button>
                 <button class="theme-tile overflow-hidden p-0 border-2 border-line rounded-champ bg-card text-text text-corps cursor-pointer aria-checked:border-accent aria-checked:ring-3 aria-checked:ring-accent-soft aria-checked:font-semibold" type="button" role="radio" data-theme="dark"><i class="flex h-20" aria-hidden="true"><span class="flex-1 grid grid-cols-2 gap-1.5 content-start p-2.5 bg-[#0e1420]"><span class="col-span-2 h-2 w-3/5 rounded-full bg-[#e8ecf3]"></span><span class="h-8 rounded-trait bg-[#172031]"></span><span class="h-8 rounded-trait bg-[#3a2f12]"></span><span class="h-1.5 w-2/3 rounded-full bg-[#93a9ff]"></span></span></i><span class="block px-2 py-2">Sombre</span></button>
               </div>
-              <p class="account text-corps m-0 text-muted [:not(:where(.o024100))&_strong]:text-text [.assist-dialog_&]:m-0">Pour l'accueil v4 : Automatique suit l'appareil, clair le jour, sombre le soir s'il le fait. La v3 (la maquette) garde ses couleurs.</p>
+              <p class="account text-corps m-0 text-muted [:not(:where(.o024100))&_strong]:text-text [.assist-dialog_&]:m-0">Automatique suit l'appareil : clair le jour, sombre le soir s'il le fait.</p>
             </div>
           </section>
           <section class="set-pane grid content-start gap-3.5" data-pane="accueil" aria-labelledby="set-accueil" hidden>
@@ -256,14 +267,6 @@
               <p class="account text-corps m-0 text-muted [:not(:where(.o024100))&_strong]:text-text [.assist-dialog_&]:m-0">L'heure, la météo et la maison en grand, plus sombre la nuit. Un contact pour revenir.</p>
             </div>
             <div class="grid gap-2 p-4 border border-line rounded-panneau bg-card">
-              <label class="grid gap-1 font-semibold">
-                Style de l'accueil
-                <select id="hub-style" class="max-w-full min-w-0 font-normal">
-                  <option value="v3">v3, la maquette : la maison au centre, sur fond dégradé</option>
-                  <option value="v4">v4, toute la maquette « Hub maison »</option>
-                </select>
-              </label>
-              <p class="account text-corps m-0 text-muted [:not(:where(.o024100))&_strong]:text-text [.assist-dialog_&]:m-0">Sur l'ordinateur, la tablette et le téléphone. La v3 garde ses couleurs ; l'apparence (clair, sombre) sert à la v4.</p>
               <details id="hub-pick" class="hub-pick [:not(:where(.o143300))&_summary]:cursor-pointer [:not(:where(.o143301))&_summary]:text-text [:not(:where(.o143302))&_summary]:text-courant">
                 <summary>Les scènes du hub (6 au plus)</summary>
                 <p class="account text-corps m-0 text-muted [:not(:where(.o024100))&_strong]:text-text [.assist-dialog_&]:m-0">Sans choix, les 6 premières par ordre alphabétique.</p>

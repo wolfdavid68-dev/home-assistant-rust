@@ -689,13 +689,6 @@ function hubV4PageNav(name) {
   if (name === HUB_V4_ENERGY && typeof openEnergy === "function") {
     links.push(pill("Bilan détaillé", false, () => openEnergy(), true));
   }
-  // Depuis « Toute la maison » : le tableau de bord complet, comme avant.
-  if (name === HUB_V4_ALL && typeof leaveHub === "function") {
-    links.push(pill("Tableau complet", false, () => {
-      hubV4PageClose(false);
-      leaveHub();
-    }, true));
-  }
   return el("nav", {
     class: "absolute inset-x-0 top-0 z-20 flex items-center gap-3 px-5 pt-4 pb-2 overflow-x-auto [scrollbar-width:none] "
       + "lg:grid lg:grid-cols-[1fr_auto_1fr] max-lg:bg-scrim/88 max-lg:backdrop-blur-[16px]",

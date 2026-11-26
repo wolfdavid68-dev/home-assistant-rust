@@ -33,16 +33,24 @@ const HUB_ICONS = {
 const HUB_PEOPLE_COLORS = ["#0277bd", "#c2185b", "#2e7d32", "#b45309", "#5e35b1", "#00838f"];
 
 /** La vue hub ne sert qu'à la v4, sur tous les écrans (en colonne sur le
- *  téléphone, hub-v4-telephone.js). En v3, l'accueil est le tableau
- *  « maquette » lui-même (app.js). */
+ *  téléphone, hub-v4-telephone.js). En v3, l'accueil est l'apparence
+ *  v3 elle-même (app.js). Seuls l'agenda et le lecteur passent devant
+ *  l'accueil v4 : jamais le tableau de bord d'avant. */
 function hubShouldShow() {
   if ($("#dashboard-view").hidden || hub.away) return false;
   return typeof hubV4On === "function" && hubV4On();
 }
 
+/** L'agenda ou le lecteur est-il ouvert devant l'accueil ? */
+function hubCovered() {
+  return (typeof agenda !== "undefined" && agenda.open) || (typeof music !== "undefined" && music.open);
+}
+
 /** Affiche ou cache la vue hub selon le moment, et la redessine. Appelé à
  *  chaque changement d'état (renderHome), et quand un réglage change. */
 function updateHub() {
+  // Rien d'ouvert devant l'accueil : il revient (jamais le tableau d'avant).
+  if (hub.away && !hubCovered()) hub.away = false;
   const want = hubShouldShow();
   if (want && !hub.on) showHub();
   else if (!want && hub.on) hideHub();
@@ -87,7 +95,8 @@ function hubBack() {
 /** Quitte la vue hub pour le tableau de bord complet. */
 function leaveHub() {
   hub.away = true;
-  updateHub();
+  // Après l'ouverture qui suit (agenda, lecteur) : sans elle, l'accueil reste.
+  queueMicrotask(updateHub);
 }
 
 function renderHub() {

@@ -180,6 +180,8 @@ function hubV3Init() {
     // Stockage bloqué : le réglage par défaut.
   }
   hubV3Apply(hubV3Style(saved));
+  const themeV4 = $("#theme-v4");
+  if (themeV4) themeV4.hidden = hubV3Style(saved) !== "v4";
   const pick = $("#hub-style");
   if (pick) {
     pick.value = hubV3Style(saved);
@@ -192,7 +194,8 @@ function hubV3Init() {
         // Stockage bloqué : le choix ne durera que le temps de la page.
       }
       hubV3Apply(style);
-      // v3 (la maquette) ou v4 : le thème et la disposition changent avec.
+      if (themeV4) themeV4.hidden = style !== "v4";
+      // v3 ou v4 : le thème et la disposition changent avec.
       applyTheme();
       if (typeof forgetPanels === "function") forgetPanels();
       if (typeof renderHome === "function" && !$("#dashboard-view").hidden) renderHome();

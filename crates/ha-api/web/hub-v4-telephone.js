@@ -344,7 +344,8 @@ function hubV4TelBuild() {
     if (typeof hubV4Page === "function" && hubV4Page(HUB_V4_ENERGY)) return;
     hubV4TelLeave(() => openEnergy())();
   }),
-  hubV4TelTab(HUB_ICONS.grid, "Plus", hubV4TelLeave(null)));
+  // « Plus » : les réglages (dont l'apparence), par-dessus l'accueil.
+  hubV4TelTab(HUB_ICONS.grid, "Plus", () => $("#dock-account")?.click()));
 
   // En bas : la place des onglets fixés, et un peu d'air sous la musique.
   ui.root = el("div", {
