@@ -669,8 +669,8 @@ hubV4TelMedia.addEventListener("change", () => {
   updateHub();
 });
 document.querySelector?.("#hub-style")?.addEventListener("change", () => hubV4TelSync());
-// Le bouton Maison de la barre du bas (tableau complet, agenda, musique) ramène
-// à l'accueil v4.
+// Le bouton Maison de la barre (tableau complet, agenda, musique) ramène à
+// l'accueil v4, sur le téléphone comme sur l'ordinateur ou la tablette.
 document.querySelector?.("#dock-home")?.addEventListener("click", () => {
-  if (hubV4Phone()) hubBack();
+  if (hubV4On()) hubBack();
 });

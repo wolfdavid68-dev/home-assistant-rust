@@ -14,9 +14,8 @@
 // selectPage, agendaEvents…). Pas d'innerHTML ici non plus.
 "use strict";
 
-const HUB_KEY = "ha-hub";
-// Plus étroit que ça (téléphone, tablette à la verticale) : le tableau de
-// bord habituel.
+// Plus étroit que ça (téléphone, tablette à la verticale) : la vue téléphone
+// de la v4 (hub-v4-telephone.js) quand l'écran est assez étroit.
 const hubWide = matchMedia("(min-width: 900px) and (orientation: landscape)");
 const hub = {
   on: false,
@@ -33,21 +32,12 @@ const HUB_ICONS = {
 // Assez foncées pour une initiale blanche lisible (contraste AA, 4,5:1 au moins).
 const HUB_PEOPLE_COLORS = ["#0277bd", "#c2185b", "#2e7d32", "#b45309", "#5e35b1", "#00838f"];
 
-function hubWanted() {
-  try {
-    return localStorage.getItem(HUB_KEY) !== "0";
-  } catch {
-    return true;
-  }
-}
-
+/** La vue hub ne sert qu'à la v4, sur tous les écrans (en colonne sur le
+ *  téléphone, hub-v4-telephone.js). En v3, l'accueil est le tableau
+ *  « maquette » lui-même (app.js). */
 function hubShouldShow() {
   if ($("#dashboard-view").hidden || hub.away) return false;
-  // L'accueil v4 s'affiche aussi sur le téléphone, en colonne (hub-v4-telephone.js).
-  if (typeof hubV4Phone === "function" && hubV4Phone()) return true;
-  return document.body.classList.contains("tablet")
-    && $("#hub-mode").checked
-    && hubWide.matches;
+  return typeof hubV4On === "function" && hubV4On();
 }
 
 /** Affiche ou cache la vue hub selon le moment, et la redessine. Appelé à
@@ -561,17 +551,6 @@ $("#hub-announce").addEventListener("click", () => {
   $("#hub-say-text").focus();
 });
 
-$("#hub-mode").checked = hubWanted();
-$("#hub-mode").addEventListener("change", (event) => {
-  try {
-    if (event.target.checked) localStorage.removeItem(HUB_KEY);
-    else localStorage.setItem(HUB_KEY, "0");
-  } catch {
-    // Stockage bloqué : le choix ne durera que le temps de la page.
-  }
-  hub.away = false;
-  updateHub();
-});
 
 // Le choix des scènes, dans Mon compte : une case par scène ou script.
 function renderHubPick() {

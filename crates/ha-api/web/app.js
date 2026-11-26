@@ -15,15 +15,27 @@ const TOKEN_KEY = "ha_token";
 const $ = (selector) => document.querySelector(selector);
 
 // ---------------------------------------------------------------- Apparence
-// Clair ou sombre, ou comme l'appareil (« Automatique »). Tout le tableau de
-// bord suit ce choix, l'accueil v3/v4 aussi (hub-v3.css). Un réglage de cet
-// appareil seulement (localStorage), appliqué avant le premier affichage.
-// Les anciens styles (« plan », « plan-nuit », « maquette ») ne sont plus
-// proposés : un appareil qui les avait gardés repasse en « Automatique ».
+// Deux accueils, au choix sur chaque appareil (Mon compte → Style de
+// l'accueil, localStorage) : la v3, par défaut, est la « maquette » (fond
+// sombre dégradé, disposition « tableau » : les pièces en onglets, le dessin
+// de la maison au centre, les volets dessous) ; la v4 (hub-v4*.js) suit le
+// thème clair ou sombre, ou celui de l'appareil (« Automatique »).
+// Appliqué tout de suite, avant le premier affichage de la page.
 const THEME_KEY = "ha-theme";
 const THEMES = ["auto", "light", "dark"];
+const ACCUEIL_KEY = "ha-hub-style";
 const darkQuery = matchMedia("(prefers-color-scheme: dark)");
 
+/** L'accueil choisi sur cet appareil : "v4", sinon "v3" (la maquette). */
+function accueilWanted() {
+  try {
+    return localStorage.getItem(ACCUEIL_KEY) === "v4" ? "v4" : "v3";
+  } catch {
+    return "v3"; // stockage bloqué (navigation privée…)
+  }
+}
+
+/** Le thème de la v4 : clair, sombre ou comme l'appareil. */
 function themeWanted() {
   try {
     const value = localStorage.getItem(THEME_KEY);
@@ -35,8 +47,9 @@ function themeWanted() {
 
 function applyTheme(choice = themeWanted()) {
   const root = document.documentElement;
-  root.dataset.theme = choice === "auto" ? (darkQuery.matches ? "dark" : "light") : choice;
-  root.dataset.layout = ["plan", "plan-nuit", "maquette"].includes(choice) ? "board" : "classic";
+  const v3 = accueilWanted() === "v3";
+  root.dataset.theme = v3 ? "maquette" : choice === "auto" ? (darkQuery.matches ? "dark" : "light") : choice;
+  root.dataset.layout = v3 ? "board" : "classic";
   // La barre du navigateur (téléphone) prend la couleur du fond.
   const color = getComputedStyle(root).getPropertyValue("--bar").trim();
   if (color) for (const meta of document.querySelectorAll('meta[name="theme-color"]')) meta.content = color;
@@ -567,7 +580,7 @@ function looseStates(states = [...entities.values()]) {
 const view = { room: null };
 
 // Les tuiles d'une section, en grille.
-const TILE_GRID = "tile-grid grid [grid-template-columns:repeat(auto-fill,_minmax(min(100%,_200px),_1fr))] [align-items:start] gap-3 [:not(:where(.o102200)).room-body_&]:[grid-template-columns:1fr] [.room-body_&>*]:[grid-column:1_/_-1] [@media(min-width:1000px)]:[.room-view_.room-body_&>*]:[break-inside:avoid]";
+const TILE_GRID = "tile-grid grid [grid-template-columns:repeat(auto-fill,_minmax(min(100%,_200px),_1fr))] [align-items:start] gap-3 [:not(:where(.o102200)).room-body_&]:[grid-template-columns:1fr] [.room-body_&>*]:[grid-column:1_/_-1] [@media(min-width:1000px)]:[.room-view_.room-body_&>*]:[break-inside:avoid] [@media(min-width:1000px)]:[:not(:where(.o079300))[data-layout=board]_&]:[grid-template-columns:repeat(auto-fill,_minmax(260px,_1fr))]";
 // Sur téléphone, les tuiles d'une section forment une seule carte : une
 // ligne par appareil, séparées d'un filet (au lieu d'une carte chacune).
 const PHONE_LIST = "phone-list max-sm:gap-0 max-sm:bg-card max-sm:rounded-carte max-sm:shadow-carte max-sm:overflow-hidden max-sm:[&>.tile]:rounded-none max-sm:[&>.tile]:shadow-none max-sm:[&>.tile]:bg-transparent max-sm:[&>.tile]:px-3.5 max-sm:[&>.tile]:py-3 max-sm:[&>.tile]:gap-2 max-sm:[&>.tile+.tile]:border-t max-sm:[&>.tile+.tile]:border-line max-sm:[&>.tile.light.on]:text-text max-sm:[&>.tile>input[type=range]]:ml-12 max-sm:[&>.tile>input[type=range]]:w-[calc(100%-50px)] max-sm:[&>.tile>input[type=range]::-webkit-slider-runnable-track]:h-4.5 max-sm:[&>.tile>input[type=range]::-moz-range-track]:h-4.5 max-sm:[&>.tile>input[type=range]::-webkit-slider-thumb]:h-7 max-sm:[&>.tile>input[type=range]::-webkit-slider-thumb]:-mt-1.25 max-sm:[&>.tile>input[type=range]::-moz-range-thumb]:h-7 max-sm:[&>.tile.sensor]:grid-cols-[minmax(0,1fr)_auto] max-sm:[&>.tile.sensor]:items-center max-sm:[&>.tile.sensor>.tile-head]:pr-0 max-sm:[&>.tile.sensor>.value]:text-titre max-sm:[&>.tile.sensor>.value]:mr-8 max-sm:[&>.tile.sensor>:not(.tile-head,.value,.history-button)]:col-span-full max-sm:[&_.history-button]:top-px max-sm:[&_.history-button]:right-0 max-sm:[&_.history-button]:opacity-70";

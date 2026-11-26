@@ -61,19 +61,20 @@ du soleil).
 
 ## La régler
 
-Dans **Mon compte**, sous **Mode tablette murale** : **Vue hub, la maison au centre** (cochée par
-défaut). Comme le mode tablette et l'écran de veille, c'est un réglage **de cet appareil
-seulement**. Sur la tablette, on y arrive par **Toute la maison**, puis l'avatar en haut.
+Dans **Mon compte**, **Style de l'accueil** : **v3**, la maquette (par défaut : fond sombre
+dégradé, les pièces en onglets, le dessin de la maison au centre, les volets dessous), ou **v4**,
+l'accueil « Hub maison » de cette page. Il n'y a plus d'accueil « Actuel » ni de case « Vue hub ».
+Comme le mode tablette et l'écran de veille, c'est un réglage **de cet appareil seulement**. Sur la
+tablette, on y arrive par **Toute la maison**, puis l'avatar en haut.
 
 Juste en dessous, **Les scènes du hub (6 au plus)** : coche celles à montrer. Sans choix, ce sont
 les 6 premières par ordre alphabétique. Une scène supprimée disparaît du choix ; si plus aucune
 scène choisie n'existe, le choix par défaut revient.
 
-La vue hub ne s'affiche que :
-
-- en **mode tablette murale** ;
-- sur un écran **à l'horizontale d'au moins 900 pixels** de large (une tablette de 10 pouces).
-  Tournée à la verticale, ou sur un téléphone, c'est le tableau de bord habituel.
+En **v4**, la vue hub s'affiche sur tous les écrans, mode tablette ou non ; sur un téléphone, en
+colonne (vue téléphone de la v4). En **v3**, l'accueil est la maquette elle-même, sur l'ordinateur,
+la tablette et le téléphone. « Toute la maison », l'agenda ou la musique ouvrent le tableau complet ;
+le bouton **Maison** ou 2 minutes sans contact (mode tablette) ramènent à l'accueil.
 
 ## Sécurité
 

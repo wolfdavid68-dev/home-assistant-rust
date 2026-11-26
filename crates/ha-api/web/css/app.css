@@ -21,7 +21,7 @@
 @source "../*.js";
 
 /* Les thèmes choisis dans les Réglages (attribut data-theme de <html>). */
-@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, [data-theme="maquette"], [data-theme="maquette"] *));
 
 @theme inline {
   --color-bg: var(--bg);

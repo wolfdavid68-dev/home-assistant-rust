@@ -11031,6 +11031,112 @@
   :not(:where(.o058801)).\[\:not\(\:where\(\.o058801\)\)\&\:hover\]\:\[outline\:none\]:hover {
     outline: none;
   }
+  :not(:where(.o060400)):where(.\[\:not\(\:where\(\.o060400\)\)\:where\(\&\)\[data-theme\|\=plan\]_body\]\:bg-bg)[data-theme|=plan] body {
+    background-color: var(--bg);
+  }
+  :not(:where(.o060401)):where(.\[\:not\(\:where\(\.o060401\)\)\:where\(\&\)\[data-theme\|\=plan\]_body\]\:\[background-image\:linear-gradient\(var\(--grid-major\)_1px\,_transparent_1px\)\,_linear-gradient\(90deg\,_var\(--grid-major\)_1px\,_transparent_1px\)\,_linear-gradient\(var\(--grid-minor\)_1px\,_transparent_1px\)\,_linear-gradient\(90deg\,_var\(--grid-minor\)_1px\,_transparent_1px\)\])[data-theme|=plan] body {
+    background-image: linear-gradient(var(--grid-major) 1px, transparent 1px), linear-gradient(90deg, var(--grid-major) 1px, transparent 1px), linear-gradient(var(--grid-minor) 1px, transparent 1px), linear-gradient(90deg, var(--grid-minor) 1px, transparent 1px);
+  }
+  :not(:where(.o060402)):where(.\[\:not\(\:where\(\.o060402\)\)\:where\(\&\)\[data-theme\|\=plan\]_body\]\:\[background-size\:120px_120px\,_120px_120px\,_24px_24px\,_24px_24px\])[data-theme|=plan] body {
+    background-size: 120px 120px, 120px 120px, 24px 24px, 24px 24px;
+  }
+  :not(:where(.o060403)):where(.\[\:not\(\:where\(\.o060403\)\)\:where\(\&\)\[data-theme\|\=plan\]_body\]\:\[background-attachment\:fixed\])[data-theme|=plan] body {
+    background-attachment: fixed;
+  }
+  :not(:where(.o060500))[data-theme|=plan] .\[\:not\(\:where\(\.o060500\)\)\[data-theme\|\=plan\]_\&\]\:\[background\:none\] {
+    background: none;
+  }
+  :not(:where(.o060600))[data-theme|=plan] .\[\:not\(\:where\(\.o060600\)\)\[data-theme\|\=plan\]_\&\]\:pb-\[1\.4rem\] {
+    padding-bottom: 1.4rem;
+  }
+  :not(:where(.o060702))[data-theme|=plan] .\[\:not\(\:where\(\.o060702\)\)\[data-theme\|\=plan\]_\&\:\:after\]\:max-w-\[1240px\]::after {
+    max-width: 1240px;
+  }
+  :not(:where(.o060800))[data-theme|=plan] .\[\:not\(\:where\(\.o060800\)\)\[data-theme\|\=plan\]_\&\]\:\[font-family\:var\(--font-mono\)\] {
+    font-family: var(--font-mono);
+  }
+  :not(:where(.o060801))[data-theme|=plan] .\[\:not\(\:where\(\.o060801\)\)\[data-theme\|\=plan\]_\&\]\:text-petit {
+    font-size: var(--text-petit);
+  }
+  :not(:where(.o060900))[data-theme|=plan] .\[\:not\(\:where\(\.o060900\)\)\[data-theme\|\=plan\]_\&\]\:\[font-family\:var\(--font-mono\)\] {
+    font-family: var(--font-mono);
+  }
+  :not(:where(.o060901))[data-theme|=plan] .\[\:not\(\:where\(\.o060901\)\)\[data-theme\|\=plan\]_\&\]\:font-medium {
+    --tw-font-weight: var(--font-weight-medium);
+    font-weight: var(--font-weight-medium);
+  }
+  :not(:where(.o061000))[data-theme|=plan] .\[\:not\(\:where\(\.o061000\)\)\[data-theme\|\=plan\]_\&\]\:font-medium {
+    --tw-font-weight: var(--font-weight-medium);
+    font-weight: var(--font-weight-medium);
+  }
+  :not(:where(.o061001))[data-theme|=plan] .\[\:not\(\:where\(\.o061001\)\)\[data-theme\|\=plan\]_\&\]\:\[letter-spacing\:-0\.02em\] {
+    letter-spacing: -0.02em;
+  }
+  :not(:where(.o061100))[data-theme|=plan] .\[\:not\(\:where\(\.o061100\)\)\[data-theme\|\=plan\]_\&\]\:mt-\[1\.4rem\] {
+    margin-top: 1.4rem;
+  }
+  :not(:where(.o061200))[data-theme|=plan] .\[\:not\(\:where\(\.o061200\)\)\[data-theme\|\=plan\]_\&\]\:\[border\:1\.25px_solid_var\(--ink\)\] {
+    border: 1.25px solid var(--ink);
+  }
+  :not(:where(.o061201))[data-theme|=plan] .\[\:not\(\:where\(\.o061201\)\)\[data-theme\|\=plan\]_\&\]\:\[box-shadow\:none\] {
+    box-shadow: none;
+  }
+  :not(:where(.o061202))[data-theme|=plan] .\[\:not\(\:where\(\.o061202\)\)\[data-theme\|\=plan\]_\&\]\:\[border-radius\:var\(--radius\)\] {
+    border-radius: var(--radius);
+  }
+  :not(:where(.o061300)):where(.\[\:not\(\:where\(\.o061300\)\)\:where\(\&\)\[data-theme\|\=plan\]_select\]\:\[border-radius\:4px\])[data-theme|=plan] select {
+    border-radius: 4px;
+  }
+  :not(:where(.o061300)):where(.\[\:not\(\:where\(\.o061300\)\)\:where\(\&\)\[data-theme\|\=plan\]_textarea\]\:\[border-radius\:4px\])[data-theme|=plan] textarea {
+    border-radius: 4px;
+  }
+  :not(:where(.o061601))[data-theme|=plan] .\[\:not\(\:where\(\.o061601\)\)\[data-theme\|\=plan\]_\&\]\:\[border-width\:0\] {
+    border-width: 0;
+  }
+  :not(:where(.o062100)):where(.\[\:not\(\:where\(\.o062100\)\)\:where\(\&\)\[data-theme\|\=plan\]_svg\]\:\[stroke-width\:1\.6\])[data-theme|=plan] svg {
+    stroke-width: 1.6;
+  }
+  :not(:where(.o063100)):where(.\[\:not\(\:where\(\.o063100\)\)\:where\(\&\)\[data-theme\|\=plan\]_input\[type\=range\]\]\:h-\[22px\])[data-theme|=plan] input[type=range] {
+    height: 22px;
+  }
+  :not(:where(.o063101)):where(.\[\:not\(\:where\(\.o063101\)\)\:where\(\&\)\[data-theme\|\=plan\]_input\[type\=range\]\]\:\[border-radius\:3px\])[data-theme|=plan] input[type=range] {
+    border-radius: 3px;
+  }
+  :not(:where(.o063403))[data-theme|=plan] .\[\:not\(\:where\(\.o063403\)\)\[data-theme\|\=plan\]_\&_section\>h2\]\:\[font-family\:var\(--font-mono\)\] section > h2 {
+    font-family: var(--font-mono);
+  }
+  :not(:where(.o063404))[data-theme|=plan] .\[\:not\(\:where\(\.o063404\)\)\[data-theme\|\=plan\]_\&_section\>h2\]\:font-medium section > h2 {
+    --tw-font-weight: var(--font-weight-medium);
+    font-weight: var(--font-weight-medium);
+  }
+  :not(:where(.o063600))[data-theme|=plan] .\[\:not\(\:where\(\.o063600\)\)\[data-theme\|\=plan\]_\&_h2\]\:\[font-family\:var\(--font-mono\)\] h2 {
+    font-family: var(--font-mono);
+  }
+  :not(:where(.o063601))[data-theme|=plan] .\[\:not\(\:where\(\.o063601\)\)\[data-theme\|\=plan\]_\&_h2\]\:text-petit h2 {
+    font-size: var(--text-petit);
+  }
+  :not(:where(.o063602))[data-theme|=plan] .\[\:not\(\:where\(\.o063602\)\)\[data-theme\|\=plan\]_\&_h2\]\:font-medium h2 {
+    --tw-font-weight: var(--font-weight-medium);
+    font-weight: var(--font-weight-medium);
+  }
+  :not(:where(.o063603))[data-theme|=plan] .\[\:not\(\:where\(\.o063603\)\)\[data-theme\|\=plan\]_\&_h2\]\:uppercase h2 {
+    text-transform: uppercase;
+  }
+  :not(:where(.o063604))[data-theme|=plan] .\[\:not\(\:where\(\.o063604\)\)\[data-theme\|\=plan\]_\&_h2\]\:\[letter-spacing\:0\.14em\] h2 {
+    letter-spacing: 0.14em;
+  }
+  :not(:where(.o063605))[data-theme|=plan] .\[\:not\(\:where\(\.o063605\)\)\[data-theme\|\=plan\]_\&_h2\]\:\[color\:var\(--ink\)\] h2 {
+    color: var(--ink);
+  }
+  :not(:where(.o064800))[data-theme|=plan] .\[\:not\(\:where\(\.o064800\)\)\[data-theme\|\=plan\]_\&\]\:\[border-radius\:6px\] {
+    border-radius: 6px;
+  }
+  :not(:where(.o064801))[data-theme|=plan] .\[\:not\(\:where\(\.o064801\)\)\[data-theme\|\=plan\]_\&\]\:\[box-shadow\:0_0_0_1\.25px_var\(--ink\)\] {
+    box-shadow: 0 0 0 1.25px var(--ink);
+  }
+  :not(:where(.o064803))[data-theme|=plan] .\[\:not\(\:where\(\.o064803\)\)\[data-theme\|\=plan\]_\&\]\:bg-card {
+    background-color: var(--card);
+  }
   :not(:where(.o066100)).\[\:not\(\:where\(\.o066100\)\)\&_img\]\:block img {
     display: block;
   }
@@ -11039,6 +11145,18 @@
   }
   :not(:where(.o066102)).\[\:not\(\:where\(\.o066102\)\)\&_img\]\:h-\[auto\] img {
     height: auto;
+  }
+  :not(:where(.o066500))[data-theme=maquette] .house-stage.default-drawing .\[\:not\(\:where\(\.o066500\)\)\[data-theme\=maquette\]_\.house-stage\.default-drawing_\&\]\:\[filter\:invert\(1\)_hue-rotate\(180deg\)_brightness\(1\.15\)\] {
+    filter: invert(1) hue-rotate(180deg) brightness(1.15);
+  }
+  :not(:where(.o066500))[data-theme=plan-nuit] .house-stage.default-drawing .\[\:not\(\:where\(\.o066500\)\)\[data-theme\=plan-nuit\]_\.house-stage\.default-drawing_\&\]\:\[filter\:invert\(1\)_hue-rotate\(180deg\)_brightness\(1\.15\)\] {
+    filter: invert(1) hue-rotate(180deg) brightness(1.15);
+  }
+  :not(:where(.o066501))[data-theme=maquette] .house-stage.default-drawing .\[\:not\(\:where\(\.o066501\)\)\[data-theme\=maquette\]_\.house-stage\.default-drawing_\&\]\:\[mix-blend-mode\:screen\] {
+    mix-blend-mode: screen;
+  }
+  :not(:where(.o066501))[data-theme=plan-nuit] .house-stage.default-drawing .\[\:not\(\:where\(\.o066501\)\)\[data-theme\=plan-nuit\]_\.house-stage\.default-drawing_\&\]\:\[mix-blend-mode\:screen\] {
+    mix-blend-mode: screen;
   }
   :not(:where(.o066604)).\[\:not\(\:where\(\.o066604\)\)\&\]\:\[font-family\:var\(--font-mono\)\] {
     font-family: var(--font-mono);
@@ -11147,6 +11265,9 @@
   :not(:where(.o068200)).\[\:not\(\:where\(\.o068200\)\)\&\.placing\:\:before\]\:\[animation\:place_1s_ease-in-out_infinite\].placing::before {
     animation: place 1s ease-in-out infinite;
   }
+  :not(:where(.o068300))[data-theme|=plan] .\[\:not\(\:where\(\.o068300\)\)\[data-theme\|\=plan\]_\&\:not\(\[hidden\]\)\]\:block:not([hidden]) {
+    display: block;
+  }
   :not(:where(.o068400)).\[\:not\(\:where\(\.o068400\)\)\&_dl\]\:m-0 dl {
     margin: 0px;
   }
@@ -11175,6 +11296,37 @@
     --tw-font-weight: var(--font-weight-medium);
     font-weight: var(--font-weight-medium);
   }
+  :not(:where(.o069200))[data-layout=board] .\[\:not\(\:where\(\.o069200\)\)\[data-layout\=board\]_\&\]\:\[padding-top\:max\(0\.8rem\,_env\(safe-area-inset-top\,_0px\)\)\] {
+    padding-top: max(0.8rem, env(safe-area-inset-top, 0px));
+  }
+  :not(:where(.o069201))[data-layout=board] .\[\:not\(\:where\(\.o069201\)\)\[data-layout\=board\]_\&\]\:pb-\[0\.4rem\] {
+    padding-bottom: 0.4rem;
+  }
+  :not(:where(.o069300))[data-layout=board] .\[\:not\(\:where\(\.o069300\)\)\[data-layout\=board\]_\&\]\:\[font-family\:var\(--font\)\] {
+    font-family: var(--font);
+  }
+  :not(:where(.o069301))[data-layout=board] .\[\:not\(\:where\(\.o069301\)\)\[data-layout\=board\]_\&\]\:text-moyen {
+    font-size: var(--text-moyen);
+  }
+  :not(:where(.o069302))[data-layout=board] .\[\:not\(\:where\(\.o069302\)\)\[data-layout\=board\]_\&\]\:font-semibold {
+    --tw-font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-semibold);
+  }
+  :not(:where(.o069303))[data-layout=board] .\[\:not\(\:where\(\.o069303\)\)\[data-layout\=board\]_\&\]\:\[letter-spacing\:0\] {
+    letter-spacing: 0;
+  }
+  :not(:where(.o069304))[data-layout=board] .\[\:not\(\:where\(\.o069304\)\)\[data-layout\=board\]_\&\]\:mt-\[0\.35rem\] {
+    margin-top: 0.35rem;
+  }
+  :not(:where(.o069600))[data-layout=board] .\[\:not\(\:where\(\.o069600\)\)\[data-layout\=board\]_\&\]\:gap-\[12px\] {
+    gap: 12px;
+  }
+  :not(:where(.o069601))[data-layout=board] .\[\:not\(\:where\(\.o069601\)\)\[data-layout\=board\]_\&\]\:mt-\[0\.6rem\] {
+    margin-top: 0.6rem;
+  }
+  :not(:where(.o069700))[data-layout=board] .\[\:not\(\:where\(\.o069700\)\)\[data-layout\=board\]_\&\]\:gap-\[12px\] {
+    gap: 12px;
+  }
   :not(:where(.o070006)).\[\:not\(\:where\(\.o070006\)\)\&\]\:font-bold {
     --tw-font-weight: var(--font-weight-bold);
     font-weight: var(--font-weight-bold);
@@ -11182,11 +11334,41 @@
   :not(:where(.o070007)).\[\:not\(\:where\(\.o070007\)\)\&\]\:text-corps {
     font-size: var(--text-corps);
   }
+  :not(:where(.o070200))[data-theme|=plan] .\[\:not\(\:where\(\.o070200\)\)\[data-theme\|\=plan\]_\&\]\:\[border\:1px_solid_var\(--ink-line\)\] {
+    border: 1px solid var(--ink-line);
+  }
+  :not(:where(.o070201))[data-theme|=plan] .\[\:not\(\:where\(\.o070201\)\)\[data-theme\|\=plan\]_\&\]\:\[box-shadow\:none\] {
+    box-shadow: none;
+  }
+  :not(:where(.o070600))[data-layout=board] .\[\:not\(\:where\(\.o070600\)\)\[data-layout\=board\]_\&\>span\]\:hidden > span {
+    display: none;
+  }
+  :not(:where(.o070700))[data-layout=board] .\[\:not\(\:where\(\.o070700\)\)\[data-layout\=board\]_\&\:not\(\:has\(button\)\)\]\:hidden:not(:has(button)) {
+    display: none;
+  }
+  :not(:where(.o070801))[data-layout=board] .\[\:not\(\:where\(\.o070801\)\)\[data-layout\=board\]_\&\]\:\[box-shadow\:none\] {
+    box-shadow: none;
+  }
+  :not(:where(.o070802))[data-layout=board] .\[\:not\(\:where\(\.o070802\)\)\[data-layout\=board\]_\&\]\:\[border\:0\] {
+    border: 0;
+  }
   :not(:where(.o071600)).\[\:not\(\:where\(\.o071600\)\)\&_svg\]\:w-\[18px\] svg {
     width: 18px;
   }
   :not(:where(.o071601)).\[\:not\(\:where\(\.o071601\)\)\&_svg\]\:h-\[18px\] svg {
     height: 18px;
+  }
+  :not(:where(.o072100))[data-layout=board] .room.lit .\[\:not\(\:where\(\.o072100\)\)\[data-layout\=board\]_\.room\.lit_\&\]\:bg-glow {
+    background-color: var(--glow);
+  }
+  :not(:where(.o072101))[data-layout=board] .room.lit .\[\:not\(\:where\(\.o072101\)\)\[data-layout\=board\]_\.room\.lit_\&\]\:\[color\:\#3b2a05\] {
+    color: #3b2a05;
+  }
+  :not(:where(.o072200))[data-layout=board] .room.alert .\[\:not\(\:where\(\.o072200\)\)\[data-layout\=board\]_\.room\.alert_\&\]\:bg-alert {
+    background-color: var(--alert);
+  }
+  :not(:where(.o072201))[data-layout=board] .room.alert .\[\:not\(\:where\(\.o072201\)\)\[data-layout\=board\]_\.room\.alert_\&\]\:\[color\:\#ffffff\] {
+    color: #ffffff;
   }
   :not(:where(.o072500)).house .\[\:not\(\:where\(\.o072500\)\)\.house_\&\]\:bg-card-2 {
     background-color: var(--card-2);
@@ -11249,6 +11431,37 @@
   :not(:where(.o074100)).\[\:not\(\:where\(\.o074100\)\)\&\>h2\]\:m-0 > h2 {
     margin: 0px;
   }
+  :not(:where(.o079500))[data-theme|=plan] .\[\:not\(\:where\(\.o079500\)\)\[data-theme\|\=plan\]_\&\]\:\[border\:1px_solid_var\(--ink-line\)\] {
+    border: 1px solid var(--ink-line);
+  }
+  :not(:where(.o079501))[data-theme|=plan] .\[\:not\(\:where\(\.o079501\)\)\[data-theme\|\=plan\]_\&\]\:\[box-shadow\:none\] {
+    box-shadow: none;
+  }
+  :not(:where(.o079700))[data-theme|=plan] .\[\:not\(\:where\(\.o079700\)\)\[data-theme\|\=plan\]_\&\]\:\[background\:transparent\] {
+    background: transparent;
+  }
+  :not(:where(.o079702))[data-theme|=plan] .\[\:not\(\:where\(\.o079702\)\)\[data-theme\|\=plan\]_\&\]\:\[border-radius\:4px\] {
+    border-radius: 4px;
+  }
+  :not(:where(.o079703))[data-theme|=plan] .\[\:not\(\:where\(\.o079703\)\)\[data-theme\|\=plan\]_\&\]\:\[color\:var\(--ink\)\] {
+    color: var(--ink);
+  }
+  :not(:where(.o079903))[data-theme|=plan] .\[\:not\(\:where\(\.o079903\)\)\[data-theme\|\=plan\]_\&\>h2\]\:\[font-family\:var\(--font-mono\)\] > h2 {
+    font-family: var(--font-mono);
+  }
+  :not(:where(.o079904))[data-theme|=plan] .\[\:not\(\:where\(\.o079904\)\)\[data-theme\|\=plan\]_\&\>h2\]\:font-medium > h2 {
+    --tw-font-weight: var(--font-weight-medium);
+    font-weight: var(--font-weight-medium);
+  }
+  :not(:where(.o079905))[data-theme|=plan] .\[\:not\(\:where\(\.o079905\)\)\[data-theme\|\=plan\]_\&\>h2\]\:\[letter-spacing\:0\.14em\] > h2 {
+    letter-spacing: 0.14em;
+  }
+  :not(:where(.o079906))[data-theme|=plan] .\[\:not\(\:where\(\.o079906\)\)\[data-theme\|\=plan\]_\&\>h2\]\:\[color\:var\(--ink\)\] > h2 {
+    color: var(--ink);
+  }
+  :not(:where(.o080203))[data-layout=board] .\[\:not\(\:where\(\.o080203\)\)\[data-layout\=board\]_\&\]\:\[order\:-1\] {
+    order: -1;
+  }
   :not(:where(.o080300)).\[\:not\(\:where\(\.o080300\)\)\&_svg\]\:w-\[20px\] svg {
     width: 20px;
   }
@@ -11257,6 +11470,115 @@
   }
   :not(:where(.o080302)).\[\:not\(\:where\(\.o080302\)\)\&_svg\]\:flex-none svg {
     flex: none;
+  }
+  :not(:where(.o082400)):where(.\[\:not\(\:where\(\.o082400\)\)\:where\(\&\)\[data-theme\=maquette\]_body\]\:\[background\:radial-gradient\(1100px_760px_at_8\%_8\%\,_rgb\(10_70_86_\/_0\.55\)\,_transparent_65\%\)\,_radial-gradient\(1100px_760px_at_10\%_100\%\,_rgb\(70_24_110_\/_0\.6\)\,_transparent_65\%\)\,_radial-gradient\(1300px_900px_at_100\%_45\%\,_rgb\(110_14_52_\/_0\.62\)\,_transparent_68\%\)\,_radial-gradient\(900px_700px_at_60\%_100\%\,_rgb\(60_14_80_\/_0\.5\)\,_transparent_70\%\)\,_\#12101c_fixed\])[data-theme=maquette] body {
+    background: radial-gradient(1100px 760px at 8% 8%, rgb(10 70 86 / 0.55), transparent 65%), radial-gradient(1100px 760px at 10% 100%, rgb(70 24 110 / 0.6), transparent 65%), radial-gradient(1300px 900px at 100% 45%, rgb(110 14 52 / 0.62), transparent 68%), radial-gradient(900px 700px at 60% 100%, rgb(60 14 80 / 0.5), transparent 70%), #12101c fixed;
+  }
+  :not(:where(.o082401)):where(.\[\:not\(\:where\(\.o082401\)\)\:where\(\&\)\[data-theme\=maquette\]_body\]\:\[background-attachment\:fixed\])[data-theme=maquette] body {
+    background-attachment: fixed;
+  }
+  :not(:where(.o082500))[data-theme=maquette] .\[\:not\(\:where\(\.o082500\)\)\[data-theme\=maquette\]_\&\]\:\[background\:none\] {
+    background: none;
+  }
+  :not(:where(.o083400))[data-theme=maquette] .\[\:not\(\:where\(\.o083400\)\)\[data-theme\=maquette\]_\&_svg\]\:\[color\:\#e0e0e0\] svg {
+    color: #e0e0e0;
+  }
+  :not(:where(.o084900))[data-theme=maquette] .\[\:not\(\:where\(\.o084900\)\)\[data-theme\=maquette\]_\&\]\:\[background\:\#111111\] {
+    background: #111111;
+  }
+  :not(:where(.o084901))[data-theme=maquette] .\[\:not\(\:where\(\.o084901\)\)\[data-theme\=maquette\]_\&\]\:\[box-shadow\:inset_-1px_0_0_rgb\(255_255_255_\/_0\.06\)\] {
+    box-shadow: inset -1px 0 0 rgb(255 255 255 / 0.06);
+  }
+  :not(:where(.o085000))[data-theme=maquette] .\[\:not\(\:where\(\.o085000\)\)\[data-theme\=maquette\]_\&_a\]\:\[color\:\#b4b4bc\] a {
+    color: #b4b4bc;
+  }
+  :not(:where(.o085000))[data-theme=maquette] .\[\:not\(\:where\(\.o085000\)\)\[data-theme\=maquette\]_\&_button\]\:\[color\:\#b4b4bc\] button {
+    color: #b4b4bc;
+  }
+  :not(:where(.o085100))[data-theme=maquette] .\[\:not\(\:where\(\.o085100\)\)\[data-theme\=maquette\]_\&_\.active\]\:\[background\:rgb\(3_169_244_\/_0\.16\)\] .active {
+    background: rgb(3 169 244 / 0.16);
+  }
+  :not(:where(.o085200))[data-theme=maquette] .\[\:not\(\:where\(\.o085200\)\)\[data-theme\=maquette\]_\&\]\:bg-card {
+    background-color: var(--card);
+  }
+  :not(:where(.o085201))[data-theme=maquette] .\[\:not\(\:where\(\.o085201\)\)\[data-theme\=maquette\]_\&\]\:\[box-shadow\:none\] {
+    box-shadow: none;
+  }
+  :not(:where(.o085202))[data-theme=maquette] .\[\:not\(\:where\(\.o085202\)\)\[data-theme\=maquette\]_\&\]\:\[border\:0\] {
+    border: 0;
+  }
+  :not(:where(.o085300)):where(.\[\:not\(\:where\(\.o085300\)\)\:where\(\&\)\[data-theme\=maquette\]_\:is\(\.room-line-name\,_\.house-action-text_b\)\]\:\[color\:\#f0f0f4\])[data-theme=maquette] :is(.room-line-name, .house-action-text b) {
+    color: #f0f0f4;
+  }
+  :not(:where(.o085301)):where(.\[\:not\(\:where\(\.o085301\)\)\:where\(\&\)\[data-theme\=maquette\]_\:is\(\.room-line-name\,_\.house-action-text_b\)\]\:font-semibold)[data-theme=maquette] :is(.room-line-name, .house-action-text b) {
+    --tw-font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-semibold);
+  }
+  :not(:where(.o085400)):where(.\[\:not\(\:where\(\.o085400\)\)\:where\(\&\)\[data-theme\=maquette\]_\:is\(\.room-line-info\,_\.house-action-text_span\)\]\:\[color\:\#b4b4bc\])[data-theme=maquette] :is(.room-line-info, .house-action-text span) {
+    color: #b4b4bc;
+  }
+  :not(:where(.o085600))[data-theme=maquette] .\[\:not\(\:where\(\.o085600\)\)\[data-theme\=maquette\]_\&\]\:\[border-radius\:50\%\] {
+    border-radius: 50%;
+  }
+  :not(:where(.o085601))[data-theme=maquette] .\[\:not\(\:where\(\.o085601\)\)\[data-theme\=maquette\]_\&\]\:\[background\:transparent\] {
+    background: transparent;
+  }
+  :not(:where(.o085602))[data-theme=maquette] .\[\:not\(\:where\(\.o085602\)\)\[data-theme\=maquette\]_\&\]\:\[color\:\#8e8e98\] {
+    color: #8e8e98;
+  }
+  :not(:where(.o085700))[data-theme=maquette] .room.lit .\[\:not\(\:where\(\.o085700\)\)\[data-theme\=maquette\]_\.room\.lit_\&\]\:\[background\:rgb\(255_193_7_\/_0\.2\)\] {
+    background: rgb(255 193 7 / 0.2);
+  }
+  :not(:where(.o085701))[data-theme=maquette] .house-action.on .\[\:not\(\:where\(\.o085701\)\)\[data-theme\=maquette\]_\.house-action\.on_\&\]\:\[color\:var\(--m-amber\)\] {
+    color: var(--m-amber);
+  }
+  :not(:where(.o085701))[data-theme=maquette] .room.lit .\[\:not\(\:where\(\.o085701\)\)\[data-theme\=maquette\]_\.room\.lit_\&\]\:\[color\:var\(--m-amber\)\] {
+    color: var(--m-amber);
+  }
+  :not(:where(.o085702))[data-theme=maquette] .room.lit .\[\:not\(\:where\(\.o085702\)\)\[data-theme\=maquette\]_\.room\.lit_\&\]\:\[box-shadow\:none\] {
+    box-shadow: none;
+  }
+  :not(:where(.o085800))[data-theme=maquette] .room.heat .\[\:not\(\:where\(\.o085800\)\)\[data-theme\=maquette\]_\.room\.heat_\&\]\:\[background\:rgb\(255_152_0_\/_0\.2\)\] {
+    background: rgb(255 152 0 / 0.2);
+  }
+  :not(:where(.o085801))[data-theme=maquette] .room.heat .\[\:not\(\:where\(\.o085801\)\)\[data-theme\=maquette\]_\.room\.heat_\&\]\:\[color\:var\(--m-orange\)\] {
+    color: var(--m-orange);
+  }
+  :not(:where(.o085900))[data-theme=maquette] .room.alert .\[\:not\(\:where\(\.o085900\)\)\[data-theme\=maquette\]_\.room\.alert_\&\]\:\[background\:rgb\(244_67_54_\/_0\.22\)\] {
+    background: rgb(244 67 54 / 0.22);
+  }
+  :not(:where(.o085901))[data-theme=maquette] .room.alert .\[\:not\(\:where\(\.o085901\)\)\[data-theme\=maquette\]_\.room\.alert_\&\]\:\[color\:var\(--m-red\)\] {
+    color: var(--m-red);
+  }
+  :not(:where(.o085902))[data-theme=maquette] .room.alert .\[\:not\(\:where\(\.o085902\)\)\[data-theme\=maquette\]_\.room\.alert_\&\]\:\[box-shadow\:none\] {
+    box-shadow: none;
+  }
+  :not(:where(.o086000))[data-theme=maquette] .house-action.d-garage:not(.on) .\[\:not\(\:where\(\.o086000\)\)\[data-theme\=maquette\]_\.house-action\.d-garage\:not\(\.on\)_\&\]\:\[background\:rgb\(255_255_255_\/_0\.1\)\] {
+    background: rgb(255 255 255 / 0.1);
+  }
+  :not(:where(.o086001))[data-theme=maquette] .house-action.d-garage:not(.on) .\[\:not\(\:where\(\.o086001\)\)\[data-theme\=maquette\]_\.house-action\.d-garage\:not\(\.on\)_\&\]\:\[color\:\#c4c4cc\] {
+    color: #c4c4cc;
+  }
+  :not(:where(.o086100))[data-theme=maquette] .house-action.d-garage.on .\[\:not\(\:where\(\.o086100\)\)\[data-theme\=maquette\]_\.house-action\.d-garage\.on_\&\]\:\[background\:rgb\(255_87_34_\/_0\.2\)\] {
+    background: rgb(255 87 34 / 0.2);
+  }
+  :not(:where(.o086101))[data-theme=maquette] .house-action.d-garage.on .\[\:not\(\:where\(\.o086101\)\)\[data-theme\=maquette\]_\.house-action\.d-garage\.on_\&\]\:\[color\:var\(--m-deep-orange\)\] {
+    color: var(--m-deep-orange);
+  }
+  :not(:where(.o086702))[data-theme=maquette] .person-chip.home .\[\:not\(\:where\(\.o086702\)\)\[data-theme\=maquette\]_\.person-chip\.home_\&\:\:after\]\:\[top\:-3px\]::after {
+    top: -3px;
+  }
+  :not(:where(.o086703))[data-theme=maquette] .person-chip.home .\[\:not\(\:where\(\.o086703\)\)\[data-theme\=maquette\]_\.person-chip\.home_\&\:\:after\]\:\[right\:-3px\]::after {
+    right: -3px;
+  }
+  :not(:where(.o086800))[data-theme=maquette] .cover-row .\[\:not\(\:where\(\.o086800\)\)\[data-theme\=maquette\]_\.cover-row_\&\]\:\[background\:transparent\] {
+    background: transparent;
+  }
+  :not(:where(.o086801))[data-theme=maquette] .cover-row .\[\:not\(\:where\(\.o086801\)\)\[data-theme\=maquette\]_\.cover-row_\&\]\:\[color\:var\(--m-purple\)\] {
+    color: var(--m-purple);
+  }
+  :not(:where(.o086900))[data-theme=maquette] .cover-row.on .\[\:not\(\:where\(\.o086900\)\)\[data-theme\=maquette\]_\.cover-row\.on_\&\]\:\[color\:var\(--m-cyan\)\] {
+    color: var(--m-cyan);
   }
   :not(:where(.o089000)).\[\:not\(\:where\(\.o089000\)\)\&_legend\]\:px-1\.5 legend {
     padding-inline: calc(var(--spacing) * 1.5);
@@ -11327,6 +11649,15 @@
   }
   :not(:where(.o092300)).chart-card .\[\:not\(\:where\(\.o092300\)\)\.chart-card_\&\]\:m-0 {
     margin: 0px;
+  }
+  :not(:where(.o093201))[data-theme|=plan] .\[\:not\(\:where\(\.o093201\)\)\[data-theme\|\=plan\]_\&\]\:\[box-shadow\:none\] {
+    box-shadow: none;
+  }
+  :not(:where(.o093300))[data-theme|=plan] .chart-card .\[\:not\(\:where\(\.o093300\)\)\[data-theme\|\=plan\]_\.chart-card_\&\]\:\[background\:transparent\] {
+    background: transparent;
+  }
+  :not(:where(.o093401))[data-theme=maquette] .\[\:not\(\:where\(\.o093401\)\)\[data-theme\=maquette\]_\&\]\:\[box-shadow\:none\] {
+    box-shadow: none;
   }
   :not(:where(.o095901)).\[\:not\(\:where\(\.o095901\)\)\&\]\:\[left\:50\%\] {
     left: 50%;
@@ -11538,6 +11869,24 @@
   }
   :not(:where(.o102400)).\[\:not\(\:where\(\.o102400\)\)\&\[open\]\]\:\[animation\:room-in_0\.18s_ease-out\][open] {
     animation: room-in 0.18s ease-out;
+  }
+  :not(:where(.o104600))[data-theme=maquette] .\[\:not\(\:where\(\.o104600\)\)\[data-theme\=maquette\]_\&\.lit\]\:\[background\:rgb\(255_193_7_\/_0\.2\)\].lit {
+    background: rgb(255 193 7 / 0.2);
+  }
+  :not(:where(.o104601))[data-theme=maquette] .\[\:not\(\:where\(\.o104601\)\)\[data-theme\=maquette\]_\&\.lit\]\:\[color\:var\(--m-amber\)\].lit {
+    color: var(--m-amber);
+  }
+  :not(:where(.o104700))[data-theme=maquette] .\[\:not\(\:where\(\.o104700\)\)\[data-theme\=maquette\]_\&\.heat\]\:\[background\:rgb\(255_152_0_\/_0\.2\)\].heat {
+    background: rgb(255 152 0 / 0.2);
+  }
+  :not(:where(.o104701))[data-theme=maquette] .\[\:not\(\:where\(\.o104701\)\)\[data-theme\=maquette\]_\&\.heat\]\:\[color\:var\(--m-orange\)\].heat {
+    color: var(--m-orange);
+  }
+  :not(:where(.o104800))[data-theme=maquette] .\[\:not\(\:where\(\.o104800\)\)\[data-theme\=maquette\]_\&\.alert\]\:\[background\:rgb\(244_67_54_\/_0\.22\)\].alert {
+    background: rgb(244 67 54 / 0.22);
+  }
+  :not(:where(.o104801))[data-theme=maquette] .\[\:not\(\:where\(\.o104801\)\)\[data-theme\=maquette\]_\&\.alert\]\:\[color\:var\(--m-red\)\].alert {
+    color: var(--m-red);
   }
   :not(:where(.o105203)).\[\:not\(\:where\(\.o105203\)\)\&\]\:\[font-family\:var\(--font-mono\)\] {
     font-family: var(--font-mono);
@@ -12086,6 +12435,12 @@
   :not(:where(.o130701)).\[\:not\(\:where\(\.o130701\)\)\&\.is-today_b\]\:text-accent-ink.is-today b {
     color: var(--accent-ink);
   }
+  :not(:where(.o132101))[data-theme=maquette] .\[\:not\(\:where\(\.o132101\)\)\[data-theme\=maquette\]_\&\]\:\[box-shadow\:none\] {
+    box-shadow: none;
+  }
+  :not(:where(.o132700))[data-theme|=plan] .\[\:not\(\:where\(\.o132700\)\)\[data-theme\|\=plan\]_\&\]\:\[box-shadow\:0_0_0_1\.25px_var\(--ink\)\] {
+    box-shadow: 0 0 0 1.25px var(--ink);
+  }
   :not(:where(.o133004)).\[\:not\(\:where\(\.o133004\)\)\&\]\:\[grid-template-columns\:minmax\(260px\,_25\%\)_minmax\(0\,_1fr\)_minmax\(280px\,_27\%\)\] {
     grid-template-columns: minmax(260px, 25%) minmax(0, 1fr) minmax(280px, 27%);
   }
@@ -12319,22 +12674,52 @@
   :not(:where(.o138600))[data-theme=dark] .\[\:not\(\:where\(\.o138600\)\)\[data-theme\=dark\]_\&\]\:\[background\:radial-gradient\(70\%_70\%_at_50\%_55\%\,_rgb\(255_190_120_\/_0\.06\)\,_transparent_70\%\)\,_rgb\(0_0_0_\/_0\.18\)\] {
     background: radial-gradient(70% 70% at 50% 55%, rgb(255 190 120 / 0.06), transparent 70%), rgb(0 0 0 / 0.18);
   }
+  :not(:where(.o138600))[data-theme=maquette] .\[\:not\(\:where\(\.o138600\)\)\[data-theme\=maquette\]_\&\]\:\[background\:radial-gradient\(70\%_70\%_at_50\%_55\%\,_rgb\(255_190_120_\/_0\.06\)\,_transparent_70\%\)\,_rgb\(0_0_0_\/_0\.18\)\] {
+    background: radial-gradient(70% 70% at 50% 55%, rgb(255 190 120 / 0.06), transparent 70%), rgb(0 0 0 / 0.18);
+  }
+  :not(:where(.o138600))[data-theme=plan-nuit] .\[\:not\(\:where\(\.o138600\)\)\[data-theme\=plan-nuit\]_\&\]\:\[background\:radial-gradient\(70\%_70\%_at_50\%_55\%\,_rgb\(255_190_120_\/_0\.06\)\,_transparent_70\%\)\,_rgb\(0_0_0_\/_0\.18\)\] {
+    background: radial-gradient(70% 70% at 50% 55%, rgb(255 190 120 / 0.06), transparent 70%), rgb(0 0 0 / 0.18);
+  }
   :not(:where(.o138800)).\[\:not\(\:where\(\.o138800\)\)\&_\#house-stage\]\:\[width\:min\(96cqw\,_calc\(96cqh_\*_var\(--ratio\,_1\.35\)\)\)\] #house-stage {
     width: min(96cqw, calc(96cqh * var(--ratio, 1.35)));
   }
   :not(:where(.o138900))[data-theme=dark] .\[\:not\(\:where\(\.o138900\)\)\[data-theme\=dark\]_\&_\#house-stage\]\:\[-webkit-mask-image\:radial-gradient\(closest-side\,_\#000_84\%\,_transparent_100\%\)\] #house-stage {
     -webkit-mask-image: radial-gradient(closest-side, #000 84%, transparent 100%);
   }
+  :not(:where(.o138900))[data-theme=maquette] .\[\:not\(\:where\(\.o138900\)\)\[data-theme\=maquette\]_\&_\#house-stage\]\:\[-webkit-mask-image\:radial-gradient\(closest-side\,_\#000_84\%\,_transparent_100\%\)\] #house-stage {
+    -webkit-mask-image: radial-gradient(closest-side, #000 84%, transparent 100%);
+  }
+  :not(:where(.o138900))[data-theme=plan-nuit] .\[\:not\(\:where\(\.o138900\)\)\[data-theme\=plan-nuit\]_\&_\#house-stage\]\:\[-webkit-mask-image\:radial-gradient\(closest-side\,_\#000_84\%\,_transparent_100\%\)\] #house-stage {
+    -webkit-mask-image: radial-gradient(closest-side, #000 84%, transparent 100%);
+  }
   :not(:where(.o138901))[data-theme=dark] .\[\:not\(\:where\(\.o138901\)\)\[data-theme\=dark\]_\&_\#house-stage\]\:\[mask-image\:radial-gradient\(closest-side\,_\#000_84\%\,_transparent_100\%\)\] #house-stage {
+    mask-image: radial-gradient(closest-side, #000 84%, transparent 100%);
+  }
+  :not(:where(.o138901))[data-theme=maquette] .\[\:not\(\:where\(\.o138901\)\)\[data-theme\=maquette\]_\&_\#house-stage\]\:\[mask-image\:radial-gradient\(closest-side\,_\#000_84\%\,_transparent_100\%\)\] #house-stage {
+    mask-image: radial-gradient(closest-side, #000 84%, transparent 100%);
+  }
+  :not(:where(.o138901))[data-theme=plan-nuit] .\[\:not\(\:where\(\.o138901\)\)\[data-theme\=plan-nuit\]_\&_\#house-stage\]\:\[mask-image\:radial-gradient\(closest-side\,_\#000_84\%\,_transparent_100\%\)\] #house-stage {
     mask-image: radial-gradient(closest-side, #000 84%, transparent 100%);
   }
   :not(:where(.o139000))[data-theme=dark] .hub-house .\[\:not\(\:where\(\.o139000\)\)\[data-theme\=dark\]_\.hub-house_\&_img\]\:\[mix-blend-mode\:lighten\] img {
     mix-blend-mode: lighten;
   }
+  :not(:where(.o139000))[data-theme=maquette] .hub-house .\[\:not\(\:where\(\.o139000\)\)\[data-theme\=maquette\]_\.hub-house_\&_img\]\:\[mix-blend-mode\:lighten\] img {
+    mix-blend-mode: lighten;
+  }
+  :not(:where(.o139000))[data-theme=plan-nuit] .hub-house .\[\:not\(\:where\(\.o139000\)\)\[data-theme\=plan-nuit\]_\.hub-house_\&_img\]\:\[mix-blend-mode\:lighten\] img {
+    mix-blend-mode: lighten;
+  }
   :not(:where(.o139100)):root[data-theme=light] .\[\:not\(\:where\(\.o139100\)\)\:root\[data-theme\=light\]_\&\.cutout\]\:\[isolation\:isolate\].cutout {
     isolation: isolate;
   }
+  :not(:where(.o139100)):root[data-theme=plan] .\[\:not\(\:where\(\.o139100\)\)\:root\[data-theme\=plan\]_\&\.cutout\]\:\[isolation\:isolate\].cutout {
+    isolation: isolate;
+  }
   :not(:where(.o139101)):root[data-theme=light] .\[\:not\(\:where\(\.o139101\)\)\:root\[data-theme\=light\]_\&\.cutout\]\:\[overflow\:visible\].cutout {
+    overflow: visible;
+  }
+  :not(:where(.o139101)):root[data-theme=plan] .\[\:not\(\:where\(\.o139101\)\)\:root\[data-theme\=plan\]_\&\.cutout\]\:\[overflow\:visible\].cutout {
     overflow: visible;
   }
   :not(:where(.o139200)).hub-house .\[\:not\(\:where\(\.o139200\)\)\.hub-house_\&\.cutout_img\]\:\[-webkit-mask-image\:var\(--house-cut\)\].cutout img {
@@ -12343,10 +12728,16 @@
   :not(:where(.o139200)):root[data-theme=light] .\[\:not\(\:where\(\.o139200\)\)\:root\[data-theme\=light\]_\&\.cutout_img\]\:\[-webkit-mask-image\:var\(--house-cut\)\].cutout img {
     -webkit-mask-image: var(--house-cut);
   }
+  :not(:where(.o139200)):root[data-theme=plan] .\[\:not\(\:where\(\.o139200\)\)\:root\[data-theme\=plan\]_\&\.cutout_img\]\:\[-webkit-mask-image\:var\(--house-cut\)\].cutout img {
+    -webkit-mask-image: var(--house-cut);
+  }
   :not(:where(.o139201)).hub-house .\[\:not\(\:where\(\.o139201\)\)\.hub-house_\&\.cutout_img\]\:\[mask-image\:var\(--house-cut\)\].cutout img {
     mask-image: var(--house-cut);
   }
   :not(:where(.o139201)):root[data-theme=light] .\[\:not\(\:where\(\.o139201\)\)\:root\[data-theme\=light\]_\&\.cutout_img\]\:\[mask-image\:var\(--house-cut\)\].cutout img {
+    mask-image: var(--house-cut);
+  }
+  :not(:where(.o139201)):root[data-theme=plan] .\[\:not\(\:where\(\.o139201\)\)\:root\[data-theme\=plan\]_\&\.cutout_img\]\:\[mask-image\:var\(--house-cut\)\].cutout img {
     mask-image: var(--house-cut);
   }
   :not(:where(.o139202)).hub-house .\[\:not\(\:where\(\.o139202\)\)\.hub-house_\&\.cutout_img\]\:\[-webkit-mask-size\:100\%_100\%\].cutout img {
@@ -12355,10 +12746,16 @@
   :not(:where(.o139202)):root[data-theme=light] .\[\:not\(\:where\(\.o139202\)\)\:root\[data-theme\=light\]_\&\.cutout_img\]\:\[-webkit-mask-size\:100\%_100\%\].cutout img {
     -webkit-mask-size: 100% 100%;
   }
+  :not(:where(.o139202)):root[data-theme=plan] .\[\:not\(\:where\(\.o139202\)\)\:root\[data-theme\=plan\]_\&\.cutout_img\]\:\[-webkit-mask-size\:100\%_100\%\].cutout img {
+    -webkit-mask-size: 100% 100%;
+  }
   :not(:where(.o139203)).hub-house .\[\:not\(\:where\(\.o139203\)\)\.hub-house_\&\.cutout_img\]\:\[mask-size\:100\%_100\%\].cutout img {
     mask-size: 100% 100%;
   }
   :not(:where(.o139203)):root[data-theme=light] .\[\:not\(\:where\(\.o139203\)\)\:root\[data-theme\=light\]_\&\.cutout_img\]\:\[mask-size\:100\%_100\%\].cutout img {
+    mask-size: 100% 100%;
+  }
+  :not(:where(.o139203)):root[data-theme=plan] .\[\:not\(\:where\(\.o139203\)\)\:root\[data-theme\=plan\]_\&\.cutout_img\]\:\[mask-size\:100\%_100\%\].cutout img {
     mask-size: 100% 100%;
   }
   :not(:where(.o139204)).hub-house .\[\:not\(\:where\(\.o139204\)\)\.hub-house_\&\.cutout_img\]\:\[-webkit-mask-repeat\:no-repeat\].cutout img {
@@ -12367,10 +12764,16 @@
   :not(:where(.o139204)):root[data-theme=light] .\[\:not\(\:where\(\.o139204\)\)\:root\[data-theme\=light\]_\&\.cutout_img\]\:\[-webkit-mask-repeat\:no-repeat\].cutout img {
     -webkit-mask-repeat: no-repeat;
   }
+  :not(:where(.o139204)):root[data-theme=plan] .\[\:not\(\:where\(\.o139204\)\)\:root\[data-theme\=plan\]_\&\.cutout_img\]\:\[-webkit-mask-repeat\:no-repeat\].cutout img {
+    -webkit-mask-repeat: no-repeat;
+  }
   :not(:where(.o139205)).hub-house .\[\:not\(\:where\(\.o139205\)\)\.hub-house_\&\.cutout_img\]\:\[mask-repeat\:no-repeat\].cutout img {
     mask-repeat: no-repeat;
   }
   :not(:where(.o139205)):root[data-theme=light] .\[\:not\(\:where\(\.o139205\)\)\:root\[data-theme\=light\]_\&\.cutout_img\]\:\[mask-repeat\:no-repeat\].cutout img {
+    mask-repeat: no-repeat;
+  }
+  :not(:where(.o139205)):root[data-theme=plan] .\[\:not\(\:where\(\.o139205\)\)\:root\[data-theme\=plan\]_\&\.cutout_img\]\:\[mask-repeat\:no-repeat\].cutout img {
     mask-repeat: no-repeat;
   }
   :not(:where(.o139206)).hub-house .\[\:not\(\:where\(\.o139206\)\)\.hub-house_\&\.cutout_img\]\:\[mix-blend-mode\:normal\].cutout img {
@@ -12379,10 +12782,16 @@
   :not(:where(.o139206)):root[data-theme=light] .\[\:not\(\:where\(\.o139206\)\)\:root\[data-theme\=light\]_\&\.cutout_img\]\:\[mix-blend-mode\:normal\].cutout img {
     mix-blend-mode: normal;
   }
+  :not(:where(.o139206)):root[data-theme=plan] .\[\:not\(\:where\(\.o139206\)\)\:root\[data-theme\=plan\]_\&\.cutout_img\]\:\[mix-blend-mode\:normal\].cutout img {
+    mix-blend-mode: normal;
+  }
   :not(:where(.o139300)).hub-house .\[\:not\(\:where\(\.o139300\)\)\.hub-house_\&\.cutout\:\:before\]\:\[content\:\'\'\].cutout::before {
     content: '';
   }
   :not(:where(.o139300)):root[data-theme=light] .\[\:not\(\:where\(\.o139300\)\)\:root\[data-theme\=light\]_\&\.cutout\:\:before\]\:\[content\:\'\'\].cutout::before {
+    content: '';
+  }
+  :not(:where(.o139300)):root[data-theme=plan] .\[\:not\(\:where\(\.o139300\)\)\:root\[data-theme\=plan\]_\&\.cutout\:\:before\]\:\[content\:\'\'\].cutout::before {
     content: '';
   }
   :not(:where(.o139301)).hub-house .\[\:not\(\:where\(\.o139301\)\)\.hub-house_\&\.cutout\:\:before\]\:absolute.cutout::before {
@@ -12391,10 +12800,16 @@
   :not(:where(.o139301)):root[data-theme=light] .\[\:not\(\:where\(\.o139301\)\)\:root\[data-theme\=light\]_\&\.cutout\:\:before\]\:absolute.cutout::before {
     position: absolute;
   }
+  :not(:where(.o139301)):root[data-theme=plan] .\[\:not\(\:where\(\.o139301\)\)\:root\[data-theme\=plan\]_\&\.cutout\:\:before\]\:absolute.cutout::before {
+    position: absolute;
+  }
   :not(:where(.o139302)).hub-house .\[\:not\(\:where\(\.o139302\)\)\.hub-house_\&\.cutout\:\:before\]\:\[inset\:0_0_-8\%_0\].cutout::before {
     inset: 0 0 -8% 0;
   }
   :not(:where(.o139302)):root[data-theme=light] .\[\:not\(\:where\(\.o139302\)\)\:root\[data-theme\=light\]_\&\.cutout\:\:before\]\:\[inset\:0_0_-8\%_0\].cutout::before {
+    inset: 0 0 -8% 0;
+  }
+  :not(:where(.o139302)):root[data-theme=plan] .\[\:not\(\:where\(\.o139302\)\)\:root\[data-theme\=plan\]_\&\.cutout\:\:before\]\:\[inset\:0_0_-8\%_0\].cutout::before {
     inset: 0 0 -8% 0;
   }
   :not(:where(.o139303)).hub-house .\[\:not\(\:where\(\.o139303\)\)\.hub-house_\&\.cutout\:\:before\]\:\[z-index\:-1\].cutout::before {
@@ -12403,16 +12818,25 @@
   :not(:where(.o139303)):root[data-theme=light] .\[\:not\(\:where\(\.o139303\)\)\:root\[data-theme\=light\]_\&\.cutout\:\:before\]\:\[z-index\:-1\].cutout::before {
     z-index: -1;
   }
+  :not(:where(.o139303)):root[data-theme=plan] .\[\:not\(\:where\(\.o139303\)\)\:root\[data-theme\=plan\]_\&\.cutout\:\:before\]\:\[z-index\:-1\].cutout::before {
+    z-index: -1;
+  }
   :not(:where(.o139304)).hub-house .\[\:not\(\:where\(\.o139304\)\)\.hub-house_\&\.cutout\:\:before\]\:\[background\:var\(--house-shadow\)_center_\/_100\%_100\%_no-repeat\].cutout::before {
     background: var(--house-shadow) center / 100% 100% no-repeat;
   }
   :not(:where(.o139304)):root[data-theme=light] .\[\:not\(\:where\(\.o139304\)\)\:root\[data-theme\=light\]_\&\.cutout\:\:before\]\:\[background\:var\(--house-shadow\)_center_\/_100\%_100\%_no-repeat\].cutout::before {
     background: var(--house-shadow) center / 100% 100% no-repeat;
   }
+  :not(:where(.o139304)):root[data-theme=plan] .\[\:not\(\:where\(\.o139304\)\)\:root\[data-theme\=plan\]_\&\.cutout\:\:before\]\:\[background\:var\(--house-shadow\)_center_\/_100\%_100\%_no-repeat\].cutout::before {
+    background: var(--house-shadow) center / 100% 100% no-repeat;
+  }
   :not(:where(.o139305)).hub-house .\[\:not\(\:where\(\.o139305\)\)\.hub-house_\&\.cutout\:\:before\]\:pointer-events-none.cutout::before {
     pointer-events: none;
   }
   :not(:where(.o139305)):root[data-theme=light] .\[\:not\(\:where\(\.o139305\)\)\:root\[data-theme\=light\]_\&\.cutout\:\:before\]\:pointer-events-none.cutout::before {
+    pointer-events: none;
+  }
+  :not(:where(.o139305)):root[data-theme=plan] .\[\:not\(\:where\(\.o139305\)\)\:root\[data-theme\=plan\]_\&\.cutout\:\:before\]\:pointer-events-none.cutout::before {
     pointer-events: none;
   }
   :not(:where(.o139502)).\[\:not\(\:where\(\.o139502\)\)\&\]\:\[left\:14px\] {
@@ -13030,6 +13454,12 @@
   :not(:where(.o162103)).\[\:not\(\:where\(\.o162103\)\)\&\>svg\]\:text-muted > svg {
     color: var(--muted);
   }
+  :not(:where(.o162207))[data-layout=board] .\[\:not\(\:where\(\.o162207\)\)\[data-layout\=board\]_\&\:not\(\[hidden\]\)\]\:\[border-radius\:var\(--radius\)\]:not([hidden]) {
+    border-radius: var(--radius);
+  }
+  :not(:where(.o162208))[data-layout=board] .\[\:not\(\:where\(\.o162208\)\)\[data-layout\=board\]_\&\:not\(\[hidden\]\)\]\:\[box-shadow\:var\(--shadow\)\]:not([hidden]) {
+    box-shadow: var(--shadow);
+  }
   :not(:where(.o163000)).\[\:not\(\:where\(\.o163000\)\)\&_button_svg\]\:w-\[18px\] button svg {
     width: 18px;
   }
@@ -13050,6 +13480,15 @@
   }
   :not(:where(.o163501)).board-music .\[\:not\(\:where\(\.o163501\)\)\.board-music_\&_svg\]\:h-\[20px\] svg {
     height: 20px;
+  }
+  :not(:where(.o163600))[data-theme=maquette][data-layout=board] .\[\:not\(\:where\(\.o163600\)\)\[data-theme\=maquette\]\[data-layout\=board\]_\&\]\:\[box-shadow\:none\] {
+    box-shadow: none;
+  }
+  :not(:where(.o163700))[data-theme|=plan][data-layout=board] .\[\:not\(\:where\(\.o163700\)\)\[data-theme\|\=plan\]\[data-layout\=board\]_\&\]\:\[box-shadow\:0_0_0_1\.25px_var\(--ink\)\] {
+    box-shadow: 0 0 0 1.25px var(--ink);
+  }
+  :not(:where(.o163701))[data-theme|=plan][data-layout=board] .\[\:not\(\:where\(\.o163701\)\)\[data-theme\|\=plan\]\[data-layout\=board\]_\&\]\:\[border-radius\:6px\] {
+    border-radius: 6px;
   }
   :not(:where(.o164000)).\[\:not\(\:where\(\.o164000\)\)\&_h2\]\:m-0 h2 {
     margin: 0px;
@@ -13162,6 +13601,33 @@
   :not(:where(.o167605)).\[\:not\(\:where\(\.o167605\)\)\&_span\]\:text-muted span {
     color: var(--muted);
   }
+  :not(:where(.o168000))[data-theme=maquette] .\[\:not\(\:where\(\.o168000\)\)\[data-theme\=maquette\]_\&\]\:\[background\:rgb\(255_255_255_\/_0\.035\)\] {
+    background: rgb(255 255 255 / 0.035);
+  }
+  :not(:where(.o168100))[data-theme=maquette] .\[\:not\(\:where\(\.o168100\)\)\[data-theme\=maquette\]_\&\]\:\[background\:rgb\(255_255_255_\/_0\.07\)\] {
+    background: rgb(255 255 255 / 0.07);
+  }
+  :not(:where(.o168101))[data-theme=maquette] .\[\:not\(\:where\(\.o168101\)\)\[data-theme\=maquette\]_\&\]\:\[color\:\#d0d0d8\] {
+    color: #d0d0d8;
+  }
+  :not(:where(.o168300))[data-theme=maquette] .\[\:not\(\:where\(\.o168300\)\)\[data-theme\=maquette\]_\&\]\:\[background\:rgb\(255_255_255_\/_0\.06\)\] {
+    background: rgb(255 255 255 / 0.06);
+  }
+  :not(:where(.o168600))[data-theme|=plan] .\[\:not\(\:where\(\.o168600\)\)\[data-theme\|\=plan\]_\&\]\:\[background\:none\] {
+    background: none;
+  }
+  :not(:where(.o169101))[data-theme|=plan] .\[\:not\(\:where\(\.o169101\)\)\[data-theme\|\=plan\]_\&\]\:\[background\:none\] {
+    background: none;
+  }
+  :not(:where(.o169103))[data-theme|=plan] .\[\:not\(\:where\(\.o169103\)\)\[data-theme\|\=plan\]_\&\]\:\[color\:var\(--ink\)\] {
+    color: var(--ink);
+  }
+  :not(:where(.o169201))[data-theme|=plan] .\[\:not\(\:where\(\.o169201\)\)\[data-theme\|\=plan\]_\&\]\:\[background\:none\] {
+    background: none;
+  }
+  :not(:where(.o169302))[data-theme|=plan] .\[\:not\(\:where\(\.o169302\)\)\[data-theme\|\=plan\]_\&\]\:bg-card {
+    background-color: var(--card);
+  }
   :root .\[\:root_\&_\#house-stage\.cutout\]\:\[mask-image\:none\] #house-stage.cutout {
     mask-image: none;
   }
@@ -13203,6 +13669,12 @@
   }
   :where(.\[\:where\(\&\)\[data-hub\=on\]_body\]\:overflow-hidden)[data-hub=on] body {
     overflow: hidden;
+  }
+  :where(.\[\:where\(\&\)\[data-theme\|\=plan\]_input\:not\(\[type\=range\]\)\:not\(\[type\=checkbox\]\)\]\:\[border-radius\:4px\])[data-theme|=plan] input:not([type=range]):not([type=checkbox]) {
+    border-radius: 4px;
+  }
+  :where(.\[\:where\(\&\)\[data-theme\|\=plan\]_input\[type\=range\]\]\:\[box-shadow\:inset_0_0_0_1px_var\(--ink-line\)\])[data-theme|=plan] input[type=range] {
+    box-shadow: inset 0 0 0 1px var(--ink-line);
   }
   @media (hover:hover) {
     .\[\@media\(hover\:hover\)\]\:\[\&\:hover\:not\(\:disabled\)\]\:\[background\:color-mix\(in_srgb\,_var\(--text\)_8\%\,_transparent\)\]:hover:not(:disabled) {
@@ -13411,6 +13883,11 @@
       min-height: 70dvh;
     }
   }
+  @media (max-width:999px) {
+    :not(:where(.o082101))[data-layout=board] .\[\@media\(max-width\:999px\)\]\:\[\:not\(\:where\(\.o082101\)\)\[data-layout\=board\]_\&\]\:\[order\:10\] {
+      order: 10;
+    }
+  }
   @media (min-width:1000px) {
     .\[\@media\(min-width\:1000px\)\]\:sticky {
       position: sticky;
@@ -13473,6 +13950,187 @@
     :not(:where(.o005105)).\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o005105\)\)\&\]\:\[font-variant-numeric\:tabular-nums\] {
       font-variant-numeric: tabular-nums;
     }
+    :not(:where(.o074200))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o074200\)\)\[data-layout\=board\]_\&\]\:max-w-\[1760px\] {
+      max-width: 1760px;
+    }
+    :not(:where(.o074300))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o074300\)\)\[data-layout\=board\]_\&\>\*\]\:max-w-\[none\] > * {
+      max-width: none;
+    }
+    :not(:where(.o074401))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o074401\)\)\[data-layout\=board\]_\&\]\:\[grid-template-columns\:minmax\(300px\,_30\%\)_minmax\(0\,_1fr\)\] {
+      grid-template-columns: minmax(300px, 30%) minmax(0, 1fr);
+    }
+    :not(:where(.o074402))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o074402\)\)\[data-layout\=board\]_\&\]\:\[grid-template-areas\:\'overview_house\'_\'covers_covers\'\] {
+      grid-template-areas: 'overview house' 'covers covers';
+    }
+    :not(:where(.o074605))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o074605\)\)\[data-layout\=board\]_\&\]\:\[border-radius\:0\] {
+      border-radius: 0;
+    }
+    :not(:where(.o074610))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o074610\)\)\[data-layout\=board\]_\&\]\:\[box-shadow\:inset_-1px_0_0_var\(--line\)\] {
+      box-shadow: inset -1px 0 0 var(--line);
+    }
+    :not(:where(.o074800))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o074800\)\)\[data-layout\=board\]_\&_a\]\:\[place-content\:center\] a {
+      place-content: center;
+    }
+    :not(:where(.o074800))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o074800\)\)\[data-layout\=board\]_\&_button\]\:\[place-content\:center\] button {
+      place-content: center;
+    }
+    :not(:where(.o074801))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o074801\)\)\[data-layout\=board\]_\&_a\]\:\[border-radius\:12px\] a {
+      border-radius: 12px;
+    }
+    :not(:where(.o074801))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o074801\)\)\[data-layout\=board\]_\&_button\]\:\[border-radius\:12px\] button {
+      border-radius: 12px;
+    }
+    :not(:where(.o074802))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o074802\)\)\[data-layout\=board\]_\&_a\]\:\[margin\:0_10px\] a {
+      margin: 0 10px;
+    }
+    :not(:where(.o074802))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o074802\)\)\[data-layout\=board\]_\&_button\]\:\[margin\:0_10px\] button {
+      margin: 0 10px;
+    }
+    :not(:where(.o074900))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o074900\)\)\[data-layout\=board\]_\&_a\:hover\]\:bg-card-2 a:hover {
+      background-color: var(--card-2);
+    }
+    :not(:where(.o074900))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o074900\)\)\[data-layout\=board\]_\&_button\:hover\]\:bg-card-2 button:hover {
+      background-color: var(--card-2);
+    }
+    :not(:where(.o074901))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o074901\)\)\[data-layout\=board\]_\&_a\:hover\]\:text-text a:hover {
+      color: var(--text);
+    }
+    :not(:where(.o074901))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o074901\)\)\[data-layout\=board\]_\&_button\:hover\]\:text-text button:hover {
+      color: var(--text);
+    }
+    :not(:where(.o075000))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o075000\)\)\[data-layout\=board\]_\&_\.active\]\:bg-accent-soft .active {
+      background-color: var(--accent-soft);
+    }
+    :not(:where(.o075100))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o075100\)\)\[data-layout\=board\]_\&\]\:\[padding-left\:calc\(68px_\+_var\(--gutter\)\)\] {
+      padding-left: calc(68px + var(--gutter));
+    }
+    :not(:where(.o075600))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o075600\)\)\[data-layout\=board\]_\&\]\:\[grid-template-rows\:minmax\(0\,_1fr\)_auto\] {
+      grid-template-rows: minmax(0, 1fr) auto;
+    }
+    :not(:where(.o075602))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o075602\)\)\[data-layout\=board\]_\&\]\:mt-0 {
+      margin-top: 0px;
+    }
+    :not(:where(.o075603))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o075603\)\)\[data-layout\=board\]_\&\]\:gap-\[10px\] {
+      gap: 10px;
+    }
+    :not(:where(.o075604))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o075604\)\)\[data-layout\=board\]_\&\]\:pb-0 {
+      padding-bottom: 0px;
+    }
+    :not(:where(.o075700))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o075700\)\)\[data-layout\=board\]_\&\:not\(\[hidden\]\)\]\:hidden:not([hidden]) {
+      display: none;
+    }
+    :not(:where(.o075900))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o075900\)\)\[data-layout\=board\]_\&\:\:-webkit-scrollbar\]\:hidden::-webkit-scrollbar {
+      display: none;
+    }
+    :not(:where(.o076000))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o076000\)\)\[data-layout\=board\]_\&\]\:pb-0 {
+      padding-bottom: 0px;
+    }
+    :not(:where(.o076001))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o076001\)\)\[data-layout\=board\]_\&\]\:\[padding-left\:calc\(68px_\+_var\(--gutter\)\)\] {
+      padding-left: calc(68px + var(--gutter));
+    }
+    :not(:where(.o076204))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o076204\)\)\[data-layout\=board\]_\&\]\:gap-\[10px\] {
+      gap: 10px;
+    }
+    :not(:where(.o076900)):where(.\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o076900\)\)\:where\(\&\)\[data-layout\=board\]_\#house-stage\]\:\[width\:min\(100cqw\,_calc\(100cqh_\*_var\(--ratio\,_1\.35\)\)\)\])[data-layout=board] #house-stage {
+      width: min(100cqw, calc(100cqh * var(--ratio, 1.35)));
+    }
+    :not(:where(.o077000)):root[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o077000\)\)\:root\[data-layout\=board\]_\&\>h2\]\:hidden > h2 {
+      display: none;
+    }
+    :not(:where(.o077201))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o077201\)\)\[data-layout\=board\]_\&\:has\(button\)\]\:\[top\:58px\]:has(button) {
+      top: 58px;
+    }
+    :not(:where(.o077202))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o077202\)\)\[data-layout\=board\]_\&\:has\(button\)\]\:\[right\:20px\]:has(button) {
+      right: 20px;
+    }
+    :not(:where(.o077403))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o077403\)\)\[data-layout\=board\]_\&\]\:\[padding-block\:0\.7rem_0\.6rem\] {
+      padding-block: 0.7rem 0.6rem;
+    }
+    :not(:where(.o077803))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o077803\)\)\[data-layout\=board\]_\&\]\:m-0 {
+      margin: 0px;
+    }
+    :not(:where(.o077807))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o077807\)\)\[data-layout\=board\]_\&\]\:text-courant {
+      font-size: var(--text-courant);
+    }
+    :not(:where(.o077808))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o077808\)\)\[data-layout\=board\]_\&\]\:font-medium {
+      --tw-font-weight: var(--font-weight-medium);
+      font-weight: var(--font-weight-medium);
+    }
+    :not(:where(.o077900))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o077900\)\)\[data-layout\=board\]_\&\]\:text-grand {
+      font-size: var(--text-grand);
+    }
+    :not(:where(.o078200))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o078200\)\)\[data-layout\=board\]_\&\]\:w-\[30px\] {
+      width: 30px;
+    }
+    :not(:where(.o078201))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o078201\)\)\[data-layout\=board\]_\&\]\:h-\[30px\] {
+      height: 30px;
+    }
+    :not(:where(.o078300))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o078300\)\)\[data-layout\=board\]_\&_svg\]\:w-\[16px\] svg {
+      width: 16px;
+    }
+    :not(:where(.o078301))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o078301\)\)\[data-layout\=board\]_\&_svg\]\:h-\[16px\] svg {
+      height: 16px;
+    }
+    :not(:where(.o078400)):where(.\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o078400\)\)\:where\(\&\)\[data-layout\=board\]_\:is\(\.room-line-name\,_\.house-action-text_b\)\]\:text-petit)[data-layout=board] :is(.room-line-name, .house-action-text b) {
+      font-size: var(--text-petit);
+    }
+    :not(:where(.o078500)):where(.\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o078500\)\)\:where\(\&\)\[data-layout\=board\]_\:is\(\.room-line-info\,_\.house-action-text_span\)\]\:text-micro)[data-layout=board] :is(.room-line-info, .house-action-text span) {
+      font-size: var(--text-micro);
+    }
+    :not(:where(.o078800))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o078800\)\)\[data-layout\=board\]_\&_\.round_svg\]\:w-\[16px\] .round svg {
+      width: 16px;
+    }
+    :not(:where(.o078801))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o078801\)\)\[data-layout\=board\]_\&_\.round_svg\]\:h-\[16px\] .round svg {
+      height: 16px;
+    }
+    :not(:where(.o079300))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o079300\)\)\[data-layout\=board\]_\&\]\:\[grid-template-columns\:repeat\(auto-fill\,_minmax\(260px\,_1fr\)\)\] {
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    }
+    :not(:where(.o081400))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o081400\)\)\[data-layout\=board\]_\&\.many_\.board-tab-item\]\:px-3.many .board-tab-item {
+      padding-inline: calc(var(--spacing) * 3);
+    }
+    :not(:where(.o081800))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o081800\)\)\[data-layout\=board\]_\&\.fade-end\]\:\[mask-image\:linear-gradient\(to_right\,_transparent\,_\#000_var\(--fade-start\,_0px\)\,_\#000_calc\(100\%_-_var\(--fade-end\,_0px\)\)\,_transparent\)\].fade-end {
+      mask-image: linear-gradient(to right, transparent, #000 var(--fade-start, 0px), #000 calc(100% - var(--fade-end, 0px)), transparent);
+    }
+    :not(:where(.o081800))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o081800\)\)\[data-layout\=board\]_\&\.fade-start\]\:\[mask-image\:linear-gradient\(to_right\,_transparent\,_\#000_var\(--fade-start\,_0px\)\,_\#000_calc\(100\%_-_var\(--fade-end\,_0px\)\)\,_transparent\)\].fade-start {
+      mask-image: linear-gradient(to right, transparent, #000 var(--fade-start, 0px), #000 calc(100% - var(--fade-end, 0px)), transparent);
+    }
+    :not(:where(.o081900))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o081900\)\)\[data-layout\=board\]_\&\.fade-end\]\:\[mask-image\:linear-gradient\(to_bottom\,_transparent\,_\#000_var\(--fade-start\,_0px\)\,_\#000_calc\(100\%_-_var\(--fade-end\,_0px\)\)\,_transparent\)\].fade-end {
+      mask-image: linear-gradient(to bottom, transparent, #000 var(--fade-start, 0px), #000 calc(100% - var(--fade-end, 0px)), transparent);
+    }
+    :not(:where(.o081900))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o081900\)\)\[data-layout\=board\]_\&\.fade-start\]\:\[mask-image\:linear-gradient\(to_bottom\,_transparent\,_\#000_var\(--fade-start\,_0px\)\,_\#000_calc\(100\%_-_var\(--fade-end\,_0px\)\)\,_transparent\)\].fade-start {
+      mask-image: linear-gradient(to bottom, transparent, #000 var(--fade-start, 0px), #000 calc(100% - var(--fade-end, 0px)), transparent);
+    }
+    :not(:where(.o084300))[data-theme=maquette][data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o084300\)\)\[data-theme\=maquette\]\[data-layout\=board\]_\&_svg\]\:w-\[20px\] svg {
+      width: 20px;
+    }
+    :not(:where(.o084301))[data-theme=maquette][data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o084301\)\)\[data-theme\=maquette\]\[data-layout\=board\]_\&_svg\]\:h-\[20px\] svg {
+      height: 20px;
+    }
+    :not(:where(.o084400)):where(.\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o084400\)\)\:where\(\&\)\[data-theme\=maquette\]\[data-layout\=board\]_\:is\(\.room-line-name\,_\.house-action-text_b\)\]\:text-corps)[data-theme=maquette][data-layout=board] :is(.room-line-name, .house-action-text b) {
+      font-size: var(--text-corps);
+    }
+    :not(:where(.o084500)):where(.\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o084500\)\)\:where\(\&\)\[data-theme\=maquette\]\[data-layout\=board\]_\:is\(\.room-line-info\,_\.house-action-text_span\)\]\:text-legende)[data-theme=maquette][data-layout=board] :is(.room-line-info, .house-action-text span) {
+      font-size: var(--text-legende);
+    }
+    :not(:where(.o103700))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o103700\)\)\[data-layout\=board\]_\&\]\:\[padding-left\:calc\(68px_\+_var\(--gutter\)\)\] {
+      padding-left: calc(68px + var(--gutter));
+    }
+    :not(:where(.o103701))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o103701\)\)\[data-layout\=board\]_\&\]\:pb-\[16px\] {
+      padding-bottom: 16px;
+    }
+    :not(:where(.o131300))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o131300\)\)\[data-layout\=board\]_\&\]\:\[padding-left\:calc\(68px_\+_var\(--gutter\)\)\] {
+      padding-left: calc(68px + var(--gutter));
+    }
+    :not(:where(.o131301))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o131301\)\)\[data-layout\=board\]_\&\]\:pb-\[16px\] {
+      padding-bottom: 16px;
+    }
+    :not(:where(.o160900))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o160900\)\)\[data-layout\=board\]_\&\]\:\[padding-left\:calc\(68px_\+_var\(--gutter\)\)\] {
+      padding-left: calc(68px + var(--gutter));
+    }
+    :not(:where(.o160901))[data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o160901\)\)\[data-layout\=board\]_\&\]\:pb-\[16px\] {
+      padding-bottom: 16px;
+    }
     :not(:where(.o161000)).\[\@media\(min-width\:1000px\)\]\:\[\:not\(\:where\(\.o161000\)\)\&\]\:\[grid-template-columns\:minmax\(0\,_1\.5fr\)_minmax\(0\,_1fr\)\] {
       grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
     }
@@ -13480,7 +14138,15 @@
       grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     }
   }
+  @media (min-width:1000px) and (max-width:1399px) {
+    :not(:where(.o082000))[data-layout=board] .\[\@media\(min-width\:1000px\)_and_\(max-width\:1399px\)\]\:\[\:not\(\:where\(\.o082000\)\)\[data-layout\=board\]_\&\.many_\.board-tab-item\]\:px-\[0\.55rem\].many .board-tab-item {
+      padding-inline: 0.55rem;
+    }
+  }
   @media (min-width:1400px) {
+    :not(:where(.o079400))[data-theme|=plan] .\[\@media\(min-width\:1400px\)\]\:\[\:not\(\:where\(\.o079400\)\)\[data-theme\|\=plan\]_\&\:\:after\]\:max-w-\[1760px\]::after {
+      max-width: 1760px;
+    }
     :not(:where(.o170100)).\[\@media\(min-width\:1400px\)\]\:\[\:not\(\:where\(\.o170100\)\)\&\]\:\[grid-template-columns\:minmax\(0\,_1\.7fr\)_minmax\(0\,_1fr\)\] {
       grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
     }
@@ -13729,6 +14395,298 @@
   [data-hub-tel] .\[\[data-hub-tel\]_\&\>\:not\(\.hub-v4-tel\)\]\:hidden\! > :not(.hub-v4-tel) {
     display: none !important;
   }
+  [data-layout=board] .\[\[data-layout\=board\]_\&\]\:flex {
+    display: flex;
+  }
+  [data-layout=board] .\[\[data-layout\=board\]_\&\]\:hidden {
+    display: none;
+  }
+  [data-layout=board] .\[\[data-layout\=board\]_\&\]\:min-w-0 {
+    min-width: 0px;
+  }
+  [data-layout=board] .\[\[data-layout\=board\]_\&\]\:items-center {
+    align-items: center;
+  }
+  [data-layout=board] .\[\[data-layout\=board\]_\&\]\:justify-end {
+    justify-content: flex-end;
+  }
+  [data-layout=board] .\[\[data-layout\=board\]_\&\]\:gap-\[0\.6rem\] {
+    gap: 0.6rem;
+  }
+  [data-layout=board] .\[\[data-layout\=board\]_\&\]\:\[align-self\:stretch\] {
+    align-self: stretch;
+  }
+  [data-layout=board] .\[\[data-layout\=board\]_\&\]\:p-0 {
+    padding: 0px;
+  }
+  [data-layout=board] .\[\[data-layout\=board\]_\&\]\:\[background\:none\] {
+    background: none;
+  }
+  @media (width < 640px) {
+    [data-layout=board] .max-\[640px\]\:\[\[data-layout\=board\]_\&\]\:order-none {
+      order: 0;
+    }
+  }
+  @media (max-width:999px) {
+    [data-layout=board] .\[\@media\(max-width\:999px\)\]\:\[\[data-layout\=board\]_\&\]\:\[flex-basis\:100\%\] {
+      flex-basis: 100%;
+    }
+  }
+  @media (min-width:1000px) {
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:\[container-type\:size\] {
+      container-type: size;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:\[position\:static\] {
+      position: static;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:fixed {
+      position: fixed;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:\[inset\:0_auto_0_0\] {
+      inset: 0 auto 0 0;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:\[order\:0\] {
+      order: 0;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:\[order\:1\] {
+      order: 1;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:\[order\:2\] {
+      order: 2;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:mx-\[auto\] {
+      margin-inline: auto;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:contents {
+      display: contents;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:flex {
+      display: flex;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:grid {
+      display: grid;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:hidden {
+      display: none;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:\[height\:max\(520px\,_calc\(100dvh_-_var\(--hero-h\,_76px\)_-_52px\)\)\] {
+      height: max(520px, calc(100dvh - var(--hero-h, 76px) - 52px));
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:h-\[30px\] {
+      height: 30px;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:h-\[auto\] {
+      height: auto;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:\[max-height\:calc\(100dvh_-_var\(--hero-h\,_76px\)_-_28px\)\] {
+      max-height: calc(100dvh - var(--hero-h, 76px) - 28px);
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:max-h-\[7\.5rem\] {
+      max-height: 7.5rem;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:min-h-0 {
+      min-height: 0px;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:min-h-\[50px\] {
+      min-height: 50px;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:w-\[30px\] {
+      width: 30px;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:w-\[68px\] {
+      width: 68px;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:max-w-\[1760px\] {
+      max-width: 1760px;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:min-w-0 {
+      min-width: 0px;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:flex-1 {
+      flex: 1;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:flex-none {
+      flex: none;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:\[scrollbar-width\:none\] {
+      scrollbar-width: none;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:\[grid-auto-rows\:64px\] {
+      grid-auto-rows: 64px;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:\[grid-auto-rows\:minmax\(0\,_auto\)\] {
+      grid-auto-rows: minmax(0, auto);
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:\[grid-template-columns\:none\]\! {
+      grid-template-columns: none !important;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:\[grid-template-columns\:repeat\(auto-fill\,_minmax\(min\(100\%\,_270px\)\,_1fr\)\)\] {
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 270px), 1fr));
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:\[place-items\:center\] {
+      place-items: center;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:\[align-content\:start\] {
+      align-content: start;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:\[align-items\:start\] {
+      align-items: start;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:items-center {
+      align-items: center;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:gap-\[1\.1rem\] {
+      gap: 1.1rem;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:gap-\[8px\] {
+      gap: 8px;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:\[align-self\:stretch\] {
+      align-self: stretch;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:\[overflow\:hidden_auto\] {
+      overflow: hidden auto;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:overflow-hidden {
+      overflow: hidden;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:\[overscroll-behavior\:contain\] {
+      overscroll-behavior: contain;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:\[padding\:0\.4rem_0\.55rem\] {
+      padding: 0.4rem 0.55rem;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:\[padding\:6px_10px\] {
+      padding: 6px 10px;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:pt-\[14px\] {
+      padding-top: 14px;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:text-ellipsis {
+      text-overflow: ellipsis;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:whitespace-nowrap {
+      white-space: nowrap;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:text-text-2 {
+      color: var(--text-2);
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:\[grid-area\:covers\] {
+      grid-area: covers;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\]\:\[grid-area\:overview\] {
+      grid-area: overview;
+    }
+  }
+  [data-layout=board] .\[\[data-layout\=board\]_\&_a\]\:\[text-decoration-thickness\:1\.5px\] a {
+    text-decoration-thickness: 1.5px;
+  }
+  [data-layout=board] .\[\[data-layout\=board\]_\&_a\]\:\[text-underline-offset\:3px\] a {
+    text-underline-offset: 3px;
+  }
+  @media (min-width:1000px) {
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&_span\]\:absolute span {
+      position: absolute;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&_span\]\:h-\[1px\] span {
+      height: 1px;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&_span\]\:w-\[1px\] span {
+      width: 1px;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&_span\]\:overflow-hidden span {
+      overflow: hidden;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&_span\]\:whitespace-nowrap span {
+      white-space: nowrap;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&_span\]\:\[clip-path\:inset\(50\%\)\] span {
+      clip-path: inset(50%);
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&_summary\]\:\[padding\:0\.5rem_0\] summary {
+      padding: 0.5rem 0;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&_summary\]\:text-corps summary {
+      font-size: var(--text-corps);
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\:\:-webkit-scrollbar\]\:hidden::-webkit-scrollbar {
+      display: none;
+    }
+  }
+  [data-layout=board] .\[\[data-layout\=board\]_\&\:empty\]\:hidden:empty {
+    display: none;
+  }
+  @media (min-width:1000px) {
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\:has\(\.board-tabs\.many\)\]\:\[flex-basis\:100\%\]:has(.board-tabs.many) {
+      flex-basis: 100%;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\:has\(\.board-tabs\.many\)\]\:flex-wrap:has(.board-tabs.many) {
+      flex-wrap: wrap;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\:has\(\.board-tabs\.many\)\]\:gap-y-0:has(.board-tabs.many) {
+      row-gap: 0px;
+    }
+  }
+  @media (max-width:999px) {
+    [data-layout=board] .\[\@media\(max-width\:999px\)\]\:\[\[data-layout\=board\]_\&\:has\(\.single\)\]\:hidden:has(.single) {
+      display: none;
+    }
+  }
+  @media (min-width:1000px) {
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\:has\(button\)\]\:absolute:has(button) {
+      position: absolute;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\:has\(button\)\]\:\[z-index\:2\]:has(button) {
+      z-index: 2;
+    }
+  }
+  [data-layout=board] .\[\[data-layout\=board\]_\&\:not\(\[hidden\]\)\]\:flex:not([hidden]) {
+    display: flex;
+  }
+  [data-layout=board] .\[\[data-layout\=board\]_\&\:not\(\[hidden\]\)\]\:grid:not([hidden]) {
+    display: grid;
+  }
+  [data-layout=board] .\[\[data-layout\=board\]_\&\:not\(\[hidden\]\)\]\:min-w-0:not([hidden]) {
+    min-width: 0px;
+  }
+  [data-layout=board] .\[\[data-layout\=board\]_\&\:not\(\[hidden\]\)\]\:\[grid-template-columns\:repeat\(2\,_minmax\(0\,_1fr\)\)\]:not([hidden]) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  [data-layout=board] .\[\[data-layout\=board\]_\&\:not\(\[hidden\]\)\]\:\[grid-template-columns\:repeat\(auto-fit\,_minmax\(min\(100\%\,_150px\)\,_1fr\)\)\]:not([hidden]) {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+  }
+  [data-layout=board] .\[\[data-layout\=board\]_\&\:not\(\[hidden\]\)\]\:flex-wrap:not([hidden]) {
+    flex-wrap: wrap;
+  }
+  [data-layout=board] .\[\[data-layout\=board\]_\&\:not\(\[hidden\]\)\]\:items-center:not([hidden]) {
+    align-items: center;
+  }
+  [data-layout=board] .\[\[data-layout\=board\]_\&\:not\(\[hidden\]\)\]\:\[gap\:4px_8px\]:not([hidden]) {
+    gap: 4px 8px;
+  }
+  [data-layout=board] .\[\[data-layout\=board\]_\&\:not\(\[hidden\]\)\]\:gap-3:not([hidden]) {
+    gap: calc(var(--spacing) * 3);
+  }
+  [data-layout=board] .\[\[data-layout\=board\]_\&\:not\(\[hidden\]\)\]\:gap-\[6px\]:not([hidden]) {
+    gap: 6px;
+  }
+  [data-layout=board] .\[\[data-layout\=board\]_\&\:not\(\[hidden\]\)\]\:gap-\[8px\]:not([hidden]) {
+    gap: 8px;
+  }
+  [data-layout=board] .\[\[data-layout\=board\]_\&\:not\(\[hidden\]\)\]\:bg-card:not([hidden]) {
+    background-color: var(--card);
+  }
+  [data-layout=board] .\[\[data-layout\=board\]_\&\:not\(\[hidden\]\)\]\:\[padding\:8px_10px_4px_8px\]:not([hidden]) {
+    padding: 8px 10px 4px 8px;
+  }
+  @media (min-width:1000px) {
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\:not\(\[hidden\]\)\]\:min-h-0:not([hidden]) {
+      min-height: 0px;
+    }
+    [data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-layout\=board\]_\&\:not\(\[hidden\]\)\]\:\[grid-template-rows\:minmax\(0\,_auto\)_auto\]:not([hidden]) {
+      grid-template-rows: minmax(0, auto) auto;
+    }
+  }
   [data-meteo=eclaircies] .\[\[data-meteo\=eclaircies\]_\&\]\:opacity-80 {
     opacity: 80%;
   }
@@ -13746,6 +14704,352 @@
   [data-theme=light] .\[\[data-theme\=light\]_\&\]\:shadow-\[var\(--v4-sun-halo\)\] {
     --tw-shadow: var(--v4-sun-halo);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+  [data-theme=maquette] .\[\[data-theme\=maquette\]_\&\]\:relative {
+    position: relative;
+  }
+  [data-theme=maquette] .\[\[data-theme\=maquette\]_\&\]\:gap-\[8px\] {
+    gap: 8px;
+  }
+  [data-theme=maquette] .\[\[data-theme\=maquette\]_\&\]\:\[border-radius\:8px\] {
+    border-radius: 8px;
+  }
+  [data-theme=maquette] .\[\[data-theme\=maquette\]_\&\]\:bg-card {
+    background-color: var(--card);
+  }
+  [data-theme=maquette] .\[\[data-theme\=maquette\]_\&\]\:\[color\:\#ffffff\] {
+    color: #ffffff;
+  }
+  [data-theme=maquette] .\[\[data-theme\=maquette\]_\&\]\:\[box-shadow\:none\] {
+    box-shadow: none;
+  }
+  [data-theme=maquette] .\[\[data-theme\=maquette\]_\&\]\:\[background\:\#1c1b22\] {
+    background: #1c1b22;
+  }
+  [data-theme=maquette] .\[\[data-theme\=maquette\]_\&\]\:\[background\:\#3a3a44\] {
+    background: #3a3a44;
+  }
+  [data-theme=maquette] .\[\[data-theme\=maquette\]_\&\]\:\[background\:radial-gradient\(1100px_760px_at_8\%_8\%\,_rgb\(10_70_86_\/_0\.55\)\,_transparent_65\%\)\,_radial-gradient\(1100px_760px_at_10\%_100\%\,_rgb\(70_24_110_\/_0\.6\)\,_transparent_65\%\)\,_radial-gradient\(1300px_900px_at_100\%_45\%\,_rgb\(110_14_52_\/_0\.62\)\,_transparent_68\%\)\,_radial-gradient\(900px_700px_at_60\%_100\%\,_rgb\(60_14_80_\/_0\.5\)\,_transparent_70\%\)\,_\#12101c\] {
+    background: radial-gradient(1100px 760px at 8% 8%, rgb(10 70 86 / 0.55), transparent 65%), radial-gradient(1100px 760px at 10% 100%, rgb(70 24 110 / 0.6), transparent 65%), radial-gradient(1300px 900px at 100% 45%, rgb(110 14 52 / 0.62), transparent 68%), radial-gradient(900px 700px at 60% 100%, rgb(60 14 80 / 0.5), transparent 70%), #12101c;
+  }
+  [data-theme=maquette] .\[\[data-theme\=maquette\]_\&\]\:\[background\:rgb\(0_0_0_\/_0\.4\)\] {
+    background: rgb(0 0 0 / 0.4);
+  }
+  [data-theme=maquette] .\[\[data-theme\=maquette\]_\&\]\:\[background\:rgb\(0_0_0_\/_0\.6\)\] {
+    background: rgb(0 0 0 / 0.6);
+  }
+  [data-theme=maquette] .\[\[data-theme\=maquette\]_\&\]\:\[border\:0\] {
+    border: 0;
+  }
+  [data-theme=maquette] .\[\[data-theme\=maquette\]_\&_\.active\]\:\[color\:var\(--m-blue\)\] .active {
+    color: var(--m-blue);
+  }
+  [data-theme=maquette] .\[\[data-theme\=maquette\]_\&_\.round_svg\]\:\[stroke-width\:2\.2\] .round svg {
+    stroke-width: 2.2;
+  }
+  [data-theme=maquette] .\[\[data-theme\=maquette\]_\&_button\.on\]\:\[color\:\#fff\] button.on {
+    color: #fff;
+  }
+  [data-theme=maquette] .\[\[data-theme\=maquette\]_\&_button\.on\]\:\[background\:rgb\(255_255_255_\/_0\.12\)\] button.on {
+    background: rgb(255 255 255 / 0.12);
+  }
+  [data-theme=maquette] .\[\[data-theme\=maquette\]_\&_button\[aria-pressed\=true\]\]\:\[background\:rgb\(255_255_255_\/_0\.12\)\] button[aria-pressed=true] {
+    background: rgb(255 255 255 / 0.12);
+  }
+  [data-theme=maquette] .\[\[data-theme\=maquette\]_\&\.running\]\:\[color\:\#ffb59a\].running {
+    color: #ffb59a;
+  }
+  [data-theme=maquette] .\[\[data-theme\=maquette\]_\&\.running\]\:\[background\:rgb\(255_122_89_\/_0\.16\)\].running {
+    background: rgb(255 122 89 / 0.16);
+  }
+  [data-theme=maquette] .\[\[data-theme\=maquette\]_\&\:\:after\]\:\[background\:\#ffffff\]::after {
+    background: #ffffff;
+  }
+  [data-theme=maquette] .\[\[data-theme\=maquette\]_\&\:\:before\]\:\[box-shadow\:0_0_0_1\.5px_\#ffffff\]::before {
+    box-shadow: 0 0 0 1.5px #ffffff;
+  }
+  [data-theme=maquette] .\[\[data-theme\=maquette\]_\&\:hover\:not\(\:disabled\)\]\:\[background\:rgb\(255_255_255_\/_0\.13\)\]:hover:not(:disabled) {
+    background: rgb(255 255 255 / 0.13);
+  }
+  [data-theme=maquette] .house-action.on .\[\[data-theme\=maquette\]_\.house-action\.on_\&\]\:\[box-shadow\:none\] {
+    box-shadow: none;
+  }
+  [data-theme=maquette] .house-action.on .\[\[data-theme\=maquette\]_\.house-action\.on_\&\]\:\[background\:rgb\(255_193_7_\/_0\.2\)\] {
+    background: rgb(255 193 7 / 0.2);
+  }
+  [data-theme=maquette] .person-chip.home .\[\[data-theme\=maquette\]_\.person-chip\.home_\&\]\:\[color\:\#ffffff\] {
+    color: #ffffff;
+  }
+  [data-theme=maquette] .person-chip.home .\[\[data-theme\=maquette\]_\.person-chip\.home_\&\]\:\[box-shadow\:none\] {
+    box-shadow: none;
+  }
+  [data-theme=maquette] .person-chip.home .\[\[data-theme\=maquette\]_\.person-chip\.home_\&\]\:\[background\:\#3a3a44\] {
+    background: #3a3a44;
+  }
+  [data-theme=maquette] .person-chip.home .\[\[data-theme\=maquette\]_\.person-chip\.home_\&\:\:after\]\:absolute::after {
+    position: absolute;
+  }
+  [data-theme=maquette] .person-chip.home .\[\[data-theme\=maquette\]_\.person-chip\.home_\&\:\:after\]\:h-\[12px\]::after {
+    height: 12px;
+  }
+  [data-theme=maquette] .person-chip.home .\[\[data-theme\=maquette\]_\.person-chip\.home_\&\:\:after\]\:w-\[12px\]::after {
+    width: 12px;
+  }
+  [data-theme=maquette] .person-chip.home .\[\[data-theme\=maquette\]_\.person-chip\.home_\&\:\:after\]\:\[border-radius\:50\%\]::after {
+    border-radius: 50%;
+  }
+  [data-theme=maquette] .person-chip.home .\[\[data-theme\=maquette\]_\.person-chip\.home_\&\:\:after\]\:\[box-shadow\:0_0_0_2px_\#15131c\]::after {
+    box-shadow: 0 0 0 2px #15131c;
+  }
+  [data-theme=maquette] .person-chip.home .\[\[data-theme\=maquette\]_\.person-chip\.home_\&\:\:after\]\:\[content\:\'\'\]::after {
+    content: '';
+  }
+  [data-theme=maquette] .person-chip.home .\[\[data-theme\=maquette\]_\.person-chip\.home_\&\:\:after\]\:\[background\:var\(--m-green\)\]::after {
+    background: var(--m-green);
+  }
+  [data-theme=maquette][data-layout=board] .\[\[data-theme\=maquette\]\[data-layout\=board\]_\&\]\:text-corps {
+    font-size: var(--text-corps);
+  }
+  [data-theme=maquette][data-layout=board] .\[\[data-theme\=maquette\]\[data-layout\=board\]_\&\]\:\[color\:\#a3a3ad\] {
+    color: #a3a3ad;
+  }
+  [data-theme=maquette][data-layout=board] .\[\[data-theme\=maquette\]\[data-layout\=board\]_\&\]\:\[box-shadow\:0_1px_0_rgb\(255_255_255_\/_0\.06\)\] {
+    box-shadow: 0 1px 0 rgb(255 255 255 / 0.06);
+  }
+  [data-theme=maquette][data-layout=board] .\[\[data-theme\=maquette\]\[data-layout\=board\]_\&\]\:\[background\:\#111111\] {
+    background: #111111;
+  }
+  @media (min-width:1000px) {
+    [data-theme=maquette][data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-theme\=maquette\]\[data-layout\=board\]_\&\]\:m-0 {
+      margin: 0px;
+    }
+    [data-theme=maquette][data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-theme\=maquette\]\[data-layout\=board\]_\&\]\:mt-\[12px\] {
+      margin-top: 12px;
+    }
+    [data-theme=maquette][data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-theme\=maquette\]\[data-layout\=board\]_\&\]\:h-\[36px\] {
+      height: 36px;
+    }
+    [data-theme=maquette][data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-theme\=maquette\]\[data-layout\=board\]_\&\]\:min-h-\[52px\] {
+      min-height: 52px;
+    }
+    [data-theme=maquette][data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-theme\=maquette\]\[data-layout\=board\]_\&\]\:min-h-\[56px\] {
+      min-height: 56px;
+    }
+    [data-theme=maquette][data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-theme\=maquette\]\[data-layout\=board\]_\&\]\:min-h-\[58px\] {
+      min-height: 58px;
+    }
+    [data-theme=maquette][data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-theme\=maquette\]\[data-layout\=board\]_\&\]\:w-\[36px\] {
+      width: 36px;
+    }
+    [data-theme=maquette][data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-theme\=maquette\]\[data-layout\=board\]_\&\]\:max-w-\[none\] {
+      max-width: none;
+    }
+    [data-theme=maquette][data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-theme\=maquette\]\[data-layout\=board\]_\&\]\:\[grid-template-columns\:minmax\(340px\,_34\%\)_minmax\(0\,_1fr\)\] {
+      grid-template-columns: minmax(340px, 34%) minmax(0, 1fr);
+    }
+    [data-theme=maquette][data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-theme\=maquette\]\[data-layout\=board\]_\&\]\:\[padding\:0\.5rem_0\.7rem\] {
+      padding: 0.5rem 0.7rem;
+    }
+    [data-theme=maquette][data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-theme\=maquette\]\[data-layout\=board\]_\&\]\:\[padding\:0_1\.2rem_0_calc\(68px_\+_1\.2rem\)\] {
+      padding: 0 1.2rem 0 calc(68px + 1.2rem);
+    }
+    [data-theme=maquette][data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-theme\=maquette\]\[data-layout\=board\]_\&\]\:\[padding\:8px_12px\] {
+      padding: 8px 12px;
+    }
+  }
+  [data-theme=maquette][data-layout=board] .\[\[data-theme\=maquette\]\[data-layout\=board\]_\&_a\]\:\[color\:\#ffb3ad\] a {
+    color: #ffb3ad;
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\]\:hidden {
+    display: none;
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\]\:\[border-radius\:3px\] {
+    border-radius: 3px;
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\]\:\[border-radius\:4px\] {
+    border-radius: 4px;
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\]\:\[border-radius\:6px\] {
+    border-radius: 6px;
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\]\:\[border-radius\:var\(--radius\)\] {
+    border-radius: var(--radius);
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\]\:\[border-color\:color-mix\(in_srgb\,_var\(--ink\)_40\%\,_transparent\)\] {
+    border-color: var(--ink);
+    @supports (color: color-mix(in lab, red, red)) {
+      border-color: color-mix(in srgb, var(--ink) 40%, transparent);
+    }
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\]\:bg-card {
+    background-color: var(--card);
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\]\:bg-card-2 {
+    background-color: var(--card-2);
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\]\:\[stroke\:var\(--ink\)\] {
+    stroke: var(--ink);
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\]\:\[stroke\:var\(--ink-line\)\] {
+    stroke: var(--ink-line);
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\]\:\[stroke-width\:3\.5\] {
+    stroke-width: 3.5;
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\]\:\[letter-spacing\:0\.06em\] {
+    letter-spacing: 0.06em;
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\]\:\[color\:var\(--ink\)\] {
+    color: var(--ink);
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\]\:text-muted {
+    color: var(--muted);
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\]\:\[text-transform\:none\] {
+    text-transform: none;
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\]\:uppercase {
+    text-transform: uppercase;
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\]\:\[box-shadow\:inset_0_0_0_1px_var\(--ink-line\)\] {
+    box-shadow: inset 0 0 0 1px var(--ink-line);
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\]\:\[box-shadow\:none\] {
+    box-shadow: none;
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\]\:\[box-shadow\:var\(--shadow-float\)\] {
+    box-shadow: var(--shadow-float);
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\]\:\[backdrop-filter\:none\] {
+    backdrop-filter: none;
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\]\:\[border\:1\.25px_solid_var\(--ink\)\] {
+    border: 1.25px solid var(--ink);
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\]\:\[border\:1px_solid_var\(--ink-line\)\] {
+    border: 1px solid var(--ink-line);
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\]\:\[stroke-dasharray\:0\.5_2\.6\] {
+    stroke-dasharray: 0.5 2.6;
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\]\:\[stroke-linecap\:butt\] {
+    stroke-linecap: butt;
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&_h3\]\:\[font-family\:var\(--font-mono\)\] h3 {
+    font-family: var(--font-mono);
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&_h3\]\:\[color\:var\(--ink\)\] h3 {
+    color: var(--ink);
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&_section\>h2\]\:flex section > h2 {
+    display: flex;
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&_section\>h2\]\:items-center section > h2 {
+    align-items: center;
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&_section\>h2\]\:gap-\[0\.8rem\] section > h2 {
+    gap: 0.8rem;
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&_section\>h2\]\:\[letter-spacing\:0\.14em\] section > h2 {
+    letter-spacing: 0.14em;
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&_section\>h2\]\:\[color\:var\(--ink\)\] section > h2 {
+    color: var(--ink);
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&_section\>h2\:\:after\]\:h-\[1px\] section > h2::after {
+    height: 1px;
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&_section\>h2\:\:after\]\:flex-1 section > h2::after {
+    flex: 1;
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&_section\>h2\:\:after\]\:\[content\:\'\'\] section > h2::after {
+    content: '';
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&_section\>h2\:\:after\]\:\[background\:var\(--ink-line\)\] section > h2::after {
+    background: var(--ink-line);
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\:\:after\]\:\[margin\:1\.1rem_auto_0\]::after {
+    margin: 1.1rem auto 0;
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\:\:after\]\:block::after {
+    display: block;
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\:\:after\]\:h-\[4px\]::after {
+    height: 4px;
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\:\:after\]\:\[border-radius\:2px\]::after {
+    border-radius: 2px;
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\:\:after\]\:\[box-shadow\:0_0_0_1px_var\(--ink-line\)\]::after {
+    box-shadow: 0 0 0 1px var(--ink-line);
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\:\:after\]\:\[content\:\'\'\]::after {
+    content: '';
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\:\:after\]\:\[border-block\:1px_solid_var\(--ink-line\)\]::after {
+    border-block: 1px solid var(--ink-line);
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\:not\(\[hidden\]\)\]\:\[grid-column\:1_\/_-1\]:not([hidden]) {
+    grid-column: 1 / -1;
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\>h2\]\:flex > h2 {
+    display: flex;
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\>h2\]\:items-center > h2 {
+    align-items: center;
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\>h2\]\:gap-\[0\.8rem\] > h2 {
+    gap: 0.8rem;
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\>h2\:\:after\]\:h-\[1px\] > h2::after {
+    height: 1px;
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\>h2\:\:after\]\:flex-1 > h2::after {
+    flex: 1;
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\>h2\:\:after\]\:\[content\:\'\'\] > h2::after {
+    content: '';
+  }
+  [data-theme|=plan] .\[\[data-theme\|\=plan\]_\&\>h2\:\:after\]\:\[background\:var\(--ink-line\)\] > h2::after {
+    background: var(--ink-line);
+  }
+  [data-theme|=plan] .chart-card .\[\[data-theme\|\=plan\]_\.chart-card_\&\]\:\[border-radius\:4px\] {
+    border-radius: 4px;
+  }
+  [data-theme|=plan] .chart-card .\[\[data-theme\|\=plan\]_\.chart-card_\&\]\:\[border\:1px_solid_var\(--ink-line\)\] {
+    border: 1px solid var(--ink-line);
+  }
+  [data-theme|=plan] .heat-dial.warming .\[\[data-theme\|\=plan\]_\.heat-dial\.warming_\&\]\:\[filter\:none\] {
+    filter: none;
+  }
+  [data-theme|=plan] .house .\[\[data-theme\|\=plan\]_\.house_\&\]\:bg-card {
+    background-color: var(--card);
+  }
+  [data-theme|=plan] .room-top .\[\[data-theme\|\=plan\]_\.room-top_\&\]\:\[border-radius\:4px\] {
+    border-radius: 4px;
+  }
+  [data-theme|=plan] .room-top .\[\[data-theme\|\=plan\]_\.room-top_\&\]\:\[border\:1px_solid_var\(--ink-line\)\] {
+    border: 1px solid var(--ink-line);
+  }
+  [data-theme|=plan] .tile.on .\[\[data-theme\|\=plan\]_\.tile\.on_\&\]\:bg-accent {
+    background-color: var(--accent);
+  }
+  [data-theme|=plan] .tile.on .\[\[data-theme\|\=plan\]_\.tile\.on_\&\]\:\[box-shadow\:none\] {
+    box-shadow: none;
+  }
+  [data-theme|=plan][data-layout=board] .\[\[data-theme\|\=plan\]\[data-layout\=board\]_\&\]\:\[border-radius\:6px\] {
+    border-radius: 6px;
+  }
+  [data-theme|=plan][data-layout=board] .\[\[data-theme\|\=plan\]\[data-layout\=board\]_\&\]\:\[box-shadow\:0_0_0_1\.25px_var\(--ink\)\] {
+    box-shadow: 0 0 0 1.25px var(--ink);
+  }
+  @media (min-width:1000px) {
+    [data-theme|=plan][data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-theme\|\=plan\]\[data-layout\=board\]_\&\]\:\[box-shadow\:inset_-1\.25px_0_0_var\(--ink\)\] {
+      box-shadow: inset -1.25px 0 0 var(--ink);
+    }
+    [data-theme|=plan][data-layout=board] .\[\@media\(min-width\:1000px\)\]\:\[\[data-theme\|\=plan\]\[data-layout\=board\]_\&\:\:after\]\:hidden::after {
+      display: none;
+    }
   }
   body.tablet .\[body\.tablet_\&\]\:inline {
     display: inline;

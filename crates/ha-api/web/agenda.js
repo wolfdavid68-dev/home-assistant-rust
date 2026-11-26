@@ -804,7 +804,7 @@ function renderBoardAgenda() {
     return;
   }
   box.hidden = false;
-  const today = el("div", { class: "agenda-card agenda-home-today bg-card rounded-carte [box-shadow:var(--shadow)] py-3 px-3.5 min-w-0" }, ...todayCard(calendars, true));
+  const today = el("div", { class: "agenda-card agenda-home-today bg-card rounded-carte [box-shadow:var(--shadow)] py-3 px-3.5 min-w-0 [[data-theme=maquette]_&]:bg-card [:not(:where(.o132101))[data-theme=maquette]_&]:[box-shadow:none] [:not(:where(.o132700))[data-theme|=plan]_&]:[box-shadow:0_0_0_1.25px_var(--ink)] [[data-theme|=plan]_&]:[border-radius:6px] [@media(min-width:1000px)]:[[data-layout=board]_&]:min-h-0 [@media(min-width:1000px)]:[[data-layout=board]_&]:[overflow:hidden_auto] [@media(min-width:1000px)]:[[data-layout=board]_&]:[overscroll-behavior:contain] [@media(min-width:1000px)]:[[data-layout=board]_&]:[scrollbar-width:none] [@media(min-width:1000px)]:[[data-layout=board]_&::-webkit-scrollbar]:hidden [@media(min-width:1000px)]:[:not(:where(.o081900))[data-layout=board]_&.fade-start]:[mask-image:linear-gradient(to_bottom,_transparent,_#000_var(--fade-start,_0px),_#000_calc(100%_-_var(--fade-end,_0px)),_transparent)] [@media(min-width:1000px)]:[:not(:where(.o081900))[data-layout=board]_&.fade-end]:[mask-image:linear-gradient(to_bottom,_transparent,_#000_var(--fade-start,_0px),_#000_calc(100%_-_var(--fade-end,_0px)),_transparent)]" }, ...todayCard(calendars, true));
   const monday = weekStart(new Date());
   const now = new Date();
   const week = el("div", { class: "agenda-home-week grid [grid-template-columns:repeat(7,_minmax(0,_1fr))] gap-1" });
@@ -820,7 +820,7 @@ function renderBoardAgenda() {
     cell.addEventListener("click", () => openAgenda(day, "day"));
     week.append(cell);
   }
-  const weekCard = el("div", { class: "agenda-card agenda-home-weekcard bg-card rounded-carte [box-shadow:var(--shadow)] py-3 px-3.5 min-w-0" },
+  const weekCard = el("div", { class: "agenda-card agenda-home-weekcard bg-card rounded-carte [box-shadow:var(--shadow)] py-3 px-3.5 min-w-0 [[data-theme=maquette]_&]:bg-card [:not(:where(.o132101))[data-theme=maquette]_&]:[box-shadow:none] [:not(:where(.o132700))[data-theme|=plan]_&]:[box-shadow:0_0_0_1.25px_var(--ink)] [[data-theme|=plan]_&]:[border-radius:6px]" },
     el("div", { class: "agenda-card-head flex items-center justify-between gap-2 mb-1.5 [:not(:where(.o117500))&_h3]:m-0 [:not(:where(.o117501))&_h3]:text-moyen [:not(:where(.o117502))&_h3]:font-semibold [:not(:where(.o117600))&_h3::first-letter]:uppercase" }, el("h3", { text: "Cette semaine" })), week);
   const scrolled = box.querySelector(".agenda-home-today")?.scrollTop ?? 0;
   box.replaceChildren(today, weekCard);

@@ -275,7 +275,7 @@ function mediaFavorites(state) {
   }
   const buttons = names.map((name) => {
     const button = el("button", {
-      type: "button", class: "action-button media-favorite [flex:1_1_8rem] min-w-0 max-w-[100%] [:not(:where(.o013005))&]:text-corps overflow-hidden text-ellipsis whitespace-nowrap [justify-self:start] min-h-[40px] py-2 px-4 rounded-full [border:0] bg-card-2 [:not(:where(.o018606))&]:font-semibold [&:active]:[transform:scale(0.97)] [&[aria-pressed=true]]:bg-accent-soft [&[aria-pressed=true]]:text-accent", title: name,
+      type: "button", class: "action-button media-favorite [flex:1_1_8rem] min-w-0 max-w-[100%] [:not(:where(.o013005))&]:text-corps overflow-hidden text-ellipsis whitespace-nowrap [justify-self:start] min-h-[40px] py-2 px-4 rounded-full [border:0] bg-card-2 [:not(:where(.o018606))&]:font-semibold [&:active]:[transform:scale(0.97)] [&[aria-pressed=true]]:bg-accent-soft [&[aria-pressed=true]]:text-accent [[data-theme|=plan]_&]:[border:1.25px_solid_var(--ink)] [[data-theme|=plan]_&]:[box-shadow:none] [[data-theme|=plan]_&]:[border-radius:var(--radius)]", title: name,
       "aria-label": `Lancer ${name} sur ${nameOf(state)}`,
     }, name);
     button.setAttribute("aria-pressed", String(a.source === name));

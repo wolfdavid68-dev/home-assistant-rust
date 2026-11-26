@@ -154,16 +154,18 @@ function hubV3On() {
   return document.documentElement.dataset.hubStyle === "v3";
 }
 
-/** Le style enregistré : "v3", "v4" ou "" (l'accueil actuel). */
+/** Le style enregistré : "v4", sinon "v3" (la maquette, app.js). L'accueil
+ *  « Actuel » et l'ancienne v3 « ciel » ne sont plus proposés. */
 function hubV3Style(saved) {
-  return saved === "v3" || saved === "v4" ? saved : "";
+  return saved === "v4" ? "v4" : "v3";
 }
 
 /** Pose ou retire les attributs qui activent le style (CSS). La v4 reprend
  *  l'accueil v3 et y ajoute ses écrans : elle pose les deux. */
 function hubV3Apply(style) {
   const root = document.documentElement;
-  if (style === "v3" || style === "v4") root.dataset.hubStyle = "v3";
+  // La v4 reprend le socle de l'ancienne v3 « ciel » (hub-v3.css).
+  if (style === "v4") root.dataset.hubStyle = "v3";
   else delete root.dataset.hubStyle;
   if (style === "v4") root.dataset.hubV4 = "";
   else delete root.dataset.hubV4;
@@ -184,12 +186,16 @@ function hubV3Init() {
     pick.addEventListener("change", () => {
       const style = hubV3Style(pick.value);
       try {
-        if (style) localStorage.setItem(HUB_V3_KEY, style);
+        if (style === "v4") localStorage.setItem(HUB_V3_KEY, style);
         else localStorage.removeItem(HUB_V3_KEY);
       } catch {
         // Stockage bloqué : le choix ne durera que le temps de la page.
       }
       hubV3Apply(style);
+      // v3 (la maquette) ou v4 : le thème et la disposition changent avec.
+      applyTheme();
+      if (typeof forgetPanels === "function") forgetPanels();
+      if (typeof renderHome === "function" && !$("#dashboard-view").hidden) renderHome();
       renderHubV3();
       updateHub();
     });
